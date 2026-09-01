@@ -1937,7 +1937,7 @@ rebasedjs/
 pnpm install
 pnpm typecheck   # 预期：三个 server 包 tsc 全绿（跨包类型经 @rebased/* 解析）
 pnpm format      # 预期：边界规则与共享规则零违规
-pnpm test        # 预期：contracts 7 + core 14 + api 16 = 37 个用例全绿
+pnpm test        # 预期：contracts 7 + core 15 + api 16 = 38 个用例全绿（core 15 含 Task 7 帧边界回归用例）
 ```
 
 - [ ] **Step 4: 提交**
