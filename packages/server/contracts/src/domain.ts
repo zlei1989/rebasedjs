@@ -46,6 +46,12 @@ export interface DiffFile {
   text: string;
 }
 
+/** 单文件两侧全文（Monaco DiffEditor 用）：before=旧版本、after=新版本 */
+export interface FileVersions {
+  before: string;
+  after: string;
+}
+
 export interface SettingsState {
   logInEditor: boolean;
   recentRepoIds: string[];

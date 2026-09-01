@@ -37,4 +37,19 @@ describe('log 功能', () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toEqual({ type: 'log.line', payload: expect.objectContaining({ message: 'only', parents: [] }) });
   });
+
+  it('streamLogEvents 支持 signal 取消（透传 core，abort 后拒绝）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commit(repo, 'a.txt', 'only');
+    const ac = new AbortController();
+    const collect = async (): Promise<unknown[]> => {
+      const events = [];
+      for await (const e of streamLogEvents(repo, { limit: 10, skip: 0 }, { signal: ac.signal })) events.push(e);
+      return events;
+    };
+    const p = collect();
+    ac.abort();
+    await expect(p).rejects.toMatchObject({ name: 'GitExitError', exitCode: 130 });
+  });
 });

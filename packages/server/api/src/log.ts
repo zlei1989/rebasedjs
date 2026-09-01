@@ -16,16 +16,16 @@ function toCommitInfo(c: CoreCommit): CommitInfo {
   };
 }
 
-export async function getLogPage(repoPath: string, query: LogQuery): Promise<LogPage> {
+export async function getLogPage(repoPath: string, query: LogQuery, opts: { signal?: AbortSignal } = {}): Promise<LogPage> {
   const commits: CommitInfo[] = [];
-  for await (const c of streamLog(repoPath, { skip: query.skip, maxCount: query.limit, author: query.author, path: query.path })) {
+  for await (const c of streamLog(repoPath, { skip: query.skip, maxCount: query.limit, author: query.author, path: query.path, signal: opts.signal })) {
     commits.push(toCommitInfo(c));
   }
   return { commits, hasMore: commits.length === query.limit };
 }
 
-export async function* streamLogEvents(repoPath: string, query: LogQuery): AsyncIterable<LogEvent> {
-  for await (const c of streamLog(repoPath, { skip: query.skip, maxCount: query.limit, author: query.author, path: query.path })) {
+export async function* streamLogEvents(repoPath: string, query: LogQuery, opts: { signal?: AbortSignal } = {}): AsyncIterable<LogEvent> {
+  for await (const c of streamLog(repoPath, { skip: query.skip, maxCount: query.limit, author: query.author, path: query.path, signal: opts.signal })) {
     yield { type: 'log.line', payload: toCommitInfo(c) };
   }
 }
