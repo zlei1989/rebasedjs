@@ -413,7 +413,7 @@ export function serializeSseEvent(event: SseEvent): string {
 
 - [ ] **Step 6: 运行全部测试并提交**
 
-Run: `pnpm --filter @rebased/contracts test` → Expected: PASS（4 个用例）。
+Run: `pnpm --filter @rebased/contracts test` → Expected: PASS（3 个用例）。
 
 ```powershell
 git add packages/server/contracts
@@ -565,7 +565,7 @@ export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 
 - [ ] **Step 5: 运行全部测试并提交**
 
-Run: `pnpm --filter @rebased/contracts test` → Expected: PASS（8 个用例）。
+Run: `pnpm --filter @rebased/contracts test` → Expected: PASS（7 个用例，T2 的 3 + T3 的 4）。
 
 ```powershell
 git add packages/server/contracts
@@ -1937,7 +1937,7 @@ rebasedjs/
 pnpm install
 pnpm typecheck   # 预期：三个 server 包 tsc 全绿（跨包类型经 @rebased/* 解析）
 pnpm format      # 预期：边界规则与共享规则零违规
-pnpm test        # 预期：contracts 8 + core 12 + api 13 = 33 个用例全绿
+pnpm test        # 预期：contracts 7 + core 14 + api 14 = 35 个用例全绿
 ```
 
 - [ ] **Step 4: 提交**
