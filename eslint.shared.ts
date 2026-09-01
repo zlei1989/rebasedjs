@@ -1,83 +1,59 @@
 /**
- * 统一 ESLint 格式规则 — 各 package 的 eslint 配置共享此模块。
- *
- * 职责：@stylistic 格式化 + import-x 排序 + unused-imports 清理 + sort-imports 成员排序，
- * 均为可 --fix 自动修复的规则。采用渐进收敛策略：初始 warn，模块修复后升级 error。
- *
- * 注意：插件 import 发生在本文件（仓库根目录），因此这些插件依赖声明在根 package.json
- * 的 devDependencies 中，由根 node_modules 提供解析；各 package 无需重复声明。
+ * 共享 ESLint flat 配置 + 分层边界规则工厂。
+ * 边界即架构：api/core 禁框架；ui 禁数据层；client 禁 apps；apps 间互禁。
  */
-import stylistic from "@stylistic/eslint-plugin";
-import importX from "eslint-plugin-import-x";
-import unusedImports from "eslint-plugin-unused-imports";
-import type { Linter } from "eslint";
+import type { Linter } from 'eslint';
+import stylistic from '@stylistic/eslint-plugin';
+import importX from 'eslint-plugin-import-x';
+import unusedImports from 'eslint-plugin-unused-imports';
 
-export const sharedFormatRules: Linter.Config[] = [
-  // @stylistic 格式化规则
+export type PackageName = 'core' | 'api' | 'contracts' | 'ui' | 'client' | 'web-next' | 'web-koa';
+
+/** 各包禁止 import 的模块（paths 传给 no-restricted-imports） */
+const FORBIDDEN: Record<PackageName, string[]> = {
+  core: ['next', 'next/*', 'koa', 'react', 'react-dom'],
+  api: ['next', 'next/*', 'koa', 'react', 'react-dom'],
+  contracts: [],
+  ui: ['@rebased/client', '@rebased/api', '@rebased/web-next', '@rebased/web-koa', 'next/navigation'],
+  client: ['@rebased/web-next', '@rebased/web-koa'],
+  'web-next': ['@rebased/web-koa'],
+  'web-koa': ['@rebased/web-next'],
+};
+
+export const baseConfig: Linter.Config[] = [
+  { ignores: ['**/node_modules/**', '**/dist/**', '**/.next/**', '**/public/**'] },
   {
-    plugins: { "@stylistic": stylistic },
+    files: ['**/*.{ts,tsx}'],
+    plugins: { '@stylistic': stylistic, 'import-x': importX, 'unused-imports': unusedImports },
     rules: {
-      "@stylistic/indent": ["warn", 2],
-      "@stylistic/quotes": ["warn", "single", { avoidEscape: true }],
-      "@stylistic/semi": ["warn", "always"],
-      "@stylistic/comma-dangle": ["warn", "always-multiline"],
-      "@stylistic/object-curly-spacing": ["warn", "always"],
-      "@stylistic/jsx-quotes": ["warn", "prefer-double"],
-      "@stylistic/max-len": ["warn", { code: 100, ignoreStrings: true, ignoreTemplateLiterals: true }],
-      "@stylistic/eol-last": ["warn", "always"],
-      "@stylistic/jsx-sort-props": ["warn", {
-        callbacksLast: true,
-        shorthandFirst: true,
-        ignoreCase: true,
-      }],
-    },
-  },
-  // import-x 排序规则 — --fix 自动调整顺序
-  {
-    plugins: { "import-x": importX },
-    rules: {
-      "import-x/order": [
-        "warn",
-        {
-          groups: ["builtin", "external", "internal", "parent", "sibling", "type"],
-          pathGroups: [{ pattern: "@/**", group: "internal" }],
-          alphabetize: { order: "asc" },
-          "newlines-between": "always",
-        },
-      ],
-      "import-x/no-cycle": "warn",
-    },
-  },
-  // unused-imports — --fix 自动删除未使用的导入和变量
-  {
-    plugins: { "unused-imports": unusedImports },
-    rules: {
-      "unused-imports/no-unused-imports": "error",
-      "unused-imports/no-unused-vars": [
-        "warn",
-        {
-          vars: "all",
-          varsIgnorePattern: "^_",
-          args: "after-used",
-          argsIgnorePattern: "^_",
-        },
-      ],
-    },
-  },
-  // 导入成员排序 — --fix 自动按名称排序 import { ... } 内的命名导出
-  {
-    rules: {
-      "sort-imports": [
-        "warn",
-        {
-          ignoreCase: true,
-          ignoreDeclarationSort: true, // 声明排序由 import-x/order 处理
-          ignoreMemberSort: false,
-          memberSyntaxSortOrder: ["none", "all", "multiple", "single"],
-        },
-      ],
-      // 未使用变量交由 unused-imports 插件处理（可 --fix 自动删除）
-      "@typescript-eslint/no-unused-vars": "off",
+      '@stylistic/quotes': ['error', 'single'],
+      '@stylistic/semi': ['error', 'always'],
+      '@stylistic/indent': ['error', 2],
+      'unused-imports/no-unused-imports': 'error',
+      'import-x/no-duplicates': 'error',
     },
   },
 ];
+
+/** 按包名生成带边界约束的配置（与 baseConfig 合并使用） */
+export function withBoundary(pkg: PackageName): Linter.Config[] {
+  const paths = FORBIDDEN[pkg];
+  if (paths.length === 0) return baseConfig;
+  return [
+    ...baseConfig,
+    {
+      files: ['**/*.{ts,tsx}'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: paths.map((name) => ({
+              name,
+              message: `[分层边界] ${pkg} 禁止 import ${name}（见 docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md §3.3）`,
+            })),
+          },
+        ],
+      },
+    },
+  ];
+}

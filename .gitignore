@@ -2,7 +2,7 @@
 
 # dependencies
 /node_modules/
-/packages/*/node_modules/
+**/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -56,6 +56,6 @@ data/
 **/worktrees/
 /*.png
 
-# SDD 工作区与 git worktree 目录
+# SDD 宸ヤ綔鍖轰笌 git worktree 鐩綍
 .superpowers/
 .worktrees/
