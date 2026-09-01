@@ -11,23 +11,31 @@
 
 ## 目录
 
-monorepo 分 3 层，职责严格分离：
+monorepo：2 个下游应用 + 服务端/客户端两层，职责严格分离（设计见 `docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md`）：
 
-```text
-rebasedjs/           # pnpm monorepo
+rebasedjs/
+├── apps/
+│   ├── web-next/       # 下游应用①：Next.js 薄组装（页面壳 + 路由转调 api）
+│   └── web-koa/        # 下游应用②：Koa 薄组装（路由 + 静态托管同一 SPA）
 ├── packages/
-│   ├── web/         # 组装层 — 只做最终的组装与运行：路由、入口、进程/状态编排，不承载业务逻辑
-│   ├── git-api/     # 接口层 — 后端逻辑，每个小功能 1 个文件
-│   └── git-ui/      # UI 层 — 基础组件 + 组合组件，纯数据驱动的展示组件
+│   ├── server/
+│   │   ├── core/       # git CLI 引擎封装（流式原语、进程管理），零依赖
+│   │   ├── api/        # 功能服务层：一个功能一个文件，禁框架依赖
+│   │   └── contracts/  # 跨端契约：zod schema + 领域类型 + 错误码 + SSE 事件
+│   └── client/
+│       ├── ui/         # 纯展示组件（基础 + 组合），不调接口
+│       └── client/     # 数据层：SWR hooks + SSE 订阅 hooks
 ├── docs/
-└── eslint.shared.ts # 共享 ESLint 配置
-```
+└── eslint.shared.ts    # 共享规则 + 分层边界规则（withBoundary）
 
-- **web**：只是最终的组装运行，把 ui 的组件与 api 的能力装配成应用
-- **api**：每个小功能 1 个文件，实现后端逻辑
-- **ui**：只做基础组件和组合组件，不涉及任何接口调用，只是数据驱动的 UI 展示组件
+- **core**：与 git 进程打交道的引擎层，无任何业务；测试用真实 git CLI
+- **api**：后端逻辑，每个小功能 1 个文件；只依赖 core + contracts，禁止 import 任何框架
+- **contracts**：服务端与客户端共享的类型/校验/错误契约
+- **ui**：只做基础组件和组合组件，不涉及任何接口调用，纯数据驱动
+- **client**：数据获取 hooks（SWR + SSE），类型全部来自 contracts
+- **web-next / web-koa**：框架层，路由只做「zod 校验 → 调 api → 错误映射」三件事
 
-依赖方向：`web → git-api`、`web → git-ui`；`git-ui` 不依赖 `git-api`（UI 不涉及任何接口调用）。
+依赖方向：`web-next → api/ui/client/contracts`；`web-koa → api/contracts`；`ui → contracts`；`client → contracts`；`api → core/contracts`；`core → 无`。边界由 `eslint.shared.ts` 的 `withBoundary()` 硬约束。
 
 ## 命令
 
@@ -64,6 +72,6 @@ rebasedjs/           # pnpm monorepo
 
 ## 技术栈
 
-- **路由** — App Router（Server Components + Server Actions + API Routes）
+- **路由** — web-next：App Router（Server Components + Server Actions + API Routes）；web-koa：koa-router
 - **测试** — vitest + node
 - **路径别名** — `@/` 指向 `packages/web/src/`
