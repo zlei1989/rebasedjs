@@ -40,6 +40,11 @@ export function parsePorcelainV2(raw: string): CoreStatus {
       const renameFrom = next !== undefined && next !== '' && !/^(# |1 |2 |\? |! )/.test(next) ? next : undefined;
       s.entries.push({ path, code: parts[0], renameFrom });
       if (renameFrom !== undefined) i++; // 消费 origPath 记录
+    } else if (record.startsWith('u ')) {
+      // 冲突记录：`u <xy> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>`
+      //（-z 下 path 为 NUL 结尾字段；实测空格分隔共 10 字段，path 下标 9，含空格文件名由 join 还原）
+      const parts = record.slice(2).split(' ');
+      s.entries.push({ path: parts.slice(9).join(' '), code: parts[0] });
     } else if (record.startsWith('? ')) {
       s.entries.push({ path: record.slice(2), code: '??' });
     } else if (record.startsWith('! ')) {

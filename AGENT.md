@@ -4,7 +4,7 @@
 
 ## 约束
 
-- **写 Next.js 代码前先读 `packages/web/node_modules/next/dist/docs/` 中的相关指南** — 当前版本可能有训练数据未覆盖的破坏性变更
+- **写 Next.js 代码前先读 `apps/web-next/node_modules/next/dist/docs/` 中的相关指南** — 当前版本可能有训练数据未覆盖的破坏性变更
 - **写 UI 前先用 context7 查组件用法** — 常规界面与布局用 `antd`、数据可视化用 `@ant-design/plots`；样式用 `Tailwind`，避免裸写 `div` 等原始标签
 - **代码变更后、进入审查阶段前，必须先执行检查与格式化** — 顺序：`npm run typecheck` → `npm run format` → 修复所有错误 → 再进入代码审查；格式化产生的代码变更需随本次改动一并提交
 - web 启动时若端口被占用，先 kill 占用进程再启动

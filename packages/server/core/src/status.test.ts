@@ -49,4 +49,28 @@ describe('status 原语', () => {
     expect(renamed?.path).toBe('b.txt');
     expect(renamed?.renameFrom).toBe('a.txt');
   });
+
+  it('冲突仓库 status 含未合并条目', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    execFileSync('git', ['-C', repo, 'branch', '-M', 'main']);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    execFileSync('git', ['-C', repo, 'checkout', '-q', '-b', 'side']);
+    writeFileSync(join(repo, 'a.txt'), 'side');
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-am', 'side']);
+    execFileSync('git', ['-C', repo, 'checkout', '-q', 'main']);
+    writeFileSync(join(repo, 'a.txt'), 'main');
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-am', 'main']);
+    try {
+      execFileSync('git', ['-C', repo, 'merge', 'side'], { stdio: 'ignore' });
+    } catch {
+      /* 预期冲突：merge 以非零码退出 */
+    }
+    const s = await getStatus(repo);
+    const unmerged = s.entries.find((e) => e.code === 'UU');
+    expect(unmerged).toBeDefined();
+    expect(unmerged?.path).toBe('a.txt');
+  });
 });

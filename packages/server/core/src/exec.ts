@@ -56,18 +56,19 @@ export function runGit(args: string[], opts: { cwd: string; signal?: AbortSignal
     let aborted = false;
     child.stdout.setEncoding('utf8').on('data', (d: string) => (stdout += d));
     child.stderr.setEncoding('utf8').on('data', (d: string) => (stderr += d));
-    opts.signal?.addEventListener(
-      'abort',
-      () => {
-        killTree(child.pid!);
-        // 中止必须保证拒绝：命令可能恰好在 abort 瞬间成功退出（竞态），
-        // 此时 close 事件不会带来失败；标记中止，close 后以约定的中止退出码拒绝。
-        aborted = true;
-      },
-      { once: true },
-    );
+    const onAbort = () => {
+      // exitCode 在进程退出后即被赋值：已退出的进程绝不再 killTree，
+      // 防止 Windows 上 pid 复用导致误杀无关进程树。
+      if (child.exitCode === null) killTree(child.pid!);
+      // 中止必须保证拒绝：命令可能恰好在 abort 瞬间成功退出（竞态），
+      // 此时 close 事件不会带来失败；标记中止，close 后以约定的中止退出码拒绝。
+      aborted = true;
+    };
+    opts.signal?.addEventListener('abort', onAbort, { once: true });
     child.on('error', reject);
     child.on('close', (code) => {
+      // close 后 abort 事件若再来（或悬挂）不再触发 killTree
+      opts.signal?.removeEventListener('abort', onAbort);
       // 中止优先于退出码：即使子进程恰好以 0 退出，也要按取消语义拒绝
       if (aborted) reject(new GitExitError(args, 130, stdout, stderr));
       else if (code === 0) resolve({ stdout, stderr });
@@ -85,7 +86,12 @@ export async function* streamGit(args: string[], opts: { cwd: string; signal?: A
   });
   let stderr = '';
   child.stderr.setEncoding('utf8').on('data', (d: string) => (stderr += d));
-  opts.signal?.addEventListener('abort', () => killTree(child.pid!), { once: true });
+  const onAbort = () => {
+    // exitCode 在进程退出后即被赋值：已退出的进程绝不再 killTree，
+    // 防止 Windows 上 pid 复用导致误杀无关进程树。
+    if (child.exitCode === null) killTree(child.pid!);
+  };
+  opts.signal?.addEventListener('abort', onAbort, { once: true });
 
   const exitCode: Promise<number | null> = new Promise((resolve) => child.on('close', resolve));
   child.stdout.setEncoding('utf8');
@@ -93,6 +99,8 @@ export async function* streamGit(args: string[], opts: { cwd: string; signal?: A
     yield chunk;
   }
   const code = await exitCode;
+  // close 后 abort 事件若再来（或悬挂）不再触发 killTree
+  opts.signal?.removeEventListener('abort', onAbort);
   if (code !== 0) {
     throw new GitExitError(args, code ?? 1, '', stderr);
   }
