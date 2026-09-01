@@ -1,0 +1,38 @@
+{
+  "env": {
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_AUTOUPDATER": "1"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  },
+  "enabledPlugins": {
+    "context7@claude-plugins-official": true,
+    "ecc@ecc": true,
+    "playwright@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "taste-skill@taste-skill": true
+  },
+  "extraKnownMarketplaces": {
+    "ecc": {
+      "source": {
+        "source": "github",
+        "repo": "affaan-m/everything-claude-code"
+      }
+    },
+    "taste-skill": {
+      "source": {
+        "source": "github",
+        "repo": "Leonxlnx/taste-skill"
+      }
+    }
+  },
+  "language": "zh-cn",
+  "effortLevel": "xhigh",
+  "autoUpdatesChannel": "stable"
+}
