@@ -1,15 +1,16 @@
 /**
  * 共享 ESLint flat 配置 + 分层边界规则工厂。
- * 边界即架构：api/core 禁框架；ui 禁数据层；client 禁 apps；apps 间互禁。
+ * 边界即架构：api/core 禁框架；ui 禁 client/api/apps；client 禁 apps；apps 间互禁。
  */
 import type { Linter } from 'eslint';
 import stylistic from '@stylistic/eslint-plugin';
 import importX from 'eslint-plugin-import-x';
 import unusedImports from 'eslint-plugin-unused-imports';
+import tsParser from '@typescript-eslint/parser';
 
 export type PackageName = 'core' | 'api' | 'contracts' | 'ui' | 'client' | 'web-next' | 'web-koa';
 
-/** 各包禁止 import 的模块（paths 传给 no-restricted-imports） */
+/** 各包禁止 import 的模块名（精确名或带 * 的通配名） */
 const FORBIDDEN: Record<PackageName, string[]> = {
   core: ['next', 'next/*', 'koa', 'react', 'react-dom'],
   api: ['next', 'next/*', 'koa', 'react', 'react-dom'],
@@ -24,6 +25,7 @@ export const baseConfig: Linter.Config[] = [
   { ignores: ['**/node_modules/**', '**/dist/**', '**/.next/**', '**/public/**'] },
   {
     files: ['**/*.{ts,tsx}'],
+    languageOptions: { parser: tsParser },
     plugins: { '@stylistic': stylistic, 'import-x': importX, 'unused-imports': unusedImports },
     rules: {
       '@stylistic/quotes': ['error', 'single'],
@@ -35,10 +37,30 @@ export const baseConfig: Linter.Config[] = [
   },
 ];
 
+function boundaryMessage(pkg: PackageName, name: string): string {
+  return `[分层边界] ${pkg} 禁止 import ${name}（见 docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md §3.3）`;
+}
+
+/**
+ * 把禁止名单展开为 no-restricted-imports 的 patterns 组：
+ * 精确名匹配自身，非通配名另加「名/*」子路径组；'next/*' 这类已带 * 的保持通配。
+ * （paths.name 为精确匹配，'next/*' 等死条目会被 'next/headers' 绕过，故改用 patterns.group 的 glob。）
+ */
+function toGroups(pkg: PackageName, names: string[]): Array<{ group: string; message: string }> {
+  return names.flatMap((name) => {
+    const message = boundaryMessage(pkg, name);
+    if (name.endsWith('*')) return [{ group: name, message }];
+    return [
+      { group: name, message },
+      { group: `${name}/*`, message },
+    ];
+  });
+}
+
 /** 按包名生成带边界约束的配置（与 baseConfig 合并使用） */
 export function withBoundary(pkg: PackageName): Linter.Config[] {
-  const paths = FORBIDDEN[pkg];
-  if (paths.length === 0) return baseConfig;
+  const names = FORBIDDEN[pkg];
+  if (names.length === 0) return [...baseConfig];
   return [
     ...baseConfig,
     {
@@ -47,10 +69,7 @@ export function withBoundary(pkg: PackageName): Linter.Config[] {
         'no-restricted-imports': [
           'error',
           {
-            paths: paths.map((name) => ({
-              name,
-              message: `[分层边界] ${pkg} 禁止 import ${name}（见 docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md §3.3）`,
-            })),
+            patterns: toGroups(pkg, names).map(({ group, message }) => ({ group: [group], message })),
           },
         ],
       },
