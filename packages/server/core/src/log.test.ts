@@ -2,7 +2,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseLogRecord, streamLog } from './log';
+import { runGit } from './exec';
+import { frameRecords, parseLogRecord, streamLog } from './log';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -39,5 +40,33 @@ describe('log 原语', () => {
     expect(commits.some((c) => c.message === 'c1')).toBe(true);
     expect(commits.some((c) => c.message === 'c2')).toBe(true);
     expect(commits.every((c) => c.graph.length > 0)).toBe(true);
+  });
+
+  // 复现审查缺陷：chunk 恰在 \x02 处结束时，终结符 \n 随下一 chunk 到达会缀到
+  // 下一条记录头部（graph 变 '\n*'、width 虚增、图字符开头的内容行被多剥）
+  it('frameRecords 在 chunk 恰以 \x02 结尾时不把终结符 \n 带进下条记录', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commit(repo, 'a.txt', 'a\n| b');
+    commit(repo, 'b.txt', 'c1');
+    // 与 streamLog 相同的 --format（镜像自 log.ts 的 args 构造）
+    const fmt = '\x01%H\x1f%h\x1f%P\x1f%an\x1f%ae\x1f%aI\x1f%D\x1f%B\x02';
+    const { stdout } = await runGit(['log', '--graph', '--date-order', `--format=${fmt}`], { cwd: repo });
+    // 把真实输出按 \x02 重切块：每块以 \x02 结尾，紧随的 \n 落入下一块头部
+    const chunks: string[] = [];
+    let last = 0;
+    for (let idx = stdout.indexOf('\x02'); idx >= 0; idx = stdout.indexOf('\x02', last)) {
+      chunks.push(stdout.slice(last, idx + 1));
+      last = idx + 1;
+    }
+    if (last < stdout.length) chunks.push(stdout.slice(last));
+    const commits = [];
+    for await (const record of frameRecords(chunks)) commits.push(parseLogRecord(record));
+    expect(commits).toHaveLength(2);
+    expect(commits[0].message).toBe('c1');
+    expect(commits[0].graph).toBe('*');
+    // 第二条记录头部缀过 \n：graph 不得污染为 '\n*'，'| b' 行不得被多剥成 ' b'
+    expect(commits[1].message).toBe('a\n| b');
+    expect(commits[1].graph).toBe('*');
   });
 });

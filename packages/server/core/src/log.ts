@@ -68,6 +68,30 @@ export interface StreamLogOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * 记录帧切分：把原始 chunk 流按 \x02 切成完整记录帧（含 \x02）。
+ * 供 streamLog 使用，同时暴露给测试直接驱动 chunk 边界。
+ */
+export async function* frameRecords(chunks: AsyncIterable<string> | Iterable<string>): AsyncGenerator<string> {
+  let buffer = '';
+  for await (const chunk of chunks) {
+    buffer += chunk;
+    let idx: number;
+    // 以 \x02 切记录，保留尾部不完整帧
+    while ((idx = buffer.indexOf(RECORD_SEP)) >= 0) {
+      let record = buffer.slice(0, idx + 1);
+      buffer = buffer.slice(idx + 1);
+      // chunk 边界防御：\x02 后随下一 chunk 到达的终结符 \n 会缀到下条记录头部；
+      // 真实记录首字节永远是图字符，剥掉前导 \n 即可
+      record = record.startsWith('\n') ? record.slice(1) : record;
+      // git 每条记录以换行结尾（格式终结符），不属于任何记录，吞掉以免污染下一条的图列
+      if (buffer.startsWith('\n')) buffer = buffer.slice(1);
+      if (record.trim().length > 1) yield record;
+    }
+  }
+  if (buffer.trim().length > 0) yield buffer;
+}
+
 /** 流式产出提交（逐条解析，不整库读入内存；分页用 --skip） */
 export async function* streamLog(repoPath: string, opts: StreamLogOptions = {}): AsyncIterable<CoreCommit> {
   const args = ['log', '--graph', '--date-order', `--format=${PREFIX_SEP}%H${FIELD_SEP}%h${FIELD_SEP}%P${FIELD_SEP}%an${FIELD_SEP}%ae${FIELD_SEP}%aI${FIELD_SEP}%D${FIELD_SEP}%B${RECORD_SEP}`];
@@ -76,18 +100,7 @@ export async function* streamLog(repoPath: string, opts: StreamLogOptions = {}):
   if (opts.author) args.push(`--author=${opts.author}`);
   if (opts.path) args.push('--', opts.path);
 
-  let buffer = '';
-  for await (const chunk of streamGit(args, { cwd: repoPath, signal: opts.signal })) {
-    buffer += chunk;
-    let idx: number;
-    // 以 \x02 切记录，保留尾部不完整帧
-    while ((idx = buffer.indexOf(RECORD_SEP)) >= 0) {
-      const record = buffer.slice(0, idx + 1);
-      buffer = buffer.slice(idx + 1);
-      // git 每条记录以换行结尾（格式终结符），不属于任何记录，吞掉以免污染下一条的图列
-      if (buffer.startsWith('\n')) buffer = buffer.slice(1);
-      if (record.trim().length > 1) yield parseLogRecord(record);
-    }
+  for await (const record of frameRecords(streamGit(args, { cwd: repoPath, signal: opts.signal }))) {
+    yield parseLogRecord(record);
   }
-  if (buffer.trim().length > 0) yield parseLogRecord(buffer);
 }
