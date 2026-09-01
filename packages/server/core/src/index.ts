@@ -7,3 +7,4 @@ export { parseLogRecord, streamLog } from './log';
 export type { CoreCommit, StreamLogOptions } from './log';
 export { collectFileDiff, streamFileDiff } from './diff';
 export type { FileDiffOptions } from './diff';
+export { readFileAtRev } from './content';
