@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { diffQuerySchema, logQuerySchema, openRepoBodySchema, settingsPatchSchema } from './endpoints';
+import {
+  configPutBodySchema,
+  diffQuerySchema,
+  logQuerySchema,
+  openRepoBodySchema,
+  settingsPatchSchema,
+} from './endpoints';
 
 describe('P1 端点 schema', () => {
   it('logQuery 默认 limit=50，接受 author/path/skip', () => {
@@ -26,5 +32,16 @@ describe('P1 端点 schema', () => {
   it('settingsPatch 校验 logInEditor 布尔与 recentRepoIds 数组', () => {
     expect(() => settingsPatchSchema.parse({ logInEditor: 'yes' })).toThrow();
     expect(settingsPatchSchema.parse({ recentRepoIds: ['a', 'b'] })).toEqual({ recentRepoIds: ['a', 'b'] });
+  });
+});
+
+describe('configPutBodySchema', () => {
+  it('接受白名单键与字符串值', () => {
+    const body = configPutBodySchema.parse({ key: 'user.name', value: '张三' });
+    expect(body).toEqual({ key: 'user.name', value: '张三' });
+  });
+  it('拒绝白名单外的键与空值', () => {
+    expect(() => configPutBodySchema.parse({ key: 'core.hooksPath', value: '/x' })).toThrow();
+    expect(() => configPutBodySchema.parse({ key: 'user.name', value: '' })).toThrow();
   });
 });

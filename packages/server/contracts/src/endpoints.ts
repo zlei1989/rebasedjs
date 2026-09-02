@@ -3,6 +3,7 @@
  * 查询参数走字符串，故数值用 coerce 宽容转换；布尔不用 coerce（'false' 会被当成 true），见 diffQuerySchema.staged。
  */
 import { z } from 'zod';
+import { CONFIG_KEYS } from './domain';
 
 export const openRepoBodySchema = z.object({ path: z.string().min(1) });
 export type OpenRepoBody = z.infer<typeof openRepoBodySchema>;
@@ -30,3 +31,10 @@ export const settingsPatchSchema = z.object({
   recentRepoIds: z.array(z.string()).optional(),
 });
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
+
+/** 配置写请求体：键限白名单；值为字符串（布尔类键由调用方传 'true'/'false' 等 git 原样接受） */
+export const configPutBodySchema = z.object({
+  key: z.enum(CONFIG_KEYS),
+  value: z.string().min(1).max(500),
+});
+export type ConfigPutBody = z.infer<typeof configPutBodySchema>;

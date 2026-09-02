@@ -68,3 +68,38 @@ export interface DiffEvent {
   type: 'diff.chunk';
   payload: { text: string };
 }
+
+/** git 配置白名单键：读写在契约层收敛，避免任意配置写风险 */
+export const CONFIG_KEYS = [
+  'user.name',
+  'user.email',
+  'core.autocrlf',
+  'pull.rebase',
+  'commit.gpgsign',
+  'user.signingkey',
+  'fetch.prune',
+  'init.defaultBranch',
+] as const;
+export type ConfigKey = (typeof CONFIG_KEYS)[number];
+
+/** 单个配置键视图：value 为生效值（local>global>system 合并结果），localValue 为仓库级值；未设置均为 null */
+export interface GitConfigEntry {
+  key: ConfigKey;
+  value: string | null;
+  localValue: string | null;
+}
+
+/** 仓库 git 配置视图：固定覆盖 CONFIG_KEYS 全量键 */
+export interface GitConfigView {
+  entries: GitConfigEntry[];
+}
+
+/** 进行中操作种类 */
+export type OperationKind = 'none' | 'merge' | 'rebase' | 'cherry-pick' | 'revert';
+
+/** 进行中操作状态：kind 为 none 时无其他字段；rebase 时 step/total 为进度（第 step/total 步） */
+export interface OperationState {
+  kind: OperationKind;
+  step?: number;
+  total?: number;
+}
