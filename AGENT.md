@@ -41,11 +41,12 @@ rebasedjs/
 
 | 命令 | 说明 |
 |------|------|
-| `npm run dev` | 启动开发服务器 (localhost:3030) |
-| `npm run build` | 生产构建 |
-| `npm run format` | 统一 ESLint `--fix` 自动修复（共享格式规则见根 `eslint.shared.ts`） |
-| `npm run typecheck` | TypeScript 类型检查 |
-| `npm run test` | 运行 vitest 测试 |
+| `pnpm dev` | 并行起所有包的 dev 脚本：web-next (localhost:3030) + web-koa 服务端 (localhost:3031) |
+| `pnpm --filter @rebased/web-koa dev:web` | web-koa 的 SPA 前端 Vite 开发服务器 (localhost:5173，代理 /api → 3031) |
+| `pnpm build` | 生产构建 |
+| `pnpm format` | 统一 ESLint `--fix` 自动修复（共享格式规则见根 `eslint.shared.ts`） |
+| `pnpm typecheck` | TypeScript 类型检查 |
+| `pnpm test` | 运行 vitest 测试 |
 
 ## 注释
 
@@ -74,4 +75,15 @@ rebasedjs/
 
 - **路由** — web-next：App Router（Server Components + Server Actions + API Routes）；web-koa：koa-router
 - **测试** — vitest + node
-- **路径别名** — `@/` 指向 `packages/web/src/`
+- **路径别名** — 各包自含、无跨包 `@/` 别名：web-next 内 `@/*` 指向 `apps/web-next/*`，web-koa 内 `@/*` 指向 `apps/web-koa/*`（当前两包均未实际配置别名，包内引用走相对路径、跨包引用走 `@rebased/*` 包名）
+
+## UX 默认值（对齐 Java 版，spec §6.6）
+
+| 项 | 默认值 | 落点 |
+|----|--------|------|
+| logInEditor | `true` | `packages/server/api/src/lib/config-store.ts` DEFAULTS |
+| word diff | BY_WORD（行内词级高亮，Monaco diff 默认行为） | `packages/client/ui/src/base/monaco-lazy.tsx` |
+| 行号 / sync scroll | 开（Monaco diff 编辑器默认） | 同上 |
+| DiffPage 布局 | 默认并排（side-by-side），忽略空白默认关 | `packages/client/ui/src/domain/diff-viewer.tsx` |
+| CommitGraph tag chips | 默认关（`showTags=false`），分支 chips 默认开 | `packages/client/ui/src/domain/commit-graph.tsx` |
+| 状态条徽标 | 蓝(incoming)/绿(outgoing) 圆点 + tooltip，0 不显示，无 ↑↓ 文本 | `packages/client/ui/src/domain/repo-status-bar.tsx` |

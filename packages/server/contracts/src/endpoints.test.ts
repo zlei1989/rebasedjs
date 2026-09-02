@@ -17,6 +17,12 @@ describe('P1 端点 schema', () => {
     expect(diffQuerySchema.parse({ file: 'a.txt', from: 'HEAD~1', to: 'HEAD', staged: true }).staged).toBe(true);
   });
 
+  it('diffQuery staged 查询串：' + '\'false\' → false、\'true\' → true（coerce.boolean 会把 \'false\' 当真）', () => {
+    expect(diffQuerySchema.parse({ file: 'a.txt', staged: 'false' }).staged).toBe(false);
+    expect(diffQuerySchema.parse({ file: 'a.txt', staged: 'true' }).staged).toBe(true);
+    expect(() => diffQuerySchema.parse({ file: 'a.txt', staged: 'yes' })).toThrow();
+  });
+
   it('settingsPatch 校验 logInEditor 布尔与 recentRepoIds 数组', () => {
     expect(() => settingsPatchSchema.parse({ logInEditor: 'yes' })).toThrow();
     expect(settingsPatchSchema.parse({ recentRepoIds: ['a', 'b'] })).toEqual({ recentRepoIds: ['a', 'b'] });

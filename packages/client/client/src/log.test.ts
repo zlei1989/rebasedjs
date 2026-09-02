@@ -118,4 +118,31 @@ describe('useLogStream', () => {
       renderer.unmount();
     });
   });
+
+  it('stream.error 帧：错误消息存入 error 并断开连接（中止订阅）', async () => {
+    const getCaptured = captureSubscription();
+
+    let result!: ReturnType<typeof useLogStream>;
+    function Probe() {
+      result = useLogStream('r-stream-3');
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(Probe));
+    });
+    expect(result.error).toBeNull();
+
+    const captured = getCaptured();
+    await act(async () => {
+      captured.onEvent({ type: 'stream.error', payload: { message: 'git log 失败' } });
+    });
+    expect(result.error).toBe('git log 失败');
+    expect(result.connected).toBe(false);
+    expect(captured.signal?.aborted).toBe(true);
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
 });

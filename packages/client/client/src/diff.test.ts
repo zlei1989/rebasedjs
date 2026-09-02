@@ -1,8 +1,8 @@
-/** diff.ts 测试：useFileDiff 查询串 + useDiffStream 分块累积/断开清理（mock subscribeSse） */
+/** diff.ts 测试：useFileDiff 查询串（FileVersions）+ useDiffStream 分块累积/stream.error/断开清理（mock subscribeSse） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DiffFile, SseEvent } from '@rebased/contracts';
+import type { FileVersions, SseEvent } from '@rebased/contracts';
 import { subscribeSse } from './events';
 import { useDiffStream, useFileDiff } from './diff';
 
@@ -16,13 +16,13 @@ afterEach(() => {
 });
 
 describe('useFileDiff', () => {
-  it('按 file/staged 拼接查询串请求 diff 端点并返回 DiffFile', async () => {
-    const diff: DiffFile = { path: 'a.ts', text: '@@ -1 +1 @@\n-old\n+new' };
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify(diff), { status: 200 }));
+  it('按 file/staged 拼接查询串请求 diff 端点并返回 FileVersions', async () => {
+    const versions: FileVersions = { before: 'old', after: 'new' };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(versions), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     // 渲染期间访问属性以登记 SWR 依赖
-    let result: { data?: DiffFile; error?: unknown; isLoading: boolean } | undefined;
+    let result: { data?: FileVersions; error?: unknown; isLoading: boolean } | undefined;
     function Probe() {
       const { data, error, isLoading } = useFileDiff('r-diff-1', 'a.ts', true);
       result = { data, error, isLoading };
@@ -33,7 +33,7 @@ describe('useFileDiff', () => {
       renderer = TestRenderer.create(createElement(Probe));
     });
     await act(async () => {
-      await vi.waitFor(() => expect(result?.data).toEqual(diff));
+      await vi.waitFor(() => expect(result?.data).toEqual(versions));
     });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-diff-1/diff?file=a.ts&staged=true');
@@ -84,5 +84,35 @@ describe('useDiffStream', () => {
       renderer.unmount();
     });
     expect(captured.signal?.aborted).toBe(true);
+  });
+
+  it('stream.error 帧：错误消息存入 error 并断开连接（中止订阅）', async () => {
+    let captured!: { onEvent: (event: SseEvent) => void; signal?: AbortSignal };
+    subscribeMock.mockImplementation(async (_url, onEvent, signal) => {
+      captured = { onEvent, signal };
+      await new Promise(() => {}); // 长连接：永不 resolve
+    });
+
+    let result!: ReturnType<typeof useDiffStream>;
+    function Probe() {
+      result = useDiffStream('r-diff-3', 'c.ts');
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(Probe));
+    });
+    expect(result.error).toBeNull();
+
+    await act(async () => {
+      captured.onEvent({ type: 'stream.error', payload: { message: 'git diff 失败' } });
+    });
+    expect(result.error).toBe('git diff 失败');
+    expect(result.connected).toBe(false);
+    expect(captured.signal?.aborted).toBe(true);
+
+    await act(async () => {
+      renderer.unmount();
+    });
   });
 });
