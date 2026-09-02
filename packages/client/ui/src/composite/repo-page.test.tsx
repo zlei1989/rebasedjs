@@ -75,6 +75,11 @@ describe('RepoPage', () => {
     expect(screen.getAllByTestId('repo-item')).toHaveLength(50);
   });
 
+  it('未传 onRemove 时不渲染移除按钮（移除端点属后续，避免死控件）', () => {
+    render(<RepoPage repos={[makeRepo({ id: 'a', name: 'alpha' })]} onOpen={vi.fn()} homeDir={HOME} />);
+    expect(screen.queryByTestId('repo-remove')).not.toBeInTheDocument();
+  });
+
   it('点击移除弹确认，确认后回调 onRemove(repoId)', async () => {
     const onRemove = vi.fn();
     render(

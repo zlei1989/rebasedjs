@@ -15,7 +15,10 @@ export interface RepoPageProps {
   repos: RepoInfo[];
   /** 打开表单提交（path 为用户输入的仓库路径） */
   onOpen: (path: string) => void;
-  /** 移除确认后回调（repoId） */
+  /**
+   * 移除确认后回调（repoId）。移除端点属后续（spec §4.1 端点清单不含 remove，
+   * 与 §6.3 的移除动作存在计划级不一致），故按钮仅在 onRemove 提供时出现，未提供时不渲染（避免死控件）。
+   */
   onRemove?: (repoId: string) => void;
   /** 用户主目录：浏览器端无法读 os.homedir()，由容器注入用于路径副文本相对化 */
   homeDir?: string;
@@ -78,14 +81,11 @@ export function RepoPage({ repos, onOpen, onRemove, homeDir = '' }: RepoPageProp
                 <div style={{ fontWeight: 600 }}>{repo.name}</div>
                 <div style={{ color: '#888', fontSize: 12 }}>{relativeToHome(repo.path, homeDir)}</div>
               </div>
-              <Popconfirm
-                title="移除该仓库？"
-                okText="确定"
-                cancelText="取消"
-                onConfirm={() => onRemove?.(repo.id)}
-              >
-                <Button data-testid="repo-remove" size="small" type="text" icon={<DeleteOutlined />} />
-              </Popconfirm>
+              {onRemove ? (
+                <Popconfirm title="移除该仓库？" okText="确定" cancelText="取消" onConfirm={() => onRemove(repo.id)}>
+                  <Button data-testid="repo-remove" size="small" type="text" icon={<DeleteOutlined />} />
+                </Popconfirm>
+              ) : null}
             </div>
           ))}
         </div>

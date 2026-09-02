@@ -1,9 +1,10 @@
 'use client';
 
-/** 首页容器：useRecentRepos + useOpenRepo 注入 ui RepoPage；打开成功刷新列表并跳转日志页 */
+/** 首页容器：useRecentRepos + useOpenRepo 注入 ui RepoPage；打开成功刷新列表并跳转日志页，失败经 message.error 反馈 */
 import { useOpenRepo, useRecentRepos } from '@rebased/client';
 import { RepoPage } from '@rebased/ui';
 import { useRouter } from 'next/navigation';
+import { openRepoFlow } from '../src/open-repo-flow';
 
 export default function Page(): React.ReactNode {
   const router = useRouter();
@@ -13,11 +14,12 @@ export default function Page(): React.ReactNode {
     <RepoPage
       repos={repos}
       onOpen={(path) => {
-        void (async () => {
-          const { repoId } = await openRepo({ path });
-          await mutate();
-          router.push(`/repos/${repoId}`);
-        })();
+        void openRepoFlow({
+          path,
+          openRepo,
+          refresh: () => mutate(),
+          navigate: (repoId) => router.push(`/repos/${repoId}`),
+        });
       }}
     />
   );
