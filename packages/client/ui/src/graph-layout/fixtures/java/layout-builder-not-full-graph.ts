@@ -14,12 +14,14 @@ export const input: LayoutCommit[] = [
 
 /**
  * 期望快照：Java 期望文件（layoutIndex|-head 行号）为
- * 1|-0, 1|-0, 3|-2, 2|-0, 4|-4 → lane = layoutIndex-1，color = `c<head 行号>`；
+ * 1|-0, 1|-0, 3|-2, 2|-0, 4|-4 → lane = layoutIndex-1；
  * edges 为按 Java 语义手推的边段（未知父边不产生边段）。
+ * color（Task 6 完整着色）：主线（layoutIndex == head 的 layoutIndex）且 head 无 ref → 默认黑；
+ * 行 3 为 fragment（li 2 ≠ head li 1）→ colorById(2) = '#7663a6'（Java 实测）。
  */
 export const expected: { lanes: number[]; colors: string[]; edges: EdgeSegment[][] } = {
   lanes: [0, 0, 2, 1, 3],
-  colors: ['c0', 'c0', 'c2', 'c0', 'c4'],
+  colors: ['#000000', '#000000', '#000000', '#7663a6', '#000000'],
   edges: [
     [
       { fromLane: 0, toLane: 0, fromRow: 0, toRow: 1 },

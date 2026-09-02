@@ -15,11 +15,12 @@ export const input: LayoutCommit[] = [
 /**
  * 期望快照：Java 期望文件（layoutIndex|-head 行号）为
  * 2|-0, 2|-0, 1|-2, 1|-2, 1|-2
- * → lane = layoutIndex-1，color = `c<head 行号>`；edges 为按 Java 语义手推的边段。
+ * → lane = layoutIndex-1，edges 为按 Java 语义手推的边段。
+ * color（Task 6 完整着色）：全部为主线（layoutIndex == head 的 layoutIndex），head 无 ref → 默认黑。
  */
 export const expected: { lanes: number[]; colors: string[]; edges: EdgeSegment[][] } = {
   lanes: [1, 1, 0, 0, 0],
-  colors: ['c0', 'c0', 'c2', 'c2', 'c2'],
+  colors: ['#000000', '#000000', '#000000', '#000000', '#000000'],
   edges: [
     [
       { fromLane: 1, toLane: 1, fromRow: 0, toRow: 1 },

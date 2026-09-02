@@ -6,9 +6,12 @@ import type { EdgeSegment, LayoutCommit } from '../../types';
 /** 输入：oneNodeNotFullGraph_in.txt（父提交 a1/a3/a5 均不在图中，被丢弃 → 与 oneNode 等价） */
 export const input: LayoutCommit[] = [{ hash: 'a0', parents: ['a1', 'a3', 'a5'], refs: [] }];
 
-/** 期望快照：Java 期望文件为 `1|-0` → lane = 0，head 行号 0 → color 'c0'；未知父边的边段不产生 */
+/**
+ * 期望快照：Java 期望文件为 `1|-0` → lane = 0；未知父边的边段不产生。
+ * color：唯一节点为主线，head 无 ref → 默认黑 '#000000'。
+ */
 export const expected: { lanes: number[]; colors: string[]; edges: EdgeSegment[][] } = {
   lanes: [0],
-  colors: ['c0'],
+  colors: ['#000000'],
   edges: [[]],
 };
