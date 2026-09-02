@@ -6,8 +6,11 @@
 //   走到死胡同且该节点为首次访问时 layoutIndex 递增——「边冲突时开新 lane、合并行收拢」由此而来。
 // - GraphLayoutImpl.getOneOfHeadNodeIndex：对 importantHeads 的 layoutIndex 数组做 JDK binarySearch，
 //   未命中时取 max(0, -insertionPoint - 2) 得到 head 序号。
-// - lane = layoutIndex - 1（0 基列号）；color 按 GraphColorGetterByHead 语义由所属 head 决定，
-//   此处以 `c<head 在输入中的行号>` 表示（上层可映射到具体色板）。
+// - lane = layoutIndex - 1（0 基列号）。
+// - color：head 分组键（`c<head 在输入中的行号>`）——仅是着色替身，不是完整 Java 着色语义。
+//   Java 实测（vcs-log/impl GraphColorManagerImpl.getColor）：主线节点（layoutIndex == 其 head 的 layoutIndex）
+//   染 head 首个 ref 名哈希（无 ref 为 0），fragment 节点染自身 layoutIndex。
+//   Task 6 colorForRef 将**替换**该键为完整着色语义（替换时同步更新 5 个 Java 夹具的 color 快照断言）。
 // - head 排序按哈希字典序，对应 Java 测试中按提交名比较的 comparator（真实 IntelliJ 用时间戳，可替换）。
 // - 偏离 Java branches 参数：带 refs 的提交不参与 head 集合（简报模型中 refs 仅作展示元数据）。
 
@@ -75,6 +78,8 @@ export function buildLayout(commits: LayoutCommit[]): LayoutRow[] {
       fromRow: rowIdx,
       toRow: rowOf.get(p)!,
     }));
+    // color 为 head 分组键（'c'+head 行号），仅作替身；完整着色语义（主线=ref 名哈希、fragment=layoutIndex）
+    // 由 Task 6 colorForRef 替换实现，见文件头注释。
     return { commit, lane, edges, color: `c${rowOf.get(head)}` };
   });
 }
