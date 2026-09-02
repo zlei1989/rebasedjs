@@ -12,3 +12,7 @@ export { CommitGraph, type CommitGraphProps } from './domain/commit-graph';
 export { RepoStatusBar, type RepoStatusBarProps } from './domain/repo-status-bar';
 export { DiffViewer, type DiffViewerProps } from './domain/diff-viewer';
 export { CommitDetailsPanel, type CommitDetailsPanelProps } from './domain/commit-details-panel';
+export { RepoPage, type RepoPageProps } from './composite/repo-page';
+export { LogPage, type LogPageProps } from './composite/log-page';
+export { DiffPage, type DiffPageProps } from './composite/diff-page';
+export { relativeToHome } from './composite/repo-page-utils';
