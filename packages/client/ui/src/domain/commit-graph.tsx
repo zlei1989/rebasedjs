@@ -76,6 +76,8 @@ export function CommitGraph({ commits, onSelect, height = 480, showTags = false 
               rows={rows.slice(Math.max(0, index - 1), index + 2)}
               rowHeight={ROW_HEIGHT}
               laneWidth={LANE_WIDTH}
+              // 切片起点即行偏移：边段全量行号须平移到切片局部坐标系
+              rowOffset={Math.max(0, index - 1)}
             />
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               <RefChips refs={commit.refs} showTags={showTags} />

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CommitInfo } from '@rebased/contracts';
 import { CommitGraph } from './commit-graph';
@@ -61,5 +61,47 @@ describe('CommitGraph', () => {
   it('空提交列表不渲染行', () => {
     render(<CommitGraph commits={[]} />);
     expect(screen.queryAllByTestId('commit-graph-row')).toHaveLength(0);
+  });
+
+  /** ≥5 行分支合并图：c5 合并主线 c4 与侧支 c2b（含 c5→c2 跨行长边），c2b 落第二 lane */
+  const mergeCommits: CommitInfo[] = [
+    makeCommit({ hash: 'c5', parents: ['c4', 'c2b'], message: '合并侧支' }),
+    makeCommit({ hash: 'c4', parents: ['c3'] }),
+    makeCommit({ hash: 'c3', parents: ['c2'] }),
+    makeCommit({ hash: 'c2', parents: ['c1'] }),
+    makeCommit({ hash: 'c2b', parents: ['c1'], message: '侧支提交' }),
+    makeCommit({ hash: 'c1', parents: [] }),
+  ];
+
+  it('切片画布的边坐标换算到局部坐标系（y 落在画布高度内）', () => {
+    render(<CommitGraph commits={mergeCommits} />);
+    const rows = screen.getAllByTestId('commit-graph-row');
+    // 第 5 行（index 4，侧支 c2b）：切片 rows[3..5]，画布高 3×24=72；
+    // 切片内边为 c2(3→5)、c2b(4→5)，局部坐标均应在 [0, 72] 内
+    const canvas = within(rows[4]).getByTestId('graph-canvas');
+    const height = Number(canvas.getAttribute('height'));
+    expect(height).toBe(72);
+    const lines = canvas.querySelectorAll('line');
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      for (const attr of ['y1', 'y2']) {
+        const y = Number(line.getAttribute(attr));
+        expect(y).toBeGreaterThanOrEqual(0);
+        expect(y).toBeLessThanOrEqual(height);
+      }
+    }
+  });
+
+  it('边端点与本行节点圆点对齐（存在边从本行圆点出发）', () => {
+    render(<CommitGraph commits={mergeCommits} />);
+    const rows = screen.getAllByTestId('commit-graph-row');
+    const canvas = within(rows[4]).getByTestId('graph-canvas');
+    // c2b 在切片 rows[3..5] 的局部下标 1（lane 1 → cx=27，cy=36）
+    const own = canvas.querySelectorAll('circle')[1];
+    const lines = [...canvas.querySelectorAll('line')];
+    const startsAtNode = lines.some(
+      (l) => l.getAttribute('x1') === own.getAttribute('cx') && l.getAttribute('y1') === own.getAttribute('cy'),
+    );
+    expect(startsAtNode).toBe(true);
   });
 });

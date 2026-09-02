@@ -10,6 +10,12 @@ export interface GraphCanvasProps {
   rows: LayoutRow[];
   rowHeight: number;
   laneWidth?: number;
+  /**
+   * 切片行偏移：EdgeSegment 的 fromRow/toRow 是 buildLayout 的全量行号，
+   * 渲染行切片（如 CommitGraph 的 3 行窗口）时须减去该偏移换算为切片局部坐标；
+   * 节点圆点本就用切片局部下标，不受影响。默认 0（传全量行时）。
+   */
+  rowOffset?: number;
 }
 
 /** lane/行号 → 节点中心坐标 */
@@ -17,7 +23,7 @@ function center(lane: number, row: number, rowHeight: number, laneWidth: number)
   return { x: (lane + 0.5) * laneWidth, y: row * rowHeight + rowHeight / 2 };
 }
 
-export function GraphCanvas({ rows, rowHeight, laneWidth = 16 }: GraphCanvasProps): ReactNode {
+export function GraphCanvas({ rows, rowHeight, laneWidth = 16, rowOffset = 0 }: GraphCanvasProps): ReactNode {
   const maxLane = rows.reduce((m, r) => Math.max(m, r.lane, ...r.edges.map((e) => Math.max(e.fromLane, e.toLane))), 0);
   const width = (maxLane + 1) * laneWidth;
   const height = rows.length * rowHeight;
@@ -25,8 +31,8 @@ export function GraphCanvas({ rows, rowHeight, laneWidth = 16 }: GraphCanvasProp
     <svg width={width} height={height} data-testid="graph-canvas">
       {rows.flatMap((row) =>
         row.edges.map((edge, ei) => {
-          const from = center(edge.fromLane, edge.fromRow, rowHeight, laneWidth);
-          const to = center(edge.toLane, edge.toRow, rowHeight, laneWidth);
+          const from = center(edge.fromLane, edge.fromRow - rowOffset, rowHeight, laneWidth);
+          const to = center(edge.toLane, edge.toRow - rowOffset, rowHeight, laneWidth);
           const midY = (from.y + to.y) / 2;
           const dash = edge.type === 'D' ? '4 3' : undefined;
           return [
