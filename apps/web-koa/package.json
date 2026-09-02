@@ -8,12 +8,27 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "format": "eslint . --fix",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "dev": "tsx watch src/app.ts",
+    "dev:web": "vite",
+    "build": "vite build",
+    "build:server": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@koa/bodyparser": "^5.1.2",
+    "@koa/router": "^13.1.0",
+    "@rebased/api": "workspace:*",
+    "@rebased/contracts": "workspace:*",
+    "koa": "^2.15.4",
+    "koa-static": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@vitejs/plugin-react": "^4.4.0",
     "eslint": "^9",
+    "tsx": "^4.22.4",
     "typescript": "^5",
+    "vite": "7.3.6",
     "vitest": "^4"
   }
 }

@@ -11,9 +11,21 @@
     "format": "eslint . --fix",
     "test": "vitest run --passWithNoTests"
   },
+  "dependencies": {
+    "@ant-design/icons": "^6.3.2",
+    "@rebased/contracts": "workspace:*",
+    "antd": "^6.5.3",
+    "monaco-editor": "^0.52.0",
+    "react": "19.2.7"
+  },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
+    "@types/react": "^19.2.7",
     "eslint": "^9",
+    "jsdom": "^29.1.1",
+    "react-dom": "19.2.7",
     "typescript": "^5",
     "vitest": "^4"
   }

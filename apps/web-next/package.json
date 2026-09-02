@@ -8,11 +8,29 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "format": "eslint . --fix",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "dev": "next dev -p 3030",
+    "build": "next build",
+    "start": "next start -p 3030"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.3.2",
+    "@rebased/api": "workspace:*",
+    "@rebased/client": "workspace:*",
+    "@rebased/contracts": "workspace:*",
+    "@rebased/ui": "workspace:*",
+    "antd": "^6.5.3",
+    "next": "16.2.7",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "swr": "^2.3.0",
+    "tailwindcss": "^3.4.0",
+    "zod": "^3.25.28"
   },
   "devDependencies": {
     "@types/node": "^20",
     "eslint": "^9",
+    "jiti": "^2.7.0",
     "typescript": "^5",
     "vitest": "^4"
   }
