@@ -75,4 +75,18 @@ describe('diff 功能', () => {
     await expect(getFileVersions(repo, { file: 'a.txt', from: 'HEAD', staged: false }))
       .rejects.toMatchObject({ code: 'INVALID_QUERY' });
   });
+
+  it('file 含 .. 路径段时抛 INVALID_QUERY（防工作区直读逃逸仓库根）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    await expect(getFileVersions(repo, { file: '../secret', staged: false }))
+      .rejects.toMatchObject({ code: 'INVALID_QUERY' });
+  });
+
+  it('file 为绝对路径时抛 INVALID_QUERY（防工作区直读逃逸仓库根）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    await expect(getFileDiff(repo, { file: join(repo, 'secret.txt'), staged: false }))
+      .rejects.toMatchObject({ code: 'INVALID_QUERY' });
+  });
 });

@@ -1,4 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { GitExitError, runGit, streamGit } from './exec';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
@@ -72,5 +74,14 @@ describe('streamGit 取消语义', () => {
     await iter.return(undefined); // break 语义：finally 清理后结束
     // 仓库未被锁：后续 git 命令仍可执行
     await expect(runGit(['rev-parse', '--is-inside-work-tree'], { cwd: repo })).resolves.toMatchObject({ stdout: 'true\n' });
+  });
+
+  it('spawn 失败（cwd 不存在）以拒绝结束且不崩溃', async () => {
+    const collect = async (): Promise<string> => {
+      let out = '';
+      for await (const c of streamGit(['log'], { cwd: join(tmpdir(), 'no-such-dir-xxx') })) out += c;
+      return out;
+    };
+    await expect(collect()).rejects.toThrow();
   });
 });

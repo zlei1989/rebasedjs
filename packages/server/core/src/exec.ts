@@ -90,14 +90,23 @@ export async function* streamGit(args: string[], opts: { cwd: string; signal?: A
   });
   let stderr = '';
   let aborted = false;
+  // spawn 失败（git 缺失、cwd 不存在等）时进程不会产生，'close' 不会触发；
+  // 监听 'error' 记下失败并以 null 关闭等待，避免 'error' 无监听导致进程崩溃。
+  let spawnError: Error | undefined;
   const onAbort = (): void => {
     aborted = true;
-    // 进程已退出则绝不动其 pid（Windows PID 复用风险）
-    if (child.exitCode === null) killTree(child.pid!);
+    // 进程已退出则绝不动其 pid（Windows PID 复用风险）；spawn 失败时 pid 为 undefined，同样跳过
+    if (child.exitCode === null && child.pid !== undefined) killTree(child.pid);
   };
   opts.signal?.addEventListener('abort', onAbort, { once: true });
   child.stderr.setEncoding('utf8').on('data', (d: string) => (stderr += d));
-  const closed: Promise<number | null> = new Promise((resolve) => child.on('close', resolve));
+  const closed: Promise<number | null> = new Promise((resolve) => {
+    child.on('close', resolve);
+    child.on('error', (e: Error) => {
+      spawnError = e;
+      resolve(null);
+    });
+  });
   child.stdout.setEncoding('utf8');
 
   let completed = false;
@@ -108,11 +117,11 @@ export async function* streamGit(args: string[], opts: { cwd: string; signal?: A
     completed = true;
   } finally {
     opts.signal?.removeEventListener('abort', onAbort);
-    // 仅消费者提前退出（break/throw）时杀进程；自然结束不动已退出 pid
-    if (!completed && child.exitCode === null) killTree(child.pid!);
+    // 仅消费者提前退出（break/throw）时杀进程；自然结束不动已退出 pid；spawn 失败时 pid 为 undefined，跳过
+    if (!completed && child.exitCode === null && child.pid !== undefined) killTree(child.pid);
   }
   const code = await closed;
-  if (aborted || code !== 0) {
+  if (aborted || spawnError || code !== 0) {
     throw new GitExitError(args, aborted ? 130 : (code ?? 1), '', stderr);
   }
 }
