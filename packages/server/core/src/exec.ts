@@ -43,8 +43,9 @@ function killTree(pid: number): void {
   }
 }
 
-/** 执行 git 并收集完整输出（小输出场景） */
-export function runGit(args: string[], opts: { cwd: string; signal?: AbortSignal }): Promise<GitResult> {
+/** 执行 git 并收集完整输出（小输出场景）。
+ *  timeoutMs 可选项：超时杀进程并以退出码 124 拒绝（防 git 传输 helper 挂起——如 Windows msys2 并发初始化失败导致 clone 无限等待）。 */
+export function runGit(args: string[], opts: { cwd: string; signal?: AbortSignal; timeoutMs?: number }): Promise<GitResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', buildArgs(args), {
       cwd: opts.cwd,
@@ -54,6 +55,14 @@ export function runGit(args: string[], opts: { cwd: string; signal?: AbortSignal
     let stdout = '';
     let stderr = '';
     let aborted = false;
+    let timedOut = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (opts.timeoutMs !== undefined) {
+      timeoutId = setTimeout(() => {
+        timedOut = true;
+        if (child.exitCode === null && child.pid !== undefined) killTree(child.pid);
+      }, opts.timeoutMs);
+    }
     child.stdout.setEncoding('utf8').on('data', (d: string) => (stdout += d));
     child.stderr.setEncoding('utf8').on('data', (d: string) => (stderr += d));
     const onAbort = () => {
@@ -67,10 +76,12 @@ export function runGit(args: string[], opts: { cwd: string; signal?: AbortSignal
     opts.signal?.addEventListener('abort', onAbort, { once: true });
     child.on('error', reject);
     child.on('close', (code) => {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
       // close 后 abort 事件若再来（或悬挂）不再触发 killTree
       opts.signal?.removeEventListener('abort', onAbort);
       // 中止优先于退出码：即使子进程恰好以 0 退出，也要按取消语义拒绝
       if (aborted) reject(new GitExitError(args, 130, stdout, stderr));
+      else if (timedOut) reject(new GitExitError(args, 124, stdout, stderr));
       else if (code === 0) resolve({ stdout, stderr });
       else reject(new GitExitError(args, code ?? 1, stdout, stderr));
     });

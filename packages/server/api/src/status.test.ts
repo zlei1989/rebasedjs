@@ -21,6 +21,8 @@ describe('status 功能', () => {
     const s = await getRepoStatus(repo);
     expect(s.branch).toBeTruthy();
     expect(s.upstream).toBeNull();
+    expect(s.headHash).toBeTruthy();
+    expect(s.headHash).toMatch(/^[0-9a-f]{40}$/);
     expect(s.ahead).toBe(0);
     expect(s.entries.some((e) => e.path === 'c.txt' && e.renameFrom === 'a.txt')).toBe(true);
     expect(s.entries.some((e) => e.path === 'b.txt' && e.code === '??')).toBe(true);

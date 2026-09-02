@@ -7,6 +7,7 @@ export async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
   return {
     branch: s.branch,
     upstream: s.upstream,
+    headHash: s.headHash,
     ahead: s.ahead,
     behind: s.behind,
     entries: s.entries.map((e) => ({ path: e.path, code: e.code, renameFrom: e.renameFrom })),

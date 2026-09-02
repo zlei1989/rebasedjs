@@ -1,4 +1,4 @@
-/** 全局样式：暗色底 + 盒模型复位（SSR 壳）；不引 tailwind 指令——本包暂无 PostCSS 配置 */
+/** SPA 基础样式：与 web-next 的 globals.css 同源（暗色底 + 盒模型复位） */
 * {
   box-sizing: border-box;
 }
@@ -10,6 +10,11 @@ body {
   height: 100%;
   background: #141414;
   color: rgba(255, 255, 255, 0.85);
+}
+
+/* Vite SPA 挂载点承接视口高度：body → #root → .ant-app 的高度链不断（Monaco 编辑器 flex:1/minHeight:0 依赖它） */
+#root {
+  height: 100%;
 }
 
 /* antd App 包装层承接 body 高度：页面根（height: 100%）与 Monaco 编辑器（flex:1/minHeight:0）的高度链不断 */

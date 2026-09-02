@@ -79,12 +79,12 @@ export function CommitGraph({ commits, onSelect, height = 480, showTags = false 
               // 切片起点即行偏移：边段全量行号须平移到切片局部坐标系
               rowOffset={Math.max(0, index - 1)}
             />
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ flex: 1, minWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               <RefChips refs={commit.refs} showTags={showTags} />
               {commit.message.split('\n')[0]}
             </span>
-            <span style={{ width: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author}</span>
-            <span style={{ width: 140, color: '#888' }}>{formatCommitDate(commit.dateIso)}</span>
+            <span style={{ width: 160, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author}</span>
+            <span style={{ width: 140, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: '#888' }}>{formatCommitDate(commit.dateIso)}</span>
           </div>
         );
       }}

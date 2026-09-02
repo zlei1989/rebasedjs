@@ -6,6 +6,7 @@
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
+import './index.css';
 import { ReposPage } from './pages';
 import { RepoPage } from './pages/repo';
 import { RepoDiffPage } from './pages/diff';

@@ -19,6 +19,7 @@ export async function initGitRepo(path: string): Promise<void> {
   await runGit(['init', '-q', path], { cwd: parse(path).root });
 }
 
+/** 克隆仓库：超时 30s（git 传输 helper 在 Windows msys2 并发下可能挂起，超时即杀进程拒绝） */
 export async function cloneGitRepo(url: string, targetDir: string, opts: { signal?: AbortSignal } = {}): Promise<void> {
-  await runGit(['clone', url, targetDir], { cwd: dirname(targetDir), signal: opts.signal });
+  await runGit(['clone', url, targetDir], { cwd: dirname(targetDir), signal: opts.signal, timeoutMs: 30000 });
 }

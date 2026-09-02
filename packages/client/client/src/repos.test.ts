@@ -7,7 +7,7 @@ import type { RepoInfo, RepoStatus } from '@rebased/contracts';
 import { useOpenRepo, useRecentRepos, useRepoStatus } from './repos';
 
 const REPO: RepoInfo = { id: 'r1', path: '/tmp/repo', name: 'repo', openedAt: '2026-09-01T00:00:00Z' };
-const STATUS: RepoStatus = { branch: 'main', upstream: 'origin/main', ahead: 1, behind: 2, entries: [{ path: 'a.ts', code: ' M' }] };
+const STATUS: RepoStatus = { branch: 'main', upstream: 'origin/main', headHash: 'a'.repeat(40), ahead: 1, behind: 2, entries: [{ path: 'a.ts', code: ' M' }] };
 
 function freshCache(children: React.ReactNode) {
   return createElement(SWRConfig, { value: { provider: () => new Map() } }, children);

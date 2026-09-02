@@ -16,8 +16,9 @@ export function useLogPage(repoId: string, query?: Partial<LogQuery>) {
   return useSWR<LogPage>(`/api/repos/${repoId}/log${qs ? `?${qs}` : ''}`, getJson);
 }
 
-/** 订阅日志增量：SSE log.line → commits 追加；stream.error → error 暴露并断开；connected 表示订阅存活，卸载即中止 */
-export function useLogStream(repoId: string): { commits: CommitInfo[]; connected: boolean; error: string | null } {
+/** 订阅日志增量：SSE log.line → commits 追加；stream.error → error 暴露并断开；connected 表示订阅存活，卸载即中止。
+ *  refreshKey 变化时重订阅（服务端状态变化后日志刷新的入口：新提交会出现在新流顶部）。 */
+export function useLogStream(repoId: string, refreshKey = 0): { commits: CommitInfo[]; connected: boolean; error: string | null } {
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +43,6 @@ export function useLogStream(repoId: string): { commits: CommitInfo[]; connected
       ac.abort();
       setConnected(false);
     };
-  }, [repoId]);
+  }, [repoId, refreshKey]);
   return { commits, connected, error };
 }

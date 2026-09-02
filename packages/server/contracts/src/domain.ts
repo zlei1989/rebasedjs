@@ -17,6 +17,8 @@ export interface ChangeEntry {
 export interface RepoStatus {
   branch: string | null;
   upstream: string | null;
+  /** HEAD 提交哈希：干净提交也会变化，是 events 推送（repo.state-changed）检测提交/检出的关键信号 */
+  headHash: string | null;
   ahead: number;
   behind: number;
   entries: ChangeEntry[];

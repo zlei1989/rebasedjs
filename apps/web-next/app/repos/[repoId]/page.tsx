@@ -14,11 +14,16 @@ import { mergeLogCommits } from '../../../src/log-merge';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
-  const { data: page } = useLogPage(repoId);
-  const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId);
+  const { data: page, mutate: mutateLog } = useLogPage(repoId);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId, refreshKey);
   const { data: status, mutate } = useRepoStatus(repoId);
-  // SSE 推送的 RepoStatus 直接回写 SWR 缓存（不再触发 GET）
-  useRepoEvents(repoId, (next) => void mutate(next, { revalidate: false }));
+  // 状态推送（干净提交也使 headHash 变化 → 触发此回调）：回写 status 缓存 + 重验证日志快照 + 重订阅流（新提交出现在新流顶部）
+  useRepoEvents(repoId, (next) => {
+    void mutate(next, { revalidate: false });
+    void mutateLog();
+    setRefreshKey((k) => k + 1);
+  });
   const { data: repos } = useRecentRepos();
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   // stream.error 一次性呈现（Task 7 终审 deferred 接通）：error 置位即断开订阅，effect 仅触发一次

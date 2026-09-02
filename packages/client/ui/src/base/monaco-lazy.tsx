@@ -14,7 +14,7 @@ export default function MonacoDiffEditor({ original, modified, language = 'plain
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const editor = monaco.editor.createDiffEditor(container, { readOnly: true, ...options });
+    const editor = monaco.editor.createDiffEditor(container, { readOnly: true, theme: 'vs-dark', ...options });
     const originalModel = monaco.editor.createModel(original, language);
     const modifiedModel = monaco.editor.createModel(modified, language);
     editor.setModel({ original: originalModel, modified: modifiedModel });

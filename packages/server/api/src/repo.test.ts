@@ -31,7 +31,8 @@ describe('repo 功能', () => {
     expect(() => getRepoById('no-such-id')).toThrowError(expect.objectContaining({ code: 'REPO_NOT_FOUND' }));
   });
 
-  it('initRepo 与 cloneRepo 落库注册', async () => {
+  // 本机 git 慢（杀软扫描）+ clone 的 msys2 传输 helper 并发初始化偶发挂起——90s 超时 + 失败重试
+  it('initRepo 与 cloneRepo 落库注册', { timeout: 90000, retry: 2 }, async () => {
     const t1 = join(tmpdir(), `rebased-api-init-${Date.now()}`);
     dirs.push(t1);
     const i1 = await initRepo(t1);

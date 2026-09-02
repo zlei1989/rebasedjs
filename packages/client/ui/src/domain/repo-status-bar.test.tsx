@@ -5,7 +5,7 @@ import { RepoStatusBar } from './repo-status-bar';
 
 /** 测试状态工厂：补全 RepoStatus 必填字段，按需覆盖 */
 function makeStatus(overrides: Partial<RepoStatus> = {}): RepoStatus {
-  return { branch: 'main', upstream: 'origin/main', ahead: 0, behind: 0, entries: [], ...overrides };
+  return { branch: 'main', upstream: 'origin/main', headHash: 'a'.repeat(40), ahead: 0, behind: 0, entries: [], ...overrides };
 }
 
 describe('RepoStatusBar', () => {

@@ -24,6 +24,7 @@ describe('status 原语', () => {
     const s = parsePorcelainV2(raw);
     expect(s.branch).toBe('main');
     expect(s.upstream).toBe('origin/main');
+    expect(s.headHash).toBe('abc123');
     expect(s.ahead).toBe(2);
     expect(s.behind).toBe(1);
     expect(s.entries).toHaveLength(4);

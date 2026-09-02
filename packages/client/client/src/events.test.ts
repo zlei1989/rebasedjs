@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ServiceError, serializeSseEvent, type RepoStatus } from '@rebased/contracts';
 import { subscribeSse, useRepoEvents } from './events';
 
-const STATUS: RepoStatus = { branch: 'main', upstream: null, ahead: 0, behind: 0, entries: [] };
+const STATUS: RepoStatus = { branch: 'main', upstream: null, headHash: 'a'.repeat(40), ahead: 0, behind: 0, entries: [] };
 
 function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();

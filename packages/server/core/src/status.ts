@@ -10,6 +10,8 @@ export interface CoreChangeEntry {
 export interface CoreStatus {
   branch: string | null;
   upstream: string | null;
+  /** HEAD 提交哈希（branch.oid；干净提交也变化，是仓库状态变更检测的关键信号） */
+  headHash: string | null;
   ahead: number;
   behind: number;
   entries: CoreChangeEntry[];
@@ -17,11 +19,12 @@ export interface CoreStatus {
 
 /** 解析 porcelain v2 记录流（# branch.* 头部 + 1/2/?/! 条目） */
 export function parsePorcelainV2(raw: string): CoreStatus {
-  const s: CoreStatus = { branch: null, upstream: null, ahead: 0, behind: 0, entries: [] };
+  const s: CoreStatus = { branch: null, upstream: null, headHash: null, ahead: 0, behind: 0, entries: [] };
   const records = raw.split('\0');
   for (let i = 0; i < records.length; i++) {
     const record = records[i];
-    if (record.startsWith('# branch.head ')) s.branch = record.slice(14);
+    if (record.startsWith('# branch.oid ')) s.headHash = record.slice(13);
+    else if (record.startsWith('# branch.head ')) s.branch = record.slice(14);
     else if (record.startsWith('# branch.upstream ')) s.upstream = record.slice(18);
     else if (record.startsWith('# branch.ab ')) {
       const m = record.match(/\+(\d+) -(\d+)/);

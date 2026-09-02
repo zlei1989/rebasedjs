@@ -33,7 +33,8 @@ describe('repo 原语', () => {
     expect(await findRepoRoot(target)).toBe(target);
   });
 
-  it('cloneGitRepo 克隆仓库', async () => {
+  // 本机 git 慢（杀软扫描）+ clone 的 msys2 传输 helper 并发初始化偶发挂起——90s 超时 + 失败重试
+  it('cloneGitRepo 克隆仓库', { timeout: 90000, retry: 2 }, async () => {
     const src = createTmpRepo();
     dirs.push(src);
     const target = join(tmpdir(), `rebased-clone-${Date.now()}`);

@@ -18,7 +18,7 @@ function makeCommit(overrides: Partial<CommitInfo> & { hash: string }): CommitIn
   };
 }
 
-const status: RepoStatus = { branch: 'main', upstream: 'origin/main', ahead: 0, behind: 0, entries: [] };
+const status: RepoStatus = { branch: 'main', upstream: 'origin/main', headHash: 'a'.repeat(40), ahead: 0, behind: 0, entries: [] };
 
 const commits: CommitInfo[] = [
   makeCommit({ hash: 'c2', parents: ['c1'], message: '第二笔提交' }),
