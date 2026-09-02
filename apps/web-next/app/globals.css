@@ -1,0 +1,13 @@
+/** 全局样式：暗色底 + 盒模型复位（SSR 壳）；不引 tailwind 指令——本包暂无 PostCSS 配置 */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #141414;
+  color: rgba(255, 255, 255, 0.85);
+}

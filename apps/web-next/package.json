@@ -29,6 +29,8 @@
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^9",
     "jiti": "^2.7.0",
     "typescript": "^5",

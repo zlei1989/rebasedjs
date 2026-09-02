@@ -118,6 +118,12 @@ importers:
       '@types/node':
         specifier: ^20
         version: 20.19.43
+      '@types/react':
+        specifier: ^19.2.7
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.5(@types/react@19.2.18)
       eslint:
         specifier: ^9
         version: 9.39.5(jiti@2.7.0)
