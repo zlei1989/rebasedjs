@@ -67,6 +67,7 @@ export function RepoPage(): React.ReactNode {
       abortingOperation={abortingOperation}
       onOpenSettings={() => navigate(`/repos/${repoId}/settings`)}
       onOpenStatus={() => navigate(`/repos/${repoId}/status`)}
+      onOpenBranches={() => navigate(`/repos/${repoId}/branches`)}
     />
   );
 }

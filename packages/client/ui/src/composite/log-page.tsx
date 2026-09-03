@@ -1,8 +1,8 @@
 /**
- * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
+ * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  */
-import { DiffOutlined, SettingOutlined } from '@ant-design/icons';
+import { BranchesOutlined, DiffOutlined, SettingOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
@@ -27,6 +27,8 @@ export interface LogPageProps {
   onOpenSettings?: () => void;
   /** 变更（状态页）入口回调；缺省不渲染变更按钮 */
   onOpenStatus?: () => void;
+  /** 分支页入口回调；缺省不渲染分支按钮 */
+  onOpenBranches?: () => void;
 }
 
 export function LogPage({
@@ -40,6 +42,7 @@ export function LogPage({
   abortingOperation,
   onOpenSettings,
   onOpenStatus,
+  onOpenBranches,
 }: LogPageProps): React.ReactNode {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -60,14 +63,24 @@ export function LogPage({
             style={{ marginLeft: 'auto' }}
           />
         ) : null}
-        {/* 设置入口靠右对齐；变更按钮已占位（marginLeft:auto）时不再重复右推 */}
+        {/* 分支入口：排在变更与设置之间；变更按钮已占位（marginLeft:auto）时不再重复右推 */}
+        {onOpenBranches ? (
+          <Button
+            aria-label="分支"
+            type="text"
+            icon={<BranchesOutlined />}
+            onClick={onOpenBranches}
+            style={onOpenStatus ? undefined : { marginLeft: 'auto' }}
+          />
+        ) : null}
+        {/* 设置入口靠右对齐；变更/分支按钮已占位（marginLeft:auto）时不再重复右推 */}
         {onOpenSettings ? (
           <Button
             aria-label="设置"
             type="text"
             icon={<SettingOutlined />}
             onClick={onOpenSettings}
-            style={onOpenStatus ? undefined : { marginLeft: 'auto' }}
+            style={onOpenStatus || onOpenBranches ? undefined : { marginLeft: 'auto' }}
           />
         ) : null}
       </div>
