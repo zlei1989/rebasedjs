@@ -1,0 +1,116 @@
+import { afterAll, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { applyStashAction, getStashes } from './stash';
+import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+
+const dirs: string[] = [];
+
+/** 造一个带初始提交的仓库（a.txt 提交为 init）；贮藏需要 HEAD 提交作基底 */
+function repoWithCommit(): string {
+  const repo = createTmpRepo();
+  dirs.push(repo);
+  writeFileSync(join(repo, 'a.txt'), 'v1');
+  execFileSync('git', ['-C', repo, 'add', '.']);
+  execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+  return repo;
+}
+
+/** 当前分支短名（git 版本间 init 默认分支不同，动态取） */
+function currentBranch(repo: string): string {
+  return execFileSync('git', ['-C', repo, 'symbolic-ref', 'HEAD', '--short'], { encoding: 'utf8' }).trim();
+}
+
+describe('stash 功能', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('getStashes 空仓库 → 空列表', async () => {
+    const repo = repoWithCommit();
+    expect(await getStashes(repo)).toEqual({ stashes: [] });
+  });
+
+  it('save 保存工作区改动 → 列表 1 条且工作区改动被收走', async () => {
+    const repo = repoWithCommit();
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+
+    const list = await applyStashAction(repo, { action: 'save', message: 's1' });
+    expect(list.stashes).toHaveLength(1);
+    expect(list.stashes[0].index).toBe(0);
+    expect(list.stashes[0].hash).not.toBe('');
+    expect(list.stashes[0].message).toContain('s1');
+    // 改动被贮藏，工作区回到 v1
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v1');
+  });
+
+  it('无工作区改动 save → INVALID_QUERY', async () => {
+    const repo = repoWithCommit();
+    await expect(applyStashAction(repo, { action: 'save' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: expect.stringContaining('没有可贮藏的工作区改动'),
+    });
+  });
+
+  it('仅未跟踪文件：未 includeUntracked → INVALID_QUERY；includeUntracked → 成功', async () => {
+    const repo = repoWithCommit();
+    writeFileSync(join(repo, 'new.txt'), 'n');
+
+    await expect(applyStashAction(repo, { action: 'save' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+    });
+
+    const list = await applyStashAction(repo, { action: 'save', includeUntracked: true });
+    expect(list.stashes).toHaveLength(1);
+  });
+
+  it('越界 apply/pop/drop/branch → INVALID_REF（贮藏不存在：stash@{n}）', async () => {
+    const repo = repoWithCommit();
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    await applyStashAction(repo, { action: 'save' });
+
+    await expect(applyStashAction(repo, { action: 'apply', index: 1 })).rejects.toMatchObject({
+      code: 'INVALID_REF',
+      message: expect.stringContaining('贮藏不存在：stash@{1}'),
+    });
+    await expect(applyStashAction(repo, { action: 'pop', index: 1 })).rejects.toMatchObject({ code: 'INVALID_REF' });
+    await expect(applyStashAction(repo, { action: 'drop', index: 5 })).rejects.toMatchObject({
+      code: 'INVALID_REF',
+      message: expect.stringContaining('stash@{5}'),
+    });
+    await expect(applyStashAction(repo, { action: 'branch', index: 1, name: 'x' })).rejects.toMatchObject({
+      code: 'INVALID_REF',
+    });
+  });
+
+  it('save→apply→drop 轮转，返回刷新列表', async () => {
+    const repo = repoWithCommit();
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+
+    const afterSave = await applyStashAction(repo, { action: 'save', message: 'rot' });
+    expect(afterSave.stashes).toHaveLength(1);
+
+    // apply：改动回到工作区，贮藏仍在
+    const afterApply = await applyStashAction(repo, { action: 'apply', index: 0 });
+    expect(afterApply.stashes).toHaveLength(1);
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
+
+    // 先清掉工作区改动再 drop，列表清空
+    execFileSync('git', ['-C', repo, 'checkout', '-q', '--', 'a.txt']);
+    const afterDrop = await applyStashAction(repo, { action: 'drop', index: 0 });
+    expect(afterDrop.stashes).toHaveLength(0);
+  });
+
+  it('branch 动作：贮藏转为新分支，HEAD 切到该分支且贮藏消失', async () => {
+    const repo = repoWithCommit();
+    const base = currentBranch(repo);
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    await applyStashAction(repo, { action: 'save', message: 'to-branch' });
+
+    const list = await applyStashAction(repo, { action: 'branch', index: 0, name: 'from-stash' });
+    expect(list.stashes).toHaveLength(0);
+    expect(currentBranch(repo)).toBe('from-stash');
+    // 贮藏改动已应用到新分支工作区
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
+    expect(base).not.toBe('from-stash');
+  });
+});

@@ -23,7 +23,7 @@ export async function listStashes(cwd: string): Promise<CoreStash[]> {
   });
 }
 
-/** 保存贮藏：git stash push [-u] [-m message]；无改动时 git 输出 'No local changes to save'（退出码 0）——api 层据此映射 INVALID_QUERY，core 原样透传 */
+/** 保存贮藏：git stash push [-u] [-m message]；无改动时 git 输出 'No local changes to save'（退出码 0，不产生贮藏）——api 层在调用前以 getStatus 预检工作区改动并映射 INVALID_QUERY，core 原样透传 */
 export async function saveStash(cwd: string, opts: { message?: string; includeUntracked?: boolean }): Promise<void> {
   const args = ['stash', 'push'];
   if (opts.includeUntracked) args.push('-u');
