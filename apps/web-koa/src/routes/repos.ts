@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyCheckout, applyHunkStaging, applyStaging, createCommit, getBranches, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, setRepoConfig, streamDiffEvents, streamLogEvents, updateSettings, watchRepoStatus } from '@rebased/api';
-import { branchActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, openRepoBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, createCommit, getBranches, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, watchRepoStatus } from '@rebased/api';
+import { branchActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, openRepoBodySchema, resetBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -231,6 +231,25 @@ router.post('/api/repos/:repoId/checkout', async (ctx) => {
   try {
     const body = checkoutActionSchema.parse(ctx.request.body);
     ctx.body = await applyCheckout(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/reset —— zod 校验请求体 → applyReset（soft/mixed/hard 重置到 ref）→ 200 RepoStatus；无效 ref → 400 INVALID_REF */
+router.post('/api/repos/:repoId/reset', async (ctx) => {
+  try {
+    const body = resetBodySchema.parse(ctx.request.body);
+    ctx.body = await applyReset(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/reset/undo-commit —— 撤销最近提交（soft 到 HEAD~1，无请求体）→ 200 RepoStatus；根提交/无提交 → 400 INVALID_QUERY */
+router.post('/api/repos/:repoId/reset/undo-commit', async (ctx) => {
+  try {
+    ctx.body = await undoCommit(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
   } catch (error) {
     handleApiError(error, ctx);
   }

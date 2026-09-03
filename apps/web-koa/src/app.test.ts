@@ -373,6 +373,62 @@ describe('web-koa REST 端点', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });
+
+  it('reset 端点：soft 重置到 HEAD~1 返回 200 且 headHash 回退', async () => {
+    const { repoId, repoPath } = registerRepo();
+    const baseHash = execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    writeFileSync(join(repoPath, 'a.txt'), 'hello\nworld\n');
+    execFileSync('git', ['-C', repoPath, 'add', 'a.txt']);
+    execFileSync('git', ['-C', repoPath, 'commit', '-q', '-m', 'second']);
+    const res = await fetch(`${base}/api/repos/${repoId}/reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ref: 'HEAD~1', mode: 'soft' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { headHash: string };
+    expect(body.headHash).toBe(baseHash);
+  });
+
+  it('reset 端点：空 ref 返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ref: '', mode: 'soft' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('reset 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await fetch(`${base}/api/repos/nope/reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ref: 'HEAD~1', mode: 'soft' }),
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('reset/undo-commit 端点：撤销最近提交返回 200 且 headHash 回退', async () => {
+    const { repoId, repoPath } = registerRepo();
+    const baseHash = execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    writeFileSync(join(repoPath, 'a.txt'), 'hello\nworld\n');
+    execFileSync('git', ['-C', repoPath, 'add', 'a.txt']);
+    execFileSync('git', ['-C', repoPath, 'commit', '-q', '-m', 'second']);
+    const res = await fetch(`${base}/api/repos/${repoId}/reset/undo-commit`, { method: 'POST' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { headHash: string };
+    expect(body.headHash).toBe(baseHash);
+  });
+
+  it('reset/undo-commit 端点：根提交上再撤销返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo(); // 仅一次提交（根提交）：无可撤销
+    const res = await fetch(`${base}/api/repos/${repoId}/reset/undo-commit`, { method: 'POST' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
 });
 
 describe('web-koa SSE 端点', () => {

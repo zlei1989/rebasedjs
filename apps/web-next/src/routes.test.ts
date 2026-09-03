@@ -20,6 +20,8 @@ import { POST as postHunkStaging } from '../app/api/repos/[repoId]/staging/hunks
 import { POST as postCommit } from '../app/api/repos/[repoId]/commit/route';
 import { GET as getBranches, POST as postBranches } from '../app/api/repos/[repoId]/branches/route';
 import { POST as postCheckout } from '../app/api/repos/[repoId]/checkout/route';
+import { POST as postReset } from '../app/api/repos/[repoId]/reset/route';
+import { POST as postUndoCommit } from '../app/api/repos/[repoId]/reset/undo-commit/route';
 import { GET as getDiffPatch } from '../app/api/repos/[repoId]/diff/patch/route';
 import { GET as getSettings, PUT as putSettings } from '../app/api/settings/route';
 
@@ -434,5 +436,76 @@ describe('web-next REST 路由', () => {
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
+  it('reset 端点：soft 重置到 HEAD~1 返回 200 且 headHash 回退', async () => {
+    const repoId = registerRepo();
+    const base = execFileSync('git', ['-C', lastRepoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    writeFileSync(join(lastRepoPath, 'a.txt'), 'hello\nworld\n');
+    execFileSync('git', ['-C', lastRepoPath, 'add', 'a.txt']);
+    execFileSync('git', ['-C', lastRepoPath, 'commit', '-q', '-m', 'second']);
+    const res = await postReset(
+      new Request(`http://localhost/api/repos/${repoId}/reset`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ref: 'HEAD~1', mode: 'soft' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.headHash).toBe(base);
+  });
+
+  it('reset 端点：空 ref 返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postReset(
+      new Request(`http://localhost/api/repos/${repoId}/reset`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ref: '', mode: 'soft' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('reset 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await postReset(
+      new Request('http://localhost/api/repos/nope/reset', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ref: 'HEAD~1', mode: 'soft' }),
+      }),
+      ctx('nope'),
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('reset/undo-commit 端点：撤销最近提交返回 200 且 headHash 回退', async () => {
+    const repoId = registerRepo();
+    const base = execFileSync('git', ['-C', lastRepoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    writeFileSync(join(lastRepoPath, 'a.txt'), 'hello\nworld\n');
+    execFileSync('git', ['-C', lastRepoPath, 'add', 'a.txt']);
+    execFileSync('git', ['-C', lastRepoPath, 'commit', '-q', '-m', 'second']);
+    const res = await postUndoCommit(
+      new Request(`http://localhost/api/repos/${repoId}/reset/undo-commit`, { method: 'POST' }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.headHash).toBe(base);
+  });
+
+  it('reset/undo-commit 端点：根提交上再撤销返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo(); // 仅一次提交（根提交）：无可撤销
+    const res = await postUndoCommit(
+      new Request(`http://localhost/api/repos/${repoId}/reset/undo-commit`, { method: 'POST' }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 });
