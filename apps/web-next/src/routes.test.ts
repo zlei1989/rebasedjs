@@ -12,6 +12,9 @@ import { POST as postOpen } from '../app/api/repos/open/route';
 import { GET as getStatus } from '../app/api/repos/[repoId]/status/route';
 import { GET as getLog } from '../app/api/repos/[repoId]/log/route';
 import { GET as getDiff } from '../app/api/repos/[repoId]/diff/route';
+import { GET as getConfig, PUT as putConfig } from '../app/api/repos/[repoId]/config/route';
+import { GET as getOperation } from '../app/api/repos/[repoId]/operation/route';
+import { POST as postAbort } from '../app/api/repos/[repoId]/operation/abort/route';
 import { GET as getSettings, PUT as putSettings } from '../app/api/settings/route';
 
 /** Next 16：route 第二参的 params 为 Promise */
@@ -175,5 +178,74 @@ describe('web-next REST 路由', () => {
     const res = await getDiff(new Request(`http://localhost/api/repos/${repoId}/diff?file=a.txt`), ctx(repoId));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ before: 'hello\n', after: 'hello\n' });
+  });
+
+  it('config 端点：GET 返回 200 且 entries 覆盖 user.name 白名单键', async () => {
+    const repoId = registerRepo();
+    const res = await getConfig(new Request(`http://localhost/api/repos/${repoId}/config`), ctx(repoId));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const entry = body.entries.find((e: { key: string }) => e.key === 'user.name');
+    expect(entry).toBeDefined();
+    expect(entry.localValue).toBe('Test User'); // 夹具仓库本地已设 user.name
+  });
+
+  it('config 端点：PUT 白名单键返回 200 且刷新视图 localValue 生效', async () => {
+    const repoId = registerRepo();
+    const res = await putConfig(
+      new Request(`http://localhost/api/repos/${repoId}/config`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: 'user.name', value: '李四' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const entry = body.entries.find((e: { key: string }) => e.key === 'user.name');
+    expect(entry.localValue).toBe('李四');
+  });
+
+  it('config 端点：PUT 白名单外键返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await putConfig(
+      new Request(`http://localhost/api/repos/${repoId}/config`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: 'core.hooksPath', value: '/x' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('config 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await getConfig(new Request('http://localhost/api/repos/nope/config'), ctx('nope'));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('operation 端点：无进行中操作返回 200 与 {kind:"none"}', async () => {
+    const repoId = registerRepo();
+    const res = await getOperation(new Request(`http://localhost/api/repos/${repoId}/operation`), ctx(repoId));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ kind: 'none' });
+  });
+
+  it('operation/abort 端点：无进行中操作返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postAbort(
+      new Request(`http://localhost/api/repos/${repoId}/operation/abort`, { method: 'POST' }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('operation 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await getOperation(new Request('http://localhost/api/repos/nope/operation'), ctx('nope'));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
   });
 });

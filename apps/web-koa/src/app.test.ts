@@ -166,6 +166,65 @@ describe('web-koa REST 端点', () => {
     const afterRes = await fetch(`${base}/api/settings`);
     expect(await afterRes.json()).toMatchObject({ logInEditor: false });
   });
+
+  it('config 端点：GET 返回 200 且 entries 覆盖 user.name 白名单键', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/config`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { entries: Array<{ key: string; localValue: string | null }> };
+    const entry = body.entries.find((e) => e.key === 'user.name');
+    expect(entry).toBeDefined();
+    expect(entry!.localValue).toBe('Test User'); // 夹具仓库本地已设 user.name
+  });
+
+  it('config 端点：PUT 白名单键返回 200 且刷新视图 localValue 生效', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/config`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: 'user.name', value: '李四' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { entries: Array<{ key: string; localValue: string | null }> };
+    expect(body.entries.find((e) => e.key === 'user.name')!.localValue).toBe('李四');
+  });
+
+  it('config 端点：PUT 白名单外键返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/config`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: 'core.hooksPath', value: '/x' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('config 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await fetch(`${base}/api/repos/nope/config`);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('operation 端点：无进行中操作返回 200 与 {kind:"none"}', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/operation`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ kind: 'none' });
+  });
+
+  it('operation/abort 端点：无进行中操作返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/operation/abort`, { method: 'POST' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('operation 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await fetch(`${base}/api/repos/nope/operation`);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
 });
 
 describe('web-koa SSE 端点', () => {

@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { getLogPage, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, streamDiffEvents, streamLogEvents, updateSettings, watchRepoStatus } from '@rebased/api';
-import { diffQuerySchema, logQuerySchema, openRepoBodySchema, serializeSseEvent, settingsPatchSchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, setRepoConfig, streamDiffEvents, streamLogEvents, updateSettings, watchRepoStatus } from '@rebased/api';
+import { configPutBodySchema, diffQuerySchema, logQuerySchema, openRepoBodySchema, serializeSseEvent, settingsPatchSchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -124,6 +124,43 @@ router.get('/api/repos/:repoId/events', async (ctx) => {
   try {
     const repoPath = resolveRepo(ctx.params.repoId);
     await writeSseStream(ctx, (signal) => watchRepoStatus(repoPath, { signal }));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/config —— repoId 解析 → getRepoConfig → 错误映射 */
+router.get('/api/repos/:repoId/config', async (ctx) => {
+  try {
+    ctx.body = await getRepoConfig(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** PUT /api/repos/:repoId/config —— zod 校验 → setRepoConfig → 返回刷新视图 */
+router.put('/api/repos/:repoId/config', async (ctx) => {
+  try {
+    const body = configPutBodySchema.parse(ctx.request.body);
+    ctx.body = await setRepoConfig(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/operation —— 进行中操作状态 */
+router.get('/api/repos/:repoId/operation', async (ctx) => {
+  try {
+    ctx.body = await getOperation(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/operation/abort —— 中止当前操作 → 返回刷新状态 */
+router.post('/api/repos/:repoId/operation/abort', async (ctx) => {
+  try {
+    ctx.body = await abortOperation(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
   } catch (error) {
     handleApiError(error, ctx);
   }
