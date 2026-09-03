@@ -44,6 +44,19 @@ function registerRepo(opts: { modify?: boolean } = {}): { repoId: string; repoPa
   return { repoId: 'r1', repoPath: repo };
 }
 
+/** 冲突夹具：在注册仓库上造 side/main 两侧改 a.txt 同一行（合并必冲突，stage 1/2/3 全在） */
+function makeConflictScenario(repo: string): void {
+  const main = execFileSync('git', ['-C', repo, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+  execFileSync('git', ['-C', repo, 'checkout', '-q', '-b', 'side']);
+  writeFileSync(join(repo, 'a.txt'), 'side\n');
+  execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+  execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'side']);
+  execFileSync('git', ['-C', repo, 'checkout', '-q', main]);
+  writeFileSync(join(repo, 'a.txt'), 'main\n');
+  execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+  execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'main']);
+}
+
 /** SSE/流式读取：收集整个响应体为文本 */
 function readBody(res: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -558,5 +571,97 @@ describe('web-koa SSE 端点', () => {
     expect(frames[1]).toContain('"kind":"none"');
     expect(frames[2]).toContain('"type":"repo.state-changed"');
     expect(frames[2]).toContain('b.txt'); // 新未跟踪文件出现在状态变化帧里
+  });
+});
+
+describe('web-koa merge/conflicts 端点', () => {
+  it('冲突全流程：merge→conflicts 列表→contents 三版本→resolve theirs→continue→操作态清零', async () => {
+    const { repoId, repoPath } = registerRepo();
+    makeConflictScenario(repoPath);
+
+    // POST merge：冲突合并 → 200 MergeOutcome{status:'conflicts'} 附带冲突列表
+    const mergeRes = await fetch(`${base}/api/repos/${repoId}/merge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ branch: 'side' }),
+    });
+    expect(mergeRes.status).toBe(200);
+    const outcome = (await mergeRes.json()) as { status: string; conflicts: unknown[] };
+    expect(outcome.status).toBe('conflicts');
+    expect(outcome.conflicts).toEqual([{ path: 'a.txt', stages: [1, 2, 3] }]);
+
+    // GET conflicts：列出冲突路径
+    const listRes = await fetch(`${base}/api/repos/${repoId}/conflicts`);
+    expect(listRes.status).toBe(200);
+    expect(await listRes.json()).toEqual({ conflicts: [{ path: 'a.txt', stages: [1, 2, 3] }] });
+
+    // GET conflicts/contents：base/ours/theirs 三字段齐
+    const contentsRes = await fetch(`${base}/api/repos/${repoId}/conflicts/contents?path=a.txt`);
+    expect(contentsRes.status).toBe(200);
+    expect(await contentsRes.json()).toEqual({ path: 'a.txt', base: 'hello\n', ours: 'main\n', theirs: 'side\n' });
+
+    // POST conflicts/resolve：theirs 采纳 → 列表变空
+    const resolveRes = await fetch(`${base}/api/repos/${repoId}/conflicts/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ strategy: 'theirs', path: 'a.txt' }),
+    });
+    expect(resolveRes.status).toBe(200);
+    expect(await resolveRes.json()).toEqual({ conflicts: [] });
+
+    // POST merge/continue（无请求体）：产合并提交 → 200 RepoStatus
+    const continueRes = await fetch(`${base}/api/repos/${repoId}/merge/continue`, { method: 'POST' });
+    expect(continueRes.status).toBe(200);
+    expect(await continueRes.json()).toMatchObject({ entries: [] });
+
+    // 操作态清零
+    const opRes = await fetch(`${base}/api/repos/${repoId}/operation`);
+    expect(await opRes.json()).toEqual({ kind: 'none' });
+  });
+
+  it('merge 端点：空 branch 返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/merge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ branch: '' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('merge 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await fetch(`${base}/api/repos/nope/merge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ branch: 'side' }),
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('merge/continue 端点：无进行中合并返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/merge/continue`, { method: 'POST' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('conflicts/contents 端点：缺 path 查询参数返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/conflicts/contents`);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('conflicts/resolve 端点：非法 strategy 返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/conflicts/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ strategy: 'base', path: 'a.txt' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 });

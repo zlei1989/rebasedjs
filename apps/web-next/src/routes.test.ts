@@ -23,6 +23,11 @@ import { POST as postCheckout } from '../app/api/repos/[repoId]/checkout/route';
 import { POST as postReset } from '../app/api/repos/[repoId]/reset/route';
 import { POST as postUndoCommit } from '../app/api/repos/[repoId]/reset/undo-commit/route';
 import { GET as getDiffPatch } from '../app/api/repos/[repoId]/diff/patch/route';
+import { POST as postMerge } from '../app/api/repos/[repoId]/merge/route';
+import { POST as postMergeContinue } from '../app/api/repos/[repoId]/merge/continue/route';
+import { GET as getConflicts } from '../app/api/repos/[repoId]/conflicts/route';
+import { GET as getConflictContentsRoute } from '../app/api/repos/[repoId]/conflicts/contents/route';
+import { POST as postResolveConflict } from '../app/api/repos/[repoId]/conflicts/resolve/route';
 import { GET as getSettings, PUT as putSettings } from '../app/api/settings/route';
 
 /** Next 16：route 第二参的 params 为 Promise */
@@ -59,6 +64,20 @@ function registerRepo(): string {
     }),
   );
   return 'r1';
+}
+
+/** 冲突夹具：在 registerRepo 的仓库上造 side/main 两侧改 a.txt 同一行（合并必冲突，stage 1/2/3 全在） */
+function makeConflictScenario(): void {
+  const repo = lastRepoPath;
+  const main = execFileSync('git', ['-C', repo, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+  execFileSync('git', ['-C', repo, 'checkout', '-q', '-b', 'side']);
+  writeFileSync(join(repo, 'a.txt'), 'side\n');
+  execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+  execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'side']);
+  execFileSync('git', ['-C', repo, 'checkout', '-q', main]);
+  writeFileSync(join(repo, 'a.txt'), 'main\n');
+  execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+  execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'main']);
 }
 
 beforeEach(() => {
@@ -503,6 +522,125 @@ describe('web-next REST 路由', () => {
     const repoId = registerRepo(); // 仅一次提交（根提交）：无可撤销
     const res = await postUndoCommit(
       new Request(`http://localhost/api/repos/${repoId}/reset/undo-commit`, { method: 'POST' }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+});
+
+describe('web-next merge/conflicts 路由', () => {
+  it('冲突全流程：merge→conflicts 列表→contents 三版本→resolve theirs→continue→操作态清零', async () => {
+    const repoId = registerRepo();
+    makeConflictScenario();
+
+    // POST merge：冲突合并 → 200 MergeOutcome{status:'conflicts'} 附带冲突列表
+    const mergeRes = await postMerge(
+      new Request(`http://localhost/api/repos/${repoId}/merge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ branch: 'side' }),
+      }),
+      ctx(repoId),
+    );
+    expect(mergeRes.status).toBe(200);
+    const outcome = await mergeRes.json();
+    expect(outcome.status).toBe('conflicts');
+    expect(outcome.conflicts).toEqual([{ path: 'a.txt', stages: [1, 2, 3] }]);
+
+    // GET conflicts：列出冲突路径
+    const listRes = await getConflicts(new Request(`http://localhost/api/repos/${repoId}/conflicts`), ctx(repoId));
+    expect(listRes.status).toBe(200);
+    expect(await listRes.json()).toEqual({ conflicts: [{ path: 'a.txt', stages: [1, 2, 3] }] });
+
+    // GET conflicts/contents：base/ours/theirs 三字段齐
+    const contentsRes = await getConflictContentsRoute(
+      new Request(`http://localhost/api/repos/${repoId}/conflicts/contents?path=a.txt`),
+      ctx(repoId),
+    );
+    expect(contentsRes.status).toBe(200);
+    expect(await contentsRes.json()).toEqual({ path: 'a.txt', base: 'hello\n', ours: 'main\n', theirs: 'side\n' });
+
+    // POST conflicts/resolve：theirs 采纳 → 列表变空
+    const resolveRes = await postResolveConflict(
+      new Request(`http://localhost/api/repos/${repoId}/conflicts/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ strategy: 'theirs', path: 'a.txt' }),
+      }),
+      ctx(repoId),
+    );
+    expect(resolveRes.status).toBe(200);
+    expect(await resolveRes.json()).toEqual({ conflicts: [] });
+
+    // POST merge/continue（无请求体）：产合并提交 → 200 RepoStatus
+    const continueRes = await postMergeContinue(
+      new Request(`http://localhost/api/repos/${repoId}/merge/continue`, { method: 'POST' }),
+      ctx(repoId),
+    );
+    expect(continueRes.status).toBe(200);
+    expect(await continueRes.json()).toMatchObject({ entries: [] });
+
+    // 操作态清零
+    const opRes = await getOperation(new Request(`http://localhost/api/repos/${repoId}/operation`), ctx(repoId));
+    expect(await opRes.json()).toEqual({ kind: 'none' });
+  });
+
+  it('merge 端点：空 branch 返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postMerge(
+      new Request(`http://localhost/api/repos/${repoId}/merge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ branch: '' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('merge 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await postMerge(
+      new Request('http://localhost/api/repos/nope/merge', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ branch: 'side' }),
+      }),
+      ctx('nope'),
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('merge/continue 端点：无进行中合并返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postMergeContinue(
+      new Request(`http://localhost/api/repos/${repoId}/merge/continue`, { method: 'POST' }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('conflicts/contents 端点：缺 path 查询参数返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await getConflictContentsRoute(
+      new Request(`http://localhost/api/repos/${repoId}/conflicts/contents`),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('conflicts/resolve 端点：非法 strategy 返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postResolveConflict(
+      new Request(`http://localhost/api/repos/${repoId}/conflicts/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ strategy: 'base', path: 'a.txt' }),
+      }),
       ctx(repoId),
     );
     expect(res.status).toBe(400);

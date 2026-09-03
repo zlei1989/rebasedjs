@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, createCommit, getBranches, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, watchRepoStatus } from '@rebased/api';
-import { branchActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, openRepoBodySchema, resetBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, continueMergeOperation, createCommit, getBranches, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, mergeBranchIntoCurrent, openRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, watchRepoStatus } from '@rebased/api';
+import { branchActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -250,6 +250,54 @@ router.post('/api/repos/:repoId/reset', async (ctx) => {
 router.post('/api/repos/:repoId/reset/undo-commit', async (ctx) => {
   try {
     ctx.body = await undoCommit(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/merge —— zod 校验请求体 → mergeBranchIntoCurrent（分支并入当前）→ 200 MergeOutcome；分支不存在 → 400 GIT_ERROR */
+router.post('/api/repos/:repoId/merge', async (ctx) => {
+  try {
+    const body = mergeBodySchema.parse(ctx.request.body);
+    ctx.body = await mergeBranchIntoCurrent(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/merge/continue —— 继续合并（冲突全解后产合并提交，无请求体）→ 200 RepoStatus；无进行中合并 → 400 INVALID_QUERY */
+router.post('/api/repos/:repoId/merge/continue', async (ctx) => {
+  try {
+    ctx.body = await continueMergeOperation(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/conflicts —— 冲突列表（path + 存在阶段）→ 200 ConflictList；无冲突为空列表 */
+router.get('/api/repos/:repoId/conflicts', async (ctx) => {
+  try {
+    ctx.body = await getConflicts(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/conflicts/contents —— zod 校验查询 → getConflictContents（base/ours/theirs 三版本全文）→ 200 ConflictContents */
+router.get('/api/repos/:repoId/conflicts/contents', async (ctx) => {
+  try {
+    const query = conflictContentsQuerySchema.parse(ctx.query);
+    ctx.body = await getConflictContents(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.path);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/conflicts/resolve —— zod 校验请求体 → resolveConflict（ours/theirs 整侧采纳 / manual 写入合并结果）→ 200 刷新 ConflictList；非冲突路径 → 400 INVALID_QUERY */
+router.post('/api/repos/:repoId/conflicts/resolve', async (ctx) => {
+  try {
+    const body = resolveConflictBodySchema.parse(ctx.request.body);
+    ctx.body = await resolveConflict(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }
