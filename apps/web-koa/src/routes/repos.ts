@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, continueMergeOperation, createCommit, getBranches, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, mergeBranchIntoCurrent, openRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, watchRepoStatus } from '@rebased/api';
-import { branchActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, applyStashAction, continueMergeOperation, createCommit, getBranches, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, listRecentRepos, mergeBranchIntoCurrent, openRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, watchRepoStatus } from '@rebased/api';
+import { branchActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -298,6 +298,25 @@ router.post('/api/repos/:repoId/conflicts/resolve', async (ctx) => {
   try {
     const body = resolveConflictBodySchema.parse(ctx.request.body);
     ctx.body = await resolveConflict(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/stashes —— 贮藏列表（StashList）→ 错误映射 */
+router.get('/api/repos/:repoId/stashes', async (ctx) => {
+  try {
+    ctx.body = await getStashes(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/stashes —— zod 校验 action → applyStashAction（save/apply/pop/drop/branch）→ 200 刷新 StashList；无改动 save → 400 INVALID_QUERY，越界 index → 400 INVALID_REF */
+router.post('/api/repos/:repoId/stashes', async (ctx) => {
+  try {
+    const body = stashActionSchema.parse(ctx.request.body);
+    ctx.body = await applyStashAction(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }

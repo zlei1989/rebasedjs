@@ -664,4 +664,59 @@ describe('web-koa merge/conflicts 端点', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
+
+  it('stashes 端点：GET 返回 200 且空贮藏列表', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/stashes`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ stashes: [] });
+  });
+
+  it('stashes 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await fetch(`${base}/api/repos/nope/stashes`);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('stashes 端点：save → apply → drop 往返均返回 200 刷新列表', async () => {
+    const { repoId, repoPath } = registerRepo();
+    writeFileSync(join(repoPath, 'a.txt'), 'hello\nworld\n');
+    const post = (body: unknown) =>
+      fetch(`${base}/api/repos/${repoId}/stashes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const saveRes = await post({ action: 'save', message: 'wip' });
+    expect(saveRes.status).toBe(200);
+    expect(((await saveRes.json()) as { stashes: unknown[] }).stashes).toHaveLength(1);
+    const applyRes = await post({ action: 'apply', index: 0 });
+    expect(applyRes.status).toBe(200);
+    expect(((await applyRes.json()) as { stashes: unknown[] }).stashes).toHaveLength(1);
+    const dropRes = await post({ action: 'drop', index: 0 });
+    expect(dropRes.status).toBe(200);
+    expect(((await dropRes.json()) as { stashes: unknown[] }).stashes).toHaveLength(0);
+  });
+
+  it('stashes 端点：pop 带负 index 返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/stashes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'pop', index: -1 }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('stashes 端点：无工作区改动 save 返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/stashes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'save' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
 });
