@@ -1,10 +1,12 @@
 /**
  * merge 原语：发起合并与继续合并。
  * 状态判定不猜 stderr 文本：仅 up-to-date 依赖 LC_ALL=C 固定的英文 stdout；
- * 冲突以 MERGE_HEAD 标记文件为准（复用 operation 原语），其余非 0 退出原样抛 GitExitError。
+ * 冲突以 MERGE_HEAD 标记文件或未合并条目（squash 从不写 MERGE_HEAD）为准，
+ * 其余非 0 退出原样抛 GitExitError。
  */
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
+import { listConflictedPaths } from './conflict';
 import { GitExitError, runGit } from './exec';
 import { getOperationState } from './operation';
 
@@ -27,7 +29,8 @@ async function exists(path: string): Promise<boolean> {
 /**
  * 合并 branch 到当前分支：选项映射 --no-ff/--squash/--no-commit/-m。
  * 状态判定算法：stdout 含 'Already up to date'（LC_ALL=C 固定英文）→ up-to-date；
- * 退出码非 0 且存在 MERGE_HEAD → conflicts；退出码非 0 且无 MERGE_HEAD → 原样抛 GitExitError；
+ * 退出码非 0 且（存在 MERGE_HEAD 或 ls-files -u 有未合并条目）→ conflicts
+ * （squash 从不写 MERGE_HEAD，须靠未合并条目兜底）；其余非 0 退出 → 原样抛 GitExitError；
  * 退出码 0 → success（squash/no-commit 时 git 不产提交也返回 0）。
  */
 export async function mergeBranch(
@@ -46,12 +49,30 @@ export async function mergeBranch(
     if (stdout.includes('Already up to date')) return { status: 'up-to-date', stdout };
     return { status: 'success', stdout };
   } catch (err) {
-    // 冲突时 git 非 0 退出但留下 MERGE_HEAD；分支不存在等失败无此标记，原样透出
-    if (err instanceof GitExitError && (await getOperationState(cwd)).kind === 'merge') {
+    // 冲突时 git 非 0 退出但留下 MERGE_HEAD 或未合并条目；分支不存在等失败两者皆无，原样透出
+    if (
+      err instanceof GitExitError &&
+      ((await getOperationState(cwd)).kind === 'merge' || (await listConflictedPaths(cwd)).length > 0)
+    ) {
       return { status: 'conflicts', stdout: err.stdout };
     }
     throw err;
   }
+}
+
+/** gitDir 定位 + squash 信息文件探测（continueMerge 退化与 canContinueMerge 共用） */
+async function hasSquashMarkers(cwd: string): Promise<boolean> {
+  const { stdout } = await runGit(['rev-parse', '--absolute-git-dir'], { cwd });
+  const gitDir = stdout.trim();
+  return (await exists(join(gitDir, 'SQUASH_MSG'))) || (await exists(join(gitDir, 'MERGE_MSG')));
+}
+
+/**
+ * 是否可继续合并：合并态（MERGE_HEAD）或 squash 信息文件（SQUASH_MSG/MERGE_MSG）在场。
+ * api 层 continue 预检用——squash 不进合并态，单看操作态会把退化提交路径拦成死代码。
+ */
+export async function canContinueMerge(cwd: string): Promise<boolean> {
+  return (await getOperationState(cwd)).kind === 'merge' || (await hasSquashMarkers(cwd));
 }
 
 /**
@@ -63,14 +84,10 @@ export async function mergeBranch(
  * "Terminal is dumb" 失败——以 -c core.editor=true 强制空编辑器（同 exec.ts 注入 -c 的手法）。
  */
 export async function continueMerge(cwd: string): Promise<void> {
-  if ((await getOperationState(cwd)).kind !== 'merge') {
-    const { stdout } = await runGit(['rev-parse', '--absolute-git-dir'], { cwd });
-    const gitDir = stdout.trim();
-    if ((await exists(join(gitDir, 'SQUASH_MSG'))) || (await exists(join(gitDir, 'MERGE_MSG')))) {
-      // --no-edit：信息文件已备好，跳过编辑器
-      await runGit(['commit', '--no-edit'], { cwd });
-      return;
-    }
+  if ((await getOperationState(cwd)).kind !== 'merge' && (await hasSquashMarkers(cwd))) {
+    // --no-edit：信息文件已备好，跳过编辑器
+    await runGit(['commit', '--no-edit'], { cwd });
+    return;
   }
   await runGit(['-c', 'core.editor=true', 'merge', '--continue'], { cwd });
 }

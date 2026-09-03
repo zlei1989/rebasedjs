@@ -106,6 +106,58 @@ describe('ConflictsPanel 行操作', () => {
     expect(screen.getByTestId('resolve-ours-src/a.ts')).toBeDisabled();
     expect(screen.getByTestId('resolve-theirs-src/a.ts')).toBeDisabled();
     expect(screen.getByTestId('merge-manual-src/a.ts')).toBeDisabled();
+    expect(screen.getByTestId('resolve-delete-src/c.ts')).toBeDisabled();
+  });
+});
+
+describe('ConflictsPanel 删除/修改冲突（stages 缺 2 或 3）', () => {
+  it('[1,2]（对方删除/我方修改）：「用他们的」禁用，渲染「删除该文件」', () => {
+    render(<ConflictsPanel conflicts={{ conflicts: [{ path: 'x.ts', stages: [1, 2] }] }} {...makeHandlers()} />);
+    expect(screen.getByTestId('resolve-ours-x.ts')).toBeEnabled();
+    expect(screen.getByTestId('resolve-theirs-x.ts')).toBeDisabled();
+    expect(screen.getByTestId('resolve-delete-x.ts')).toBeInTheDocument();
+  });
+
+  it('[1,3]（我方删除/对方修改）：「用我们的」禁用，渲染「删除该文件」', () => {
+    render(<ConflictsPanel conflicts={{ conflicts: [{ path: 'y.ts', stages: [1, 3] }] }} {...makeHandlers()} />);
+    expect(screen.getByTestId('resolve-ours-y.ts')).toBeDisabled();
+    expect(screen.getByTestId('resolve-theirs-y.ts')).toBeEnabled();
+    expect(screen.getByTestId('resolve-delete-y.ts')).toBeInTheDocument();
+  });
+
+  it('[1,2,3]/[2,3] 两侧皆有版本：不渲染「删除该文件」，用我们/用他们均可用', () => {
+    render(
+      <ConflictsPanel
+        conflicts={{
+          conflicts: [
+            { path: 'a.ts', stages: [1, 2, 3] },
+            { path: 'b.ts', stages: [2, 3] },
+          ],
+        }}
+        {...makeHandlers()}
+      />,
+    );
+    expect(screen.queryByTestId('resolve-delete-a.ts')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('resolve-delete-b.ts')).not.toBeInTheDocument();
+    expect(screen.getByTestId('resolve-ours-a.ts')).toBeEnabled();
+    expect(screen.getByTestId('resolve-theirs-b.ts')).toBeEnabled();
+  });
+
+  it('「删除该文件」经 Popconfirm 确认后传出 {strategy:"delete", path}', async () => {
+    const { onResolve } = makeHandlers();
+    render(
+      <ConflictsPanel
+        conflicts={{ conflicts: [{ path: 'x.ts', stages: [1, 2] }] }}
+        onResolve={onResolve}
+        onOpenMergeView={() => {}}
+        onContinue={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('resolve-delete-x.ts'));
+    // antd Button 两个汉字间自动插空格（"确 定"），用正则匹配可访问名
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
+    expect(onResolve).toHaveBeenCalledTimes(1);
+    expect(onResolve).toHaveBeenCalledWith({ strategy: 'delete', path: 'x.ts' });
   });
 });
 

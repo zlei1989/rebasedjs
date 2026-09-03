@@ -1,6 +1,6 @@
-/** conflict 功能测试：冲突列表、三版本内容、ours/theirs/manual 三解决路径与刷新列表。 */
+/** conflict 功能测试：冲突列表、三版本内容、ours/theirs/manual/delete 解决路径与刷新列表。 */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { getConflictContents, getConflicts, resolveConflict } from './conflict';
@@ -42,6 +42,21 @@ async function repoInConflictedMerge(): Promise<string> {
   writeFileSync(join(repo, 'a.txt'), 'main\n');
   git(repo, ['add', '.']);
   git(repo, ['commit', '-q', '-m', 'main']);
+  await mergeBranchIntoCurrent(repo, { branch: 'side' });
+  return repo;
+}
+
+/** 删除/修改冲突场景（[1,3] 我方删除/对方修改）：side 改 a.txt，主分支删 a.txt，发起合并产生冲突 */
+async function repoInDeleteModifyConflict(): Promise<string> {
+  const repo = makeRepo();
+  const main = makeBaseCommit(repo);
+  git(repo, ['checkout', '-q', '-b', 'side']);
+  writeFileSync(join(repo, 'a.txt'), 'side\n');
+  git(repo, ['add', '.']);
+  git(repo, ['commit', '-q', '-m', 'side']);
+  git(repo, ['checkout', '-q', main]);
+  git(repo, ['rm', '-q', 'a.txt']);
+  git(repo, ['commit', '-q', '-m', 'main delete']);
   await mergeBranchIntoCurrent(repo, { branch: 'side' });
   return repo;
 }
@@ -104,9 +119,23 @@ describe('conflict 功能', () => {
         message: expect.stringContaining('该文件没有冲突'),
       },
     );
-    // ours/theirs 同样先校验
+    // ours/theirs/delete 同样先校验
     await expect(resolveConflict(repo, { strategy: 'ours', path: 'ghost.txt' })).rejects.toMatchObject({
       code: 'INVALID_QUERY',
     });
+    await expect(resolveConflict(repo, { strategy: 'delete', path: 'ghost.txt' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+    });
+  });
+
+  it('resolveConflict delete 以删除解决删除/修改冲突并返回刷新列表', async () => {
+    const repo = await repoInDeleteModifyConflict();
+    expect((await getConflicts(repo)).conflicts).toEqual([{ path: 'a.txt', stages: [1, 3] }]);
+
+    const list = await resolveConflict(repo, { strategy: 'delete', path: 'a.txt' });
+    expect(list.conflicts).toEqual([]);
+    expect(existsSync(join(repo, 'a.txt'))).toBe(false);
+    // [1,3] 我方删除场景：HEAD 本已删除该文件，保持删除后工作区无残留变更
+    expect(git(repo, ['status', '--porcelain']).trim()).toBe('');
   });
 });

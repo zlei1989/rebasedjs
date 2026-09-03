@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError } from '@rebased/core';
+import { resolveConflict } from './conflict';
 import { continueMergeOperation, mergeBranchIntoCurrent } from './merge';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
@@ -127,5 +128,26 @@ describe('merge 功能', () => {
     expect(git(repo, ['rev-parse', 'HEAD']).trim()).toBe(status.headHash);
     const parents = git(repo, ['log', '--format=%P', '-1']).trim().split(' ');
     expect(parents).toHaveLength(2);
+  });
+
+  it('squash 冲突全链：conflicts（非抛错）→ resolveConflict theirs → continue 产单父提交（信息来自 SQUASH_MSG）', async () => {
+    const repo = makeRepo();
+    makeConflictScenario(repo);
+
+    // squash 从不写 MERGE_HEAD：修复前此处 GitExitError 原样抛，修复后正确分类 conflicts
+    const outcome = await mergeBranchIntoCurrent(repo, { branch: 'side', squash: true });
+    expect(outcome.status).toBe('conflicts');
+    expect(outcome.conflicts).toEqual([{ path: 'a.txt', stages: [1, 2, 3] }]);
+
+    const list = await resolveConflict(repo, { strategy: 'theirs', path: 'a.txt' });
+    expect(list.conflicts).toEqual([]);
+
+    // squash 不在合并态（kind==='none'）但留 SQUASH_MSG：continue 预检须放行
+    const status = await continueMergeOperation(repo);
+    const parents = git(repo, ['log', '--format=%P', '-1']).trim().split(' ');
+    expect(parents).toHaveLength(1); // squash 产普通单父提交（非合并提交）
+    expect(git(repo, ['log', '--format=%B', '-1'])).toContain('Squashed commit');
+    expect(git(repo, ['show', 'HEAD:a.txt'])).toBe('side\n');
+    expect(git(repo, ['rev-parse', 'HEAD']).trim()).toBe(status.headHash);
   });
 });

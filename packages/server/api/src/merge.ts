@@ -1,5 +1,5 @@
 /** 合并功能：core mergeBranch/continueMerge → contracts 形状；发起前预检无进行中操作，冲突时附冲突列表，操作后返回刷新状态。 */
-import { continueMerge, mergeBranch } from '@rebased/core';
+import { canContinueMerge, continueMerge, mergeBranch } from '@rebased/core';
 import { ServiceError, type MergeBody, type MergeOutcome, type RepoStatus } from '@rebased/contracts';
 import { getConflicts } from './conflict';
 import { getOperation } from './operation';
@@ -20,12 +20,12 @@ export async function mergeBranchIntoCurrent(repoPath: string, body: MergeBody):
 }
 
 /**
- * 继续合并：预检 getOperation(repoPath).kind==='merge'（否则 INVALID_QUERY '当前没有进行中的合并'）；
- * squash/no-commit 等无 MERGE_HEAD 场景的退化提交由 core continueMerge 统一处理，api 只透传；
- * 完成后返回刷新状态。
+ * 继续合并：预检 core canContinueMerge（合并态或 squash 信息文件在场；否则 INVALID_QUERY
+ * '当前没有进行中的合并'）——squash 不进合并态，仅看操作态会把 core 的退化提交路径拦成死代码；
+ * 退化提交由 core continueMerge 统一处理，api 只透传；完成后返回刷新状态。
  */
 export async function continueMergeOperation(repoPath: string): Promise<RepoStatus> {
-  if ((await getOperation(repoPath)).kind !== 'merge') {
+  if (!(await canContinueMerge(repoPath))) {
     throw new ServiceError('INVALID_QUERY', '当前没有进行中的合并');
   }
   await continueMerge(repoPath);

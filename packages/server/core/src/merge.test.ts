@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError, runGit } from './exec';
-import { continueMerge, mergeBranch } from './merge';
+import { canContinueMerge, continueMerge, mergeBranch } from './merge';
 import { getOperationState } from './operation';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
@@ -123,7 +123,7 @@ describe('merge 原语', () => {
 
     const result = await mergeBranch(repo, { branch: 'side', squash: true });
     expect(result.status).toBe('success');
-    // squash 无 MERGE_HEAD，仅有 MERGE_MSG：continueMerge 走 git commit 退化路径
+    // squash 无 MERGE_HEAD，仅有 SQUASH_MSG：continueMerge 走 git commit 退化路径
     expect((await getOperationState(repo)).kind).toBe('none');
     await continueMerge(repo);
 
@@ -132,5 +132,32 @@ describe('merge 原语', () => {
     expect(parents.trim().split(' ')).toHaveLength(1);
     const { stdout: content } = await runGit(['show', 'HEAD:b.txt'], { cwd: repo });
     expect(content).toBe('side\n');
+  });
+
+  it('squash 冲突（从不写 MERGE_HEAD）凭未合并条目分类为 conflicts 而非抛错', async () => {
+    const repo = makeRepo();
+    await makeConflictScenario(repo);
+
+    const result = await mergeBranch(repo, { branch: 'side', squash: true });
+    expect(result.status).toBe('conflicts');
+    // squash 冲突无 MERGE_HEAD：操作态非 merge，但 ls-files -u 有未合并条目
+    expect((await getOperationState(repo)).kind).toBe('none');
+  });
+
+  it('canContinueMerge：合并态或 squash 信息文件在场为 true，干净仓库为 false', async () => {
+    const clean = makeRepo();
+    await makeBaseCommit(clean);
+    expect(await canContinueMerge(clean)).toBe(false);
+
+    const merging = makeRepo();
+    await makeConflictScenario(merging);
+    await mergeBranch(merging, { branch: 'side' });
+    expect(await canContinueMerge(merging)).toBe(true);
+
+    // squash 合并不进合并态但留 SQUASH_MSG：可继续（退化为 git commit）
+    const squashing = makeRepo();
+    await makeFfScenario(squashing);
+    await mergeBranch(squashing, { branch: 'side', squash: true });
+    expect(await canContinueMerge(squashing)).toBe(true);
   });
 });

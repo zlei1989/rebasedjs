@@ -2,9 +2,11 @@
  * 冲突面板（对照 Java GitConflictsPanel）：
  *  冲突文件列表（路径 + 冲突类型徽标，由 stages 组合推导）+ 行操作「用我们的」「用他们的」「手动合并」
  *  （手动合并开 MergeView，由容器承接）+ 底部「完成合并」按钮（全部解决后可用，否则禁用并 Tooltip 提示）。
+ *  删除/修改冲突（stages 缺 2 或 3）：对应整侧采纳按钮禁用（该侧无版本，checkout 必失败），
+ *  并额外渲染「删除该文件」（Popconfirm 确认；对照 Java 版把采纳映射为删除的路径）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入。
  */
-import { Button, Card, Flex, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Popconfirm, Tag, Tooltip, Typography } from 'antd';
 import type { ConflictEntry, ConflictList, ResolveConflictBody } from '@rebased/contracts';
 
 export interface ConflictsPanelProps {
@@ -32,7 +34,7 @@ export function conflictKindLabel(stages: number[]): string {
   return '冲突';
 }
 
-/** 冲突文件行：路径 + 类型徽标 + 行尾操作（用我们的/用他们的/手动合并） */
+/** 冲突文件行：路径 + 类型徽标 + 行尾操作（用我们的/用他们的/手动合并；删除/修改冲突加「删除该文件」） */
 function ConflictRow({
   entry,
   resolving,
@@ -44,6 +46,9 @@ function ConflictRow({
   onResolve: (body: ResolveConflictBody) => void;
   onOpenMergeView: (path: string) => void;
 }): React.ReactNode {
+  // 某侧无版本（stages 缺 2/3）时对应采纳按钮禁用：git checkout --ours/--theirs 必失败
+  const hasOurs = entry.stages.includes(2);
+  const hasTheirs = entry.stages.includes(3);
   return (
     <Flex data-testid={`conflict-row-${entry.path}`} align="center" gap={8} style={{ padding: '4px 0' }}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
@@ -53,7 +58,7 @@ function ConflictRow({
       <Button
         size="small"
         data-testid={`resolve-ours-${entry.path}`}
-        disabled={resolving}
+        disabled={resolving || !hasOurs}
         onClick={() => onResolve({ strategy: 'ours', path: entry.path })}
       >
         用我们的
@@ -61,11 +66,24 @@ function ConflictRow({
       <Button
         size="small"
         data-testid={`resolve-theirs-${entry.path}`}
-        disabled={resolving}
+        disabled={resolving || !hasTheirs}
         onClick={() => onResolve({ strategy: 'theirs', path: entry.path })}
       >
         用他们的
       </Button>
+      {/* 删除/修改冲突（一侧无版本）：提供「保持删除」路径（git rm 语义） */}
+      {!hasOurs || !hasTheirs ? (
+        <Popconfirm
+          title="确认以删除解决该冲突？"
+          okText="确定"
+          cancelText="取消"
+          onConfirm={() => onResolve({ strategy: 'delete', path: entry.path })}
+        >
+          <Button size="small" danger data-testid={`resolve-delete-${entry.path}`} disabled={resolving}>
+            删除该文件
+          </Button>
+        </Popconfirm>
+      ) : null}
       <Button
         size="small"
         data-testid={`merge-manual-${entry.path}`}

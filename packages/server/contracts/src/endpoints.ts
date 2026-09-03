@@ -97,11 +97,12 @@ export const mergeBodySchema = z.object({
 });
 export type MergeBody = z.infer<typeof mergeBodySchema>;
 
-/** 冲突解决：ours/theirs 整侧采纳；manual 由 MergeView 保存合并结果全文 */
+/** 冲突解决：ours/theirs 整侧采纳；manual 由 MergeView 保存合并结果全文；delete 以删除解决删除/修改冲突（对照 Java GitConflictsPanel 的采纳即删除映射） */
 export const resolveConflictBodySchema = z.discriminatedUnion('strategy', [
   z.object({ strategy: z.literal('ours'), path: z.string().min(1) }),
   z.object({ strategy: z.literal('theirs'), path: z.string().min(1) }),
   z.object({ strategy: z.literal('manual'), path: z.string().min(1), content: z.string() }),
+  z.object({ strategy: z.literal('delete'), path: z.string().min(1) }),
 ]);
 export type ResolveConflictBody = z.infer<typeof resolveConflictBodySchema>;
 

@@ -42,7 +42,7 @@ export function RepoMergePage(): React.ReactNode {
           void message.warning('存在冲突，请解决后完成合并');
           // MergeOutcome.conflicts 与 ConflictList 同形：预填缓存避免冲突页首帧加载闪烁
           void mutate(`/api/repos/${repoId}/conflicts`, { conflicts: outcome.conflicts }, { revalidate: false });
-          navigate(`/repos/${repoId}/conflicts`);
+          void navigate(`/repos/${repoId}/conflicts`);
         }
       })
       .catch(onError);

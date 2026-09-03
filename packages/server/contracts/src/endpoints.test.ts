@@ -179,10 +179,15 @@ describe('resolveConflictBodySchema（冲突解决判别联合）', () => {
     expect(resolveConflictBodySchema.parse({ strategy: 'manual', path: 'a.txt', content: 'resolved' }))
       .toEqual({ strategy: 'manual', path: 'a.txt', content: 'resolved' });
   });
+  it('接受 delete 以删除解决删除/修改冲突', () => {
+    expect(resolveConflictBodySchema.parse({ strategy: 'delete', path: 'a.txt' }))
+      .toEqual({ strategy: 'delete', path: 'a.txt' });
+  });
   it('拒绝 manual 缺 content、枚举外 strategy 与空 path', () => {
     expect(() => resolveConflictBodySchema.parse({ strategy: 'manual', path: 'a.txt' })).toThrow();
     expect(() => resolveConflictBodySchema.parse({ strategy: 'base', path: 'a.txt' })).toThrow();
     expect(() => resolveConflictBodySchema.parse({ strategy: 'ours', path: '' })).toThrow();
+    expect(() => resolveConflictBodySchema.parse({ strategy: 'delete', path: '' })).toThrow();
   });
 });
 

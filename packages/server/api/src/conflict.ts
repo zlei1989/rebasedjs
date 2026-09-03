@@ -1,7 +1,7 @@
 /** 冲突功能：core conflict 原语 → contracts 形状；解决操作写前校验路径在冲突列表中，操作后返回刷新列表。 */
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { checkoutConflictSide, listConflictedPaths, markResolved, readStageContent } from '@rebased/core';
+import { checkoutConflictSide, deleteConflictFile, listConflictedPaths, markResolved, readStageContent } from '@rebased/core';
 import { ServiceError, type ConflictContents, type ConflictList, type ResolveConflictBody } from '@rebased/contracts';
 
 /** 冲突列表：core → 契约薄映射 */
@@ -21,13 +21,18 @@ export async function getConflictContents(repoPath: string, path: string): Promi
 }
 
 /**
- * 按策略解决：ours/theirs → checkoutConflictSide + markResolved；manual → 写 content 到工作区文件后 markResolved。
+ * 按策略解决：ours/theirs → checkoutConflictSide + markResolved；manual → 写 content 到工作区文件后
+ * markResolved；delete → deleteConflictFile（git rm 自身已暂存删除，无需 markResolved）。
  * 写前校验 path 在冲突列表中，不在 → INVALID_QUERY '该文件没有冲突：…'；返回刷新列表。
  */
 export async function resolveConflict(repoPath: string, body: ResolveConflictBody): Promise<ConflictList> {
   const { conflicts } = await getConflicts(repoPath);
   if (!conflicts.some((c) => c.path === body.path)) {
     throw new ServiceError('INVALID_QUERY', `该文件没有冲突：${body.path}`);
+  }
+  if (body.strategy === 'delete') {
+    await deleteConflictFile(repoPath, body.path);
+    return getConflicts(repoPath);
   }
   if (body.strategy === 'manual') {
     await writeFile(join(repoPath, body.path), body.content);

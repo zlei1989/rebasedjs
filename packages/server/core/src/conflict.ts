@@ -67,3 +67,8 @@ export async function checkoutConflictSide(cwd: string, path: string, side: 'our
 export async function markResolved(cwd: string, path: string): Promise<void> {
   await runGit(['add', '--', path], { cwd });
 }
+
+/** 以删除解决删除/修改冲突：git rm -- path（同时删工作区文件并暂存删除，无需再 markResolved） */
+export async function deleteConflictFile(cwd: string, path: string): Promise<void> {
+  await runGit(['rm', '--', path], { cwd });
+}

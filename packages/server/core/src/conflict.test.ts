@@ -1,8 +1,8 @@
-/** conflict 原语测试：冲突列表/三阶段内容（含双方新增无 base）/整侧采纳 + 标记解决。 */
-import { readFile, writeFile } from 'node:fs/promises';
+/** conflict 原语测试：冲突列表/三阶段内容（含双方新增无 base）/整侧采纳 + 标记解决/删除解决。 */
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { checkoutConflictSide, listConflictedPaths, markResolved, readStageContent } from './conflict';
+import { checkoutConflictSide, deleteConflictFile, listConflictedPaths, markResolved, readStageContent } from './conflict';
 import { runGit } from './exec';
 import { mergeBranch } from './merge';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
@@ -51,6 +51,19 @@ async function makeBothAddedConflict(repo: string): Promise<void> {
   await writeFile(join(repo, 'b.txt'), 'main added\n');
   await runGit(['add', '.'], { cwd: repo });
   await runGit(['commit', '-m', 'main add b'], { cwd: repo });
+  await mergeBranch(repo, { branch: 'side' });
+}
+
+/** 删除/修改冲突场景：side 删 a.txt，主分支改 a.txt → 合并后 stage 3 缺失（[1,2] 对方删除/我方修改） */
+async function makeDeleteModifyConflict(repo: string): Promise<void> {
+  const main = await makeBaseCommit(repo);
+  await runGit(['checkout', '-b', 'side'], { cwd: repo });
+  await runGit(['rm', '-q', 'a.txt'], { cwd: repo });
+  await runGit(['commit', '-m', 'side delete'], { cwd: repo });
+  await runGit(['checkout', main], { cwd: repo });
+  await writeFile(join(repo, 'a.txt'), 'main\n');
+  await runGit(['add', '.'], { cwd: repo });
+  await runGit(['commit', '-m', 'main'], { cwd: repo });
   await mergeBranch(repo, { branch: 'side' });
 }
 
@@ -115,5 +128,19 @@ describe('conflict 原语', () => {
     await checkoutConflictSide(repo, 'a.txt', 'ours');
 
     expect(await readFile(join(repo, 'a.txt'), 'utf8')).toBe('main\n');
+  });
+
+  it('deleteConflictFile 以删除解决删除/修改冲突：工作区文件删除、删除已暂存、冲突清空', async () => {
+    const repo = makeRepo();
+    await makeDeleteModifyConflict(repo);
+    expect(await listConflictedPaths(repo)).toEqual([{ path: 'a.txt', stages: [1, 2] }]);
+
+    await deleteConflictFile(repo, 'a.txt');
+
+    // git rm 同时删工作区文件并暂存删除（无需再 markResolved）
+    await expect(access(join(repo, 'a.txt'))).rejects.toThrow();
+    expect(await listConflictedPaths(repo)).toEqual([]);
+    const { stdout } = await runGit(['status', '--porcelain'], { cwd: repo });
+    expect(stdout).toContain('D  a.txt');
   });
 });
