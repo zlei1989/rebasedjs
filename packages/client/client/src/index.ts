@@ -10,3 +10,5 @@ export { useRepoConfig, useSetConfig } from './config';
 export { useAbortOperation, useOperation } from './operation';
 export { useStaging, useHunkStaging } from './staging';
 export { useCommit } from './commit';
+export { useBranches, useBranchAction } from './branches';
+export { useCheckout } from './checkout';
