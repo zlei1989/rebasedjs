@@ -2,11 +2,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { RepoInfo, SettingsState } from '@rebased/contracts';
+import type { Changelist, RepoInfo, SettingsState } from '@rebased/contracts';
+
+/** 单仓库的变更列表簿记：lists 为列表定义；assignments 为 路径 → listId */
+export interface ChangelistBook {
+  lists: Changelist[];
+  assignments: Record<string, string>;
+}
 
 export interface AppConfig {
   repos: RepoInfo[];
   settings: SettingsState;
+  /** 变更列表簿记（按 repoId 键控）：可选——旧配置文件无此字段，读取时按 undefined 处理 */
+  changelists?: Record<string, ChangelistBook>;
 }
 
 const DEFAULTS: AppConfig = {

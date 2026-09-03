@@ -15,4 +15,5 @@ export { continueMergeOperation, mergeBranchIntoCurrent } from './merge';
 export { getConflictContents, getConflicts, resolveConflict } from './conflict';
 export { applyStashAction, getStashes } from './stash';
 export { getSettings, updateSettings } from './settings';
+export { applyChangelistAction, getChangelists } from './changelist';
 export { toServiceError } from './errors';
