@@ -7,6 +7,7 @@ export {
   type MonacoDiffLoader,
 } from './base/monaco-diff-view';
 export { EmptyState, type EmptyStateProps } from './base/empty-state';
+export { OperationStatus, type OperationStatusProps } from './base/operation-status';
 export * from './graph-layout';
 export { CommitGraph, type CommitGraphProps } from './domain/commit-graph';
 export { RepoStatusBar, type RepoStatusBarProps } from './domain/repo-status-bar';
@@ -15,4 +16,5 @@ export { CommitDetailsPanel, type CommitDetailsPanelProps } from './domain/commi
 export { RepoPage, type RepoPageProps } from './composite/repo-page';
 export { LogPage, type LogPageProps } from './composite/log-page';
 export { DiffPage, type DiffPageProps } from './composite/diff-page';
+export { SettingsPage, type SettingsPageProps } from './composite/settings-page';
 export { relativeToHome } from './composite/repo-page-utils';
