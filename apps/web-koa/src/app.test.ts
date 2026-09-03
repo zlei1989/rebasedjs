@@ -311,17 +311,17 @@ describe('web-koa SSE 端点', () => {
     await res.json();
   });
 
-  it('events：状态变化（新增未跟踪文件）→ 下一轮轮询推送第二帧', async () => {
+  it('events：状态变化（新增未跟踪文件）→ 下一轮轮询推送状态帧（第三帧）', async () => {
     const { repoId, repoPath } = registerRepo();
     const frames = await new Promise<string[]>((resolve, reject) => {
       const collected: string[] = [];
       let settled = false;
-      const timer = setTimeout(() => settle(new Error('等待第二帧超时')), 8000);
+      const timer = setTimeout(() => settle(new Error('等待第三帧超时')), 8000);
       const settle = (err?: Error): void => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        if (err && collected.length < 2) reject(err);
+        if (err && collected.length < 3) reject(err);
         else resolve(collected);
       };
       const req = httpGet(`${base}/api/repos/${repoId}/events`, { agent: false }, (res) => {
@@ -338,8 +338,8 @@ describe('web-koa SSE 端点', () => {
             // 首帧已到：改变仓库状态（未跟踪文件 → entries 变化 → 状态推送）
             writeFileSync(join(repoPath, 'b.txt'), 'change\n');
           }
-          if (collected.length >= 2) {
-            req.destroy(); // 两帧到手即可断开
+          if (collected.length >= 3) {
+            req.destroy(); // 三帧到手即可断开
             settle();
           }
         });
@@ -347,9 +347,12 @@ describe('web-koa SSE 端点', () => {
       });
       req.on('error', (e: Error) => settle(e));
     });
-    expect(frames).toHaveLength(2);
+    expect(frames).toHaveLength(3);
     expect(frames[0]).toContain('"type":"repo.state-changed"');
-    expect(frames[1]).toContain('"type":"repo.state-changed"');
-    expect(frames[1]).toContain('b.txt'); // 新未跟踪文件出现在第二帧状态里
+    // 新首帧契约：第二帧为当前操作状态
+    expect(frames[1]).toContain('"type":"operation.state-changed"');
+    expect(frames[1]).toContain('"kind":"none"');
+    expect(frames[2]).toContain('"type":"repo.state-changed"');
+    expect(frames[2]).toContain('b.txt'); // 新未跟踪文件出现在状态变化帧里
   });
 });

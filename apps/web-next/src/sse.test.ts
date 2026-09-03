@@ -103,15 +103,22 @@ describe('web-next SSE 路由', () => {
     expect(body).toContain('world');
   });
 
-  it('events：首帧 repo.state-changed；request.signal abort 后流关闭', async () => {
+  it('events：首帧 repo.state-changed、第二帧 operation.state-changed；request.signal abort 后流关闭', async () => {
     const { repoId } = registerRepo();
     const ac = new AbortController();
     const res = await getEvents(new Request(`http://localhost/api/repos/${repoId}/events`, { signal: ac.signal }), ctx(repoId));
     expect(res.status).toBe(200);
     const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
     const first = await reader.read();
     expect(first.done).toBe(false);
-    expect(new TextDecoder().decode(first.value)).toContain('"type":"repo.state-changed"');
+    expect(decoder.decode(first.value)).toContain('"type":"repo.state-changed"');
+    // 新首帧契约：紧随其后的第二帧为当前操作状态
+    const second = await reader.read();
+    expect(second.done).toBe(false);
+    const secondText = decoder.decode(second.value);
+    expect(secondText).toContain('"type":"operation.state-changed"');
+    expect(secondText).toContain('"kind":"none"');
     ac.abort(); // SSE 断开 → 取消链路：轮询生成器退出 → 流关闭
     await expect(reader.read()).resolves.toMatchObject({ done: true });
   });
