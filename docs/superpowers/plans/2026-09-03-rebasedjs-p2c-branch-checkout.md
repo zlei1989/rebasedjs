@@ -335,3 +335,20 @@ export function BranchPanel(props: BranchPanelProps): React.ReactNode;
 - Spec 覆盖：§4.2 branch 行（创建/删除/重命名/上游/合并状态 ✓；保护分支/最近检出/清理/force-push 修复/checkout with rebase 明确后置）；checkout 行（分支/新建分支检出/detached ✓；文件级检出已由 P2-B discardPaths 覆盖）。
 - 类型一致性：BranchRef/BranchList/BranchAction/CheckoutAction/BranchPanelProps 跨任务签名已对齐；`mergedIntoHead` 在 api 层组合（core 列表不含），两端路由透传。
 - 风险：`for-each-ref` 的 `upstream:track` 本地化输出（LC_ALL=C 已固定英文）✓；Windows 长分支名 NUL 分隔已处理。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+7/7 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: With fixes**——1 Important（branches 容器 events 订阅注释过度声称：watcher 为 status-diff 驱动，纯建删非当前分支不产事件）经修复波（`fa62f04` 订阅修复 + `9f67aa7` 注释修正）与两轮限定复审全部 ADDRESSED，正式关账。
+
+**Rulings（控制器裁决记录）**：
+1. `%(refname)` 替代 `%(refname:short)`（remote 判定更稳）与 `--format` 置于 `--merged` 前（防吞参）——两偏差经 git CLI 语义裁决成立。
+2. `useBranchAction` 同键 mutation 需 `revalidate:false`（swr 2.5.1 源码核验）——纳入 client hooks 约定。
+3. 「范围外提交」指控的回应：多计划并行同分支是有意的流水线策略，逐任务审查范围按父提交精确计算，完整性不受损。
+4. next/dist/docs 存在性误会：目录实际存在（422 文件），AGENT.md 指引有效。
+
+**登记缺口**：watcher 不感知纯 ref 建删 → P3 remote/refs 计划扩展 watcher 指纹。hardening 新增 ⑥-⑩（见终审 Recommendations/Minors）。
+
+终审 triage：18 项 deferred minor 全部 safe-to-defer。SDD 工作区已按规程删除，本提交为记录。
