@@ -17,9 +17,10 @@ export async function discardPaths(cwd: string, paths: string[]): Promise<void> 
   await runGit(['restore', '--worktree', '--', ...paths], { cwd });
 }
 
-/** 删除未跟踪文件（git clean -f --，discard 对 ?? 条目的分派） */
+/** 删除未跟踪文件/目录（git clean -fd --，discard 对 ?? 条目的分派）；
+ *  porcelain 将未跟踪目录折叠为 `?? dir/` 条目，-d 确保目录路径也可删除（对文件路径安全无副作用） */
 export async function cleanUntracked(cwd: string, paths: string[]): Promise<void> {
-  await runGit(['clean', '-f', '--', ...paths], { cwd });
+  await runGit(['clean', '-fd', '--', ...paths], { cwd });
 }
 
 /** 应用 patch 文本：cached=--cached（作用于暂存区），reverse=-R（反向）。

@@ -3,9 +3,11 @@
 /**
  * 状态页容器：useRepoStatus + useStaging（文件级）+ useCommit + useDiffPatch（选中文件补丁预览）
  * 注入 ui StatusPage（与 web-koa 容器同构）。操作失败统一 message.error；
- * commit 成功后经 key remount 清空提交框并 mutate status（events 推送亦会覆盖）。
+ * commit 成功后经 key remount 清空提交框并 mutate status。
+ * useRepoEvents 在本页自订阅（导航到 /status 后 LogPage 容器已卸载，外部 CLI 变更只能靠本订阅回写 status 缓存）。
  */
-import { useCommit, useDiffPatch, useRepoStatus, useStaging } from '@rebased/client';
+import { useCommit, useDiffPatch, useRepoEvents, useRepoStatus, useStaging } from '@rebased/client';
+import type { StagingBody } from '@rebased/contracts';
 import { StatusPage } from '@rebased/ui';
 import { Button, Flex, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -19,12 +21,28 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { trigger: commit, isMutating: committing } = useCommit(repoId);
   // 选中文件态驱动行内补丁预览；null 时传空 file，useDiffPatch 内部 key 为 null 不发请求（条件拉取，hook 无条件挂载）
   const [patchSel, setPatchSel] = useState<{ path: string; staged: boolean } | null>(null);
-  const { data: patch, isLoading: patchLoading } = useDiffPatch(repoId, patchSel?.path ?? '', patchSel?.staged ?? false);
+  const {
+    data: patch,
+    isLoading: patchLoading,
+    mutate: mutatePatch,
+  } = useDiffPatch(repoId, patchSel?.path ?? '', patchSel?.staged ?? false);
   // 提交成功计数：并入 StatusPage key，commit 后 remount 清空提交框与勾选态（staging 回写由 hook 完成，无需 remount）
   const [commitSeq, setCommitSeq] = useState(0);
+  // 状态推送（外部 CLI 变更/后台操作完成）：server-authoritative 回写 status 缓存；
+  // revalidate:false 与 staging hook 回写约定一致，避免 GET 竞态覆盖
+  useRepoEvents(repoId, {
+    onStatus: (next) => void mutate(next, { revalidate: false }),
+  });
   // 操作失败统一以服务端中文 message 提示，避免未捕获 rejection
   const onError = (err: unknown): void => {
     void message.error(err instanceof Error ? err.message : String(err));
+  };
+  // staging/commit 改变文件 diff：当前选中文件的 diff/patch 缓存失效重取（patchSel 为空时无 key 可失效，跳过）
+  const invalidatePatch = (): void => {
+    if (patchSel) void mutatePatch();
+  };
+  const onStaging = (body: StagingBody): void => {
+    applyStaging(body).then(invalidatePatch).catch(onError);
   };
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!status) return null;
@@ -38,14 +56,15 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
       <StatusPage
         key={`${repoId}-${commitSeq}`}
         status={status}
-        onStage={(paths) => void applyStaging({ action: 'stage', paths }).catch(onError)}
-        onUnstage={(paths) => void applyStaging({ action: 'unstage', paths }).catch(onError)}
-        onDiscard={(paths) => void applyStaging({ action: 'discard', paths }).catch(onError)}
+        onStage={(paths) => onStaging({ action: 'stage', paths })}
+        onUnstage={(paths) => onStaging({ action: 'unstage', paths })}
+        onDiscard={(paths) => onStaging({ action: 'discard', paths })}
         onCommit={(body) => {
           commit(body)
             .then(() => {
               setCommitSeq((n) => n + 1);
               void mutate();
+              invalidatePatch();
             })
             .catch(onError);
         }}

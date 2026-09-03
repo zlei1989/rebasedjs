@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { collectFileDiff } from './diff';
 import { runGit } from './exec';
@@ -57,6 +57,17 @@ describe('staging 原语', () => {
     await cleanUntracked(repo, ['new.txt']);
     expect(existsSync(join(repo, 'new.txt'))).toBe(false);
     expect(await codeOf(repo, 'new.txt')).toBeUndefined();
+  });
+
+  it('cleanUntracked 删除未跟踪子目录（porcelain 折叠为 ?? dir/ 条目）', async () => {
+    const repo = repoWithCommit('a.txt', 'v1');
+    mkdirSync(join(repo, 'sub'));
+    writeFileSync(join(repo, 'sub', 'inner.txt'), 'n');
+    expect(await codeOf(repo, 'sub/')).toBe('??');
+
+    await cleanUntracked(repo, ['sub/']);
+    expect(existsSync(join(repo, 'sub'))).toBe(false);
+    expect(await codeOf(repo, 'sub/')).toBeUndefined();
   });
 
   it('applyPatch --cached 只把指定 hunk 应用到暂存区', async () => {
