@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GitExitError } from './exec';
-import { resetToRef } from './reset';
+import { resetToRef, verifyCommitish } from './reset';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -62,5 +62,16 @@ describe('reset 原语', () => {
     makeBaseCommit(repo);
 
     await expect(resetToRef(repo, 'nope-ref', 'mixed')).rejects.toBeInstanceOf(GitExitError);
+  });
+
+  it('verifyCommitish：提交/标签类 ref → true，无效 ref → false', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const base = makeBaseCommit(repo);
+
+    await expect(verifyCommitish(repo, 'HEAD')).resolves.toBe(true);
+    await expect(verifyCommitish(repo, base)).resolves.toBe(true);
+    await expect(verifyCommitish(repo, 'HEAD~1')).resolves.toBe(false);
+    await expect(verifyCommitish(repo, 'nope-ref')).resolves.toBe(false);
   });
 });
