@@ -14,3 +14,13 @@ export { getOperationState, abortGitOperation } from './operation';
 export type { CoreOperation } from './operation';
 export { applyPatch, cleanUntracked, discardPaths, stagePaths, unstagePaths } from './staging';
 export { commitStaged } from './commit';
+export {
+  createBranch,
+  deleteBranch,
+  listBranches,
+  mergedBranchNames,
+  renameBranch,
+  setBranchUpstream,
+} from './branch';
+export type { CoreBranch } from './branch';
+export { checkoutBranch, checkoutDetached, checkoutNewBranch } from './checkout';
