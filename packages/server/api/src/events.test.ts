@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { watchRepoStatus } from './events';
@@ -6,6 +7,31 @@ import type { RepoStateEvent } from './events';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
+
+function git(dir: string, args: string[]): void {
+  execFileSync('git', ['-C', dir, ...args]);
+}
+
+/** 造真实 merge 冲突留下 MERGE_HEAD：fixture 无首个提交且默认分支名随 git 版本不同，用 symbolic-ref 取主分支名 */
+function createMergeConflict(repo: string): void {
+  const main = execFileSync('git', ['-C', repo, 'symbolic-ref', 'HEAD', '--short']).toString().trim();
+  writeFileSync(join(repo, 'a.txt'), 'base\n');
+  git(repo, ['add', '.']);
+  git(repo, ['commit', '-m', 'base']);
+  git(repo, ['checkout', '-b', 'side']);
+  writeFileSync(join(repo, 'a.txt'), 'side\n');
+  git(repo, ['add', '.']);
+  git(repo, ['commit', '-m', 'side']);
+  git(repo, ['checkout', main]);
+  writeFileSync(join(repo, 'a.txt'), 'main\n');
+  git(repo, ['add', '.']);
+  git(repo, ['commit', '-m', 'main']);
+  try {
+    git(repo, ['merge', 'side']);
+  } catch {
+    // merge 冲突以非零退出码结束，忽略
+  }
+}
 
 async function collect(repo: string, opts: { count: number; intervalMs?: number; signal?: AbortSignal }): Promise<RepoStateEvent[]> {
   const out: RepoStateEvent[] = [];
@@ -29,6 +55,32 @@ describe('watchRepoStatus', () => {
     const events = await p;
     expect(events.map((e) => e.type)).toEqual(['repo.state-changed', 'operation.state-changed']);
     expect(events[1].payload).toEqual({ kind: 'none' });
+  });
+
+  it('轮询中途操作状态变化（merge 冲突）→ 推送 operation.state-changed', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const ac = new AbortController();
+    const seen: RepoStateEvent[] = [];
+    let firstTwoResolve!: () => void;
+    const firstTwo = new Promise<void>((r) => { firstTwoResolve = r; });
+    const watching = (async () => {
+      for await (const e of watchRepoStatus(repo, { intervalMs: 100, signal: ac.signal })) {
+        seen.push(e);
+        if (seen.length === 2) firstTwoResolve(); // 首帧 repo + operation 已消费
+        if (e.type === 'operation.state-changed' && e.payload.kind === 'merge') break; // break 触发 generator return，完整退出轮询
+      }
+    })();
+    try {
+      await firstTwo;
+      createMergeConflict(repo); // 流建立后制造 MERGE_HEAD → 下一轮轮询应检测出操作变化
+      await watching;
+    } finally {
+      ac.abort(); // 兜底：超时/断言失败路径也确保生成器退出，避免 afterAll 清目录时 EPERM
+      await watching.catch(() => {});
+    }
+    const opFrames = seen.filter((e): e is Extract<RepoStateEvent, { type: 'operation.state-changed' }> => e.type === 'operation.state-changed');
+    expect(opFrames.map((e) => e.payload.kind)).toEqual(['none', 'merge']);
   });
 
   it('首产当前状态，变化后产新事件', async () => {
