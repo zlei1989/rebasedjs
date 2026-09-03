@@ -9,7 +9,8 @@ export function useOperation(repoId: string): SWRResponse<OperationState> {
   return useSWR<OperationState>(`/api/repos/${repoId}/operation`, getJson);
 }
 
-/** 中止当前操作（mutation）：POST operation/abort，响应回写 useOperation 缓存 */
+/** 中止当前操作（mutation）：POST operation/abort，响应回写 useOperation 缓存；
+ *  跨键 useSWRConfig().mutate 假设所有 hooks 共享同一 SWRConfig provider（应用当前依赖全局缓存） */
 export function useAbortOperation(repoId: string): { trigger: () => Promise<OperationState>; isMutating: boolean } {
   // abort 端点与查询键不同，无法用 populateCache；改用上下文 mutate 回写 useOperation 缓存
   const { mutate } = useSWRConfig();

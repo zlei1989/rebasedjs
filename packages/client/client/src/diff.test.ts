@@ -1,10 +1,11 @@
-/** diff.ts 测试：useFileDiff 查询串（FileVersions）+ useDiffStream 分块累积/stream.error/断开清理（mock subscribeSse） */
+/** diff.ts 测试：useFileDiff/useDiffPatch 查询串（FileVersions/DiffFile，patch 空 file 走 null key）+ useDiffStream 分块累积/stream.error/断开清理（mock subscribeSse） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { FileVersions, SseEvent } from '@rebased/contracts';
+import type { DiffFile, FileVersions, SseEvent } from '@rebased/contracts';
 import { subscribeSse } from './events';
-import { useDiffStream, useFileDiff } from './diff';
+import { useDiffPatch, useDiffStream, useFileDiff } from './diff';
+import { freshCache } from './testing/fresh-cache';
 
 vi.mock('./events', () => ({ subscribeSse: vi.fn() }));
 
@@ -37,6 +38,55 @@ describe('useFileDiff', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-diff-1/diff?file=a.ts&staged=true');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useDiffPatch', () => {
+  it('按 file/staged 拼接查询串请求 diff/patch 端点并返回 DiffFile', async () => {
+    const patch: DiffFile = { path: 'a.ts', text: 'diff --git a/a.ts b/a.ts\n@@ -1 +1 @@' };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(patch), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: DiffFile; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useDiffPatch('r-diff-4', 'a.ts', false);
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result?.data).toEqual(patch));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-diff-4/diff/patch?file=a.ts&staged=false');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('file 为空串时挂 null key：不发请求，data 为 undefined（页面可无条件挂载）', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: DiffFile; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useDiffPatch('r-diff-5', '', true);
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+
+    expect(result?.data).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
     await act(async () => {
       renderer.unmount();
     });

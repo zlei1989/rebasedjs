@@ -1,7 +1,7 @@
 /** 差异 hooks：一次性 SWR + SSE 分块流（text 累积 + connected/error 状态） */
 import { useEffect, useState } from 'react';
-import useSWR from 'swr';
-import type { FileVersions } from '@rebased/contracts';
+import useSWR, { type SWRResponse } from 'swr';
+import type { DiffFile, FileVersions } from '@rebased/contracts';
 import { getJson } from './http';
 import { subscribeSse } from './events';
 
@@ -9,6 +9,13 @@ import { subscribeSse } from './events';
 export function useFileDiff(repoId: string, file: string, staged = false) {
   const params = new URLSearchParams({ file, staged: String(staged) });
   return useSWR<FileVersions>(`/api/repos/${repoId}/diff?${params.toString()}`, getJson);
+}
+
+/** 单文件 unified 补丁全文：GET /api/repos/:repoId/diff/patch?file&staged（StatusPage 行内预览、hunk 索引顺序即此全文顺序）；
+ *  file 为空串时挂 null key 不发请求（条件拉取），页面可无条件挂载 */
+export function useDiffPatch(repoId: string, file: string, staged: boolean): SWRResponse<DiffFile> {
+  const params = new URLSearchParams({ file, staged: String(staged) });
+  return useSWR<DiffFile>(file === '' ? null : `/api/repos/${repoId}/diff/patch?${params.toString()}`, getJson);
 }
 
 /** 订阅 diff 分块：SSE diff.chunk → text 累积拼接；stream.error → error 暴露并断开；connected 表示订阅存活，卸载即中止 */

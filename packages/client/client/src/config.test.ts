@@ -1,10 +1,10 @@
 /** config.ts 测试：useRepoConfig 拉取 + useSetConfig 突变（PUT 并以响应回写 useRepoConfig 缓存） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
-import { SWRConfig } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigPutBody, GitConfigView } from '@rebased/contracts';
 import { useRepoConfig, useSetConfig } from './config';
+import { freshCache } from './testing/fresh-cache';
 
 const INITIAL: GitConfigView = {
   entries: [
@@ -19,10 +19,6 @@ const UPDATED: GitConfigView = {
   ],
 };
 const PUT_BODY: ConfigPutBody = { key: 'user.name', value: 'Bob' };
-
-function freshCache(children: React.ReactNode) {
-  return createElement(SWRConfig, { value: { provider: () => new Map() } }, children);
-}
 
 afterEach(() => {
   vi.unstubAllGlobals();

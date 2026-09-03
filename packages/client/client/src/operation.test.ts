@@ -1,17 +1,13 @@
 /** operation.ts 测试：useOperation 拉取 + useAbortOperation 突变（POST 空体并以响应回写 useOperation 缓存） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
-import { SWRConfig } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OperationState } from '@rebased/contracts';
 import { useAbortOperation, useOperation } from './operation';
+import { freshCache } from './testing/fresh-cache';
 
 const RUNNING: OperationState = { kind: 'rebase', step: 2, total: 5 };
 const IDLE: OperationState = { kind: 'none' };
-
-function freshCache(children: React.ReactNode) {
-  return createElement(SWRConfig, { value: { provider: () => new Map() } }, children);
-}
 
 afterEach(() => {
   vi.unstubAllGlobals();
