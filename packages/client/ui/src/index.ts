@@ -17,7 +17,13 @@ export { RepoPage, type RepoPageProps } from './composite/repo-page';
 export { LogPage, type LogPageProps } from './composite/log-page';
 export { DiffPage, type DiffPageProps } from './composite/diff-page';
 export { SettingsPage, type SettingsPageProps } from './composite/settings-page';
-export { StatusPage, type StatusPageProps, groupChanges, type GroupedChanges } from './composite/status-page';
+export {
+  StatusPage,
+  type StatusPageProps,
+  groupChanges,
+  type GroupedChanges,
+  groupByChangelist,
+} from './composite/status-page';
 export { BranchPanel, type BranchPanelProps } from './composite/branch-panel';
 export { StashPanel, type StashPanelProps } from './composite/stash-panel';
 export { ResetDialog, type ResetDialogProps } from './composite/reset-dialog';

@@ -1,11 +1,34 @@
 /**
  * 状态页（Local Changes + 暂存区 + 提交框）：
  *  变更按 porcelain XY 码分三组——已暂存（X ∈ MADRC）、工作区（Y ∈ MDT）、未跟踪（??；!! 已忽略条目不展示）。
+ *  可选 changelists：提供时三组内再按变更列表子分组（默认列表平铺，非默认列表以列表名子标题分组），
+ *  并开启行级「移动到列表」与页头「管理列表」（新建/重命名/设默认/删除）入口。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入 hooks。
  */
 import { useMemo, useState } from 'react';
-import { Button, Card, Checkbox, Flex, Input, Popconfirm, Skeleton, Tag, Typography } from 'antd';
-import type { ChangeEntry, CommitBody, DiffFile, RepoStatus } from '@rebased/contracts';
+import {
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Flex,
+  Input,
+  Modal,
+  Popconfirm,
+  Skeleton,
+  Tag,
+  Typography,
+} from 'antd';
+import type { MenuProps } from 'antd';
+import type {
+  Changelist,
+  ChangelistAction,
+  ChangelistView,
+  ChangeEntry,
+  CommitBody,
+  DiffFile,
+  RepoStatus,
+} from '@rebased/contracts';
 
 export interface StatusPageProps {
   status: RepoStatus;
@@ -20,6 +43,10 @@ export interface StatusPageProps {
   onSelectPatch?: (path: string, staged: boolean) => void;
   /** 跳 diff 页（行双击或"查看对比"按钮） */
   onOpenDiff?: (path: string, staged: boolean) => void;
+  /** 变更列表视图：提供时三组内按 changelist 子分组（缺省维持现状三分组，向后兼容） */
+  changelists?: ChangelistView;
+  /** 列表管理（新建/重命名/删除/设默认）与条目「移动到列表」回调；与 changelists 同时提供才生效 */
+  onChangelistAction?: (action: ChangelistAction) => void;
 }
 
 /** porcelain X 码（暂存区列）：M/A/D/R/C 视为已暂存 */
@@ -53,6 +80,36 @@ export function groupChanges(entries: ChangeEntry[]): GroupedChanges {
   return grouped;
 }
 
+/** 变更列表分组键：非默认列表用 listId，默认列表固定 'default'（含未指派、孤儿指派、显式指向默认列表） */
+const DEFAULT_KEY = 'default';
+
+/**
+ * 解析路径的当前分组键：未指派、孤儿指派（目标列表已删除）、显式指向默认列表均归 'default'；
+ *  其余归其 listId。行级「移动到列表」的"当前列表"判定与 groupByChangelist 共用此规则。
+ */
+function resolveChangelistKey(path: string, view: ChangelistView): string {
+  const assigned = view.assignments[path];
+  if (assigned === undefined) return DEFAULT_KEY;
+  const list = view.lists.find((l) => l.id === assigned);
+  if (list === undefined || list.isDefault) return DEFAULT_KEY;
+  return list.id;
+}
+
+/**
+ * 按变更列表分组（容器/测试复用）：键为 listId 或 'default'。
+ *  孤儿指派回退 'default'——assignments 读取时虽已修剪，但视图与 status 可能不是同一次刷新，UI 层仍兜底。
+ */
+export function groupByChangelist(entries: ChangeEntry[], view: ChangelistView): Map<string, ChangeEntry[]> {
+  const grouped = new Map<string, ChangeEntry[]>();
+  for (const entry of entries) {
+    const key = resolveChangelistKey(entry.path, view);
+    const bucket = grouped.get(key);
+    if (bucket) bucket.push(entry);
+    else grouped.set(key, [entry]);
+  }
+  return grouped;
+}
+
 /** 三组内部标识：决定徽标取码（staged 取 X 列、unstaged 取 Y 列、untracked 无码）与 onSelectPatch 的 staged 参数 */
 type ChangeGroupKind = 'staged' | 'unstaged' | 'untracked';
 
@@ -63,7 +120,7 @@ function codeBadge(entry: ChangeEntry, group: ChangeGroupKind): string {
   return '?';
 }
 
-/** 变更组卡片：组头"全选"Checkbox + 组级操作按钮（Card extra）+ 行列表（Checkbox + 路径 + code 徽标） */
+/** 变更组卡片：组头"全选"Checkbox + 组级操作按钮（Card extra）+ 行列表（Checkbox + 路径 + code 徽标）；提供 changelists 时组内按列表子分组 */
 function ChangeGroup({
   title,
   group,
@@ -71,6 +128,8 @@ function ChangeGroup({
   onSelectPatch,
   onOpenDiff,
   actions,
+  changelists,
+  onChangelistAction,
 }: {
   title: string;
   group: ChangeGroupKind;
@@ -79,14 +138,79 @@ function ChangeGroup({
   onOpenDiff?: (path: string, staged: boolean) => void;
   /** 组级操作按钮渲染器：接收当前勾选路径，未勾选时按钮应禁用 */
   actions: (selected: string[]) => React.ReactNode;
+  changelists?: ChangelistView;
+  onChangelistAction?: (action: ChangelistAction) => void;
 }): React.ReactNode {
   const [selected, setSelected] = useState<string[]>([]);
   const paths = useMemo(() => entries.map((e) => e.path), [entries]);
   const allChecked = entries.length > 0 && selected.length === entries.length;
 
+  /** 组内变更列表子分组：仅在提供 changelists 时计算 */
+  const byChangelist = useMemo(
+    () => (changelists ? groupByChangelist(entries, changelists) : null),
+    [entries, changelists],
+  );
+
   /** 行勾选切换：维护本组勾选路径集合（行选中预览与勾选互不影响） */
   const toggle = (path: string, checked: boolean): void => {
     setSelected((prev) => (checked ? [...prev, path] : prev.filter((p) => p !== path)));
+  };
+
+  /** 单行渲染：勾选 + 路径 + code 徽标 +（可选）「移动到列表」行操作 */
+  const renderRow = (entry: ChangeEntry): React.ReactNode => {
+    /** 移动目标 = 非当前列表（当前在默认列表时可移往各普通列表，反之含默认列表） */
+    const moveTargets: Changelist[] =
+      changelists === undefined
+        ? []
+        : changelists.lists.filter((l) => resolveChangelistKey(entry.path, changelists) !== (l.isDefault ? DEFAULT_KEY : l.id));
+
+    /** 移动分派：行已勾选时按当前选中集合批量移动，否则仅移动该行 */
+    const move = (targetId: string): void => {
+      const movePaths = selected.includes(entry.path) ? selected : [entry.path];
+      onChangelistAction?.({ action: 'move', paths: movePaths, targetId });
+    };
+
+    return (
+      <Flex
+        key={entry.path}
+        data-testid={`row-${group}-${entry.path}`}
+        align="center"
+        gap={8}
+        style={{ cursor: 'pointer', padding: '4px 0' }}
+        onClick={() => onSelectPatch?.(entry.path, group === 'staged')}
+        onDoubleClick={() => onOpenDiff?.(entry.path, group === 'staged')}
+      >
+        {/* 勾选不应触发行选中预览：阻止点击冒泡到行 */}
+        <Flex onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            data-testid={`check-${group}-${entry.path}`}
+            checked={selected.includes(entry.path)}
+            onChange={(e) => toggle(entry.path, e.target.checked)}
+          />
+        </Flex>
+        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+          {entry.path}
+        </Typography.Text>
+        <Tag>{codeBadge(entry, group)}</Tag>
+        {/* 「移动到列表」行操作：仅 changelists 模式渲染；无可用目标（仅默认列表且在默认列表）时禁用 */}
+        {changelists !== undefined && onChangelistAction !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Dropdown
+              trigger={['click']}
+              disabled={moveTargets.length === 0}
+              menu={{
+                items: moveTargets.map((l) => ({ key: l.id, label: l.name })),
+                onClick: ({ key }) => move(key),
+              }}
+            >
+              <Button size="small" type="text" data-testid={`move-${group}-${entry.path}`}>
+                移动到列表
+              </Button>
+            </Dropdown>
+          </Flex>
+        )}
+      </Flex>
+    );
   };
 
   return (
@@ -111,34 +235,81 @@ function ChangeGroup({
       <Flex vertical>
         {entries.length === 0 ? (
           <Typography.Text type="secondary">无变更</Typography.Text>
+        ) : byChangelist === null || changelists === undefined ? (
+          entries.map(renderRow)
         ) : (
-          entries.map((entry) => (
-            <Flex
-              key={entry.path}
-              data-testid={`row-${group}-${entry.path}`}
-              align="center"
-              gap={8}
-              style={{ cursor: 'pointer', padding: '4px 0' }}
-              onClick={() => onSelectPatch?.(entry.path, group === 'staged')}
-              onDoubleClick={() => onOpenDiff?.(entry.path, group === 'staged')}
-            >
-              {/* 勾选不应触发行选中预览：阻止点击冒泡到行 */}
-              <Flex onClick={(e) => e.stopPropagation()}>
-                <Checkbox
-                  data-testid={`check-${group}-${entry.path}`}
-                  checked={selected.includes(entry.path)}
-                  onChange={(e) => toggle(entry.path, e.target.checked)}
-                />
-              </Flex>
-              <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-                {entry.path}
-              </Typography.Text>
-              <Tag>{codeBadge(entry, group)}</Tag>
-            </Flex>
-          ))
+          <>
+            {/* 默认列表条目平铺在前（无子标题），非默认列表按列表名子标题分组在后 */}
+            {(byChangelist.get(DEFAULT_KEY) ?? []).map(renderRow)}
+            {changelists.lists
+              .filter((l) => !l.isDefault)
+              .map((list) => {
+                const listEntries = byChangelist.get(list.id) ?? [];
+                if (listEntries.length === 0) return null;
+                return (
+                  <Flex vertical key={list.id}>
+                    <Typography.Text
+                      type="secondary"
+                      data-testid={`subtitle-${group}-${list.id}`}
+                      style={{ padding: '4px 0' }}
+                    >
+                      {list.name}（{listEntries.length}）
+                    </Typography.Text>
+                    {listEntries.map(renderRow)}
+                  </Flex>
+                );
+              })}
+          </>
         )}
       </Flex>
     </Card>
+  );
+}
+
+/** 列表名单输入 Modal：新建/重命名复用（标题与输入 testid 由调用方区分，提交回调组装 action） */
+function ChangelistNameModal({
+  title,
+  open,
+  inputTestId,
+  onSubmit,
+  onClose,
+}: {
+  title: string;
+  open: boolean;
+  inputTestId: string;
+  onSubmit: (name: string) => void;
+  onClose: () => void;
+}): React.ReactNode {
+  const [name, setName] = useState('');
+
+  /** 关闭时清空输入：Modal 默认不卸载子树，取消后重开不能残留上次输入 */
+  const close = (): void => {
+    setName('');
+    onClose();
+  };
+
+  const submit = (): void => {
+    onSubmit(name.trim());
+    close();
+  };
+
+  return (
+    <Modal
+      title={title}
+      open={open}
+      okText="确定"
+      cancelText="取消"
+      okButtonProps={{ disabled: name.trim() === '' }}
+      onOk={submit}
+      onCancel={close}
+    >
+      <Input
+        data-testid={inputTestId}
+        placeholder="列表名称"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+    </Modal>
   );
 }
 
@@ -238,11 +409,63 @@ export function StatusPage({
   patchLoading,
   onSelectPatch,
   onOpenDiff,
+  changelists,
+  onChangelistAction,
 }: StatusPageProps): React.ReactNode {
   const grouped = useMemo(() => groupChanges(status.entries), [status.entries]);
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<string | null>(null);
+
+  /** 变更列表模式仅在视图与回调同时具备时开启（向后兼容：缺省维持现状三分组） */
+  const changelistMode = changelists !== undefined && onChangelistAction !== undefined;
+
+  /** 「管理列表」菜单：新建 + 各列表一组（重命名/设默认/删除；默认列表设默认与删除禁用） */
+  const manageItems: MenuProps['items'] = changelistMode
+    ? [
+      { key: 'create', label: '新建列表' },
+      { type: 'divider' },
+      ...changelists.lists.map((list) => ({
+        type: 'group' as const,
+        label: list.isDefault ? `${list.name}（默认）` : list.name,
+        children: [
+          { key: `rename:${list.id}`, label: '重命名' },
+          { key: `setDefault:${list.id}`, label: '设为默认', disabled: list.isDefault },
+          {
+            key: `delete:${list.id}`,
+            // 删除项包 span 携带 testid：断言默认列表删除禁用需定位到具体列表的菜单项
+            label: <span data-testid={`cl-delete-${list.id}`}>删除</span>,
+            danger: true,
+            disabled: list.isDefault,
+          },
+        ],
+      })),
+    ]
+    : [];
+
+  /** 管理菜单分派：新建/重命名开对应 Modal；设默认/删除直发回调 */
+  const handleManageClick: NonNullable<MenuProps['onClick']> = ({ key }): void => {
+    if (!changelistMode) return;
+    if (key === 'create') {
+      setCreateOpen(true);
+      return;
+    }
+    const [action, id] = key.split(':');
+    if (action === 'rename') setRenameTarget(id);
+    if (action === 'setDefault') onChangelistAction({ action: 'setDefault', id });
+    if (action === 'delete') onChangelistAction({ action: 'delete', id });
+  };
+
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
+      {/* 页头工具条：变更列表管理入口（仅 changelists 模式渲染） */}
+      {changelistMode && (
+        <Flex>
+          <Dropdown trigger={['click']} menu={{ items: manageItems, onClick: handleManageClick }}>
+            <Button data-testid="manage-changelists">管理列表</Button>
+          </Dropdown>
+        </Flex>
+      )}
       {/* 左列三组变更列表 + 右列补丁预览（窄屏自然折行为上下布局） */}
       <Flex gap={16} align="stretch" wrap="wrap">
         <Flex vertical gap={16} style={{ flex: 1, minWidth: 320 }}>
@@ -252,6 +475,8 @@ export function StatusPage({
             entries={grouped.staged}
             onSelectPatch={onSelectPatch}
             onOpenDiff={onOpenDiff}
+            changelists={changelistMode ? changelists : undefined}
+            onChangelistAction={onChangelistAction}
             actions={(selected) => (
               <Button
                 size="small"
@@ -269,6 +494,8 @@ export function StatusPage({
             entries={grouped.unstaged}
             onSelectPatch={onSelectPatch}
             onOpenDiff={onOpenDiff}
+            changelists={changelistMode ? changelists : undefined}
+            onChangelistAction={onChangelistAction}
             actions={(selected) => (
               <>
                 <Button
@@ -298,6 +525,8 @@ export function StatusPage({
             entries={grouped.untracked}
             onSelectPatch={onSelectPatch}
             onOpenDiff={onOpenDiff}
+            changelists={changelistMode ? changelists : undefined}
+            onChangelistAction={onChangelistAction}
             actions={(selected) => (
               <>
                 <Button
@@ -328,6 +557,24 @@ export function StatusPage({
         </Flex>
       </Flex>
       <CommitCard committing={committing} onCommit={onCommit} />
+
+      {/* 列表名 Modal：新建/重命名互斥（renameTarget 非空才开重命名），提交后清空输入并关闭 */}
+      <ChangelistNameModal
+        title="新建列表"
+        open={changelistMode && createOpen}
+        inputTestId="cl-create-name"
+        onSubmit={(name) => onChangelistAction?.({ action: 'create', name })}
+        onClose={() => setCreateOpen(false)}
+      />
+      <ChangelistNameModal
+        title="重命名列表"
+        open={changelistMode && renameTarget !== null}
+        inputTestId="cl-rename-input"
+        onSubmit={(name) => {
+          if (renameTarget !== null) onChangelistAction?.({ action: 'rename', id: renameTarget, name });
+        }}
+        onClose={() => setRenameTarget(null)}
+      />
     </Flex>
   );
 }

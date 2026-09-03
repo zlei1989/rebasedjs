@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { ChangeEntry, RepoStatus } from '@rebased/contracts';
-import { groupChanges, StatusPage } from './status-page';
+import type { ChangeEntry, ChangelistView, RepoStatus } from '@rebased/contracts';
+import { groupByChangelist, groupChanges, StatusPage } from './status-page';
 
 /** 测试状态工厂：补全 RepoStatus 必填字段，仅注入 entries */
 function makeStatus(entries: ChangeEntry[]): RepoStatus {
@@ -229,5 +229,151 @@ describe('StatusPage', () => {
       />,
     );
     expect(screen.getByTestId('patch-text').textContent).toContain('@@ -1 +1 @@');
+  });
+});
+
+/** 测试变更列表视图工厂：默认列表 + 两个普通列表；assignments 按需覆盖 */
+function makeChangelists(assignments: Record<string, string> = {}): ChangelistView {
+  return {
+    lists: [
+      { id: 'cl-default', name: '默认列表', isDefault: true },
+      { id: 'cl-feat', name: '功能A', isDefault: false },
+      { id: 'cl-fix', name: '修复B', isDefault: false },
+    ],
+    assignments,
+  };
+}
+
+describe('groupByChangelist', () => {
+  it('按 assignments 分组：已指派路径归对应 listId，未指派归 "default"', () => {
+    const a: ChangeEntry = { path: 'a.ts', code: '.M' };
+    const b: ChangeEntry = { path: 'b.ts', code: '.M' };
+    const c: ChangeEntry = { path: 'c.ts', code: '.M' };
+    const grouped = groupByChangelist([a, b, c], makeChangelists({ 'a.ts': 'cl-feat', 'b.ts': 'cl-fix' }));
+    expect(grouped.get('cl-feat')).toEqual([a]);
+    expect(grouped.get('cl-fix')).toEqual([b]);
+    expect(grouped.get('default')).toEqual([c]);
+  });
+
+  it('孤儿指派（目标列表已不存在）回退 "default"', () => {
+    const a: ChangeEntry = { path: 'a.ts', code: '.M' };
+    const view = makeChangelists({ 'a.ts': 'cl-gone' });
+    const grouped = groupByChangelist([a], view);
+    expect(grouped.get('default')).toEqual([a]);
+    expect(grouped.has('cl-gone')).toBe(false);
+  });
+
+  it('显式指派到默认列表 id 也归 "default" 键', () => {
+    const a: ChangeEntry = { path: 'a.ts', code: '.M' };
+    const grouped = groupByChangelist([a], makeChangelists({ 'a.ts': 'cl-default' }));
+    expect(grouped.get('default')).toEqual([a]);
+    expect(grouped.has('cl-default')).toBe(false);
+  });
+});
+
+describe('StatusPage changelists', () => {
+  /** 工作区三条：a.ts→功能A、b.ts→修复B、c.ts 未指派（默认列表） */
+  const entries: ChangeEntry[] = [
+    { path: 'a.ts', code: '.M' },
+    { path: 'b.ts', code: '.M' },
+    { path: 'c.ts', code: '.M' },
+  ];
+  const changelists = makeChangelists({ 'a.ts': 'cl-feat', 'b.ts': 'cl-fix' });
+
+  it('changelists 提供时按列表子分组：非默认列表渲染子标题（带计数），默认列表无子标题', () => {
+    render(
+      <StatusPage
+        status={makeStatus(entries)}
+        {...makeHandlers()}
+        changelists={changelists}
+        onChangelistAction={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('subtitle-unstaged-cl-feat')).toHaveTextContent('功能A（1）');
+    expect(screen.getByTestId('subtitle-unstaged-cl-fix')).toHaveTextContent('修复B（1）');
+    // 默认列表条目平铺：不渲染其子标题
+    expect(screen.queryByTestId('subtitle-unstaged-cl-default')).toBeNull();
+    // 三条行均仍渲染
+    expect(screen.getByTestId('row-unstaged-a.ts')).toBeInTheDocument();
+    expect(screen.getByTestId('row-unstaged-b.ts')).toBeInTheDocument();
+    expect(screen.getByTestId('row-unstaged-c.ts')).toBeInTheDocument();
+  });
+
+  it('行级「移动到列表」：行未勾选时仅移动该行，载荷 {action:"move",paths:[该行],targetId}', async () => {
+    const onChangelistAction = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus(entries)}
+        {...makeHandlers()}
+        changelists={changelists}
+        onChangelistAction={onChangelistAction}
+      />,
+    );
+    // b.ts 当前在「修复B」：目标菜单只列非当前列表（默认列表 + 功能A）
+    fireEvent.click(screen.getByTestId('move-unstaged-b.ts'));
+    fireEvent.click(await screen.findByText('功能A'));
+    expect(onChangelistAction).toHaveBeenCalledTimes(1);
+    expect(onChangelistAction).toHaveBeenCalledWith({ action: 'move', paths: ['b.ts'], targetId: 'cl-feat' });
+  });
+
+  it('行级「移动到列表」：行已勾选时按当前选中集合批量移动', async () => {
+    const onChangelistAction = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus(entries)}
+        {...makeHandlers()}
+        changelists={changelists}
+        onChangelistAction={onChangelistAction}
+      />,
+    );
+    clickCheckbox('check-unstaged-a.ts');
+    clickCheckbox('check-unstaged-c.ts');
+    // 在已勾选的 a.ts 行上打开移动菜单：操作整个选中集合
+    fireEvent.click(screen.getByTestId('move-unstaged-a.ts'));
+    fireEvent.click(await screen.findByText('修复B'));
+    expect(onChangelistAction).toHaveBeenCalledWith({
+      action: 'move',
+      paths: ['a.ts', 'c.ts'],
+      targetId: 'cl-fix',
+    });
+  });
+
+  it('管理列表「新建列表」：Modal 输入名称后以 {action:"create",name} 回调', async () => {
+    const onChangelistAction = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus(entries)}
+        {...makeHandlers()}
+        changelists={changelists}
+        onChangelistAction={onChangelistAction}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('manage-changelists'));
+    fireEvent.click(await screen.findByText('新建列表'));
+    fireEvent.change(await screen.findByTestId('cl-create-name'), { target: { value: '新列表' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onChangelistAction).toHaveBeenCalledTimes(1);
+    expect(onChangelistAction).toHaveBeenCalledWith({ action: 'create', name: '新列表' });
+  });
+
+  it('管理列表：默认列表的「删除」菜单项禁用', async () => {
+    render(
+      <StatusPage
+        status={makeStatus(entries)}
+        {...makeHandlers()}
+        changelists={changelists}
+        onChangelistAction={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('manage-changelists'));
+    const deleteItem = await screen.findByTestId('cl-delete-cl-default');
+    expect(deleteItem.closest('li')).toHaveClass('ant-dropdown-menu-item-disabled');
+  });
+
+  it('changelists 缺省时无管理入口与行级移动按钮（向后兼容三分组现状）', () => {
+    render(<StatusPage status={makeStatus(entries)} {...makeHandlers()} />);
+    expect(screen.queryByTestId('manage-changelists')).toBeNull();
+    expect(screen.queryByTestId('move-unstaged-a.ts')).toBeNull();
+    expect(screen.queryByTestId('subtitle-unstaged-cl-feat')).toBeNull();
   });
 });
