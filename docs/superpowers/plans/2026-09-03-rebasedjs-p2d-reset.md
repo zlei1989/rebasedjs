@@ -231,3 +231,19 @@ export function ResetDialog(props: ResetDialogProps): React.ReactNode;
 - Spec 覆盖：§4.2 reset 行三项（mixed/soft/hard ✓、Reset Current Branch to Here ✓ 经 CommitDetailsPanel、Undo Commit ✓）。
 - 类型一致性：ResetBody/ResetDialogProps/LogPage 与 CommitDetailsPanel 新 props 跨任务对齐；undo-commit 无体 POST 在路由/hook/容器三层一致。
 - 风险：hard reset 误操作——UI 双重确认（Radio 明示 + Checkbox 放行）已设计；`verifyCommitish` 的 `^{commit}` 剥离 tag/分支到提交，分支名 ref 合法（Java Reset 亦允许分支目标）✓。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+7/7 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: Yes**（无 Critical/Important；15 项 deferred minor 全部 safe-to-defer），正式关账。
+
+**终审亮点**：全链契约一致性（ResetBody 逐层同一出处）、hard 双重确认真实有效（okButtonProps.disabled + 测试双断言）、undo-commit soft 语义有真实 git 证据（改动确实回暂存区）、刷新链（即时回写 + 轮询推送幂等叠加）无缺口。
+
+**Rulings / 采纳**：
+1. 终审建议①：容器 label 改用主题行（`commit.message.split('\n')[0]`）——入 hardening 清单⑪。
+2. 终审建议②：spec §4.2 reset 行已补注「经 CommitDetailsPanel 按钮入口（非右键菜单）」（随本提交落地）。
+3. 终审建议③：core ref 类调用统一加 `--end-of-options` 收敛 exotic ref ——入 hardening 清单⑫。
+
+SDD 工作区已按规程删除，本提交为记录。

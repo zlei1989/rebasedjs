@@ -1,4 +1,4 @@
-# Rebased.js 架构重构设计
+﻿# Rebased.js 架构重构设计
 
 - **日期**：2026-09-01
 - **状态**：待评审
@@ -188,7 +188,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 | `settings.ts` | 应用设置：最近仓库、UI 偏好、**log 位置**、仓库级设置集中存储、git 可执行文件检测/引导、GPG 配置、SSH 配置 | `GitVcsPanel`、`GitExecutableSelectorPanel`、`GitGpgConfigDialog`、`SSHConnectionSettings` | P1 |
 | `errors.ts` | `ServiceError` + 错误码表 | — | P1 |
 | `operation.ts` | 进行中操作状态（merge/rebase/cherry-pick 检测）、进度事件、操作锁、**中止操作** | `GitFreezingProcess`、`GitMergeRebaseWidget`、`GitAbortOperationAction` | P2 |
-| `reset.ts` | Reset：mixed/soft/hard、日志右键"Reset Current Branch to Here"、**Undo Commit**（撤销最近提交） | `GitResetAction`、`GitNewResetDialog`、`GitUncommitAction` | P2 |
+| `reset.ts` | Reset：mixed/soft/hard、日志"Reset Current Branch to Here"（**经 CommitDetailsPanel 按钮入口**，非右键菜单）、**Undo Commit**（撤销最近提交） | `GitResetAction`、`GitNewResetDialog`、`GitUncommitAction` | P2 |
 | `staging.ts` | 暂存区：add/**取消暂存**/放弃修改（hunk 级）、三版本对比（注：与 `reset.ts` 的 Reset HEAD 不同） | `GitStageAllAction`、`StagingAreaOperation`、`GitStageCompareThreeVersionsAction` | P2 |
 | `changelist.ts` | 变更列表：创建/切换/移动变更/默认列表 | 平台 changelists（`ChangeListManager`） | P2 |
 | `commit.ts` | 提交、amend、**modal 提交 UX**、sign-off、GPG 签名、commit template、跳过 hooks、commit & push、push up to commit、add commit to remote branch、amend 历史提交、reword、CRLF 提示 | `GitCheckinEnvironment`、插件 `intellij.git.commit.modal`、`commit\signing`（`GpgAgentConfigurationAction`）、`GitSkipHooksCommitHandlerFactory`、`GitPushUpToCommitAction`、`GitAmendSpecificCommitSquasher`、`GitCrlfDialog` | P2 |
