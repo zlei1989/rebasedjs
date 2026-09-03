@@ -12,6 +12,7 @@ export { useStaging, useHunkStaging } from './staging';
 export { useCommit } from './commit';
 export { useBranches, useBranchAction } from './branches';
 export { useStashes, useStashAction } from './stash';
+export { useChangelists, useChangelistAction } from './changelist';
 export { useCheckout } from './checkout';
 export { useReset, useUndoCommit } from './reset';
 export { useMerge, useContinueMerge } from './merge';
