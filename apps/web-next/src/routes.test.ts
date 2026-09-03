@@ -15,6 +15,10 @@ import { GET as getDiff } from '../app/api/repos/[repoId]/diff/route';
 import { GET as getConfig, PUT as putConfig } from '../app/api/repos/[repoId]/config/route';
 import { GET as getOperation } from '../app/api/repos/[repoId]/operation/route';
 import { POST as postAbort } from '../app/api/repos/[repoId]/operation/abort/route';
+import { POST as postStaging } from '../app/api/repos/[repoId]/staging/route';
+import { POST as postHunkStaging } from '../app/api/repos/[repoId]/staging/hunks/route';
+import { POST as postCommit } from '../app/api/repos/[repoId]/commit/route';
+import { GET as getDiffPatch } from '../app/api/repos/[repoId]/diff/patch/route';
 import { GET as getSettings, PUT as putSettings } from '../app/api/settings/route';
 
 /** Next 16：route 第二参的 params 为 Promise */
@@ -30,9 +34,13 @@ function tmpDir(prefix: string): string {
   return dir;
 }
 
+/** 最近一次 registerRepo 的仓库磁盘路径（供测试内制造工作区改动） */
+let lastRepoPath = '';
+
 /** 建临时 git 仓库（一次提交）并写入配置注册表，返回注册 repoId */
 function registerRepo(): string {
   const repo = tmpDir('rebased-web-next-repo-');
+  lastRepoPath = repo;
   execFileSync('git', ['init', '-q', repo]);
   execFileSync('git', ['-C', repo, 'config', 'user.email', 'test@example.com']);
   execFileSync('git', ['-C', repo, 'config', 'user.name', 'Test User']);
@@ -247,5 +255,99 @@ describe('web-next REST 路由', () => {
     const res = await getOperation(new Request('http://localhost/api/repos/nope/operation'), ctx('nope'));
     expect(res.status).toBe(404);
     expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('staging 端点：stage 后返回 200 且 entries 反映暂存状态', async () => {
+    const repoId = registerRepo();
+    writeFileSync(join(lastRepoPath, 'a.txt'), 'hello\nworld\n');
+    const res = await postStaging(
+      new Request(`http://localhost/api/repos/${repoId}/staging`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'stage', paths: ['a.txt'] }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const entry = body.entries.find((e: { path: string }) => e.path === 'a.txt');
+    expect(entry?.code.startsWith('M.')).toBe(true);
+  });
+
+  it('staging 端点：空 paths 返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postStaging(
+      new Request(`http://localhost/api/repos/${repoId}/staging`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'stage', paths: [] }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('staging/hunks 端点：hunk 索引越界返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    writeFileSync(join(lastRepoPath, 'a.txt'), 'hello\nworld\n');
+    const res = await postHunkStaging(
+      new Request(`http://localhost/api/repos/${repoId}/staging/hunks`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'stage', file: 'a.txt', hunks: [99] }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('diff/patch 端点：工作区改动后返回 200 且 text 以 diff --git 开头', async () => {
+    const repoId = registerRepo();
+    writeFileSync(join(lastRepoPath, 'a.txt'), 'hello\nworld\n');
+    const res = await getDiffPatch(new Request(`http://localhost/api/repos/${repoId}/diff/patch?file=a.txt`), ctx(repoId));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.path).toBe('a.txt');
+    expect(body.text.startsWith('diff --git')).toBe(true);
+  });
+
+  it('diff/patch 端点：缺 file 查询参数返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await getDiffPatch(new Request(`http://localhost/api/repos/${repoId}/diff/patch`), ctx(repoId));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('commit 端点：暂存后提交返回 200 且 hash 为 40 位十六进制', async () => {
+    const repoId = registerRepo();
+    writeFileSync(join(lastRepoPath, 'a.txt'), 'hello\nworld\n');
+    execFileSync('git', ['-C', lastRepoPath, 'add', 'a.txt']);
+    const res = await postCommit(
+      new Request(`http://localhost/api/repos/${repoId}/commit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message: '测试提交' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.hash).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  it('commit 端点：空 message 返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postCommit(
+      new Request(`http://localhost/api/repos/${repoId}/commit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message: '' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 });

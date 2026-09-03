@@ -225,6 +225,85 @@ describe('web-koa REST 端点', () => {
     expect(res.status).toBe(404);
     expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
   });
+
+  it('staging 端点：stage 后返回 200 且 entries 反映暂存状态', async () => {
+    const { repoId, repoPath } = registerRepo();
+    writeFileSync(join(repoPath, 'a.txt'), 'hello\nworld\n');
+    const res = await fetch(`${base}/api/repos/${repoId}/staging`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'stage', paths: ['a.txt'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { entries: Array<{ path: string; code: string }> };
+    const entry = body.entries.find((e) => e.path === 'a.txt');
+    expect(entry?.code.startsWith('M.')).toBe(true);
+  });
+
+  it('staging 端点：空 paths 返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/staging`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'stage', paths: [] }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('staging/hunks 端点：hunk 索引越界返回 400 INVALID_QUERY', async () => {
+    const { repoId, repoPath } = registerRepo();
+    writeFileSync(join(repoPath, 'a.txt'), 'hello\nworld\n');
+    const res = await fetch(`${base}/api/repos/${repoId}/staging/hunks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'stage', file: 'a.txt', hunks: [99] }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('diff/patch 端点：工作区改动后返回 200 且 text 以 diff --git 开头', async () => {
+    const { repoId, repoPath } = registerRepo();
+    writeFileSync(join(repoPath, 'a.txt'), 'hello\nworld\n');
+    const res = await fetch(`${base}/api/repos/${repoId}/diff/patch?file=a.txt`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { path: string; text: string };
+    expect(body.path).toBe('a.txt');
+    expect(body.text.startsWith('diff --git')).toBe(true);
+  });
+
+  it('diff/patch 端点：缺 file 查询参数返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/diff/patch`);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('commit 端点：暂存后提交返回 200 且 hash 为 40 位十六进制', async () => {
+    const { repoId, repoPath } = registerRepo();
+    writeFileSync(join(repoPath, 'a.txt'), 'hello\nworld\n');
+    execFileSync('git', ['-C', repoPath, 'add', 'a.txt']);
+    const res = await fetch(`${base}/api/repos/${repoId}/commit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: '测试提交' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hash: string };
+    expect(body.hash).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  it('commit 端点：空 message 返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/commit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: '' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
 });
 
 describe('web-koa SSE 端点', () => {

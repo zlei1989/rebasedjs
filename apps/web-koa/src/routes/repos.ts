@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, setRepoConfig, streamDiffEvents, streamLogEvents, updateSettings, watchRepoStatus } from '@rebased/api';
-import { configPutBodySchema, diffQuerySchema, logQuerySchema, openRepoBodySchema, serializeSseEvent, settingsPatchSchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyHunkStaging, applyStaging, createCommit, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, setRepoConfig, streamDiffEvents, streamLogEvents, updateSettings, watchRepoStatus } from '@rebased/api';
+import { commitBodySchema, configPutBodySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, openRepoBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -162,6 +162,46 @@ router.get('/api/repos/:repoId/operation', async (ctx) => {
 router.post('/api/repos/:repoId/operation/abort', async (ctx) => {
   try {
     ctx.body = await abortOperation(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/staging —— zod 校验请求体 → applyStaging（文件级 stage/unstage/discard）→ 200 RepoStatus */
+router.post('/api/repos/:repoId/staging', async (ctx) => {
+  try {
+    const body = stagingBodySchema.parse(ctx.request.body);
+    ctx.body = await applyStaging(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/staging/hunks —— zod 校验请求体 → applyHunkStaging（hunk 级）→ 200 RepoStatus；索引越界 → 400 */
+router.post('/api/repos/:repoId/staging/hunks', async (ctx) => {
+  try {
+    const body = hunkStagingBodySchema.parse(ctx.request.body);
+    ctx.body = await applyHunkStaging(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/diff/patch —— zod 校验查询 → getFileDiff（unified patch 全文，供 hunk 级暂存索引）→ 200 DiffFile */
+router.get('/api/repos/:repoId/diff/patch', async (ctx) => {
+  try {
+    const query = diffQuerySchema.parse(ctx.query);
+    ctx.body = await getFileDiff(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/commit —— zod 校验请求体 → createCommit（缺 user.name/email → 400 INVALID_QUERY）→ 200 {hash} */
+router.post('/api/repos/:repoId/commit', async (ctx) => {
+  try {
+    const body = commitBodySchema.parse(ctx.request.body);
+    ctx.body = await createCommit(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }
