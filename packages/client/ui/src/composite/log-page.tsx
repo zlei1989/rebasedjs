@@ -1,8 +1,8 @@
 /**
- * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
+ * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  */
-import { SettingOutlined } from '@ant-design/icons';
+import { DiffOutlined, SettingOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
@@ -25,6 +25,8 @@ export interface LogPageProps {
   abortingOperation?: boolean;
   /** 设置入口回调；缺省不渲染设置按钮 */
   onOpenSettings?: () => void;
+  /** 变更（状态页）入口回调；缺省不渲染变更按钮 */
+  onOpenStatus?: () => void;
 }
 
 export function LogPage({
@@ -37,6 +39,7 @@ export function LogPage({
   onAbortOperation,
   abortingOperation,
   onOpenSettings,
+  onOpenStatus,
 }: LogPageProps): React.ReactNode {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -47,14 +50,24 @@ export function LogPage({
         {operation && onAbortOperation ? (
           <OperationStatus operation={operation} onAbort={onAbortOperation} aborting={abortingOperation} />
         ) : null}
-        {/* 设置入口靠右对齐；仅在容器注入导航回调时渲染 */}
+        {/* 变更入口（状态页）：在设置按钮旁、靠右对齐；仅在容器注入导航回调时渲染 */}
+        {onOpenStatus ? (
+          <Button
+            aria-label="变更"
+            type="text"
+            icon={<DiffOutlined />}
+            onClick={onOpenStatus}
+            style={{ marginLeft: 'auto' }}
+          />
+        ) : null}
+        {/* 设置入口靠右对齐；变更按钮已占位（marginLeft:auto）时不再重复右推 */}
         {onOpenSettings ? (
           <Button
             aria-label="设置"
             type="text"
             icon={<SettingOutlined />}
             onClick={onOpenSettings}
-            style={{ marginLeft: 'auto' }}
+            style={onOpenStatus ? undefined : { marginLeft: 'auto' }}
           />
         ) : null}
       </div>

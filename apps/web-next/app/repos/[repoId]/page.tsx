@@ -67,6 +67,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
       }}
       abortingOperation={abortingOperation}
       onOpenSettings={() => router.push(`/repos/${repoId}/settings`)}
+      onOpenStatus={() => router.push(`/repos/${repoId}/status`)}
     />
   );
 }

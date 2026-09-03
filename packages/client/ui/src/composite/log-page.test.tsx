@@ -75,6 +75,18 @@ describe('LogPage', () => {
     expect(screen.queryByRole('button', { name: '设置' })).not.toBeInTheDocument();
   });
 
+  it('传入 onOpenStatus 时点击变更按钮触发回调', () => {
+    const onOpenStatus = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenStatus={onOpenStatus} />);
+    fireEvent.click(screen.getByRole('button', { name: '变更' }));
+    expect(onOpenStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传 onOpenStatus 时不渲染变更按钮', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} />);
+    expect(screen.queryByRole('button', { name: '变更' })).not.toBeInTheDocument();
+  });
+
   it('选中提交后右侧渲染 CommitDetailsPanel', () => {
     const selected = makeCommit({ hash: 'c9selected0001', message: '被选中的提交' });
     render(<LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} />);
