@@ -8,5 +8,7 @@ export { getLogPage, streamLogEvents } from './log';
 export { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
 export { applyHunkStaging, applyStaging } from './staging';
 export { createCommit } from './commit';
+export { applyBranchAction, getBranches } from './branch';
+export { applyCheckout } from './checkout';
 export { getSettings, updateSettings } from './settings';
 export { toServiceError } from './errors';
