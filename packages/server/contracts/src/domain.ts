@@ -103,3 +103,21 @@ export interface OperationState {
   step?: number;
   total?: number;
 }
+
+/** 分支条目：remote=true 为远程跟踪分支；current 仅本地分支可能为 true；mergedIntoHead 表示已合并入当前 HEAD */
+export interface BranchRef {
+  name: string;
+  remote: boolean;
+  current: boolean;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  hash: string;
+  mergedIntoHead: boolean;
+  lastCommitIso: string;
+}
+
+/** 分支列表视图 */
+export interface BranchList {
+  branches: BranchRef[];
+}

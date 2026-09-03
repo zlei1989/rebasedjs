@@ -62,3 +62,20 @@ export const commitBodySchema = z.object({
   noVerify: z.boolean().optional(),
 });
 export type CommitBody = z.infer<typeof commitBodySchema>;
+
+/** 分支写操作（判别联合）：create 可带 startPoint；delete 的 force 对应 git branch -D；rename 改名；setUpstream 设置上游 */
+export const branchActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('create'), name: z.string().min(1), startPoint: z.string().optional() }),
+  z.object({ action: z.literal('delete'), name: z.string().min(1), force: z.boolean().optional() }),
+  z.object({ action: z.literal('rename'), oldName: z.string().min(1), newName: z.string().min(1) }),
+  z.object({ action: z.literal('setUpstream'), name: z.string().min(1), upstream: z.string().min(1) }),
+]);
+export type BranchAction = z.infer<typeof branchActionSchema>;
+
+/** 检出操作：branch=既有分支；newBranch=新建并检出（可带 startPoint）；detach=detached 检出标签/提交 */
+export const checkoutActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('branch'), name: z.string().min(1) }),
+  z.object({ action: z.literal('newBranch'), name: z.string().min(1), startPoint: z.string().optional() }),
+  z.object({ action: z.literal('detach'), ref: z.string().min(1) }),
+]);
+export type CheckoutAction = z.infer<typeof checkoutActionSchema>;

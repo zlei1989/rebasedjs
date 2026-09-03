@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  branchActionSchema,
+  checkoutActionSchema,
   commitBodySchema,
   configPutBodySchema,
   diffQuerySchema,
@@ -83,5 +85,51 @@ describe('commitBodySchema（提交请求体）', () => {
     expect(() => commitBodySchema.parse({ message: '' })).toThrow();
     expect(() => commitBodySchema.parse({})).toThrow();
     expect(() => commitBodySchema.parse({ message: 'x', amend: 'yes' })).toThrow();
+  });
+});
+
+describe('branchActionSchema（分支写操作）', () => {
+  it('接受 create（可带 startPoint）', () => {
+    expect(branchActionSchema.parse({ action: 'create', name: 'feat/x' }))
+      .toEqual({ action: 'create', name: 'feat/x' });
+    expect(branchActionSchema.parse({ action: 'create', name: 'feat/x', startPoint: 'HEAD~1' }))
+      .toEqual({ action: 'create', name: 'feat/x', startPoint: 'HEAD~1' });
+  });
+  it('接受 delete（可带 force）与 rename 与 setUpstream', () => {
+    expect(branchActionSchema.parse({ action: 'delete', name: 'feat/x' }))
+      .toEqual({ action: 'delete', name: 'feat/x' });
+    expect(branchActionSchema.parse({ action: 'delete', name: 'feat/x', force: true }))
+      .toEqual({ action: 'delete', name: 'feat/x', force: true });
+    expect(branchActionSchema.parse({ action: 'rename', oldName: 'a', newName: 'b' }))
+      .toEqual({ action: 'rename', oldName: 'a', newName: 'b' });
+    expect(branchActionSchema.parse({ action: 'setUpstream', name: 'a', upstream: 'origin/a' }))
+      .toEqual({ action: 'setUpstream', name: 'a', upstream: 'origin/a' });
+  });
+  it('拒绝枚举外 action、缺字段与空 name', () => {
+    expect(() => branchActionSchema.parse({ action: 'merge', name: 'x' })).toThrow();
+    expect(() => branchActionSchema.parse({ action: 'create' })).toThrow();
+    expect(() => branchActionSchema.parse({ action: 'create', name: '' })).toThrow();
+    expect(() => branchActionSchema.parse({ action: 'rename', oldName: 'a' })).toThrow();
+    expect(() => branchActionSchema.parse({ action: 'setUpstream', name: 'a', upstream: '' })).toThrow();
+  });
+});
+
+describe('checkoutActionSchema（检出操作）', () => {
+  it('接受 branch / newBranch（可带 startPoint）/ detach', () => {
+    expect(checkoutActionSchema.parse({ action: 'branch', name: 'main' }))
+      .toEqual({ action: 'branch', name: 'main' });
+    expect(checkoutActionSchema.parse({ action: 'newBranch', name: 'feat/x' }))
+      .toEqual({ action: 'newBranch', name: 'feat/x' });
+    expect(checkoutActionSchema.parse({ action: 'newBranch', name: 'feat/x', startPoint: 'main' }))
+      .toEqual({ action: 'newBranch', name: 'feat/x', startPoint: 'main' });
+    expect(checkoutActionSchema.parse({ action: 'detach', ref: 'v1.0.0' }))
+      .toEqual({ action: 'detach', ref: 'v1.0.0' });
+  });
+  it('拒绝枚举外 action、缺字段与空 name/ref', () => {
+    expect(() => checkoutActionSchema.parse({ action: 'reset', name: 'x' })).toThrow();
+    expect(() => checkoutActionSchema.parse({ action: 'branch' })).toThrow();
+    expect(() => checkoutActionSchema.parse({ action: 'branch', name: '' })).toThrow();
+    expect(() => checkoutActionSchema.parse({ action: 'detach' })).toThrow();
+    expect(() => checkoutActionSchema.parse({ action: 'detach', ref: '' })).toThrow();
   });
 });
