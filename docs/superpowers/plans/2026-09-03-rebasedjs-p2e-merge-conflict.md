@@ -397,3 +397,20 @@ export function MergeView(props: MergeViewProps): React.ReactNode;
 - Spec 覆盖：§4.2 merge 行（合并 ✓、冲突状态 ✓、方向/策略 ✓ 选项对齐 Java 暴露面）、conflict 行（冲突列表 ✓、标记已解决 ✓=markResolved、3-way 状态查询 ✓=contents 端点）；§4.5.2 MergeDialog/ConflictsPanel/MergeView 对照落实。
 - 类型一致性：MergeBody/MergeOutcome/ConflictEntry/ConflictList/ConflictContents/ResolveConflictBody/三组件 Props 跨任务签名已对齐；conflicts/resolve 返回刷新列表与 staging 模式一致。
 - 风险：`Already up to date` 文本匹配依赖 LC_ALL=C（exec.ts 已固定）✓；squash 合并后 `merge --continue` 不适用（无 MERGE_HEAD）——core continueMerge 内部对无 MERGE_HEAD 但有 MERGE_MSG 的场景退化 `git commit`，该分支由 api 测试覆盖（squash 冲突解决后 continue）。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+9/9 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: With fixes**——2 Important + 2 Minor 修复波（commit `c4f09d1`）经限定复审全部 ADDRESSED、零新 Critical/Important 破坏，正式关账。
+
+**终审修复内容**：① squash+冲突误分类修正（catch 加 `listConflictedPaths` 兜底判定）+ `canContinueMerge` 出口使 squash continue 退化路径恢复可达 + 计划承诺的 squash 全链 api 测试落地（单父提交 + SQUASH_MSG 信息）；② 删除/修改冲突（[1,2]/[1,3]）全链解决路径——契约 delete 策略 → core `git rm` → api 分支（校验前置）→ ui 缺侧禁用 + 「删除该文件」Popconfirm；③ 契约 ConflictEntry 注释勘误（plan defect 传播修正）；④ navigate 补 void。
+
+**Rulings（控制器裁决记录）**：
+1. SQUASH_MSG 修正为 plan defect 修复（计划自审记录误写 MERGE_MSG，git 2.47 实测证伪）。
+2. 'but not at stage' 特征串补充为 brief 真实缺口（审查者真机验证无误判面；exit code 无区分力，stderr 匹配为唯一可行方案）。
+3. squash 延续经 StatusPage 提交框完成（git commit 原生消费 SQUASH_MSG，经核验属实）；squash 冲突态无操作条判 safe-to-defer。
+4. squash 冲突未决时再发起合并：温和退化返回 conflicts（git 在 unmerged index 早期拒绝、零状态变更）——复审裁定可接受。
+
+终审 triage：21 项 deferred minor 全部 safe-to-defer。SDD 工作区已按规程删除，本提交为记录。
