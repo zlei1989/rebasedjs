@@ -2,6 +2,8 @@
 export { cloneRepo, getRepoById, initRepo, listRecentRepos, openRepo } from './repo';
 export { getRepoStatus } from './status';
 export { watchRepoStatus } from './events';
+export { getRepoConfig, setRepoConfig } from './config';
+export { abortOperation, getOperation } from './operation';
 export { getLogPage, streamLogEvents } from './log';
 export { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
 export { getSettings, updateSettings } from './settings';
