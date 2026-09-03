@@ -17,4 +17,5 @@ export { RepoPage, type RepoPageProps } from './composite/repo-page';
 export { LogPage, type LogPageProps } from './composite/log-page';
 export { DiffPage, type DiffPageProps } from './composite/diff-page';
 export { SettingsPage, type SettingsPageProps } from './composite/settings-page';
+export { StatusPage, type StatusPageProps, groupChanges, type GroupedChanges } from './composite/status-page';
 export { relativeToHome } from './composite/repo-page-utils';
