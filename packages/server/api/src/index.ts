@@ -11,5 +11,7 @@ export { createCommit } from './commit';
 export { applyBranchAction, getBranches } from './branch';
 export { applyCheckout } from './checkout';
 export { applyReset, undoCommit } from './reset';
+export { continueMergeOperation, mergeBranchIntoCurrent } from './merge';
+export { getConflictContents, getConflicts, resolveConflict } from './conflict';
 export { getSettings, updateSettings } from './settings';
 export { toServiceError } from './errors';
