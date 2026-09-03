@@ -321,3 +321,20 @@ export function StatusPage(props: StatusPageProps): React.ReactNode;
 - Spec 覆盖：§4.2 staging（add/取消暂存/放弃/hunk 级——文件级 UI + hunk 级 API，hunk UI 明确后置）✓；commit（提交/amend/sign-off/no-verify；modal UX 由 StatusPage 提交框承担，独立 CommitDialog 待 commit 增强计划）✓；`getFileDiff` 挂端点（审计遗留）✓。
 - 类型一致性：StagingBody/HunkStagingBody/CommitBody/StatusPageProps/groupChanges 跨任务签名已对齐；useDiffPatch 空 file → null key 语义在 Task 5/7 一致。
 - 风险：`git apply` 对 CRLF/权限位的 patch 敏感——hunk 重组保持原始字节（只按行切分不重排）；测试用 LF 仓库，CRLF 场景记入 ledger 待终审 triage。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+7/7 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: With fixes**——2 Important + 1 Minor 修复波（commit `08c6a02`）经限定复审全部 ADDRESSED、零新破坏，正式关账。
+
+**Rulings（控制器裁决记录）**：
+1. 计划缺陷：brief 的 exec stdin 测试期望哈希 `ce01362…` 实为 `hello\n` 的哈希；实现者修正为 `hello` 的真实哈希 `b6fc4c6…`（经审查者独立重算验证）——接受修正，断言反而更强（证明字节级透传）。
+2. antd v6.6.1 `List` 运行期弃用属实（`antd/es/list` 含 Deprecated 标记）——StatusPage 行列表用 Flex 渲染，后续所有列表 UI 沿用此约定。
+3. 终审 Finding 2（cleanUntracked 目录 no-op）经限定复审实测裁定为**假阳性**（显式 `dir/` pathspec 下 `clean -f` 本可删目录，git 2.47 实测）；`-fd` 作为无害硬化保留 + 新增 characterization 测试防回归。
+4. 终审建议③（freshCache 提取 + useSWRConfig JSDoc）已随 Task 5 落地；流程模板「契约变更 → grep 消费方 → 同轮修复」继续沿用。
+
+**遗留 hardening 清单**（safe-to-defer，按优先级）：①StatusPage 勾选态修剪 + 容器首载后不整树卸载（组合修复）；②koa-static SPA history fallback；③hunk 级 UI（DiffPage 增强，含 CRLF 注意）；④onOpenDiff 补 staged 查询串；⑤core 一次偶发 flaky（计时抖动，观察中）。
+
+SDD 工作区已按规程删除，本提交为记录。
