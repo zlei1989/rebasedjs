@@ -6,5 +6,7 @@ export { getRepoConfig, setRepoConfig } from './config';
 export { abortOperation, getOperation } from './operation';
 export { getLogPage, streamLogEvents } from './log';
 export { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
+export { applyHunkStaging, applyStaging } from './staging';
+export { createCommit } from './commit';
 export { getSettings, updateSettings } from './settings';
 export { toServiceError } from './errors';
