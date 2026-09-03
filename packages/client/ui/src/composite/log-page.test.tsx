@@ -106,4 +106,40 @@ describe('LogPage', () => {
     expect(screen.getByText('被选中的提交')).toBeInTheDocument();
     expect(screen.getByText('c9selec')).toBeInTheDocument();
   });
+
+  it('传入 onUndoCommit 时渲染撤销最近提交按钮，Popconfirm 确认后回调', async () => {
+    const onUndoCommit = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onUndoCommit={onUndoCommit} />);
+    fireEvent.click(screen.getByRole('button', { name: '撤销最近提交' }));
+    expect(await screen.findByText('将撤销最近提交并保留改动到暂存区')).toBeInTheDocument();
+    // antd Button 两个汉字间自动插空格（"确 定"），用正则匹配可访问名
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
+    expect(onUndoCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传 onUndoCommit 时不渲染撤销按钮', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} />);
+    expect(screen.queryByRole('button', { name: '撤销最近提交' })).not.toBeInTheDocument();
+  });
+
+  it('undoCommitting 时撤销按钮进入 loading 态', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onUndoCommit={() => {}} undoCommitting />);
+    expect(screen.getByRole('button', { name: '撤销最近提交' })).toHaveClass('ant-btn-loading');
+  });
+
+  it('传入 onResetHere 时透传给详情面板，点击回调带选中提交 hash', () => {
+    const onResetHere = vi.fn();
+    const selected = makeCommit({ hash: 'c9selected0001' });
+    render(
+      <LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} onResetHere={onResetHere} />,
+    );
+    fireEvent.click(screen.getByTestId('reset-here'));
+    expect(onResetHere).toHaveBeenCalledWith('c9selected0001');
+  });
+
+  it('未传 onResetHere 时详情面板不渲染 Reset 按钮', () => {
+    const selected = makeCommit({ hash: 'c9selected0001' });
+    render(<LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} />);
+    expect(screen.queryByTestId('reset-here')).not.toBeInTheDocument();
+  });
 });

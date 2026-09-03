@@ -12,9 +12,11 @@ import { formatAuthorLine } from './format';
 
 export interface CommitDetailsPanelProps {
   commit: CommitInfo;
+  /** 「Reset 当前分支到此处」回调（携带当前提交 hash）；缺省不渲染该按钮 */
+  onResetHere?: (hash: string) => void;
 }
 
-export function CommitDetailsPanel({ commit }: CommitDetailsPanelProps): React.ReactNode {
+export function CommitDetailsPanel({ commit, onResetHere }: CommitDetailsPanelProps): React.ReactNode {
   const { branches, tags } = classifyRefs(commit.refs);
   const subject = commit.message.split('\n')[0];
   const copyHash = (): void => {
@@ -57,6 +59,14 @@ export function CommitDetailsPanel({ commit }: CommitDetailsPanelProps): React.R
               {p.slice(0, 7)}
             </a>
           ))}
+        </div>
+      ) : null}
+      {/* 操作区：Reset 当前分支到此处（仅调用方注入回调时渲染；弹窗与确认由容器持有） */}
+      {onResetHere ? (
+        <div>
+          <Button data-testid="reset-here" size="small" onClick={() => onResetHere(commit.hash)}>
+            Reset 当前分支到此处
+          </Button>
         </div>
       ) : null}
     </div>

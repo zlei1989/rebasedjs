@@ -19,4 +19,5 @@ export { DiffPage, type DiffPageProps } from './composite/diff-page';
 export { SettingsPage, type SettingsPageProps } from './composite/settings-page';
 export { StatusPage, type StatusPageProps, groupChanges, type GroupedChanges } from './composite/status-page';
 export { BranchPanel, type BranchPanelProps } from './composite/branch-panel';
+export { ResetDialog, type ResetDialogProps } from './composite/reset-dialog';
 export { relativeToHome } from './composite/repo-page-utils';

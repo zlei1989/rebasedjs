@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import type { CommitInfo } from '@rebased/contracts';
 import { CommitDetailsPanel } from './commit-details-panel';
 
@@ -53,5 +53,17 @@ describe('CommitDetailsPanel', () => {
   it('无父提交时不渲染父链接区', () => {
     render(<CommitDetailsPanel commit={{ ...commit, parents: [] }} />);
     expect(screen.queryByTestId('parent-link')).not.toBeInTheDocument();
+  });
+
+  it('未传 onResetHere 时不渲染 Reset 按钮', () => {
+    render(<CommitDetailsPanel commit={commit} />);
+    expect(screen.queryByTestId('reset-here')).not.toBeInTheDocument();
+  });
+
+  it('传入 onResetHere 时点击按钮回调携带当前提交 hash', () => {
+    const onResetHere = vi.fn();
+    render(<CommitDetailsPanel commit={commit} onResetHere={onResetHere} />);
+    fireEvent.click(screen.getByTestId('reset-here'));
+    expect(onResetHere).toHaveBeenCalledWith('abc1234567890def');
   });
 });

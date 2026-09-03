@@ -2,8 +2,8 @@
  * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  */
-import { BranchesOutlined, DiffOutlined, SettingOutlined } from '@ant-design/icons';
-import { Button } from 'antd';
+import { BranchesOutlined, DiffOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
+import { Button, Popconfirm } from 'antd';
 import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
 import { RepoStatusBar } from '../domain/repo-status-bar';
@@ -29,6 +29,12 @@ export interface LogPageProps {
   onOpenStatus?: () => void;
   /** 分支页入口回调；缺省不渲染分支按钮 */
   onOpenBranches?: () => void;
+  /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
+  onUndoCommit?: () => void;
+  /** 撤销请求进行中：撤销按钮 loading 态 */
+  undoCommitting?: boolean;
+  /** 透传给 CommitDetailsPanel 的「Reset 当前分支到此处」回调；缺省详情面板不渲染该按钮 */
+  onResetHere?: (hash: string) => void;
 }
 
 export function LogPage({
@@ -43,6 +49,9 @@ export function LogPage({
   onOpenSettings,
   onOpenStatus,
   onOpenBranches,
+  onUndoCommit,
+  undoCommitting,
+  onResetHere,
 }: LogPageProps): React.ReactNode {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -52,6 +61,22 @@ export function LogPage({
         {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
         {operation && onAbortOperation ? (
           <OperationStatus operation={operation} onAbort={onAbortOperation} aborting={abortingOperation} />
+        ) : null}
+        {/* 撤销最近提交：Popconfirm 确认后回调（保留改动到暂存区，等价 reset --soft HEAD~1） */}
+        {onUndoCommit ? (
+          <Popconfirm
+            title="将撤销最近提交并保留改动到暂存区"
+            okText="确定"
+            cancelText="取消"
+            onConfirm={onUndoCommit}
+          >
+            <Button
+              aria-label="撤销最近提交"
+              type="text"
+              icon={<RollbackOutlined />}
+              loading={undoCommitting}
+            />
+          </Popconfirm>
         ) : null}
         {/* 变更入口（状态页）：在设置按钮旁、靠右对齐；仅在容器注入导航回调时渲染 */}
         {onOpenStatus ? (
@@ -93,7 +118,7 @@ export function LogPage({
             data-testid="commit-details"
             style={{ width: 320, flexShrink: 0, borderLeft: '1px solid #f0f0f0', overflow: 'auto' }}
           >
-            <CommitDetailsPanel commit={selectedCommit} />
+            <CommitDetailsPanel commit={selectedCommit} onResetHere={onResetHere} />
           </div>
         ) : null}
       </div>
