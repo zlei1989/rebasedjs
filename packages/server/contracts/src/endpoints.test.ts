@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  commitBodySchema,
   configPutBodySchema,
   diffQuerySchema,
+  hunkStagingBodySchema,
   logQuerySchema,
   openRepoBodySchema,
   settingsPatchSchema,
+  stagingBodySchema,
 } from './endpoints';
 
 describe('P1 端点 schema', () => {
@@ -43,5 +46,42 @@ describe('configPutBodySchema', () => {
   it('拒绝白名单外的键与空值', () => {
     expect(() => configPutBodySchema.parse({ key: 'core.hooksPath', value: '/x' })).toThrow();
     expect(() => configPutBodySchema.parse({ key: 'user.name', value: '' })).toThrow();
+  });
+});
+
+describe('stagingBodySchema（暂存区文件级操作）', () => {
+  it('接受 stage/unstage/discard 与非空路径数组', () => {
+    expect(stagingBodySchema.parse({ action: 'stage', paths: ['a.txt'] }))
+      .toEqual({ action: 'stage', paths: ['a.txt'] });
+    expect(stagingBodySchema.parse({ action: 'discard', paths: ['a.txt', 'b/c.txt'] }).action).toBe('discard');
+  });
+  it('拒绝空 paths 数组与枚举外 action', () => {
+    expect(() => stagingBodySchema.parse({ action: 'stage', paths: [] })).toThrow();
+    expect(() => stagingBodySchema.parse({ action: 'reset', paths: ['a.txt'] })).toThrow();
+  });
+});
+
+describe('hunkStagingBodySchema（hunk 级操作）', () => {
+  it('接受 file 与 0-based hunk 索引数组', () => {
+    expect(hunkStagingBodySchema.parse({ action: 'unstage', file: 'a.txt', hunks: [0, 2] }))
+      .toEqual({ action: 'unstage', file: 'a.txt', hunks: [0, 2] });
+  });
+  it('拒绝负索引、空 hunks 数组与空 file', () => {
+    expect(() => hunkStagingBodySchema.parse({ action: 'stage', file: 'a.txt', hunks: [0, -1] })).toThrow();
+    expect(() => hunkStagingBodySchema.parse({ action: 'stage', file: 'a.txt', hunks: [] })).toThrow();
+    expect(() => hunkStagingBodySchema.parse({ action: 'stage', file: '', hunks: [0] })).toThrow();
+  });
+});
+
+describe('commitBodySchema（提交请求体）', () => {
+  it('message 必填，amend/signOff/noVerify 可选布尔', () => {
+    expect(commitBodySchema.parse({ message: '修复：暂存逻辑' })).toEqual({ message: '修复：暂存逻辑' });
+    expect(commitBodySchema.parse({ message: 'x', amend: true, signOff: true, noVerify: true }))
+      .toEqual({ message: 'x', amend: true, signOff: true, noVerify: true });
+  });
+  it('拒绝空 message 与非布尔 amend', () => {
+    expect(() => commitBodySchema.parse({ message: '' })).toThrow();
+    expect(() => commitBodySchema.parse({})).toThrow();
+    expect(() => commitBodySchema.parse({ message: 'x', amend: 'yes' })).toThrow();
   });
 });

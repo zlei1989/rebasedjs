@@ -38,3 +38,27 @@ export const configPutBodySchema = z.object({
   value: z.string().min(1).max(500),
 });
 export type ConfigPutBody = z.infer<typeof configPutBodySchema>;
+
+/** 暂存区文件级操作：stage=加入暂存（git add）；unstage=移出暂存（git restore --staged）；discard=放弃修改（按条目状态分派 restore/clean） */
+export const stagingBodySchema = z.object({
+  action: z.enum(['stage', 'unstage', 'discard']),
+  paths: z.array(z.string().min(1)).min(1),
+});
+export type StagingBody = z.infer<typeof stagingBodySchema>;
+
+/** hunk 级操作：hunks 为 GET diff/patch 返回全文的 hunk 索引（0-based，按出现顺序） */
+export const hunkStagingBodySchema = z.object({
+  action: z.enum(['stage', 'unstage', 'discard']),
+  file: z.string().min(1),
+  hunks: z.array(z.number().int().min(0)).min(1),
+});
+export type HunkStagingBody = z.infer<typeof hunkStagingBodySchema>;
+
+/** 提交请求体：message 必填；amend 改上次提交；signOff 追加 Signed-off-by；noVerify 跳过 hooks */
+export const commitBodySchema = z.object({
+  message: z.string().min(1),
+  amend: z.boolean().optional(),
+  signOff: z.boolean().optional(),
+  noVerify: z.boolean().optional(),
+});
+export type CommitBody = z.infer<typeof commitBodySchema>;
