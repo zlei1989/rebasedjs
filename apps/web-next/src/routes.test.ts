@@ -20,6 +20,7 @@ import { POST as postHunkStaging } from '../app/api/repos/[repoId]/staging/hunks
 import { POST as postCommit } from '../app/api/repos/[repoId]/commit/route';
 import { GET as getBranches, POST as postBranches } from '../app/api/repos/[repoId]/branches/route';
 import { GET as getStashes, POST as postStashes } from '../app/api/repos/[repoId]/stashes/route';
+import { GET as getChangelists, POST as postChangelists } from '../app/api/repos/[repoId]/changelists/route';
 import { POST as postCheckout } from '../app/api/repos/[repoId]/checkout/route';
 import { POST as postReset } from '../app/api/repos/[repoId]/reset/route';
 import { POST as postUndoCommit } from '../app/api/repos/[repoId]/reset/undo-commit/route';
@@ -710,5 +711,65 @@ describe('web-next merge/conflicts 路由', () => {
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('changelists 端点：GET 返回 200 含默认列表', async () => {
+    const repoId = registerRepo();
+    const res = await getChangelists(new Request(`http://localhost/api/repos/${repoId}/changelists`), ctx(repoId));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      lists: [{ id: 'default', name: '默认', isDefault: true }],
+      assignments: {},
+    });
+  });
+
+  it('changelists 端点：POST create 返回 200 两列表', async () => {
+    const repoId = registerRepo();
+    const res = await postChangelists(
+      new Request(`http://localhost/api/repos/${repoId}/changelists`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'create', name: '进行中' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.lists).toHaveLength(2);
+    expect(body.lists[0]).toEqual({ id: 'default', name: '默认', isDefault: true });
+    expect(body.lists[1]).toMatchObject({ name: '进行中', isDefault: false });
+  });
+
+  it('changelists 端点：POST move 到不存在列表返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postChangelists(
+      new Request(`http://localhost/api/repos/${repoId}/changelists`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'move', paths: ['a.txt'], targetId: 'no-such-list' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('changelists 端点：POST create 缺 name（zod 拒绝）返回 400', async () => {
+    const repoId = registerRepo();
+    const res = await postChangelists(
+      new Request(`http://localhost/api/repos/${repoId}/changelists`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'create' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('changelists 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await getChangelists(new Request('http://localhost/api/repos/nope/changelists'), ctx('nope'));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
   });
 });

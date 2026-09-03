@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, applyStashAction, continueMergeOperation, createCommit, getBranches, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, listRecentRepos, mergeBranchIntoCurrent, openRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, watchRepoStatus } from '@rebased/api';
-import { branchActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, applyStashAction, continueMergeOperation, createCommit, getBranches, getChangelists, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, listRecentRepos, mergeBranchIntoCurrent, openRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, watchRepoStatus } from '@rebased/api';
+import { branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -317,6 +317,25 @@ router.post('/api/repos/:repoId/stashes', async (ctx) => {
   try {
     const body = stashActionSchema.parse(ctx.request.body);
     ctx.body = await applyStashAction(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/changelists —— 变更列表视图（ChangelistView：lists + assignments）→ 错误映射 */
+router.get('/api/repos/:repoId/changelists', async (ctx) => {
+  try {
+    ctx.body = await getChangelists(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/changelists —— zod 校验 action → applyChangelistAction（create/rename/delete/setDefault/move）→ 200 刷新 ChangelistView；列表不存在/重名/删默认 → 400 INVALID_QUERY */
+router.post('/api/repos/:repoId/changelists', async (ctx) => {
+  try {
+    const body = changelistActionSchema.parse(ctx.request.body);
+    ctx.body = await applyChangelistAction(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }
