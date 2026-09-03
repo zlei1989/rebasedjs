@@ -11,6 +11,7 @@ export { useAbortOperation, useOperation } from './operation';
 export { useStaging, useHunkStaging } from './staging';
 export { useCommit } from './commit';
 export { useBranches, useBranchAction } from './branches';
+export { useStashes, useStashAction } from './stash';
 export { useCheckout } from './checkout';
 export { useReset, useUndoCommit } from './reset';
 export { useMerge, useContinueMerge } from './merge';
