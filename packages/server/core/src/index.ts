@@ -29,3 +29,5 @@ export { continueMerge, mergeBranch } from './merge';
 export type { CoreMergeResult } from './merge';
 export { checkoutConflictSide, listConflictedPaths, markResolved, readStageContent } from './conflict';
 export type { CoreConflict } from './conflict';
+export { applyStash, dropStash, listStashes, popStash, saveStash, stashToBranch } from './stash';
+export type { CoreStash } from './stash';
