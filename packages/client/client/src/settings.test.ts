@@ -1,17 +1,13 @@
 /** settings.ts 测试：useSettings 拉取 + update 突变（PUT 并回写缓存） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
-import { SWRConfig } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsState } from '@rebased/contracts';
 import { useSettings } from './settings';
+import { freshCache } from './testing/fresh-cache';
 
 const INITIAL: SettingsState = { logInEditor: false, recentRepoIds: [] };
 const UPDATED: SettingsState = { logInEditor: true, recentRepoIds: ['r1'] };
-
-function freshCache(children: React.ReactNode) {
-  return createElement(SWRConfig, { value: { provider: () => new Map() } }, children);
-}
 
 afterEach(() => {
   vi.unstubAllGlobals();

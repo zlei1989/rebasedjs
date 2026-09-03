@@ -32,6 +32,7 @@ describe('useCommit', () => {
       renderer = TestRenderer.create(freshCache(createElement(Probe)));
     });
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.isMutating).toBe(false);
 
     let committed: { hash: string } | undefined;
     await act(async () => {
@@ -39,6 +40,7 @@ describe('useCommit', () => {
     });
 
     expect(committed).toEqual({ hash: HASH });
+    expect(result.isMutating).toBe(false);
     expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-cmt-1/commit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

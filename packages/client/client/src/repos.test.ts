@@ -1,17 +1,13 @@
 /** repos.ts 测试：useRecentRepos 拉取列表 + useOpenRepo 突变（POST 体与返回 repoId） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
-import { SWRConfig } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RepoInfo, RepoStatus } from '@rebased/contracts';
 import { useOpenRepo, useRecentRepos, useRepoStatus } from './repos';
+import { freshCache } from './testing/fresh-cache';
 
 const REPO: RepoInfo = { id: 'r1', path: '/tmp/repo', name: 'repo', openedAt: '2026-09-01T00:00:00Z' };
 const STATUS: RepoStatus = { branch: 'main', upstream: 'origin/main', headHash: 'a'.repeat(40), ahead: 1, behind: 2, entries: [{ path: 'a.ts', code: ' M' }] };
-
-function freshCache(children: React.ReactNode) {
-  return createElement(SWRConfig, { value: { provider: () => new Map() } }, children);
-}
 
 afterEach(() => {
   vi.unstubAllGlobals();
