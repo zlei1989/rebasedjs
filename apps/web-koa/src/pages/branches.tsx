@@ -1,7 +1,8 @@
 /**
  * 分支页容器：useBranches + useBranchAction + useCheckout 注入 ui BranchPanel（与 web-next 容器同构；
  * repoId 取 useParams、返回导航用 useNavigate，而非 Next params/router）。操作失败经 message.error 呈现
- * （成功响应由各 hook 显式回写缓存）；本页自订阅 events：外部 CLI 检出/建删分支时重验证分支列表刷新 current 标记。
+ * （成功响应由各 hook 显式回写缓存）；本页自订阅 events：外部 CLI 检出/重命名当前分支时重验证分支列表刷新
+ * current 标记（纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
 import { useBranchAction, useBranches, useCheckout, useRepoEvents } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
@@ -14,7 +15,8 @@ export function RepoBranchesPage(): React.ReactNode {
   const { data: branches, mutate: mutateBranches } = useBranches(repoId);
   const { trigger: branchAction, isMutating: actingBranch } = useBranchAction(repoId);
   const { trigger: checkout, isMutating: checkingOut } = useCheckout(repoId);
-  // 外部 CLI 变更（检出/建删分支）→ repo.state-changed：重验证分支列表刷新 current 标记
+  // 外部 CLI 检出/重命名当前分支 → repo.state-changed（branch/headHash 变化）→ 重验证分支列表刷新 current 标记；
+  // 注：纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件（watcher 架构的已知局限，已登记 P3 缺口）
   useRepoEvents(repoId, { onStatus: () => void mutateBranches() });
   // 操作失败统一以服务端中文 message 提示，避免未捕获 rejection
   const onError = (err: unknown): void => {
