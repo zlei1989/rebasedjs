@@ -150,6 +150,18 @@ export interface StashList {
   stashes: StashEntry[];
 }
 
+/** 变更列表（应用层簿记，git 无原生概念）：id 为生成的主键；isDefault 接收未分配路径 */
+export interface Changelist {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+/** 变更列表视图：assignments 为 路径 → listId（仅含 status 现存路径，读取时已修剪失效条目） */
+export interface ChangelistView {
+  lists: Changelist[];
+  assignments: Record<string, string>;
+}
+
 /** 合并结果：success=合并完成（含 squash/no-commit 未产提交）；conflicts=进入合并态待解决；up-to-date=已是最新 */
 export interface MergeOutcome {
   status: 'success' | 'conflicts' | 'up-to-date';

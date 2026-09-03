@@ -116,6 +116,16 @@ export const stashActionSchema = z.discriminatedUnion('action', [
 ]);
 export type StashAction = z.infer<typeof stashActionSchema>;
 
+/** 变更列表操作（判别联合）：move 把 paths 移入 targetId；delete 的文件归入默认列表；默认列表不可删除（api 层拒绝） */
+export const changelistActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('create'), name: z.string().min(1) }),
+  z.object({ action: z.literal('rename'), id: z.string().min(1), name: z.string().min(1) }),
+  z.object({ action: z.literal('delete'), id: z.string().min(1) }),
+  z.object({ action: z.literal('setDefault'), id: z.string().min(1) }),
+  z.object({ action: z.literal('move'), paths: z.array(z.string().min(1)).min(1), targetId: z.string().min(1) }),
+]);
+export type ChangelistAction = z.infer<typeof changelistActionSchema>;
+
 /** 冲突内容查询：path 必填 */
 export const conflictContentsQuerySchema = z.object({ path: z.string().min(1) });
 export type ConflictContentsQuery = z.infer<typeof conflictContentsQuerySchema>;

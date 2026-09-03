@@ -15,6 +15,7 @@ import {
   settingsPatchSchema,
   stagingBodySchema,
   stashActionSchema,
+  changelistActionSchema,
 } from './endpoints';
 
 describe('P1 端点 schema', () => {
@@ -221,6 +222,50 @@ describe('stashActionSchema（贮藏操作判别联合）', () => {
   it('拒绝枚举外 action 与非布尔 includeUntracked', () => {
     expect(() => stashActionSchema.parse({ action: 'clear' })).toThrow();
     expect(() => stashActionSchema.parse({ action: 'save', includeUntracked: 'yes' })).toThrow();
+  });
+});
+
+describe('changelistActionSchema（变更列表操作判别联合）', () => {
+  it('接受 create 带非空 name', () => {
+    expect(changelistActionSchema.parse({ action: 'create', name: '进行中' }))
+      .toEqual({ action: 'create', name: '进行中' });
+  });
+  it('接受 rename 带非空 id 与 name', () => {
+    expect(changelistActionSchema.parse({ action: 'rename', id: 'cl-1', name: '新名' }))
+      .toEqual({ action: 'rename', id: 'cl-1', name: '新名' });
+  });
+  it('接受 delete 与 setDefault 按非空 id', () => {
+    expect(changelistActionSchema.parse({ action: 'delete', id: 'cl-1' }))
+      .toEqual({ action: 'delete', id: 'cl-1' });
+    expect(changelistActionSchema.parse({ action: 'setDefault', id: 'cl-2' }))
+      .toEqual({ action: 'setDefault', id: 'cl-2' });
+  });
+  it('接受 move 带非空 paths 数组与 targetId', () => {
+    expect(changelistActionSchema.parse({ action: 'move', paths: ['a.txt', 'b/c.txt'], targetId: 'cl-1' }))
+      .toEqual({ action: 'move', paths: ['a.txt', 'b/c.txt'], targetId: 'cl-1' });
+  });
+  it('拒绝枚举外 action', () => {
+    expect(() => changelistActionSchema.parse({ action: 'clear', id: 'cl-1' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'create', name: 'x', extra: 1 } as unknown)).not.toThrow();
+  });
+  it('拒绝 create/rename 空 name 或缺字段', () => {
+    expect(() => changelistActionSchema.parse({ action: 'create' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'create', name: '' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'rename', id: 'cl-1' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'rename', id: 'cl-1', name: '' })).toThrow();
+  });
+  it('拒绝 delete/setDefault 空 id 或缺 id', () => {
+    expect(() => changelistActionSchema.parse({ action: 'delete' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'delete', id: '' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'setDefault' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'setDefault', id: '' })).toThrow();
+  });
+  it('拒绝 move 缺 paths/targetId、空数组、空路径或空 targetId', () => {
+    expect(() => changelistActionSchema.parse({ action: 'move', targetId: 'cl-1' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'move', paths: ['a.txt'] })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'move', paths: [], targetId: 'cl-1' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'move', paths: [''], targetId: 'cl-1' })).toThrow();
+    expect(() => changelistActionSchema.parse({ action: 'move', paths: ['a.txt'], targetId: '' })).toThrow();
   });
 });
 
