@@ -23,7 +23,9 @@ export function RepoSettingsPage(): React.ReactNode {
       <Button type="link" onClick={() => navigate(`/repos/${repoId}`)}>
         返回日志
       </Button>
+      {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，ConfigRow 行内输入 state 随之重置 */}
       <SettingsPage
+        key={repoId}
         settings={settings}
         onPatchSettings={(patch) => update(patch).catch(onError)}
         config={config}
