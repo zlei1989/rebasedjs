@@ -2,10 +2,10 @@
 
 /**
  * 分支页容器：useBranches + useBranchAction + useCheckout 注入 ui BranchPanel（与 web-koa 容器同构）；
- * 顶部返回按钮回日志页；操作失败经 message.error 呈现（成功响应由各 hook 显式回写缓存，
- * checkout 后 headHash 变化经日志页 events 推送自动刷新，无需额外接线）。
+ * 顶部返回按钮回日志页；操作失败经 message.error 呈现（成功响应由各 hook 显式回写缓存）；
+ * 本页自订阅 events：外部 CLI 检出/建删分支时重验证分支列表刷新 current 标记。
  */
-import { useBranchAction, useBranches, useCheckout } from '@rebased/client';
+import { useBranchAction, useBranches, useCheckout, useRepoEvents } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
 import { Button, Flex, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -17,6 +17,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { data: branches, mutate: mutateBranches } = useBranches(repoId);
   const { trigger: branchAction, isMutating: actingBranch } = useBranchAction(repoId);
   const { trigger: checkout, isMutating: checkingOut } = useCheckout(repoId);
+  // 外部 CLI 变更（检出/建删分支）→ repo.state-changed：重验证分支列表刷新 current 标记
+  useRepoEvents(repoId, { onStatus: () => void mutateBranches() });
   // 操作失败统一以服务端中文 message 提示，避免未捕获 rejection
   const onError = (err: unknown): void => {
     void message.error(err instanceof Error ? err.message : String(err));
