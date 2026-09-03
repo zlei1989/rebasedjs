@@ -13,3 +13,5 @@ export { useCommit } from './commit';
 export { useBranches, useBranchAction } from './branches';
 export { useCheckout } from './checkout';
 export { useReset, useUndoCommit } from './reset';
+export { useMerge, useContinueMerge } from './merge';
+export { useConflicts, useConflictContents, useResolveConflict } from './conflicts';
