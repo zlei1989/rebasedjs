@@ -24,3 +24,4 @@ export {
 } from './branch';
 export type { CoreBranch } from './branch';
 export { checkoutBranch, checkoutDetached, checkoutNewBranch } from './checkout';
+export { resetToRef } from './reset';
