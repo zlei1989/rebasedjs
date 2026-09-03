@@ -1,5 +1,6 @@
 /**
- * GET /api/repos/:repoId/events —— SSE：repo.state-changed 状态推送（首帧为当前状态，之后变化才推）。
+ * GET /api/repos/:repoId/events —— SSE：仓库状态与进行中操作推送
+ * （首帧依次产 repo.state-changed（当前状态）与 operation.state-changed（当前操作），之后各自变化才推）。
  * 断开 → req.signal → watchRepoStatus 轮询退出；getRepoStatus 抛错冒泡 → 流内 error 帧后结束。
  */
 import { watchRepoStatus } from '@rebased/api';
