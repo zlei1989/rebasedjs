@@ -1,11 +1,12 @@
-/** events.ts 测试：subscribeSse 帧解析（含跨块拆分/非 2xx）+ useRepoEvents 回调与取消 */
+/** events.ts 测试：subscribeSse 帧解析（含跨块拆分/非 2xx）+ useRepoEvents 处理器（onStatus/onOperation）与取消 */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ServiceError, serializeSseEvent, type RepoStatus } from '@rebased/contracts';
-import { subscribeSse, useRepoEvents } from './events';
+import { ServiceError, serializeSseEvent, type OperationState, type RepoStatus } from '@rebased/contracts';
+import { subscribeSse, useRepoEvents, type RepoEventHandlers } from './events';
 
 const STATUS: RepoStatus = { branch: 'main', upstream: null, headHash: 'a'.repeat(40), ahead: 0, behind: 0, entries: [] };
+const OPERATION: OperationState = { kind: 'rebase', step: 2, total: 5 };
 
 function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -17,8 +18,8 @@ function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-function Probe({ repoId, onChange }: { repoId: string; onChange: (status: RepoStatus) => void }) {
-  useRepoEvents(repoId, onChange);
+function Probe({ repoId, handlers }: { repoId: string; handlers: RepoEventHandlers }) {
+  useRepoEvents(repoId, handlers);
   return null;
 }
 
@@ -62,24 +63,24 @@ describe('subscribeSse', () => {
 });
 
 describe('useRepoEvents', () => {
-  it('repo.state-changed 事件触发 onChange 回调，卸载时中止订阅', async () => {
+  it('repo.state-changed 事件触发 onStatus 回调，卸载时中止订阅', async () => {
     const encoder = new TextEncoder();
     let controller!: ReadableStreamDefaultController<Uint8Array>;
     const stream = new ReadableStream<Uint8Array>({ start(c) { controller = c; } });
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(stream, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    const onChange = vi.fn();
+    const onStatus = vi.fn();
 
     let renderer!: ReactTestRenderer;
     await act(async () => {
-      renderer = TestRenderer.create(createElement(Probe, { repoId: 'r1', onChange }));
+      renderer = TestRenderer.create(createElement(Probe, { repoId: 'r1', handlers: { onStatus } }));
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/repos/r1/events', expect.objectContaining({ signal: expect.any(AbortSignal) }));
 
     await act(async () => {
       controller.enqueue(encoder.encode(serializeSseEvent({ type: 'repo.state-changed', payload: STATUS })));
     });
-    expect(onChange).toHaveBeenCalledWith(STATUS);
+    expect(onStatus).toHaveBeenCalledWith(STATUS);
 
     const signal = (fetchMock.mock.calls[0][1] as RequestInit).signal as AbortSignal;
     await act(async () => {
@@ -88,22 +89,44 @@ describe('useRepoEvents', () => {
     expect(signal.aborted).toBe(true);
   });
 
-  it('非 repo.state-changed 事件不触发 onChange', async () => {
+  it('operation.state-changed 事件触发 onOperation 回调', async () => {
     const encoder = new TextEncoder();
     let controller!: ReadableStreamDefaultController<Uint8Array>;
     const stream = new ReadableStream<Uint8Array>({ start(c) { controller = c; } });
     vi.stubGlobal('fetch', vi.fn(async () => new Response(stream, { status: 200 })));
-    const onChange = vi.fn();
+    const onOperation = vi.fn();
 
     let renderer!: ReactTestRenderer;
     await act(async () => {
-      renderer = TestRenderer.create(createElement(Probe, { repoId: 'r1', onChange }));
+      renderer = TestRenderer.create(createElement(Probe, { repoId: 'r1', handlers: { onOperation } }));
     });
     await act(async () => {
+      controller.enqueue(encoder.encode(serializeSseEvent({ type: 'operation.state-changed', payload: OPERATION })));
+    });
+
+    expect(onOperation).toHaveBeenCalledWith(OPERATION);
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('未提供对应处理器的事件不报错也不触发其他处理器', async () => {
+    const encoder = new TextEncoder();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({ start(c) { controller = c; } });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream, { status: 200 })));
+    const onStatus = vi.fn();
+
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(Probe, { repoId: 'r1', handlers: { onStatus } }));
+    });
+    await act(async () => {
+      controller.enqueue(encoder.encode(serializeSseEvent({ type: 'operation.state-changed', payload: OPERATION })));
       controller.enqueue(encoder.encode(serializeSseEvent({ type: 'log.line', payload: { hash: 'x' } })));
     });
 
-    expect(onChange).not.toHaveBeenCalled();
+    expect(onStatus).not.toHaveBeenCalled();
     await act(async () => {
       renderer.unmount();
     });
