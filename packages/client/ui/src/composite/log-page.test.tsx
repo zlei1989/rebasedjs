@@ -142,4 +142,49 @@ describe('LogPage', () => {
     render(<LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} />);
     expect(screen.queryByTestId('reset-here')).not.toBeInTheDocument();
   });
+
+  it('传入 onOpenMerge 时点击合并按钮触发回调', () => {
+    const onOpenMerge = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenMerge={onOpenMerge} />);
+    fireEvent.click(screen.getByRole('button', { name: '合并' }));
+    expect(onOpenMerge).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传 onOpenMerge 时不渲染合并按钮', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} />);
+    expect(screen.queryByRole('button', { name: '合并' })).not.toBeInTheDocument();
+  });
+
+  it('operation.kind 为 merge 且传入 onOpenConflicts 时渲染「去解决冲突」，点击触发回调', () => {
+    const onOpenConflicts = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        operation={{ kind: 'merge' }}
+        onOpenConflicts={onOpenConflicts}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '去解决冲突' }));
+    expect(onOpenConflicts).toHaveBeenCalledTimes(1);
+  });
+
+  it('operation.kind 非 merge 时即使传入 onOpenConflicts 也不渲染「去解决冲突」', () => {
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        operation={{ kind: 'cherry-pick' }}
+        onOpenConflicts={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: '去解决冲突' })).not.toBeInTheDocument();
+  });
+
+  it('未传 onOpenConflicts 时不渲染「去解决冲突」', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} operation={{ kind: 'merge' }} />);
+    expect(screen.queryByRole('button', { name: '去解决冲突' })).not.toBeInTheDocument();
+  });
 });

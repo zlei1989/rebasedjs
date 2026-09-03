@@ -101,6 +101,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onOpenSettings={() => router.push(`/repos/${repoId}/settings`)}
         onOpenStatus={() => router.push(`/repos/${repoId}/status`)}
         onOpenBranches={() => router.push(`/repos/${repoId}/branches`)}
+        onOpenMerge={() => router.push(`/repos/${repoId}/merge`)}
+        onOpenConflicts={() => router.push(`/repos/${repoId}/conflicts`)}
       />
       <ResetDialog
         open={resetTarget !== null}

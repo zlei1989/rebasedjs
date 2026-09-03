@@ -1,8 +1,9 @@
 /**
- * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
+ * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/合并/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
+ * 合并中（operation.kind==='merge'）时顶栏在操作条旁追加「去解决冲突」链接（onOpenConflicts 注入才渲染）。
  */
-import { BranchesOutlined, DiffOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
+import { BranchesOutlined, DiffOutlined, MergeOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
 import { Button, Popconfirm } from 'antd';
 import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
@@ -29,6 +30,10 @@ export interface LogPageProps {
   onOpenStatus?: () => void;
   /** 分支页入口回调；缺省不渲染分支按钮 */
   onOpenBranches?: () => void;
+  /** 合并页入口回调；缺省不渲染合并按钮 */
+  onOpenMerge?: () => void;
+  /** 冲突页入口回调；仅当 operation.kind==='merge' 时渲染「去解决冲突」链接，缺省不渲染 */
+  onOpenConflicts?: () => void;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
   onUndoCommit?: () => void;
   /** 撤销请求进行中：撤销按钮 loading 态 */
@@ -49,6 +54,8 @@ export function LogPage({
   onOpenSettings,
   onOpenStatus,
   onOpenBranches,
+  onOpenMerge,
+  onOpenConflicts,
   onUndoCommit,
   undoCommitting,
   onResetHere,
@@ -61,6 +68,13 @@ export function LogPage({
         {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
         {operation && onAbortOperation ? (
           <OperationStatus operation={operation} onAbort={onAbortOperation} aborting={abortingOperation} />
+        ) : null}
+        {/* 「去解决冲突」链接：仅合并进行中（operation.kind==='merge'）且容器注入导航回调时渲染，
+            跟在操作条旁；base 组件 OperationStatus 不背导航职责，故由本层自行渲染 */}
+        {operation?.kind === 'merge' && onOpenConflicts ? (
+          <Button type="link" size="small" onClick={onOpenConflicts}>
+            去解决冲突
+          </Button>
         ) : null}
         {/* 撤销最近提交：Popconfirm 确认后回调（保留改动到暂存区，等价 reset --soft HEAD~1） */}
         {onUndoCommit ? (
@@ -98,14 +112,24 @@ export function LogPage({
             style={onOpenStatus ? undefined : { marginLeft: 'auto' }}
           />
         ) : null}
-        {/* 设置入口靠右对齐；变更/分支按钮已占位（marginLeft:auto）时不再重复右推 */}
+        {/* 合并入口：排在分支与设置之间；前面按钮已占位（marginLeft:auto）时不再重复右推 */}
+        {onOpenMerge ? (
+          <Button
+            aria-label="合并"
+            type="text"
+            icon={<MergeOutlined />}
+            onClick={onOpenMerge}
+            style={onOpenStatus || onOpenBranches ? undefined : { marginLeft: 'auto' }}
+          />
+        ) : null}
+        {/* 设置入口靠右对齐；变更/分支/合并按钮已占位（marginLeft:auto）时不再重复右推 */}
         {onOpenSettings ? (
           <Button
             aria-label="设置"
             type="text"
             icon={<SettingOutlined />}
             onClick={onOpenSettings}
-            style={onOpenStatus || onOpenBranches ? undefined : { marginLeft: 'auto' }}
+            style={onOpenStatus || onOpenBranches || onOpenMerge ? undefined : { marginLeft: 'auto' }}
           />
         ) : null}
       </div>
