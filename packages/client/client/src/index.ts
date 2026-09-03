@@ -12,3 +12,4 @@ export { useStaging, useHunkStaging } from './staging';
 export { useCommit } from './commit';
 export { useBranches, useBranchAction } from './branches';
 export { useCheckout } from './checkout';
+export { useReset, useUndoCommit } from './reset';
