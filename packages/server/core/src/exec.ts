@@ -44,14 +44,21 @@ function killTree(pid: number): void {
 }
 
 /** 执行 git 并收集完整输出（小输出场景）。
- *  timeoutMs 可选项：超时杀进程并以退出码 124 拒绝（防 git 传输 helper 挂起——如 Windows msys2 并发初始化失败导致 clone 无限等待）。 */
-export function runGit(args: string[], opts: { cwd: string; signal?: AbortSignal; timeoutMs?: number }): Promise<GitResult> {
+ *  timeoutMs 可选项：超时杀进程并以退出码 124 拒绝（防 git 传输 helper 挂起——如 Windows msys2 并发初始化失败导致 clone 无限等待）。
+ *  input 可选项：写入 child.stdin 后 end（git apply、hash-object --stdin 等从 stdin 读数据的命令用）。 */
+export function runGit(args: string[], opts: { cwd: string; signal?: AbortSignal; timeoutMs?: number; input?: string }): Promise<GitResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', buildArgs(args), {
       cwd: opts.cwd,
       env: { ...process.env, LC_ALL: 'C' },
       windowsHide: true,
     });
+    if (opts.input !== undefined) {
+      // 子进程可能提前退出（参数错误等），stdin 写会遇到 EPIPE；
+      // 忽略之，成败统一由 close 事件按退出码裁决，不另立失败路径。
+      child.stdin.on('error', () => {});
+      child.stdin.end(opts.input);
+    }
     let stdout = '';
     let stderr = '';
     let aborted = false;

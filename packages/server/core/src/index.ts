@@ -12,3 +12,5 @@ export { getGitConfigEntries, setGitConfigLocal } from './config';
 export type { CoreConfigEntry } from './config';
 export { getOperationState, abortGitOperation } from './operation';
 export type { CoreOperation } from './operation';
+export { applyPatch, cleanUntracked, discardPaths, stagePaths, unstagePaths } from './staging';
+export { commitStaged } from './commit';

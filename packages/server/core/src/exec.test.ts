@@ -26,6 +26,15 @@ describe('runGit', () => {
     });
   });
 
+  it('input 写入子进程 stdin（hash-object --stdin 得已知 blob 哈希）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const r = await runGit(['hash-object', '--stdin'], { cwd: repo, input: 'hello' });
+    // 'hello'（无换行）的 blob 哈希；ce01362… 实为 'hello\n' 的哈希（echo 管道惯例所致）。
+    // 断言 b6fc4c6… 同时证明 stdin 字节精确透传、未被追加换行。
+    expect(r.stdout.trim()).toBe('b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0');
+  });
+
   it('AbortSignal 终止进行中的命令', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
