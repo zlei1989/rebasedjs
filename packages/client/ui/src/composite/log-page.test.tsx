@@ -155,6 +155,18 @@ describe('LogPage', () => {
     expect(screen.queryByRole('button', { name: '合并' })).not.toBeInTheDocument();
   });
 
+  it('传入 onOpenStashes 时点击贮藏按钮触发回调', () => {
+    const onOpenStashes = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenStashes={onOpenStashes} />);
+    fireEvent.click(screen.getByRole('button', { name: '贮藏' }));
+    expect(onOpenStashes).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传 onOpenStashes 时不渲染贮藏按钮', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} />);
+    expect(screen.queryByRole('button', { name: '贮藏' })).not.toBeInTheDocument();
+  });
+
   it('operation.kind 为 merge 且传入 onOpenConflicts 时渲染「去解决冲突」，点击触发回调', () => {
     const onOpenConflicts = vi.fn();
     render(

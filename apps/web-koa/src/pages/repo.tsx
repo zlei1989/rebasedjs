@@ -101,6 +101,7 @@ export function RepoPage(): React.ReactNode {
         onOpenStatus={() => navigate(`/repos/${repoId}/status`)}
         onOpenBranches={() => navigate(`/repos/${repoId}/branches`)}
         onOpenMerge={() => navigate(`/repos/${repoId}/merge`)}
+        onOpenStashes={() => navigate(`/repos/${repoId}/stashes`)}
         onOpenConflicts={() => navigate(`/repos/${repoId}/conflicts`)}
       />
       <ResetDialog

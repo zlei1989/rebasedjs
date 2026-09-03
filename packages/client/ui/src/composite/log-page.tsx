@@ -1,9 +1,9 @@
 /**
- * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/合并/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
+ * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/合并/贮藏/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  * 合并中（operation.kind==='merge'）时顶栏在操作条旁追加「去解决冲突」链接（onOpenConflicts 注入才渲染）。
  */
-import { BranchesOutlined, DiffOutlined, MergeOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
+import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
 import { Button, Popconfirm } from 'antd';
 import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
@@ -32,6 +32,8 @@ export interface LogPageProps {
   onOpenBranches?: () => void;
   /** 合并页入口回调；缺省不渲染合并按钮 */
   onOpenMerge?: () => void;
+  /** 贮藏页入口回调；缺省不渲染贮藏按钮 */
+  onOpenStashes?: () => void;
   /** 冲突页入口回调；仅当 operation.kind==='merge' 时渲染「去解决冲突」链接，缺省不渲染 */
   onOpenConflicts?: () => void;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
@@ -55,6 +57,7 @@ export function LogPage({
   onOpenStatus,
   onOpenBranches,
   onOpenMerge,
+  onOpenStashes,
   onOpenConflicts,
   onUndoCommit,
   undoCommitting,
@@ -122,14 +125,24 @@ export function LogPage({
             style={onOpenStatus || onOpenBranches ? undefined : { marginLeft: 'auto' }}
           />
         ) : null}
-        {/* 设置入口靠右对齐；变更/分支/合并按钮已占位（marginLeft:auto）时不再重复右推 */}
+        {/* 贮藏入口：排在合并与设置之间；前面按钮已占位（marginLeft:auto）时不再重复右推 */}
+        {onOpenStashes ? (
+          <Button
+            aria-label="贮藏"
+            type="text"
+            icon={<InboxOutlined />}
+            onClick={onOpenStashes}
+            style={onOpenStatus || onOpenBranches || onOpenMerge ? undefined : { marginLeft: 'auto' }}
+          />
+        ) : null}
+        {/* 设置入口靠右对齐；变更/分支/合并/贮藏按钮已占位（marginLeft:auto）时不再重复右推 */}
         {onOpenSettings ? (
           <Button
             aria-label="设置"
             type="text"
             icon={<SettingOutlined />}
             onClick={onOpenSettings}
-            style={onOpenStatus || onOpenBranches || onOpenMerge ? undefined : { marginLeft: 'auto' }}
+            style={onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes ? undefined : { marginLeft: 'auto' }}
           />
         ) : null}
       </div>
