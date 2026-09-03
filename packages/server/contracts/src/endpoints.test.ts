@@ -8,6 +8,7 @@ import {
   hunkStagingBodySchema,
   logQuerySchema,
   openRepoBodySchema,
+  resetBodySchema,
   settingsPatchSchema,
   stagingBodySchema,
 } from './endpoints';
@@ -131,5 +132,20 @@ describe('checkoutActionSchema（检出操作）', () => {
     expect(() => checkoutActionSchema.parse({ action: 'branch', name: '' })).toThrow();
     expect(() => checkoutActionSchema.parse({ action: 'detach' })).toThrow();
     expect(() => checkoutActionSchema.parse({ action: 'detach', ref: '' })).toThrow();
+  });
+});
+
+describe('resetBodySchema（reset 请求体）', () => {
+  it('接受 ref（提交哈希/分支/HEAD~n 表达式）与 soft/mixed/hard 三选 mode', () => {
+    expect(resetBodySchema.parse({ ref: 'HEAD~1', mode: 'soft' }))
+      .toEqual({ ref: 'HEAD~1', mode: 'soft' });
+    expect(resetBodySchema.parse({ ref: 'main', mode: 'mixed' }).mode).toBe('mixed');
+    expect(resetBodySchema.parse({ ref: 'a1b2c3d', mode: 'hard' }).mode).toBe('hard');
+  });
+  it('拒绝空 ref、缺字段与枚举外 mode', () => {
+    expect(() => resetBodySchema.parse({ ref: '', mode: 'soft' })).toThrow();
+    expect(() => resetBodySchema.parse({ mode: 'soft' })).toThrow();
+    expect(() => resetBodySchema.parse({ ref: 'HEAD~1' })).toThrow();
+    expect(() => resetBodySchema.parse({ ref: 'HEAD~1', mode: 'merge' })).toThrow();
   });
 });

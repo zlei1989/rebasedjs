@@ -79,3 +79,10 @@ export const checkoutActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('detach'), ref: z.string().min(1) }),
 ]);
 export type CheckoutAction = z.infer<typeof checkoutActionSchema>;
+
+/** Reset 请求体：ref 为目标引用（提交哈希/分支/HEAD~n 表达式）；mode 三选（对照 Java GitNewResetDialog：soft 仅移 HEAD、mixed 重置暂存区、hard 连工作区一起重置） */
+export const resetBodySchema = z.object({
+  ref: z.string().min(1),
+  mode: z.enum(['soft', 'mixed', 'hard']),
+});
+export type ResetBody = z.infer<typeof resetBodySchema>;
