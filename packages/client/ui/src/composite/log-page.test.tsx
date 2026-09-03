@@ -45,6 +45,36 @@ describe('LogPage', () => {
     expect(screen.queryByTestId('commit-details')).not.toBeInTheDocument();
   });
 
+  it('传入 operation 与 onAbortOperation 时顶栏渲染进行中操作条', () => {
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        operation={{ kind: 'merge' }}
+        onAbortOperation={() => {}}
+      />,
+    );
+    expect(screen.getByText('合并中')).toBeInTheDocument();
+  });
+
+  it('缺 onAbortOperation 时不渲染操作条', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} operation={{ kind: 'merge' }} />);
+    expect(screen.queryByText('合并中')).not.toBeInTheDocument();
+  });
+
+  it('传入 onOpenSettings 时点击设置按钮触发回调', () => {
+    const onOpenSettings = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenSettings={onOpenSettings} />);
+    fireEvent.click(screen.getByRole('button', { name: '设置' }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传 onOpenSettings 时不渲染设置按钮', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} />);
+    expect(screen.queryByRole('button', { name: '设置' })).not.toBeInTheDocument();
+  });
+
   it('选中提交后右侧渲染 CommitDetailsPanel', () => {
     const selected = makeCommit({ hash: 'c9selected0001', message: '被选中的提交' });
     render(<LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} />);

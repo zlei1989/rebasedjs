@@ -114,6 +114,9 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 1. `plugins/git4idea/backend/src` 源文件计数实测：**533 个 .kt + 248 个 .java = 781 个**，与 spec 附录 A-2 一致。
 2. `platform/build-scripts/.../BaseIdeaProperties.kt:13-20` 实测 `REBASED_BUNDLED_PLUGINS = DEFAULT_BUNDLED_PLUGINS + [intellij.vcs.git, intellij.vcs.git.commit.modal, intellij.vcs.github, intellij.vcs.gitlab, intellij.terminal, intellij.textmate.plugin]`，与 spec §2.1 一致。
 3. 30 个操作页面与 36 个功能域的完整枚举引用自架构 spec §4.2/§4.5（其证据链含 git4idea 全量文件核对、平台 VCS 包核对、GitHub/GitLab 插件包核对，见 spec 附录 A-2/3/5）。
+4. **导航证据（附录 D 一手来源）**：`plugins/git4idea/backend/resources/intellij.vcs.git.backend.xml`（1063 行）为 git 插件 action 注册总表——Git 主菜单组 `Git.MainMenu`（:151-196）、分支弹窗动作组 `Git.Branches.List`/`Git.Branch.Backend`（:245-283）、日志右键注入 `Git.Log.ContextMenu`（:344-367）、暂存区/贮藏组（:391-529）、主工具栏与 worktree 组（:531-598）。
+5. **Rebased 独家导航改动实测**（backend.xml 注释原文）：:305-309「in rebased the git context menu has been moved up into the main menu」（编辑器右键 Git 子菜单删去通用仓库动作）；:519-529「in rebased, pull & push are moved to the toolbar」（分支弹窗顶层移除 Pull/Push）；主工具栏 VCS 组 `MainToolbarVCSGroup` 定义于 `platform/platform-impl/resources/META-INF/PlatformActions.xml:1084`（Update Project / Push 按钮）。
+6. **平台侧注册表**：`platform/vcs-log/impl/resources/intellij.platform.vcs.log.impl.xml:271-281`（`Vcs.Log.ContextMenu` 基座组）、`platform/vcs-impl/resources/META-INF/VcsActions.xml:633-637`（`Vcs.Show.Toolwindow.Tab` 组：Local Changes / Shelf 等 tab 切换动作）。
 
 ---
 
