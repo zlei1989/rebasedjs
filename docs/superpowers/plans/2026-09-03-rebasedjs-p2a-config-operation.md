@@ -534,3 +534,20 @@ settings-page.test.tsx：渲染两个卡片标题；`onPatchSettings` 在 Switch
 - Spec 覆盖：config（§4.2 config 行）→ Task 2/3/4/5/6/7；operation（§4.2 operation 行：检测/中止；进度事件与操作锁属后续长操作任务，本计划覆盖检测+中止+推送）→ Task 2/3/4/5/6/7；`operation.state-changed`（§5）→ Task 3/5；SettingsPage（§4.5 清单）→ Task 6/7；PUT /api/settings 接线（审计报告遗留）→ Task 6/7。
 - 明确不做（留给后续计划）：进度事件 `operation.progress`（长操作类功能落地时一并做）、操作锁、GPG/SSH 引导（settings.ts 的 P1 扩展）。
 - 类型一致性：`OperationState`/`GitConfigView`/`ConfigPutBody`/`RepoEventHandlers` 跨任务签名已逐一对齐。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+7/7 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: Yes**；终审唯一 Important（events 轮询中途 operation 变化推送零覆盖）经 fix round 修复并复审 ADDRESSED（commit `734dec3`，含变异验证）。
+
+**Rulings（控制器裁决记录）**：
+1. SDD 文件一律显式 UTF-8 读写（PS5.1 默认 ANSI 会损坏无 BOM 的 UTF-8）——若错成本：brief 乱码导致实现偏差。
+2. `createTmpRepo` 夹具三事实（无首个提交/预置身份/默认分支名不定）→ 测试配方以 `symbolic-ref` 取分支名、先造 base 提交——后续所有计划沿用。
+3. 「SSE 既有 flaky」说法被证伪：根因是 Task 3 首帧契约变更未同步路由级测试——固化流程模板「契约变更 → grep 消费方 → 同轮修复」。
+4. Task 6 审查 Minor（ConfigRow 跨仓库 state 不同步）以 `key={repoId}` 缓解（`d57b6e6`）。
+5. Turbopack dev ≥3 段路由 404 / koa-static 无 SPA fallback 两个 KNOWN ISSUE 判 safe-to-defer，后者入 roadmap hardening 任务。
+6. 终审 Recommendations ③（freshCache 提取 + useSWRConfig JSDoc）随 P2-B Task 5 dispatch 携带。
+
+终审 triage：15 项 deferred minor 全部 safe-to-defer（明细见终审报告）。SDD 工作区已按规程删除，本提交为记录。
