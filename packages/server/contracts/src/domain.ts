@@ -121,3 +121,26 @@ export interface BranchRef {
 export interface BranchList {
   branches: BranchRef[];
 }
+
+/** 冲突条目：stages 为存在的阶段编号（1=base 共同祖先，2=ours 当前分支，3=theirs 合并来源）；组合即冲突类型（[2,3]=双方修改，[1,2,3]=双方修改有祖先，[2]=双方新增…） */
+export interface ConflictEntry {
+  path: string;
+  stages: number[];
+}
+export interface ConflictList {
+  conflicts: ConflictEntry[];
+}
+
+/** 冲突三版本内容：某阶段不存在为 null（如删除方） */
+export interface ConflictContents {
+  path: string;
+  base: string | null;
+  ours: string | null;
+  theirs: string | null;
+}
+
+/** 合并结果：success=合并完成（含 squash/no-commit 未产提交）；conflicts=进入合并态待解决；up-to-date=已是最新 */
+export interface MergeOutcome {
+  status: 'success' | 'conflicts' | 'up-to-date';
+  conflicts: ConflictEntry[];
+}

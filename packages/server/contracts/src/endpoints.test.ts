@@ -8,7 +8,10 @@ import {
   hunkStagingBodySchema,
   logQuerySchema,
   openRepoBodySchema,
+  conflictContentsQuerySchema,
+  mergeBodySchema,
   resetBodySchema,
+  resolveConflictBodySchema,
   settingsPatchSchema,
   stagingBodySchema,
 } from './endpoints';
@@ -147,5 +150,47 @@ describe('resetBodySchema（reset 请求体）', () => {
     expect(() => resetBodySchema.parse({ mode: 'soft' })).toThrow();
     expect(() => resetBodySchema.parse({ ref: 'HEAD~1' })).toThrow();
     expect(() => resetBodySchema.parse({ ref: 'HEAD~1', mode: 'merge' })).toThrow();
+  });
+});
+
+describe('mergeBodySchema（合并请求体）', () => {
+  it('接受 branch 必填与 noFf/squash/noCommit/message 全选项', () => {
+    expect(mergeBodySchema.parse({ branch: 'feat/x' })).toEqual({ branch: 'feat/x' });
+    expect(mergeBodySchema.parse({
+      branch: 'feat/x', noFf: true, squash: true, noCommit: true, message: '合并说明',
+    })).toEqual({ branch: 'feat/x', noFf: true, squash: true, noCommit: true, message: '合并说明' });
+  });
+  it('拒绝空 branch、缺 branch 与非布尔开关', () => {
+    expect(() => mergeBodySchema.parse({ branch: '' })).toThrow();
+    expect(() => mergeBodySchema.parse({})).toThrow();
+    expect(() => mergeBodySchema.parse({ branch: 'feat/x', squash: 'yes' })).toThrow();
+  });
+});
+
+describe('resolveConflictBodySchema（冲突解决判别联合）', () => {
+  it('接受 ours / theirs 整侧采纳', () => {
+    expect(resolveConflictBodySchema.parse({ strategy: 'ours', path: 'a.txt' }))
+      .toEqual({ strategy: 'ours', path: 'a.txt' });
+    expect(resolveConflictBodySchema.parse({ strategy: 'theirs', path: 'a.txt' }))
+      .toEqual({ strategy: 'theirs', path: 'a.txt' });
+  });
+  it('接受 manual 带合并结果全文 content', () => {
+    expect(resolveConflictBodySchema.parse({ strategy: 'manual', path: 'a.txt', content: 'resolved' }))
+      .toEqual({ strategy: 'manual', path: 'a.txt', content: 'resolved' });
+  });
+  it('拒绝 manual 缺 content、枚举外 strategy 与空 path', () => {
+    expect(() => resolveConflictBodySchema.parse({ strategy: 'manual', path: 'a.txt' })).toThrow();
+    expect(() => resolveConflictBodySchema.parse({ strategy: 'base', path: 'a.txt' })).toThrow();
+    expect(() => resolveConflictBodySchema.parse({ strategy: 'ours', path: '' })).toThrow();
+  });
+});
+
+describe('conflictContentsQuerySchema（冲突内容查询）', () => {
+  it('接受非空 path', () => {
+    expect(conflictContentsQuerySchema.parse({ path: 'a.txt' })).toEqual({ path: 'a.txt' });
+  });
+  it('拒绝空 path 与缺 path', () => {
+    expect(() => conflictContentsQuerySchema.parse({ path: '' })).toThrow();
+    expect(() => conflictContentsQuerySchema.parse({})).toThrow();
   });
 });

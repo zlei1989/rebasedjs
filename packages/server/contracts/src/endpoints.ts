@@ -86,3 +86,25 @@ export const resetBodySchema = z.object({
   mode: z.enum(['soft', 'mixed', 'hard']),
 });
 export type ResetBody = z.infer<typeof resetBodySchema>;
+
+/** 合并请求体：对照 Java GitMergeDialog 选项（no-ff 禁用快进、squash 压缩、no-commit 不自动提交、message 合并信息） */
+export const mergeBodySchema = z.object({
+  branch: z.string().min(1),
+  noFf: z.boolean().optional(),
+  squash: z.boolean().optional(),
+  noCommit: z.boolean().optional(),
+  message: z.string().optional(),
+});
+export type MergeBody = z.infer<typeof mergeBodySchema>;
+
+/** 冲突解决：ours/theirs 整侧采纳；manual 由 MergeView 保存合并结果全文 */
+export const resolveConflictBodySchema = z.discriminatedUnion('strategy', [
+  z.object({ strategy: z.literal('ours'), path: z.string().min(1) }),
+  z.object({ strategy: z.literal('theirs'), path: z.string().min(1) }),
+  z.object({ strategy: z.literal('manual'), path: z.string().min(1), content: z.string() }),
+]);
+export type ResolveConflictBody = z.infer<typeof resolveConflictBodySchema>;
+
+/** 冲突内容查询：path 必填 */
+export const conflictContentsQuerySchema = z.object({ path: z.string().min(1) });
+export type ConflictContentsQuery = z.infer<typeof conflictContentsQuerySchema>;
