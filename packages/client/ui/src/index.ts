@@ -26,4 +26,6 @@ export {
   conflictKindLabel,
   type ConflictsPanelProps,
 } from './composite/conflicts-panel';
+export { MergeView, type MergeViewProps } from './composite/merge-view';
+export type { MonacoEditorInnerProps, MonacoLazyLoader, MonacoLazyProps } from './base/monaco-lazy';
 export { relativeToHome } from './composite/repo-page-utils';
