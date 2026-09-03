@@ -265,3 +265,22 @@ export function StashPanel(props: StashPanelProps): React.ReactNode;
 - Spec 覆盖：§4.2 stash 行（save/pop/apply/drop ✓、stash as branch ✓；un-stash 对话框的组合 UX 明确后置）。
 - 类型一致性：StashEntry/StashList/StashAction/StashPanelProps 跨任务签名已对齐；判别联合模式与 P2-C branches 一致。
 - 风险：`stash@{n}` 索引在并发操作下漂移——本地优先单客户端语义可接受，api 层越界预检兜底；pop 冲突由 git 报错透出（GIT_ERROR 带 stderr）。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+7/7 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: Yes**（无 Critical/Important；15 项 deferred minor 全部 safe-to-defer），正式关账。
+
+**终审亮点**：stash@{n} 索引语义跨层完全闭合；同键 mutation 教训落地且有回归守卫；getStatus 预检与 git 真实行为逐条对齐（含双向用例验证）；真实 git 行为测试扎实。
+
+**Rulings / 采纳**：
+1. saveStash void 返回 → api 仅靠 getStatus 预检（controller ruling，终审核实落地干净，core JSDoc 已同步）。
+2. 终审建议采纳入 hardening：行按钮 `disabled={acting}` 防连点（⑬）、空 message save 测试（⑭）。
+3. P3 watcher 扩展注记：把 `.git/refs/stash` + `.git/logs/refs/stash` 纳入事件源是弥合 watcher 缺口的最低成本路径——写入 P3 计划时显式记录。
+4. 公共容器 hook 抽象（页面装配逻辑逐字重复）：第 5 个同构页面出现前完成（hardening ⑮）。
+
+终审 Minor（不修，留档）：SaveForm 失败即丢输入、BranchModal confirmLoading 死 prop、pop 文案过度断言（冲突时 git 保留贮藏）。
+
+SDD 工作区已按规程删除，本提交为记录。
