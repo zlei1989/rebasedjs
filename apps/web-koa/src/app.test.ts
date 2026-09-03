@@ -304,6 +304,75 @@ describe('web-koa REST 端点', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
+
+  it('branches 端点：GET 返回 200 且列表含当前分支（current=true）', async () => {
+    const { repoId, repoPath } = registerRepo();
+    const current = execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    const res = await fetch(`${base}/api/repos/${repoId}/branches`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { branches: Array<{ name: string; current: boolean }> };
+    const entry = body.branches.find((b) => b.name === current);
+    expect(entry).toBeDefined();
+    expect(entry!.current).toBe(true);
+  });
+
+  it('branches 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await fetch(`${base}/api/repos/nope/branches`);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('branches 端点：POST create 返回 200 且刷新列表含新分支', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/branches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create', name: 'b1' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { branches: Array<{ name: string }> };
+    expect(body.branches.some((b) => b.name === 'b1')).toBe(true);
+  });
+
+  it('branches 端点：POST 缺 name 返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/branches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('checkout 端点：branch 检出既有分支返回 200 且 branch 为目标名', async () => {
+    const { repoId } = registerRepo();
+    const createRes = await fetch(`${base}/api/repos/${repoId}/branches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create', name: 'b1' }),
+    });
+    expect(createRes.status).toBe(200);
+    const res = await fetch(`${base}/api/repos/${repoId}/checkout`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'branch', name: 'b1' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { branch: string };
+    expect(body.branch).toBe('b1');
+  });
+
+  it('checkout 端点：检出不存在分支返回 400 INVALID_REF', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/checkout`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'branch', name: 'nope' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
 });
 
 describe('web-koa SSE 端点', () => {

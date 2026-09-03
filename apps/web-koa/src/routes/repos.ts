@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyHunkStaging, applyStaging, createCommit, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, setRepoConfig, streamDiffEvents, streamLogEvents, updateSettings, watchRepoStatus } from '@rebased/api';
-import { commitBodySchema, configPutBodySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, openRepoBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyCheckout, applyHunkStaging, applyStaging, createCommit, getBranches, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, listRecentRepos, openRepo, setRepoConfig, streamDiffEvents, streamLogEvents, updateSettings, watchRepoStatus } from '@rebased/api';
+import { branchActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, openRepoBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -202,6 +202,35 @@ router.post('/api/repos/:repoId/commit', async (ctx) => {
   try {
     const body = commitBodySchema.parse(ctx.request.body);
     ctx.body = await createCommit(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/branches —— 分支列表（BranchList）→ 错误映射 */
+router.get('/api/repos/:repoId/branches', async (ctx) => {
+  try {
+    ctx.body = await getBranches(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/branches —— zod 校验 action → applyBranchAction（create/delete/rename/setUpstream）→ 200 刷新 BranchList */
+router.post('/api/repos/:repoId/branches', async (ctx) => {
+  try {
+    const body = branchActionSchema.parse(ctx.request.body);
+    ctx.body = await applyBranchAction(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/checkout —— zod 校验 action → applyCheckout（branch/newBranch/detach）→ 200 RepoStatus */
+router.post('/api/repos/:repoId/checkout', async (ctx) => {
+  try {
+    const body = checkoutActionSchema.parse(ctx.request.body);
+    ctx.body = await applyCheckout(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }

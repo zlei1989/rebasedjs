@@ -18,6 +18,8 @@ import { POST as postAbort } from '../app/api/repos/[repoId]/operation/abort/rou
 import { POST as postStaging } from '../app/api/repos/[repoId]/staging/route';
 import { POST as postHunkStaging } from '../app/api/repos/[repoId]/staging/hunks/route';
 import { POST as postCommit } from '../app/api/repos/[repoId]/commit/route';
+import { GET as getBranches, POST as postBranches } from '../app/api/repos/[repoId]/branches/route';
+import { POST as postCheckout } from '../app/api/repos/[repoId]/checkout/route';
 import { GET as getDiffPatch } from '../app/api/repos/[repoId]/diff/patch/route';
 import { GET as getSettings, PUT as putSettings } from '../app/api/settings/route';
 
@@ -349,5 +351,88 @@ describe('web-next REST 路由', () => {
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('branches 端点：GET 返回 200 且列表含当前分支（current=true）', async () => {
+    const repoId = registerRepo();
+    const current = execFileSync('git', ['-C', lastRepoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    const res = await getBranches(new Request(`http://localhost/api/repos/${repoId}/branches`), ctx(repoId));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const entry = body.branches.find((b: { name: string }) => b.name === current);
+    expect(entry).toBeDefined();
+    expect(entry.current).toBe(true);
+  });
+
+  it('branches 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await getBranches(new Request('http://localhost/api/repos/nope/branches'), ctx('nope'));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('branches 端点：POST create 返回 200 且刷新列表含新分支', async () => {
+    const repoId = registerRepo();
+    const res = await postBranches(
+      new Request(`http://localhost/api/repos/${repoId}/branches`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'create', name: 'b1' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.branches.some((b: { name: string }) => b.name === 'b1')).toBe(true);
+  });
+
+  it('branches 端点：POST 缺 name 返回 400 INVALID_QUERY', async () => {
+    const repoId = registerRepo();
+    const res = await postBranches(
+      new Request(`http://localhost/api/repos/${repoId}/branches`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'create' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('checkout 端点：branch 检出既有分支返回 200 且 branch 为目标名', async () => {
+    const repoId = registerRepo();
+    const createRes = await postBranches(
+      new Request(`http://localhost/api/repos/${repoId}/branches`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'create', name: 'b1' }),
+      }),
+      ctx(repoId),
+    );
+    expect(createRes.status).toBe(200);
+    const res = await postCheckout(
+      new Request(`http://localhost/api/repos/${repoId}/checkout`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'branch', name: 'b1' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).branch).toBe('b1');
+  });
+
+  it('checkout 端点：检出不存在分支返回 400 INVALID_REF', async () => {
+    const repoId = registerRepo();
+    const res = await postCheckout(
+      new Request(`http://localhost/api/repos/${repoId}/checkout`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'branch', name: 'nope' }),
+      }),
+      ctx(repoId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });
 });
