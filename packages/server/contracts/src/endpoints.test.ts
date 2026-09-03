@@ -14,6 +14,7 @@ import {
   resolveConflictBodySchema,
   settingsPatchSchema,
   stagingBodySchema,
+  stashActionSchema,
 } from './endpoints';
 
 describe('P1 端点 schema', () => {
@@ -182,6 +183,39 @@ describe('resolveConflictBodySchema（冲突解决判别联合）', () => {
     expect(() => resolveConflictBodySchema.parse({ strategy: 'manual', path: 'a.txt' })).toThrow();
     expect(() => resolveConflictBodySchema.parse({ strategy: 'base', path: 'a.txt' })).toThrow();
     expect(() => resolveConflictBodySchema.parse({ strategy: 'ours', path: '' })).toThrow();
+  });
+});
+
+describe('stashActionSchema（贮藏操作判别联合）', () => {
+  it('接受 save（可带 message 与 includeUntracked）', () => {
+    expect(stashActionSchema.parse({ action: 'save' })).toEqual({ action: 'save' });
+    expect(stashActionSchema.parse({ action: 'save', message: '进行中', includeUntracked: true }))
+      .toEqual({ action: 'save', message: '进行中', includeUntracked: true });
+  });
+  it('接受 apply / pop / drop 按非负整数 index', () => {
+    expect(stashActionSchema.parse({ action: 'apply', index: 0 }))
+      .toEqual({ action: 'apply', index: 0 });
+    expect(stashActionSchema.parse({ action: 'pop', index: 2 }))
+      .toEqual({ action: 'pop', index: 2 });
+    expect(stashActionSchema.parse({ action: 'drop', index: 1 }))
+      .toEqual({ action: 'drop', index: 1 });
+  });
+  it('接受 branch 带 index 与非空 name（git stash branch）', () => {
+    expect(stashActionSchema.parse({ action: 'branch', index: 0, name: 'feat/from-stash' }))
+      .toEqual({ action: 'branch', index: 0, name: 'feat/from-stash' });
+  });
+  it('拒绝 branch 缺 name 或空 name', () => {
+    expect(() => stashActionSchema.parse({ action: 'branch', index: 0 })).toThrow();
+    expect(() => stashActionSchema.parse({ action: 'branch', index: 0, name: '' })).toThrow();
+  });
+  it('拒绝 index 为 -1、非整数或缺失', () => {
+    expect(() => stashActionSchema.parse({ action: 'apply', index: -1 })).toThrow();
+    expect(() => stashActionSchema.parse({ action: 'pop', index: 0.5 })).toThrow();
+    expect(() => stashActionSchema.parse({ action: 'drop' })).toThrow();
+  });
+  it('拒绝枚举外 action 与非布尔 includeUntracked', () => {
+    expect(() => stashActionSchema.parse({ action: 'clear' })).toThrow();
+    expect(() => stashActionSchema.parse({ action: 'save', includeUntracked: 'yes' })).toThrow();
   });
 });
 

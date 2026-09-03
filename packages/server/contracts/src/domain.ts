@@ -139,6 +139,17 @@ export interface ConflictContents {
   theirs: string | null;
 }
 
+/** 贮藏条目：index 为 stash@{n} 序号（列表顺序即 git stash list 顺序）；hash 为贮藏提交哈希 */
+export interface StashEntry {
+  index: number;
+  hash: string;
+  message: string;
+  dateIso: string;
+}
+export interface StashList {
+  stashes: StashEntry[];
+}
+
 /** 合并结果：success=合并完成（含 squash/no-commit 未产提交）；conflicts=进入合并态待解决；up-to-date=已是最新 */
 export interface MergeOutcome {
   status: 'success' | 'conflicts' | 'up-to-date';
