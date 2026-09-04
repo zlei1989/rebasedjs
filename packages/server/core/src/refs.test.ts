@@ -65,4 +65,29 @@ describe('refs 指纹快照', () => {
     expect(after.fingerprint).not.toBe(before.fingerprint);
     expect(diffRefsSnapshots(before, after)).toEqual([`refs/heads/${defaultBranch}`]);
   });
+
+  it('stash save 后（refs/stash 出现）指纹变化且 diff 含 refs/stash（P2-F 缺口锚定）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    makeBaseCommit(repo);
+    const before = await takeRefsSnapshot(repo);
+    writeFileSync(join(repo, 'a.txt'), 'dirty');
+    git(repo, ['stash', 'push', '-q', '-m', 'wip']);
+    const after = await takeRefsSnapshot(repo);
+    expect(after.fingerprint).not.toBe(before.fingerprint);
+    expect(diffRefsSnapshots(before, after)).toEqual(['refs/stash']);
+  });
+
+  it('stash drop 后（refs/stash 消失）指纹变化且 diff 含 refs/stash（删除检测）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    makeBaseCommit(repo);
+    writeFileSync(join(repo, 'a.txt'), 'dirty');
+    git(repo, ['stash', 'push', '-q', '-m', 'wip']);
+    const before = await takeRefsSnapshot(repo);
+    git(repo, ['stash', 'drop', '-q']);
+    const after = await takeRefsSnapshot(repo);
+    expect(after.fingerprint).not.toBe(before.fingerprint);
+    expect(diffRefsSnapshots(before, after)).toEqual(['refs/stash']);
+  });
 });

@@ -2,7 +2,9 @@
  *  事件序：首帧依次产 repo.state-changed（当前状态）、operation.state-changed（当前操作）
  *  与 refs.changed（基线：当前全量 refname 列表），之后 diff 比较。
  *  refs 指纹覆盖 refs/heads + refs/remotes + refs/tags + refs/stash：
- *  分支/标签/贮藏/远程引用的创建、删除与指向移动均会改变指纹并产 refs.changed（payload.refs 为变化名单）。 */
+ *  分支/标签/贮藏/远程引用的创建、删除与指向移动均会改变指纹并产 refs.changed（payload.refs 为变化名单）。
+ *  局限：HEAD 指向切换（checkout 换分支不改任何 ref 值）不改变指纹、不产 refs.changed；
+ *  该场景由 status.branch 字段变化触发的 repo.state-changed 帧兜底。 */
 import type { OperationState, RepoStatus } from '@rebased/contracts';
 import { SSE_EVENT_REFS_CHANGED } from '@rebased/contracts';
 import { diffRefsSnapshots, takeRefsSnapshot } from '@rebased/core';
