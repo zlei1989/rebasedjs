@@ -70,6 +70,21 @@ describe('postJson', () => {
     expect((err as ServiceError).code).toBe('NOT_A_GIT_REPO');
     expect((err as ServiceError).message).toBe('不是 Git 仓库');
   });
+
+  it('非 2xx 且响应含 error.context：ServiceError 保留 context（AUTH_FAILED 的 host 供认证对话框预填）', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(401, { error: { code: 'AUTH_FAILED', message: '认证失败', context: { host: 'git.example.com' } } }),
+      ),
+    );
+
+    const err = await postJson('/api/repos/r1/fetch', {}).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ServiceError);
+    expect((err as ServiceError).code).toBe('AUTH_FAILED');
+    expect((err as ServiceError).context).toEqual({ host: 'git.example.com' });
+  });
 });
 
 describe('putJson', () => {

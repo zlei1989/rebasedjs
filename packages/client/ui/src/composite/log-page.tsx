@@ -1,10 +1,12 @@
 /**
- * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/合并/贮藏/设置入口）+ CommitGraph + 右侧 CommitDetailsPanel。
+ * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/合并/贮藏/设置入口 + 「更多」下拉）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  * 合并中（operation.kind==='merge'）时顶栏在操作条旁追加「去解决冲突」链接（onOpenConflicts 注入才渲染）。
+ * 顶栏收敛：五个页面导航按钮保留为主按钮区；远程相关操作（拉取/推送/更新项目/远程管理）收进「更多」Dropdown，
+ * 仅在容器注入对应回调时出现对应菜单项，四个回调全缺省时不渲染「更多」按钮。
  */
-import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
-import { Button, Popconfirm } from 'antd';
+import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Popconfirm } from 'antd';
 import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
 import { RepoStatusBar } from '../domain/repo-status-bar';
@@ -34,6 +36,14 @@ export interface LogPageProps {
   onOpenMerge?: () => void;
   /** 贮藏页入口回调；缺省不渲染贮藏按钮 */
   onOpenStashes?: () => void;
+  /** 拉取对话框入口回调；缺省时「更多」菜单不含拉取项 */
+  onOpenPull?: () => void;
+  /** 推送对话框入口回调；缺省时「更多」菜单不含推送项 */
+  onOpenPush?: () => void;
+  /** 更新项目对话框入口回调；缺省时「更多」菜单不含更新项目项 */
+  onOpenUpdate?: () => void;
+  /** 远程管理页入口回调；缺省时「更多」菜单不含远程管理项 */
+  onOpenRemotes?: () => void;
   /** 冲突页入口回调；仅当 operation.kind==='merge' 时渲染「去解决冲突」链接，缺省不渲染 */
   onOpenConflicts?: () => void;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
@@ -58,11 +68,29 @@ export function LogPage({
   onOpenBranches,
   onOpenMerge,
   onOpenStashes,
+  onOpenPull,
+  onOpenPush,
+  onOpenUpdate,
+  onOpenRemotes,
   onOpenConflicts,
   onUndoCommit,
   undoCommitting,
   onResetHere,
 }: LogPageProps): React.ReactNode {
+  // 「更多」菜单项：仅装配容器注入回调的远程操作入口；全缺省时连「更多」按钮都不渲染
+  const moreItems = [
+    ...(onOpenPull ? [{ key: 'pull', label: '拉取' }] : []),
+    ...(onOpenPush ? [{ key: 'push', label: '推送' }] : []),
+    ...(onOpenUpdate ? [{ key: 'update', label: '更新项目' }] : []),
+    ...(onOpenRemotes ? [{ key: 'remotes', label: '远程管理' }] : []),
+  ];
+  /** 「更多」菜单点击分发：按 key 调对应入口回调 */
+  const onMoreClick = (key: string): void => {
+    if (key === 'pull') onOpenPull?.();
+    else if (key === 'push') onOpenPush?.();
+    else if (key === 'update') onOpenUpdate?.();
+    else if (key === 'remotes') onOpenRemotes?.();
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #f0f0f0' }}>
@@ -144,6 +172,22 @@ export function LogPage({
             onClick={onOpenSettings}
             style={onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes ? undefined : { marginLeft: 'auto' }}
           />
+        ) : null}
+        {/* 「更多」Dropdown：远程相关操作（拉取/推送/更新项目/远程管理）的收敛入口，跟在设置按钮之后；
+            前面按钮已占位（marginLeft:auto）时不再重复右推 */}
+        {moreItems.length > 0 ? (
+          <Dropdown trigger={['click']} menu={{ items: moreItems, onClick: ({ key }) => onMoreClick(key) }}>
+            <Button
+              aria-label="更多"
+              type="text"
+              icon={<MoreOutlined />}
+              style={
+                onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes || onOpenSettings
+                  ? undefined
+                  : { marginLeft: 'auto' }
+              }
+            />
+          </Dropdown>
         ) : null}
       </div>
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>

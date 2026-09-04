@@ -4,23 +4,33 @@
  * 日志页容器：useLogPage（分页快照）+ useLogStream（SSE 渐进式渲染）+ useRepoStatus + useRepoEvents（状态推送）
  * 注入 ui LogPage。流式语义（Ruling 6）：stream 是同一查询的渐进式渲染而非快照后的新增，
  * 故 commits 经 mergeLogCommits 合成——流连接中以流为主列表，REST 快照作首屏与 hash 去重兜底。
+ * 远程操作区：顶栏「更多」四入口（拉取/推送/更新项目/远程管理）+ pull/push/update 对话框（页面化 Modal 不如对话框内联——Java 版即为对话框）。
+ * AuthDialog 全局于本容器（认证重试回路范式，后续页面需要认证的远程操作复用此装配）：
+ * 操作失败 err instanceof ServiceError 且 code==='AUTH_FAILED' → 开 AuthDialog（host 自 err.context）
+ * → onOk = upsertAccount({host, account, token}) → 成功后重试原操作一次；取消即放弃。
  */
 import {
   useAbortOperation,
   useLogPage,
   useLogStream,
   useOperation,
+  usePull,
+  usePush,
   useRecentRepos,
+  useRemotes,
   useRepoEvents,
   useRepoStatus,
   useReset,
   useUndoCommit,
+  useUpdateProject,
+  useUpsertAccount,
 } from '@rebased/client';
-import type { CommitInfo, ResetBody } from '@rebased/contracts';
-import { LogPage, ResetDialog } from '@rebased/ui';
+import { ServiceError, type CommitInfo, type PullBody, type PushBody, type ResetBody, type UpdateBody } from '@rebased/contracts';
+import { AuthDialog, LogPage, PullDialog, PushDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
 import { message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useMemo, useState } from 'react';
+import { useSWRConfig } from 'swr';
 import { mergeLogCommits } from '../../../src/log-merge';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
@@ -34,8 +44,20 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { trigger: abortOperation, isMutating: abortingOperation } = useAbortOperation(repoId);
   const { trigger: resetTrigger, isMutating: resetting } = useReset(repoId);
   const { trigger: undoCommit, isMutating: undoCommitting } = useUndoCommit(repoId);
+  // 远程操作区：远程列表（pull/push 对话框数据源）+ pull/push/update 突变 + 账户保存（认证重试回路用）
+  const { data: remotes } = useRemotes(repoId);
+  const { trigger: pull, isMutating: pulling } = usePull(repoId);
+  const { trigger: push, isMutating: pushing } = usePush(repoId);
+  const { trigger: updateProject, isMutating: updating } = useUpdateProject(repoId);
+  const { trigger: upsertAccount, isMutating: savingAccount } = useUpsertAccount();
+  // 全局 mutate：onRefs 里重验证分支列表缓存键（本页未挂载 useBranches，仅对已挂载该键的页面生效，如分支页打开期间）
+  const { mutate: mutateGlobal } = useSWRConfig();
   // ResetDialog 目标提交（hash + 展示用 label）；null 表示关闭
   const [resetTarget, setResetTarget] = useState<{ hash: string; label: string } | null>(null);
+  // pull/push/update 对话框状态机：同一时间只开一个；null 表示全关（对话框内部选择态在关闭时自复位）
+  const [openDialog, setOpenDialog] = useState<'pull' | 'push' | 'update' | null>(null);
+  // 认证重试回路状态：待重试的原操作 + 认证目标 host；null 表示 AuthDialog 关闭
+  const [authRetry, setAuthRetry] = useState<{ host: string; retry: () => Promise<unknown> } | null>(null);
   // 状态推送（干净提交也使 headHash 变化 → 触发此回调）：回写 status 缓存 + 重验证日志快照 + 重订阅流（新提交出现在新流顶部）；
   // 操作推送（operation.state-changed）：回写 operation 缓存驱动顶栏操作条
   useRepoEvents(repoId, {
@@ -45,6 +67,13 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
       setRefreshKey((k) => k + 1);
     },
     onOperation: (next) => void mutateOperation(next, { revalidate: false }),
+    // 引用推送（refs.changed：分支/标签/贮藏 建删/移动；首帧为全量基线，空数组=指纹变化但名单未知——watcher 扩展的首个消费方）：
+    // 重验证日志快照（ref chips 与图形可达性变化）+ 全局重验证分支列表缓存键（本页未挂载 useBranches；
+    // 全局 mutate 仅对已挂载该键的页面生效）。HEAD 切换由 repo.state-changed（onStatus）覆盖，不在此帧
+    onRefs: () => {
+      void mutateLog();
+      void mutateGlobal(`/api/repos/${repoId}/branches`);
+    },
   });
   const { data: repos } = useRecentRepos();
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
@@ -77,6 +106,78 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
       .then(() => void message.success('已撤销最近提交'))
       .catch((err: unknown) => void message.error(err instanceof Error ? err.message : String(err)));
   };
+  /**
+   * 远程数据传输操作的公共出口（认证重试回路装配点，范式供后续页面复用）：
+   * 成功 → onSuccess 呈现结果；失败且 err 为 ServiceError('AUTH_FAILED') → 关当前对话框、开 AuthDialog
+   * （host 自 err.context——服务端 withAuth 抛出时携带 {host}，绝不含 token），retry 闭包持有原操作待重试；
+   * 其余错误 → 服务端中文 message 提示
+   */
+  function runRemoteOp<T>(op: () => Promise<T>, onSuccess: (outcome: T) => void): void {
+    op()
+      .then(onSuccess)
+      .catch((err: unknown) => {
+        if (err instanceof ServiceError && err.code === 'AUTH_FAILED') {
+          const host = (err.context as { host?: string } | undefined)?.host ?? '';
+          setOpenDialog(null);
+          setAuthRetry({ host, retry: () => op().then(onSuccess) });
+        } else {
+          void message.error(err instanceof Error ? err.message : String(err));
+        }
+      });
+  }
+  // PullDialog 确定：按结果呈现（成功响应已由事件推送驱动 status/log 刷新，无需手动 mutate）
+  const onPullOk = (body: PullBody): void => {
+    runRemoteOp(
+      () => pull(body),
+      (outcome) => {
+        setOpenDialog(null);
+        if (outcome.status === 'up-to-date') void message.info('已是最新');
+        else if (outcome.status === 'updated') void message.success('拉取完成');
+        else void message.warning('拉取存在冲突，请解决后完成');
+      },
+    );
+  };
+  // PushDialog 确定：rejected 为 200 业务结果（非错误），以 hint 中文引导提示
+  const onPushOk = (body: PushBody): void => {
+    runRemoteOp(
+      () => push(body),
+      (outcome) => {
+        setOpenDialog(null);
+        if (outcome.status === 'rejected') void message.warning(outcome.hint ?? '推送被拒绝');
+        else if (outcome.status === 'up-to-date') void message.info('已是最新');
+        else void message.success('推送完成');
+      },
+    );
+  };
+  // UpdateProjectDialog 确定：结果 = fetch 引用数 + pull 状态的组合视图
+  const onUpdateOk = (body: UpdateBody): void => {
+    runRemoteOp(
+      () => updateProject(body),
+      (outcome) => {
+        setOpenDialog(null);
+        if (outcome.pull.status === 'up-to-date') void message.info('已是最新');
+        else if (outcome.pull.status === 'updated') void message.success(`更新完成（fetch 更新 ${outcome.fetched.length} 个引用）`);
+        else void message.warning('更新存在冲突，请解决后完成');
+      },
+    );
+  };
+  // AuthDialog 确定（保存并重试）：先 upsertAccount 持久化凭据，成功后重试原操作一次；
+  // 重试仍 AUTH_FAILED（凭据可能不对）→ 保持弹窗循环，用户可换凭据再试或取消；其余错误 → 关窗 + 提示
+  const onAuthOk = (account: string, token: string): void => {
+    const pending = authRetry;
+    if (!pending) return;
+    upsertAccount({ host: pending.host, account, token })
+      .then(() => pending.retry())
+      .then(() => setAuthRetry(null))
+      .catch((err: unknown) => {
+        if (err instanceof ServiceError && err.code === 'AUTH_FAILED') {
+          void message.error(err.message);
+        } else {
+          setAuthRetry(null);
+          void message.error(err instanceof Error ? err.message : String(err));
+        }
+      });
+  };
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!status) return null;
   return (
@@ -104,6 +205,10 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onOpenMerge={() => router.push(`/repos/${repoId}/merge`)}
         onOpenStashes={() => router.push(`/repos/${repoId}/stashes`)}
         onOpenConflicts={() => router.push(`/repos/${repoId}/conflicts`)}
+        onOpenPull={() => setOpenDialog('pull')}
+        onOpenPush={() => setOpenDialog('push')}
+        onOpenUpdate={() => setOpenDialog('update')}
+        onOpenRemotes={() => router.push(`/repos/${repoId}/remotes`)}
       />
       <ResetDialog
         open={resetTarget !== null}
@@ -112,6 +217,36 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         confirming={resetting}
         onOk={onResetOk}
         onCancel={() => setResetTarget(null)}
+      />
+      {/* 远程列表未就绪时以空列表兜底（对话框内远程 Select 不预选，用户可待加载后重开） */}
+      <PullDialog
+        open={openDialog === 'pull'}
+        remotes={remotes ?? { remotes: [] }}
+        confirming={pulling}
+        onOk={onPullOk}
+        onCancel={() => setOpenDialog(null)}
+      />
+      <PushDialog
+        open={openDialog === 'push'}
+        remotes={remotes ?? { remotes: [] }}
+        currentBranch={status.branch}
+        confirming={pushing}
+        onOk={onPushOk}
+        onCancel={() => setOpenDialog(null)}
+      />
+      <UpdateProjectDialog
+        open={openDialog === 'update'}
+        confirming={updating}
+        onOk={onUpdateOk}
+        onCancel={() => setOpenDialog(null)}
+      />
+      {/* 认证重试回路出口：host 只读展示；取消即放弃原操作。confirming 覆盖保存与重试全程 */}
+      <AuthDialog
+        open={authRetry !== null}
+        host={authRetry?.host ?? ''}
+        confirming={savingAccount || pulling || pushing || updating}
+        onOk={onAuthOk}
+        onCancel={() => setAuthRetry(null)}
       />
     </>
   );

@@ -12,6 +12,7 @@ import { RepoBranchesPage } from './pages/branches';
 import { RepoConflictsPage } from './pages/conflicts';
 import { RepoMergePage } from './pages/merge';
 import { RepoPage } from './pages/repo';
+import { RepoRemotesPage } from './pages/remotes';
 import { RepoDiffPage } from './pages/diff';
 import { RepoSettingsPage } from './pages/settings';
 import { RepoStashesPage } from './pages/stashes';
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/repos/:repoId" element={<RepoPage />} />
           <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
           <Route path="/repos/:repoId/merge" element={<RepoMergePage />} />
+          <Route path="/repos/:repoId/remotes" element={<RepoRemotesPage />} />
           <Route path="/repos/:repoId/conflicts" element={<RepoConflictsPage />} />
           <Route path="/repos/:repoId/diff" element={<RepoDiffPage />} />
           <Route path="/repos/:repoId/settings" element={<RepoSettingsPage />} />

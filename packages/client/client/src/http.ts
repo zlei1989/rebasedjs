@@ -1,12 +1,22 @@
-/** 客户端 HTTP：同源 /api；非 2xx 解析 {error:{code,message}} → ServiceError */
+/** 客户端 HTTP：同源 /api；非 2xx 解析 {error:{code,message,context?}} → ServiceError（context 透传，如 AUTH_FAILED 的 host） */
 import { ServiceError } from '@rebased/contracts';
+
+/** 非 2xx 响应 → ServiceError：解析 {error:{code,message,context?}}；响应非 JSON 时兜底 GIT_ERROR + HTTP 状态码 */
+async function toServiceError(res: Response): Promise<ServiceError> {
+  const body = (await res.json().catch(() => null)) as {
+    error?: { code?: string; message?: string; context?: unknown };
+  } | null;
+  return new ServiceError(
+    (body?.error?.code ?? 'GIT_ERROR') as never,
+    body?.error?.message ?? `HTTP ${res.status}`,
+    // context 仅服务端携带时透传（如 AUTH_FAILED 的 {host}），保持 undefined 语义不引入空值
+    ...(body?.error?.context !== undefined ? [{ context: body.error.context }] : []),
+  );
+}
 
 export async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
-    throw new ServiceError((body?.error?.code ?? 'GIT_ERROR') as never, body?.error?.message ?? `HTTP ${res.status}`);
-  }
+  if (!res.ok) throw await toServiceError(res);
   return res.json() as Promise<T>;
 }
 
@@ -17,10 +27,7 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const resBody = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
-    throw new ServiceError((resBody?.error?.code ?? 'GIT_ERROR') as never, resBody?.error?.message ?? `HTTP ${res.status}`);
-  }
+  if (!res.ok) throw await toServiceError(res);
   return res.json() as Promise<T>;
 }
 
@@ -31,9 +38,6 @@ export async function putJson<T>(url: string, body: unknown): Promise<T> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const resBody = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
-    throw new ServiceError((resBody?.error?.code ?? 'GIT_ERROR') as never, resBody?.error?.message ?? `HTTP ${res.status}`);
-  }
+  if (!res.ok) throw await toServiceError(res);
   return res.json() as Promise<T>;
 }

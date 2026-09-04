@@ -199,4 +199,56 @@ describe('LogPage', () => {
     render(<LogPage repoName="alpha" status={status} commits={commits} operation={{ kind: 'merge' }} />);
     expect(screen.queryByRole('button', { name: '去解决冲突' })).not.toBeInTheDocument();
   });
+
+  /** 打开顶栏「更多」下拉菜单（Dropdown trigger 为 click，菜单挂到 body） */
+  async function openMoreMenu(): Promise<void> {
+    fireEvent.click(screen.getByRole('button', { name: '更多' }));
+    await screen.findByRole('menu');
+  }
+
+  it('传入 onOpenPull 时「更多」菜单含拉取项，点击触发回调', async () => {
+    const onOpenPull = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={onOpenPull} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('拉取'));
+    expect(onOpenPull).toHaveBeenCalledTimes(1);
+  });
+
+  it('传入 onOpenPush 时「更多」菜单含推送项，点击触发回调', async () => {
+    const onOpenPush = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPush={onOpenPush} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('推送'));
+    expect(onOpenPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('传入 onOpenUpdate 时「更多」菜单含更新项目项，点击触发回调', async () => {
+    const onOpenUpdate = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenUpdate={onOpenUpdate} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('更新项目'));
+    expect(onOpenUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('传入 onOpenRemotes 时「更多」菜单含远程管理项，点击触发回调', async () => {
+    const onOpenRemotes = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenRemotes={onOpenRemotes} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('远程管理'));
+    expect(onOpenRemotes).toHaveBeenCalledTimes(1);
+  });
+
+  it('仅传部分远程入口时「更多」菜单只含对应项', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={() => {}} onOpenRemotes={() => {}} />);
+    await openMoreMenu();
+    expect(screen.getByText('拉取')).toBeInTheDocument();
+    expect(screen.getByText('远程管理')).toBeInTheDocument();
+    expect(screen.queryByText('推送')).not.toBeInTheDocument();
+    expect(screen.queryByText('更新项目')).not.toBeInTheDocument();
+  });
+
+  it('四个远程入口回调均未传时不渲染「更多」按钮', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} />);
+    expect(screen.queryByRole('button', { name: '更多' })).not.toBeInTheDocument();
+  });
 });
