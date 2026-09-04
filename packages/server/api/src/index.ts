@@ -17,4 +17,6 @@ export { applyStashAction, getStashes } from './stash';
 export { getSettings, updateSettings } from './settings';
 export { applyChangelistAction, getChangelists } from './changelist';
 export { deleteAccount, listAccounts, upsertAccount } from './auth';
+export { applyRemoteAction, fetchRepo, getRemotes, pullRepo, pushRepo } from './remote';
+export { updateProject } from './update';
 export { toServiceError } from './errors';

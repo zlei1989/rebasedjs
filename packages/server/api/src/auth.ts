@@ -5,7 +5,7 @@
  * 明文落盘的取舍见 config-store.ts 的 StoredAccount 注释。
  */
 import type { AccountBody, AccountDeleteBody, AccountList } from '@rebased/contracts';
-import { ServiceError } from '@rebased/contracts';
+import { normalizeHost, ServiceError } from '@rebased/contracts';
 import type { StoredAccount } from './lib/config-store';
 import { loadConfig, saveConfig } from './lib/config-store';
 
@@ -22,6 +22,17 @@ function toView(accounts: StoredAccount[]): AccountList {
 /** 账户列表（掩码视图）：token → tokenPreview（前 4 位 + '***'；长度 ≤4 时全掩码 '***'） */
 export function listAccounts(): AccountList {
   return toView(loadConfig().auth?.accounts ?? []);
+}
+
+/**
+ * 仅服务端内部使用，永不出现在响应/日志：按规范化 host 取回明文 token（认证回路注入用）。
+ * 不经掩码出口，index.ts 不出口——同层模块直接 import './auth'。
+ * 查找键遵循 normalizeHost 唯一约定（存侧可能大小写/形态不规整，查侧已规范化，两侧比对前统一归一）。
+ */
+export function findToken(host: string): string | null {
+  const accounts = loadConfig().auth?.accounts ?? [];
+  const match = accounts.find((a) => normalizeHost(a.host) === host);
+  return match?.token ?? null;
 }
 
 /** 添加/覆盖账户（同 host+account 覆盖）；返回刷新掩码视图 */
