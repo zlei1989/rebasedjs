@@ -1,13 +1,14 @@
 /**
  * 冲突面板（对照 Java GitConflictsPanel）：
  *  冲突文件列表（路径 + 冲突类型徽标，由 stages 组合推导）+ 行操作「用我们的」「用他们的」「手动合并」
- *  （手动合并开 MergeView，由容器承接）+ 底部「完成合并」按钮（全部解决后可用，否则禁用并 Tooltip 提示）。
+ *  （手动合并开 MergeView，由容器承接）+ 底部「继续」按钮（文案按 operationKind 泛化：
+ *  merge→完成合并、rebase→继续变基、cherry-pick→继续摘樱桃、revert→继续还原；全部解决后可用，否则禁用并 Tooltip 提示）。
  *  删除/修改冲突（stages 缺 2 或 3）：对应整侧采纳按钮禁用（该侧无版本，checkout 必失败），
  *  并额外渲染「删除该文件」（Popconfirm 确认；对照 Java 版把采纳映射为删除的路径）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入。
  */
 import { Button, Card, Flex, Popconfirm, Tag, Tooltip, Typography } from 'antd';
-import type { ConflictEntry, ConflictList, ResolveConflictBody } from '@rebased/contracts';
+import type { ConflictEntry, ConflictList, OperationKind, ResolveConflictBody } from '@rebased/contracts';
 
 export interface ConflictsPanelProps {
   conflicts: ConflictList;
@@ -18,6 +19,25 @@ export interface ConflictsPanelProps {
   resolving?: boolean;
   /** 完成合并请求进行中：底部按钮 loading 态 */
   continuing?: boolean;
+  /** 进行中操作种类：continue 按钮文案按种类泛化；缺省按 merge 处理（历史行为向后兼容） */
+  operationKind?: OperationKind;
+}
+
+/**
+ * continue 按钮文案（容器/测试复用）：按 operation kind 映射——
+ * merge→完成合并、rebase→继续变基、cherry-pick→继续摘樱桃、revert→继续还原；缺省/其他一律按 merge。
+ */
+export function continueKindLabel(kind?: OperationKind): string {
+  switch (kind) {
+    case 'rebase':
+      return '继续变基';
+    case 'cherry-pick':
+      return '继续摘樱桃';
+    case 'revert':
+      return '继续还原';
+    default:
+      return '完成合并';
+  }
 }
 
 /**
@@ -103,6 +123,7 @@ export function ConflictsPanel({
   onContinue,
   resolving,
   continuing,
+  operationKind,
 }: ConflictsPanelProps): React.ReactNode {
   const remaining = conflicts.conflicts.length;
   return (
@@ -125,7 +146,8 @@ export function ConflictsPanel({
           )}
         </Flex>
       </Card>
-      {/* 完成合并：仅在全部解决后可用；未解决时禁用 + Tooltip 提示原因。
+      {/* continue：仅在全部解决后可用；未解决时禁用 + Tooltip 提示原因。
+          文案按 operationKind 泛化（merge/rebase/cherry-pick/revert），缺省 merge。
           禁用按钮不派发 hover 事件，按 antd 官方做法在 Tooltip 与 Button 间包一层 span 承接提示 */}
       <Flex justify="flex-end">
         <Tooltip title={remaining > 0 ? '还有未解决的冲突' : undefined}>
@@ -136,7 +158,7 @@ export function ConflictsPanel({
               loading={continuing}
               onClick={onContinue}
             >
-              完成合并
+              {continueKindLabel(operationKind)}
             </Button>
           </span>
         </Tooltip>

@@ -32,8 +32,10 @@ export { RebaseDialog, type RebaseDialogProps } from './composite/rebase-dialog'
 export {
   ConflictsPanel,
   conflictKindLabel,
+  continueKindLabel,
   type ConflictsPanelProps,
 } from './composite/conflicts-panel';
+export { TagPanel, type TagPanelProps } from './composite/tag-panel';
 export { MergeView, type MergeViewProps } from './composite/merge-view';
 export { RemotePanel, type RemotePanelProps } from './composite/remote-panel';
 export { PushDialog, type PushDialogProps } from './composite/push-dialog';

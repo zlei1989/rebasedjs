@@ -66,4 +66,26 @@ describe('CommitDetailsPanel', () => {
     fireEvent.click(screen.getByTestId('reset-here'));
     expect(onResetHere).toHaveBeenCalledWith('abc1234567890def');
   });
+
+  it('未传 onCherryPick/onRevert 时不渲染对应按钮', () => {
+    render(<CommitDetailsPanel commit={commit} onResetHere={() => {}} />);
+    expect(screen.queryByTestId('cherry-pick')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('revert')).not.toBeInTheDocument();
+  });
+
+  it('传入 onCherryPick 时按钮渲染，点击回调携带当前提交 hash', () => {
+    const onCherryPick = vi.fn();
+    render(<CommitDetailsPanel commit={commit} onCherryPick={onCherryPick} />);
+    fireEvent.click(screen.getByTestId('cherry-pick'));
+    expect(onCherryPick).toHaveBeenCalledTimes(1);
+    expect(onCherryPick).toHaveBeenCalledWith('abc1234567890def');
+  });
+
+  it('传入 onRevert 时按钮渲染，点击回调携带当前提交 hash', () => {
+    const onRevert = vi.fn();
+    render(<CommitDetailsPanel commit={commit} onRevert={onRevert} />);
+    fireEvent.click(screen.getByTestId('revert'));
+    expect(onRevert).toHaveBeenCalledTimes(1);
+    expect(onRevert).toHaveBeenCalledWith('abc1234567890def');
+  });
 });

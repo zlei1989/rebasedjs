@@ -195,3 +195,22 @@ describe('ConflictsPanel 完成合并', () => {
     expect(screen.getByRole('button', { name: /完成合并/ })).toHaveClass('ant-btn-loading');
   });
 });
+
+describe('ConflictsPanel continue 文案（按操作种类泛化）', () => {
+  const cases: [string, 'none' | 'merge' | 'rebase' | 'cherry-pick' | 'revert' | undefined, string][] = [
+    ['缺省（undefined）', undefined, '完成合并'],
+    ['merge', 'merge', '完成合并'],
+    ['rebase', 'rebase', '继续变基'],
+    ['cherry-pick', 'cherry-pick', '继续摘樱桃'],
+    ['revert', 'revert', '继续还原'],
+  ];
+  it.each(cases)('%s：按钮文案为「%s」', (_name, kind, label) => {
+    render(<ConflictsPanel conflicts={{ conflicts: [] }} operationKind={kind} {...makeHandlers()} />);
+    expect(screen.getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
+  });
+
+  it('kind=none 时按缺省 merge 处理（完成合并）', () => {
+    render(<ConflictsPanel conflicts={{ conflicts: [] }} operationKind="none" {...makeHandlers()} />);
+    expect(screen.getByRole('button', { name: /完成合并/ })).toBeInTheDocument();
+  });
+});
