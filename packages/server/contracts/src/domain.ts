@@ -168,6 +168,38 @@ export interface MergeOutcome {
   conflicts: ConflictEntry[];
 }
 
+/** 变基结果：success=变基完成；conflicts=进入变基冲突态待解决；up-to-date=已是最新 */
+export interface RebaseOutcome {
+  status: 'success' | 'conflicts' | 'up-to-date';
+}
+
+/** 摘樱桃/还原（cherry-pick/revert）结果：success=完成；conflicts=进入冲突态待解决 */
+export interface PickOutcome {
+  status: 'success' | 'conflicts';
+}
+
+/** 交互式变基 todo 条目：hash 为提交完整哈希；subject 为提交主题首行 */
+export interface TodoEntry {
+  hash: string;
+  subject: string;
+}
+
+/** 交互式变基 todo 动作：对应 git rebase -i 的可用命令 */
+export type RebaseTodoAction = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop';
+
+/** 标签条目：annotated=true 为附注标签；subject 为附注信息首行（轻量标签为 null） */
+export interface TagEntry {
+  name: string;
+  hash: string;
+  subject: string | null;
+  annotated: boolean;
+}
+
+/** 标签列表视图 */
+export interface TagList {
+  tags: TagEntry[];
+}
+
 /** 账户条目（掩码视图）：token 本体永不下行；tokenPreview 为前 4 位 + '***'（便于用户辨认自己贴的是哪个 token） */
 export interface AccountEntry {
   host: string;

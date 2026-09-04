@@ -173,3 +173,32 @@ export type PushBody = z.infer<typeof pushBodySchema>;
 /** Update Project 请求体：strategy 决定 fetch 后的合并方式（merge | rebase） */
 export const updateBodySchema = z.object({ strategy: z.enum(['merge', 'rebase']) });
 export type UpdateBody = z.infer<typeof updateBodySchema>;
+
+/** rebase 请求体：onto 为变基目标（提交/分支/HEAD~n 表达式）；branch 缺省为当前分支 */
+export const rebaseBodySchema = z.object({ onto: z.string().min(1), branch: z.string().optional() });
+export type RebaseBody = z.infer<typeof rebaseBodySchema>;
+
+/** 交互式变基 todo 查询：base 为待编辑提交区间的基线（base..HEAD 全量重演） */
+export const rebaseTodoQuerySchema = z.object({ base: z.string().min(1) });
+
+/** 交互式变基请求体：entries 为按顺序编辑后的 todo 全量清单（至少 1 条）；action 枚举同 todo 可用命令 */
+export const interactiveRebaseBodySchema = z.object({
+  base: z.string().min(1),
+  entries: z.array(z.object({
+    hash: z.string().min(1),
+    action: z.enum(['pick', 'reword', 'squash', 'fixup', 'drop']),
+  })).min(1),
+});
+export type InteractiveRebaseBody = z.infer<typeof interactiveRebaseBodySchema>;
+
+/** 摘樱桃/还原请求体：hashes 为提交哈希列表（至少 1 个） */
+export const pickBodySchema = z.object({ hashes: z.array(z.string().min(1)).min(1) });
+export type PickBody = z.infer<typeof pickBodySchema>; // cherry-pick 与 revert 共用
+
+/** 标签写操作（判别联合）：create 可带 ref（默认 HEAD）与 message（附注标签）；delete 删除；push 推送（remote 缺省取当前上游） */
+export const tagActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('create'), name: z.string().min(1), ref: z.string().optional(), message: z.string().optional() }),
+  z.object({ action: z.literal('delete'), name: z.string().min(1) }),
+  z.object({ action: z.literal('push'), name: z.string().min(1), remote: z.string().optional() }),
+]);
+export type TagAction = z.infer<typeof tagActionSchema>;

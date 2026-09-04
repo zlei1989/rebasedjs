@@ -23,6 +23,11 @@ import {
   pullBodySchema,
   pushBodySchema,
   updateBodySchema,
+  rebaseBodySchema,
+  rebaseTodoQuerySchema,
+  interactiveRebaseBodySchema,
+  pickBodySchema,
+  tagActionSchema,
 } from './endpoints';
 
 describe('P1 端点 schema', () => {
@@ -381,5 +386,94 @@ describe('updateBodySchema（Update Project 请求体）', () => {
   it('拒绝枚举外 strategy 与缺 strategy', () => {
     expect(() => updateBodySchema.parse({ strategy: 'fast-forward' })).toThrow();
     expect(() => updateBodySchema.parse({})).toThrow();
+  });
+});
+
+describe('rebaseBodySchema（变基请求体）', () => {
+  it('接受 onto 必填与可选 branch', () => {
+    expect(rebaseBodySchema.parse({ onto: 'origin/main' })).toEqual({ onto: 'origin/main' });
+    expect(rebaseBodySchema.parse({ onto: 'main', branch: 'feat/x' }))
+      .toEqual({ onto: 'main', branch: 'feat/x' });
+  });
+  it('拒绝空 onto、缺 onto 与非字符串 branch', () => {
+    expect(() => rebaseBodySchema.parse({ onto: '' })).toThrow();
+    expect(() => rebaseBodySchema.parse({})).toThrow();
+    expect(() => rebaseBodySchema.parse({ onto: 'main', branch: 1 })).toThrow();
+  });
+});
+
+describe('rebaseTodoQuerySchema（交互式变基 todo 查询）', () => {
+  it('接受非空 base', () => {
+    expect(rebaseTodoQuerySchema.parse({ base: 'main' })).toEqual({ base: 'main' });
+    expect(rebaseTodoQuerySchema.parse({ base: 'HEAD~5' })).toEqual({ base: 'HEAD~5' });
+  });
+  it('拒绝空 base 与缺 base', () => {
+    expect(() => rebaseTodoQuerySchema.parse({ base: '' })).toThrow();
+    expect(() => rebaseTodoQuerySchema.parse({})).toThrow();
+  });
+});
+
+describe('interactiveRebaseBodySchema（交互式变基请求体）', () => {
+  it('接受 base 与至少一条 entries（五种 action 全接受）', () => {
+    const body = {
+      base: 'main',
+      entries: [
+        { hash: 'a1', action: 'pick' },
+        { hash: 'b2', action: 'reword' },
+        { hash: 'c3', action: 'squash' },
+        { hash: 'd4', action: 'fixup' },
+        { hash: 'e5', action: 'drop' },
+      ],
+    };
+    expect(interactiveRebaseBodySchema.parse(body)).toEqual(body);
+  });
+  it('拒绝空 entries、缺 entries、空 base、空 hash 与枚举外 action', () => {
+    expect(() => interactiveRebaseBodySchema.parse({ base: 'main', entries: [] })).toThrow();
+    expect(() => interactiveRebaseBodySchema.parse({ base: 'main' })).toThrow();
+    expect(() => interactiveRebaseBodySchema.parse({ base: '', entries: [{ hash: 'a1', action: 'pick' }] })).toThrow();
+    expect(() => interactiveRebaseBodySchema.parse({ base: 'main', entries: [{ hash: '', action: 'pick' }] })).toThrow();
+    expect(() => interactiveRebaseBodySchema.parse({ base: 'main', entries: [{ hash: 'a1', action: 'edit' }] })).toThrow();
+  });
+});
+
+describe('pickBodySchema（摘樱桃/还原请求体）', () => {
+  it('接受至少一个非空哈希（cherry-pick 与 revert 共用）', () => {
+    expect(pickBodySchema.parse({ hashes: ['a1b2c3d'] })).toEqual({ hashes: ['a1b2c3d'] });
+    expect(pickBodySchema.parse({ hashes: ['a1b2c3d', 'e5f6a7b'] }).hashes).toHaveLength(2);
+  });
+  it('拒绝空 hashes、空字符串哈希与缺 hashes', () => {
+    expect(() => pickBodySchema.parse({ hashes: [] })).toThrow();
+    expect(() => pickBodySchema.parse({ hashes: [''] })).toThrow();
+    expect(() => pickBodySchema.parse({})).toThrow();
+  });
+});
+
+describe('tagActionSchema（标签写操作判别联合）', () => {
+  it('接受 create（可带 ref 与 message）', () => {
+    expect(tagActionSchema.parse({ action: 'create', name: 'v1.0.0' }))
+      .toEqual({ action: 'create', name: 'v1.0.0' });
+    expect(tagActionSchema.parse({ action: 'create', name: 'v1.0.0', ref: 'HEAD~1', message: '发布' }))
+      .toEqual({ action: 'create', name: 'v1.0.0', ref: 'HEAD~1', message: '发布' });
+  });
+  it('接受 delete 与 push（可带 remote）', () => {
+    expect(tagActionSchema.parse({ action: 'delete', name: 'v1.0.0' }))
+      .toEqual({ action: 'delete', name: 'v1.0.0' });
+    expect(tagActionSchema.parse({ action: 'push', name: 'v1.0.0' }))
+      .toEqual({ action: 'push', name: 'v1.0.0' });
+    expect(tagActionSchema.parse({ action: 'push', name: 'v1.0.0', remote: 'origin' }))
+      .toEqual({ action: 'push', name: 'v1.0.0', remote: 'origin' });
+  });
+  it('拒绝枚举外 action 与缺 name', () => {
+    expect(() => tagActionSchema.parse({ action: 'rename', name: 'x' })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'create' })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'delete' })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'push' })).toThrow();
+  });
+  it('拒绝空 name 与非字符串 message/ref', () => {
+    expect(() => tagActionSchema.parse({ action: 'create', name: '' })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'delete', name: '' })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'push', name: '' })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'create', name: 'v1', message: 1 })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'push', name: 'v1', remote: 1 })).toThrow();
   });
 });
