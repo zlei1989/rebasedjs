@@ -4,13 +4,13 @@
 - **参照系**：`D:\zhanglei1120\Github\rebased`（Java/Kotlin 版 Rebased，基于 IntelliJ 平台的 Git 客户端）
 - **审计对象**：`D:\zhanglei1120\Github\rebasedjs`（TS + React 全栈重写，pnpm monorepo）
 - **依据**：`docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md`（下称"架构 spec"，其结论已对 Java 源码逐一核查）+ 本次对两个项目源码的直接盘点（附录 B 含抽查证据）
-- **进度更新**：2026-09-04 复核（基线 HEAD `704e1c5`，P2 阶段 12/12 收官、P3-A 契约就绪）——**最新复刻进度以「〇、进度更新」为准**；§一/§二/附录 C 主体保持 2026-09-03（`cbb7dfa`）快照口径，附录 D 保持 `a09f050`+工作区口径，均不回改。
+- **进度更新**：2026-09-04 复核（基线 HEAD `704e1c5`，P2 阶段 12/12 收官、P3-A 契约就绪）——**附录 C/D 的复刻状态已就地更新至此基线**，增量汇总见「〇、进度更新」；§一/§二保持 2026-09-03（`cbb7dfa`）快照口径不回改。
 
 ---
 
 ## 〇、进度更新（2026-09-04，基线 `704e1c5`）
 
-> 本节为当前唯一权威进度口径；与后文快照冲突时以本节为准。核查方法同附录 C（逐文件实测两端路由、容器、组件与契约）。
+> 本节为增量汇总；附录 C/D 的逐页/逐边状态已就地更新至同一基线 `704e1c5`，§一/§二仍为 2026-09-03 快照。核查方法同附录 C（逐文件实测两端路由、容器、组件与契约）。
 
 ### 0.1 总览
 
@@ -65,7 +65,7 @@ P2 阶段 12 个功能域（operation、reset、staging、changelist、commit、
 
 存量 9 路径中：`GET/PUT /api/settings` 由半使用转为完全使用（SettingsPage）；`GET /api/repos/:id/events` 首帧扩展为 `repo.state-changed` + `operation.state-changed` 双事件；`diff/stream` 仍为半使用（分块文本未接入 Monaco 渲染，容器注释明示留待后续）。
 
-### 0.4 导航边增量（相对附录 D.6）
+### 0.4 导航边增量（与附录 D.6 汇总一致）
 
 活动跳转边由 3 条增至 **18 条**（半通仍为 LogPage→DiffPage 1 条：DiffPage 现有 StatusPage `onOpenDiff` 入口，LogPage 侧仍无直达入口）：
 
@@ -212,10 +212,10 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 
 ## 附录 C：30 个操作页面逐一详析（名称 / 用途 / 功能点 / 复刻状态）
 
-- **口径**：页面清单为架构 spec §4.5 组合组件枚举（本文 §1.1 维度 B），顺序与之一致；功能点以 Java 版 Rebased 源码核查结论（架构 spec §4.2/§4.5.2、组装 spec §6 与附录 A）为参照系；复刻状态以本仓当前 HEAD（`cbb7dfa`）逐文件实测为准。
-- **状态图例**：✅ 已复刻（端到端可用）｜🟡 部分复刻（服务层/组件/契约就绪但链路未通，或仅默认行为对齐）｜❌ 未复刻｜➖ Java 概念在 Web 形态无对应（经 spec 判定不做）。
+- **口径**：页面清单为架构 spec §4.5 组合组件枚举（本文 §1.1 维度 B），顺序与之一致；功能点以 Java 版 Rebased 源码核查结论（架构 spec §4.2/§4.5.2、组装 spec §6 与附录 A）为参照系；复刻状态以本仓 HEAD `704e1c5` 逐文件实测为准（2026-09-04 由 `cbb7dfa` 快照就地更新，P2 阶段 12/12 已收官）。
+- **状态图例**：✅ 已复刻（端到端可用）｜🟡 部分复刻（服务层/组件/契约就绪但链路未通，或仅默认行为对齐，或等价形态承载）｜❌ 未复刻｜➖ Java 概念在 Web 形态无对应（经 spec 判定不做）。
 - **实测更正**（相对 §1.2 汇总表述的 3 处精度修正，证据见 C.1）：① RepoPage 显示名实为"目录名"单级回退（`api/repo.ts:19` 仅 `basename`），非三级；② 最近列表有效上限为服务端 20（`slice(0, 20)`），组件的 50 截断不会触发；③ 路径 `~/` 相对化与 Popconfirm 移除均为组件就绪但两端容器未接线，运行时不生效。
-- **口径说明**：页面级结论与 §1.2 一致（3/30 已复刻）；🟡 均出现在"页面未做但周边基础已就位"的情形（StatusPage、SettingsPage），不计入已复刻页面数。
+- **口径说明**：页面级结论 10/30 已复刻 + 2 🟡 等效（CommitDialog、QuickActionsMenu），详见「〇、进度更新」；🟡 均出现在"页面未做但周边基础已就位"或"等价形态承载"的情形，不计入已复刻页面数。
 
 ### C.0 总览表
 
@@ -224,13 +224,13 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 1 | RepoPage | 打开仓库 + 最近仓库管理（取代 Java 欢迎屏） | `repo` | P1 | ✅（3 项 🟡 遗留） |
 | 2 | LogPage | 提交图浏览 + 状态条 + 提交详情 | `log` + `status` | P1 | ✅（过滤/分页 UI 等缺口） |
 | 3 | DiffPage | 单文件差异查看（工作区/暂存/两版本） | `diff` | P1 | ✅（分块渲染等缺口） |
-| 4 | StatusPage | Local Changes + 暂存区主页 | `status`/`staging`/`changelist` | P2 | ❌（status 域已落地于 LogPage 顶栏；P2-B 计划就绪） |
-| 5 | CommitDialog | 模态提交对话框 | `commit` | P2 | ❌（P2-B 计划就绪） |
-| 6 | ResetDialog | Reset / Undo Commit | `reset` | P2 | ❌ |
-| 7 | BranchPanel | 分支树/仪表盘 + 检出 | `branch`/`checkout` | P2 | ❌ |
-| 8 | MergeDialog | 合并对话框 | `merge` | P2 | ❌ |
+| 4 | StatusPage | Local Changes + 暂存区主页 | `status`/`staging`/`changelist` | P2 | ✅（三版本对比、hunk 级 UI 缺口） |
+| 5 | CommitDialog | 模态提交对话框 | `commit` | P2 | 🟡 等效（StatusPage 内嵌提交框，非模态形态） |
+| 6 | ResetDialog | Reset / Undo Commit | `reset` | P2 | ✅（内嵌 LogPage 模态 + 顶栏 Undo Commit） |
+| 7 | BranchPanel | 分支树/仪表盘 + 检出 | `branch`/`checkout` | P2 | ✅（本地/远程两组；过滤等缺口） |
+| 8 | MergeDialog | 合并对话框 | `merge` | P2 | ✅（页面化；远程分支合并缺口） |
 | 9 | RebaseDialog | rebase（含交互式编辑器） | `rebase` | P3 | ❌ |
-| 10 | StashPanel | 贮藏管理 | `stash` | P2 | ❌ |
+| 10 | StashPanel | 贮藏管理 | `stash` | P2 | ✅（save/apply/pop/drop/branch） |
 | 11 | TagPanel | 标签管理 | `tag` | P3 | ❌ |
 | 12 | RemotePanel | 远程仓库管理 + 凭据 | `remote`/`auth` | P3 | ❌ |
 | 13 | PushDialog | 推送对话框 | `remote` | P3 | ❌ |
@@ -240,7 +240,7 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 17 | HistoryPanel | 文件历史（含重命名跟随） | `history` | P3 | ❌ |
 | 18 | CommittedChangesPanel | 已提交变更浏览器 | `committed` | P3 | ❌ |
 | 19 | SearchPanel | 提交搜索 | `search` | P3 | ❌ |
-| 20 | ConflictsPanel | 冲突解决（3-way） | `conflict` | P2 | ❌ |
+| 20 | ConflictsPanel | 冲突解决（3-way） | `conflict` | P2 | ✅（含 MergeView 3-way 全屏 Modal） |
 | 21 | PatchPanel | 补丁创建/应用/管理 | `patch` | P3 | ❌ |
 | 22 | ShelfPanel | 搁置管理 | `shelf` | P3 | ❌ |
 | 23 | WorktreePanel | 工作树管理 | `worktree` | P4 | ❌（core 有 worktree 发现原语） |
@@ -249,10 +249,10 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 26 | GitHubPanel | GitHub 认证/PR/Gist | `github` | P3 | ❌（错误码已预留） |
 | 27 | GitLabPanel | GitLab 认证/MR/Snippet | `gitlab` | P4 | ❌ |
 | 28 | GitConsole | Git 命令输出控制台 | `console` | P3 | ❌ |
-| 29 | QuickActionsMenu | 快捷操作聚合菜单 | 聚合各域 | P2+ | ❌（随各域落地聚合） |
-| 30 | SettingsPage | 应用设置 + git 配置 | `settings`/`config` | P1/P2 | ❌（数据层已通；P2-A 计划就绪） |
+| 29 | QuickActionsMenu | 快捷操作聚合菜单 | 聚合各域 | P2+ | 🟡 等效（部分：LogPage 顶栏入口聚合 + OperationStatus） |
+| 30 | SettingsPage | 应用设置 + git 配置 | `settings`/`config` | P1/P2 | ✅（设置 + 白名单 8 键 + 账户卡片） |
 
-> 可选后置 2 项（terminal、local-history）不在 30 页面口径内，均无复刻。base 组件 `OperationStatus`（进行中操作条）不在页面口径内，其契约（`OperationState` / `operation.state-changed`）已随 P2-A 预备（`b3d438e`）。
+> 可选后置 2 项（terminal、local-history）不在 30 页面口径内，均无复刻。base 组件 `OperationStatus`（进行中操作条）不在页面口径内，已随 P2-A 落地：契约 `OperationState` / `operation.state-changed` 接通，LogPage 顶栏操作条支持中止（`operation/abort`），merge 的 continue 由 ConflictsPanel「完成合并」承接。
 
 ### C.1 RepoPage ✅（P1，已复刻）
 
@@ -296,10 +296,12 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 过滤（author / path 查询参数） | 🟡 | 服务端 `logQuerySchema` 与 core 支持；UI 无过滤入口——Java 高频入口"文本即滤 + 分支过滤弹窗"（`VcsLogClassicFilterUi.kt:148-152`）列 P2 次优先 |
 | 分支折叠 / PermanentGraph 高级视图 | ❌ | 组装 spec §1.3/§3.1 明确不做 |
 | 新标签页打开 log、在控制台显示 log | ❌ | P3（`GitExternalLogTabsProperties`、`ShowGitLogCommandAction` → `console.ts`） |
-| 行右键菜单动作（Reset to Here / cherry-pick / revert 等） | ❌ | P2/P3（`reset.ts` / `cherry-pick.ts` / `revert.ts`） |
+| 行右键菜单动作（Reset to Here / cherry-pick / revert 等） | 🟡 | 「Reset 当前分支到此处」（详情面板按钮 → 内嵌 ResetDialog，P2-D）与顶栏 Undo Commit 已落地；cherry-pick/revert/rebase 等余下动作 P3（`cherry-pick.ts` / `revert.ts`） |
+| 顶栏页面入口（变更/分支/合并/贮藏/设置 + 合并中"去解决冲突"链接） | ✅ | `onOpenStatus/Branches/Merge/Stashes/Settings/Conflicts` 六回调两端容器均注入（P2-A–F 逐波落地）；等价于 Java 工具窗口 tab 组 + Git 主菜单入口面 |
+| 进行中操作条（OperationStatus：kind 展示 + 中止） | ✅ | `GET /operation` + `operation.state-changed` SSE + `POST /operation/abort`（P2-A） |
 | log 位置偏好（showInEditor） | ✅（文档化） | `logInEditor=true` 对齐 Rebased 独家默认；Web 无 editor/toolwindow 二分，免重启为改进 |
 
-- **总评**：✅ P1 目标面完整，图布局算法为唯一代码级移植资产且经行为等价验证；主要缺口为过滤/分页 UI（P2 次优先，组装 spec 附录 B-1）。
+- **总评**：✅ P1 目标面完整，图布局算法为唯一代码级移植资产且经行为等价验证；P2 后顶栏已成页面枢纽（五入口 + 操作条），右键动作已落地 Reset/Undo Commit 两项。主要缺口为过滤/分页 UI（P2 次优先，组装 spec 附录 B-1）与其余右键动作（P3）。
 
 ### C.3 DiffPage ✅（P1，已复刻）
 
@@ -322,66 +324,76 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 
 - **总评**：✅ P1 目标面完整；from/to 入口与分块渲染为已知预留（本文 §2.1 #7、§三建议①）。
 
-### C.4 StatusPage ❌（P2；status 域已部分落地）
+### C.4 StatusPage ✅（P2-B/G 落地）
 
-- **用途**：Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存、三版本对比；对应平台 Local Changes（`ChangeListManager`）+ `GitStage*` 暂存区 UI（§4.5.2 三版本模型对照）。
-- **计划落点**：`api/{staging,changelist}.ts` + `composite/StatusPage`；实施计划 `docs/superpowers/plans/2026-09-03-rebasedjs-p2b-staging-commit.md` 已就绪。
+- **用途**：Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存、提交；对应平台 Local Changes（`ChangeListManager`）+ `GitStage*` 暂存区 UI（§4.5.2 三版本模型对照）。
+- **复刻落点**：组件 `composite/status-page.tsx`；容器 `apps/web-next/app/repos/[repoId]/status/page.tsx`、`apps/web-koa/src/pages/status.tsx`（本页自订阅 events）；服务层 `api/{staging,commit,changelist}.ts`；端点 `staging`、`staging/hunks`、`commit`、`diff/patch`、`changelists`；路由 `/repos/:id/status`（两端对称，LogPage 顶栏"变更"入口）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 变更条目数据源（分支/上游/incoming/outgoing/变更清单） | 🟡 | `getRepoStatus` + `ChangeEntry` 契约已实现并被 LogPage 顶栏消费；分组列表 UI 未做 |
-| 变更分组列表（已修改/未跟踪/忽略） | ❌ | 未跟踪/忽略状态在服务层域内（`GitUntrackedFilesHolder`/`GitIgnoredFilesHolder` 对照），UI 未做 |
-| 暂存 / 取消暂存 / 放弃修改（文件与 hunk 级） | ❌ | `staging.ts`（`GitStageAllAction`、`StagingAreaOperation`） |
+| 变更条目数据源（分支/上游/incoming/outgoing/变更清单） | ✅ | `getRepoStatus` + `ChangeEntry`；顶栏与状态页共用 |
+| 变更分组列表（已暂存 / 工作区 / 未跟踪） | ✅ | 按 porcelain XY 码分三组（X∈MADRC 已暂存、Y∈MDT 工作区、?? 未跟踪；!! 已忽略不展示），组头全选 + 组级操作 |
+| 变更列表子分组与管理（P2-G） | ✅ | `changelists` 端点 + 判别联合动作（create/rename/delete/setDefault/move）；默认列表平铺、非默认列表子标题分组；行级"移动到列表"；默认列表不可删除（api 层拒绝） |
+| 暂存 / 取消暂存 / 放弃修改（文件级） | ✅ | `POST /staging`（stage/unstage/discard，按条目状态分派 restore/clean）；成功响应由 hook 显式回写 status 缓存 |
+| hunk 级暂存 | 🟡 | `POST /staging/hunks`（按 `diff/patch` hunk 索引）+ `useHunkStaging` 就绪并有测试，UI 无入口（§0.3 半使用） |
+| 行内补丁预览 | ✅ | 选中文件 → `GET /diff/patch`（`getFileDiff` 由此暴露）全文展示；staging/commit 后失效重取 |
+| 提交框（CommitDialog 等效，见 C.5） | ✅ | 内嵌 Card：message + amend/signOff/noVerify；commit 后 key remount 清空 |
+| 双击/入口跳 DiffPage | ✅ | `onOpenDiff` → 既有 `/diff?file=` 路由（staged 切换在 diff 页内完成） |
 | 三版本对比（本地/暂存/HEAD） | ❌ | `GitStageCompareThreeVersionsAction`；DiffPage 当前仅两版本 |
-| changelist：创建/切换/移动变更/默认列表 | ❌ | `changelist.ts`（平台 `ChangeListManager`） |
 
-### C.5 CommitDialog ❌（P2）
+- **总评**：✅ 本地变更主链路（分组 → 暂存 → 提交）端到端可用；changelist 簿记为应用层实现（status 合并修剪，P2-G 终审修读路径写回竞态）。缺口：hunk 级 UI、三版本对比。
 
-- **用途**：模态提交对话框——Java 插件 `intellij.vcs.git.commit.modal` 的新版提交 UX；§4.5.2 对照结构：changelist 选择、amend/sign-off/GPG 选项、提交范围。
-- **计划落点**：`api/commit.ts` + `composite/CommitDialog`（Editor 基础组件共用 Monaco 做提交信息编辑）；P2-B 计划已就绪。
+### C.5 CommitDialog 🟡（P2-B 落地；等效非模态形态）
+
+- **用途**：提交——Java 插件 `intellij.vcs.git.commit.modal` 的新版提交 UX；§4.5.2 对照结构：changelist 选择、amend/sign-off/GPG 选项、提交范围。
+- **复刻落点**：以 StatusPage 内嵌提交框承载（对齐 Java 非模态提交模式 `CommitModeManager` 非 modal 分支）；`api/commit.ts` + `POST /commit`；容器 `status/page.tsx` / `status.tsx`。**模态对话框形态未做**（Web 形态等价判定：提交框常驻变更页，提交范围=勾选条目所属列表）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 提交（modal UX、提交范围选择） | ❌ | `GitCheckinEnvironment` + commit.modal 插件 |
-| amend / amend 历史提交 / reword | ❌ | `GitAmendSpecificCommitSquasher` 等 |
-| sign-off / GPG 签名 / commit template | ❌ | `commit\signing`（`GpgAgentConfigurationAction`）；契约白名单已备 `commit.gpgsign`、`user.signingkey` 两键 |
-| 跳过 hooks / CRLF 提示 | ❌ | `GitSkipHooksCommitHandlerFactory`、`GitCrlfDialog`；错误码 `HOOK_FAILED` 已预留 |
-| commit & push / push up to commit / add commit to remote branch | ❌ | `GitPushUpToCommitAction` 等；依赖 P3 `remote.ts` |
+| 提交（提交信息必填、提交范围选择） | ✅（等效） | `commitBodySchema`；服务层身份预检（未配置 user.name/email → `INVALID_QUERY` 引导去设置页） |
+| amend（改上次提交） | ✅ | 提交框 amend 复选框（须给新 message，服务端 `git commit --amend -m`） |
+| amend 历史提交 / reword | ❌ | `GitAmendSpecificCommitSquasher` 等；依赖 P3 rebase |
+| sign-off | ✅ | 提交框 signOff 复选框（追加 Signed-off-by） |
+| GPG 签名 / commit template | ❌ | `commit\signing`；白名单键 `commit.gpgsign`、`user.signingkey` 可在 SettingsPage 读写，提交链路未消费 |
+| 跳过 hooks | ✅ | 提交框 noVerify 复选框；错误码 `HOOK_FAILED` 仍预留（hook 失败当前走 `GIT_ERROR`） |
+| CRLF 提示 | ❌ | `GitCrlfDialog` |
+| commit & push / push up to commit | ❌ | 依赖 P3-A `remote.ts`（契约已就绪） |
 
-### C.6 ResetDialog ❌（P2）
+### C.6 ResetDialog ✅（P2-D 落地；内嵌 LogPage 模态）
 
 - **用途**：Reset 与 Undo Commit；对应 `GitResetAction` / `GitNewResetDialog` / `GitUncommitAction`。
-- **计划落点**：`api/reset.ts` + `composite/ResetDialog`。
+- **复刻落点**：组件 `composite/reset-dialog.tsx`（内嵌 LogPage 模态，无独立路由）；容器注入见 `app/repos/[repoId]/page.tsx` / `web-koa/src/pages/repo.tsx`；服务层 `api/reset.ts` + core ref 预检原语；端点 `POST /reset`、`POST /reset/undo-commit`。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| Reset mixed / soft / hard | ❌ | 三模式对话框 |
-| 日志右键 "Reset Current Branch to Here" | ❌ | 依赖 LogPage 右键菜单（C.2 缺口联动） |
-| Undo Commit（撤销最近提交） | ❌ | `GitUncommitAction` |
+| Reset mixed / soft / hard | ✅ | 三模式单选（对照 `GitNewResetDialog`）；ref 预检 `git rev-parse --verify <ref>^{commit}`，失败 → `INVALID_REF` |
+| 日志右键 "Reset Current Branch to Here" | ✅（等价入口） | 提交详情面板「Reset 当前分支到此处」按钮（`onResetHere`，展示短哈希+主题 label）；右键菜单形态未做 |
+| Undo Commit（撤销最近提交） | ✅ | LogPage 顶栏 Popconfirm → soft reset HEAD~1（保留改动到暂存区）；根提交/无提交 → `INVALID_QUERY` |
 
-### C.7 BranchPanel ❌（P2）
+### C.7 BranchPanel ✅（P2-C 落地）
 
 - **用途**：分支树/仪表盘 + 检出操作；§4.5.2 对照 `BranchesTreeModel`：分组维度（本地/远程/最近检出/标签）、过滤逻辑、合并状态图标。
-- **计划落点**：`api/{branch,checkout}.ts` + `composite/BranchPanel`（`BranchTree` 领域组件）。
+- **复刻落点**：组件 `composite/branch-panel.tsx`；容器 `app/repos/[repoId]/branches/page.tsx` / `web-koa/src/pages/branches.tsx`（本页自订阅 events，外部 CLI 检出/建删分支自动刷新）；服务层 `api/{branch,checkout}.ts`；端点 `GET/POST /branches`、`POST /checkout`；路由 `/repos/:id/branches`（LogPage 顶栏"分支"入口）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 分支树分组（本地/远程/最近检出/标签）+ 过滤 | ❌ | `GitRecentCheckoutBranches` 等 |
-| 创建/删除/重命名/上游设置 | ❌ | `GitNewBranchDialog` 等 |
-| 合并状态图标 / 查找已合并 / 清理已合并与过时分支 | ❌ | `FindMergedLocalBranchesAction`、`CleanupBranchesAction` |
-| 保护分支 / force-push 后修复 / checkout with rebase | ❌ | `GitProtectedBranchProvider`、`GitForcePushedBranchUpdateAction` |
-| 检出：分支/标签/提交/文件、新建分支检出、detached | ❌ | `GitCheckoutAction`、`GitCheckoutAsNewBranch`、`GitCheckoutFromInputAction` |
+| 分支分组（本地/远程） | ✅（两组） | 本地/远程两 Card 分组；Java 的"最近检出/标签"维度与过滤未做；远程行 v1 只读展示 |
+| 行内信息：current 标记 / 上游 + ahead/behind 徽标（0 不显示）/ 已合并图标 | ✅ | `mergedIntoHead` 绿色对勾 Tooltip"已合并"（对齐合并状态图标语义） |
+| 创建（可带起始点 + "创建后检出"开关）/ 删除（未合并提示需 force）/ 重命名 / 设上游 | ✅ | `branchActionSchema` 判别联合；删除走 Popconfirm |
+| 检出：既有分支 / 新建分支检出 / detached（标签/提交） | ✅ | `checkoutActionSchema` 三动作；检出文件未做 |
+| 查找已合并 / 清理已合并与过时分支 | ❌ | `FindMergedLocalBranchesAction`、`CleanupBranchesAction`（已合并图标已具备数据基础） |
+| 保护分支 / force-push 后修复 / checkout with rebase | ❌ | `GitProtectedBranchProvider` 等 |
 
-### C.8 MergeDialog ❌（P2）
+### C.8 MergeDialog ✅（P2-E 落地；页面化对话框）
 
 - **用途**：合并对话框；§4.5.2 对照 `GitMergeDialog` + `GitOptionsPanel`。
-- **计划落点**：`api/merge.ts` + `composite/MergeDialog`。
+- **复刻落点**：组件 `composite/merge-dialog.tsx`（页面化：open 常驻，取消=返回日志页）；容器 `app/repos/[repoId]/merge/page.tsx` / `web-koa/src/pages/merge.tsx`（结果三分支：已是最新留页 / 成功返回 / 冲突预填缓存跳 ConflictsPanel）；服务层 `api/merge.ts`；端点 `POST /merge`、`POST /merge/continue`；路由 `/repos/:id/merge`（LogPage 顶栏"合并"入口）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 合并方向选择（MergeDirectionModel） | ❌ | |
-| merge 策略选项 / commit 选项 | ❌ | `GitMergeOption` |
-| 合并进行中状态联动（Merging 前缀、中止入口） | ❌ | 依赖 `operation.ts`（P2-A；契约 `OperationState` 已备） |
+| 合并方向选择（MergeDirectionModel） | 🟡 | 方向固定"本地分支 → 当前分支"（排除当前分支的 Select）；远程分支 v1 不支持直接合并 |
+| merge 策略选项 / commit 选项 | ✅ | no-ff「禁用快进」/ squash「压缩为单提交」/ no-commit「不自动提交」+ 合并信息（`mergeBodySchema`，squash 冲突分类经 P2-E 终审修正） |
+| 合并进行中状态联动（Merging 前缀、中止入口） | ✅ | `OperationState`（kind: 'merge'）：LogPage 操作条中止 + "去解决冲突"链接；ConflictsPanel 进行中提示；`OPERATION_IN_PROGRESS` 互斥 |
 
 ### C.9 RebaseDialog ❌（P3）
 
@@ -395,16 +407,17 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | auto-squash / fixup、squash by subject | ❌ | `GitAutoSquashCommitAction`、`GitCommitSquashBySubjectAction` |
 | continue / abort / rebase 冲突联动 | ❌ | 依赖 `operation.ts` 与 `conflict.ts` |
 
-### C.10 StashPanel ❌（P2）
+### C.10 StashPanel ✅（P2-F 落地）
 
 - **用途**：贮藏管理；对应 `GitStashDialog` / `GitUnstashAsDialog` / `GitStashBranchComponent`。
-- **计划落点**：`api/stash.ts` + `composite/StashPanel`。
+- **复刻落点**：组件 `composite/stash-panel.tsx`；容器 `app/repos/[repoId]/stashes/page.tsx` / `web-koa/src/pages/stashes.tsx`（本页自订阅 events）；服务层 `api/stash.ts` + core 贮藏原语；端点 `GET/POST /stashes`；路由 `/repos/:id/stashes`（LogPage 顶栏"贮藏"入口）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| stash save（含 message、keep index 等选项） | ❌ | |
-| pop / apply / drop | ❌ | |
-| un-stash 对话框 / stash as branch | ❌ | |
+| stash save（含 message、keep index 等选项） | ✅ | 保存表单：message 可空 + includeUntracked（`-u`）；keep index 选项未做 |
+| pop / apply / drop | ✅ | 按 `stash@{index}`；弹出/删除走 Popconfirm；不存在 → `INVALID_REF`；无改动可贮藏 → `INVALID_QUERY` |
+| stash as branch | ✅ | 转分支 Modal 输入分支名（`git stash branch`） |
+| un-stash 对话框（Unstash As：改分支/改名单应用） | ❌ | `GitUnstashAsDialog` |
 
 ### C.11 TagPanel ❌（P3）
 
@@ -420,19 +433,19 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 ### C.12 RemotePanel ❌（P3）
 
 - **用途**：远程仓库管理 + 凭据；对应 `GitConfigureRemotesDialog`、`GitHttpAuthService` / `GitHttpLoginDialog`。
-- **计划落点**：`api/{remote,auth}.ts` + `composite/RemotePanel`。
+- **计划落点**：`api/{remote,auth}.ts` + `composite/RemotePanel`（P3-A 计划就绪；`remoteActionSchema`/`RemoteInfo`/`RemoteList` 契约已落地）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | 远程添加 / 删除 / 编辑 | ❌ | |
 | fetch（含 fetch spec） | ❌ | `GitFetchSpec` |
 | shallow clone 识别 / unshallow | ❌ | `GitUnshallowRepositoryAction` |
-| HTTPS 认证对话框 / credential helper 桥接 / token 存储 | ❌ | `auth.ts`；credential helper 由系统 git 自处理（架构 spec §8），auth.ts 只做兜底对话框；错误码 `AUTH_FAILED` 已预留 |
+| HTTPS 认证对话框 / credential helper 桥接 / token 存储 | 🟡 | token 存储已落地（P2-H 通用账户存储，见 C.30）；credential helper 由系统 git 自处理（架构 spec §8），认证对话框随 P3-A 认证回路落地；错误码 `AUTH_FAILED` 已预留 |
 
 ### C.13 PushDialog ❌（P3）
 
 - **用途**：推送对话框；对应 `GitRejectedPushUpdateDialog` / `GitPushTagsAction`。
-- **计划落点**：`api/remote.ts` + `composite/PushDialog`。
+- **计划落点**：`api/remote.ts` + `composite/PushDialog`（`pushBodySchema`/`PushOutcome` 契约已就绪）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
@@ -443,7 +456,7 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 ### C.14 PullDialog ❌（P3）
 
 - **用途**：拉取对话框（远程与分支选择、fetch 预览）。
-- **计划落点**：`api/remote.ts` + `composite/PullDialog`。
+- **计划落点**：`api/remote.ts` + `composite/PullDialog`（`fetchBodySchema`/`pullBodySchema`/`FetchResult`/`PullOutcome` 契约已就绪）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
@@ -453,7 +466,7 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 ### C.15 UpdateProjectDialog ❌（P3）
 
 - **用途**：Update Project——多仓库/多分支一键更新的策略化入口；对应 `GitUpdateOptionsDialog` / `GitUpdateSession` / `GitPostUpdateHandler` / `FixTrackedBranchDialog`。
-- **计划落点**：`api/update.ts` + `composite/UpdateProjectDialog`。
+- **计划落点**：`api/update.ts` + `composite/UpdateProjectDialog`（`updateBodySchema`/`UpdateOutcome` 契约已就绪）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
@@ -503,17 +516,18 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 提交内容搜索（grep / pickaxe `-S`/`-G`） | ❌ | |
 | Search Everywhere 式提交/分支快速搜索 | ❌ | |
 
-### C.20 ConflictsPanel ❌（P2）
+### C.20 ConflictsPanel ✅（P2-E 落地）
 
 - **用途**：冲突解决主页——冲突文件列表 + 3-way 合并视图；§4.5.2 对照 `GitConflictsPanel` + 平台 3-way merge（冲突文件分组、左右 diff + 底部合并结果面板）。
-- **计划落点**：`api/conflict.ts` + `composite/ConflictsPanel` + `base/ThreeWayMergeView`（MergeView 基础组件亦未做）。
+- **复刻落点**：组件 `composite/conflicts-panel.tsx` + `composite/merge-view.tsx`（3-way：左 ours / 右 theirs / 底部结果编辑，Monaco）；容器 `app/repos/[repoId]/conflicts/page.tsx` / `web-koa/src/pages/conflicts.tsx`（手动合并开全屏 Modal 包 MergeView）；服务层 `api/conflict.ts` + core 冲突列表/三阶段内容/解决原语；端点 `GET /conflicts`、`GET /conflicts/contents`、`POST /conflicts/resolve`、`POST /merge/continue`；路由 `/repos/:id/conflicts`。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 冲突文件分组列表 | ❌ | `GitResolvedConflictsFilesHolder` |
-| 标记已解决 | ❌ | `MergeConflictResolveUtil` |
-| 3-way 合并视图（左/右/结果三栏） | ❌ | Monaco 扩展或自研；基础组件未做 |
-| 合并状态查询（与 operation 联动） | ❌ | 契约 `OperationState`（kind: 'merge'）已备 |
+| 冲突文件列表 + 冲突类型徽标 | ✅ | stages 组合推导文案（双方修改/双方新增/删除修改等）；分组未做（平铺列表） |
+| 整侧解决（用我们的 / 用他们的） | ✅ | `resolve` 策略 ours/theirs；删除/修改冲突对应侧禁用并额外提供「删除该文件」（delete 策略，对照 Java 采纳即删除映射；P2-E 终审修正） |
+| 标记已解决 / 3-way 合并视图（左/右/结果三栏） | ✅ | manual 策略：MergeView 保存合并结果全文；外部 `git add` 解决经 events 订阅重验证列表 |
+| 完成合并（continue） | ✅ | 底部按钮全部解决后可用（`merge/continue`），成功返回日志页 |
+| 合并状态查询（与 operation 联动） | ✅ | 契约 `OperationState`（kind: 'merge'）已接通；进行中提示在页内，中止入口在 LogPage 操作条 |
 
 ### C.21 PatchPanel ❌（P3）
 
@@ -573,7 +587,7 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 账户 / token 认证 | ❌ | 错误码 `AUTH_FAILED` / `RATE_LIMITED` 已预留 |
+| 账户 / token 认证 | 🟡 | 通用账户/令牌存储已落地（P2-H：`api/auth.ts` + `/api/auth/accounts` 三端点 + SettingsPage 账户卡片；host/account/token，token 只读掩码、配置文件 0600）；GitHub 专属登录流未做；错误码 `AUTH_FAILED` / `RATE_LIMITED` 已预留 |
 | 克隆 GitHub 仓库 / 分享项目到 GitHub | ❌ | 可复用 `cloneRepo` 服务层能力 |
 | PR 列表 / 详情 / 时间线 / 评论 | ❌ | |
 | PR 审查（approve / request changes）/ diff 视图 / 三种合并策略 / AI 描述 | ❌ | |
@@ -601,42 +615,44 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | git 命令输出展示 | ❌ | 服务端现有 `GIT_ERROR` 带 stderr 上下文，可作数据源 |
 | 输出折叠 / 按命令分组 | ❌ | |
 
-### C.29 QuickActionsMenu ❌（P2+，聚合面）
+### C.29 QuickActionsMenu 🟡（P2 各域落地后部分等效）
 
 - **用途**：当前仓库可执行操作全集的快捷入口聚合（分支弹窗 + 快捷动作工具栏）；§4.5.2 对照 `GitBranchesTreePopupOnBackend` / `GitQuickActionsToolbarPopup`。
-- **计划落点**：`composite/QuickActionsMenu`；无独立 api 文件，聚合各域动作（落地顺序随 P2/P3 各域就位逐步扩大）。
+- **复刻落点**：无独立聚合组件；由 LogPage 顶栏按钮组（变更/分支/合并/贮藏/设置 + 合并中"去解决冲突"链接）+ OperationStatus 操作条（中止）承载等价入口职能。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 分支快捷弹窗（切换/新建） | ❌ | 依赖 `branch.ts`/`checkout.ts` |
-| 当前可用操作聚合（fetch/pull/push/stash/…） | ❌ | 依赖各域动作入口 |
+| 分支快捷弹窗（切换/新建） | 🟡 | 等价物为顶栏"分支"按钮 → `/branches` 页面（弹窗形态未做） |
+| 当前可用操作聚合（fetch/pull/push/stash/…） | 🟡 | 顶栏聚合已落地各域入口（status/branches/merge/stashes/settings/conflicts）+ 操作中止；fetch/pull/push 等 P3 域入口随其落地聚合 |
 
-### C.30 SettingsPage ❌（P1 域 settings / P2 域 config；数据层已通）
+### C.30 SettingsPage ✅（P2-A/H 落地）
 
 - **用途**：应用设置 + git 配置页；对应 `GitVcsPanel` / `GitExecutableSelectorPanel` / `GitGpgConfigDialog` / `SSHConnectionSettings` / `VcsLogConfigurable` / `GitConfig`。
-- **计划落点**：`api/config.ts` + `composite/SettingsPage`；实施计划 `docs/superpowers/plans/2026-09-03-rebasedjs-p2a-config-operation.md` 已就绪。
+- **复刻落点**：组件 `composite/settings-page.tsx`；容器 `app/repos/[repoId]/settings/page.tsx` / `web-koa/src/pages/settings.tsx`（key=repoId 切仓库强制重挂载）；服务层 `api/{config,auth}.ts`；端点 `GET/PUT /settings`、`GET/PUT /config`、`/auth/accounts` 三端点；路由 `/repos/:id/settings`（LogPage 顶栏设置入口，页内"返回日志"）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 设置读写通道（`GET/PUT /api/settings` + `useSettings` SWR/mutation） | 🟡 | 端到端已通且有测试；当前仅 `logInEditor`、`recentRepoIds` 两项，且偏好值未接入任何 UI 行为（本文 §2.1 #9/#10） |
-| log 位置偏好（logInEditor 复选框） | 🟡 | 数据层就绪，无设置 UI（`VcsLogConfigurable.kt:62-65` 对照） |
+| 设置读写通道（`GET/PUT /api/settings` + `useSettings` SWR/mutation） | ✅ | 端到端被 SettingsPage 完全消费（原半使用状态消除） |
+| log 位置偏好（logInEditor 开关） | ✅ | 设置页 Switch（`VcsLogConfigurable.kt:62-65` 对照） |
 | 最近仓库管理 | ✅（等效） | 由 RepoPage 列表承载；`recentRepoIds` 已持久化于 config-store |
 | 仓库级设置集中存储（Rebased 独家"禁用 .idea"的 TS 映射） | ✅（策略级） | 应用配置集中于 `api/lib/config-store`，无 `.idea` 概念（架构 spec §2.2） |
-| git 配置白名单读写（user.name/email、core.autocrlf、pull.rebase、commit.gpgsign、user.signingkey、fetch.prune、init.defaultBranch 共 8 键） | 🟡 | 契约就绪（`CONFIG_KEYS` / `GitConfigView` / `configPutBodySchema`，`b3d438e`）；`config.ts` 服务层/路由/UI 未做（P2-A） |
+| git 配置白名单读写（user.name/email、core.autocrlf、pull.rebase、commit.gpgsign、user.signingkey、fetch.prune、init.defaultBranch 共 8 键） | ✅ | `GET/PUT /config` + ConfigRow 逐行（生效值展示 + local 覆盖输入 + 保存）；P2-A |
+| 账户 / 令牌管理 | ✅ | P2-H：账户卡片（host/account/token 添加覆盖、Popconfirm 删除；token 本体不下行仅掩码 tokenPreview；配置文件 0600 加固） |
 | git 可执行文件检测 / 引导 | ❌ | `GitExecutableSelectorPanel` |
-| GPG 配置 / SSH 配置 | ❌ | `GitGpgConfigDialog`、`SSHConnectionSettings`；白名单键已备 |
-| 保护分支设置 | ❌ | P2 `branch.ts` |
-| 自动 fetch 设置 | ❌ | P3 `remote.ts`/`update.ts` |
+| GPG 配置 / SSH 配置 | 🟡 | 白名单键 `commit.gpgsign`、`user.signingkey` 可在配置卡读写；专属对话框（`GitGpgConfigDialog`、`SSHConnectionSettings`）未做 |
+| 保护分支设置 | ❌ | P3 `branch.ts` 扩展 |
+| 自动 fetch 设置 | ❌ | P3-A `remote.ts`/`update.ts`（契约已就绪） |
 
 ### C.31 汇总
 
 | 复刻状态 | 页面数 | 页面 |
 |----------|--------|------|
-| ✅ 已复刻 | 3 | RepoPage、LogPage、DiffPage（P1 全量，各自带 🟡 级遗留，见 C.1–C.3 总评） |
-| ❌ 未复刻（周边有基础） | 4 | StatusPage（status 域）、SettingsPage（settings 数据层 + config 契约）、WorktreePanel（发现原语）、GitHubPanel（错误码预留） |
-| ❌ 未复刻 | 23 | 其余全部（P2–P4） |
+| ✅ 已复刻 | 10 | RepoPage、LogPage、DiffPage（P1）；StatusPage、ResetDialog、BranchPanel、MergeDialog、StashPanel、ConflictsPanel、SettingsPage（P2，各自带 🟡 级遗留，见 C.4–C.8/C.10/C.20/C.30） |
+| 🟡 等效（不计入已复刻） | 2 | CommitDialog（StatusPage 内嵌提交框，非模态形态）、QuickActionsMenu（LogPage 顶栏入口聚合 + OperationStatus） |
+| ❌ 未复刻（周边有基础） | 8 | GitHubPanel（账户/令牌存储 + 错误码）、PatchPanel（`diff/patch` unified 能力）、HistoryPanel（core `path` 过滤原语）、WorktreePanel（发现原语）、RemotePanel / PushDialog / PullDialog / UpdateProjectDialog（P3-A remote/update 契约已就绪） |
+| ❌ 未复刻 | 10 | 其余全部（P3–P4）：RebaseDialog、TagPanel、BlameView、CommittedChangesPanel、SearchPanel、ShelfPanel、SubmodulePanel、IgnoreDialog、GitLabPanel、GitConsole |
 
-> 页面级口径与 §1.2 完全一致（3/30 = 10%）；本附录的 🟡 均为"功能点级"细分，不改变页面级结论。功能点级缺口最多的已复刻页面是 LogPage（过滤/分页 UI、右键菜单），最近的下一步与 §三建议一致：先消化 3 个半使用接口，再按 P2-A/P2-B 计划落地 SettingsPage / StatusPage / CommitDialog。
+> 页面级口径：**10/30 = 33%** 已复刻 + 2 🟡 等效（功能域口径 17/36 ≈ 47%，P1+P2 全量）。本附录的 🟡 均为"功能点级"细分或等价形态承载，不改变页面级结论。最近的下一步与「〇、进度更新」§0.5 一致：先消化 2 个半使用接口（diff/stream 分块渲染、hunk 级暂存 UI），再进入 P3-A（remote/update，计划与契约均已就绪）。
 
 ---
 
@@ -647,8 +663,8 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 - **参照系**：Java 版 Rebased 源码（`D:\zhanglei1120\Github\rebased`）。证据以 action 注册表与动作类源码为准；路径简写：`backend` = `plugins/git4idea/backend/src`，`backend.xml` = `plugins/git4idea/backend/resources/intellij.vcs.git.backend.xml`，`VcsActions.xml` = `platform/vcs-impl/resources/META-INF/VcsActions.xml`，`vcs-log.xml` = `platform/vcs-log/impl/resources/intellij.platform.vcs.log.impl.xml`（一手来源清单见附录 B-4/5/6）。
 - **"跳转"口径**：用户可见的页面间导航边——菜单项、按钮、弹窗动作、双击、右键、快捷键、工具窗口 tab 切换。**不含页内交互**（如 LogPage 行点击展开详情面板、DiffPage 的并排/行内切换）。
 - **核查方法**：action 注册组枚举（Git 主菜单 / 分支弹窗 / 日志右键 / Local Changes 右键 / 工具窗口 tab 组）+ 动作类逐一验证 + 分四域并行深查（日志差异历史 / 变更提交 / 分支操作 / 入口远程设置）+ 抽查复核。标注"未找到直接证据"的边为经查找确认不存在（或仅有间接通道）者。
-- **rebasedjs 复刻状态基线**：当前 HEAD `a09f050` + 工作区未提交改动（settings 路由两端接线）。**与 §1.2/附录 C 的 `cbb7dfa` 快照相比 P2-A 已落地**：SettingsPage 成为第 4 个有路由的页面（`/repos/:repoId/settings`，两端对称），新增 2 条活动跳转边——本附录复刻状态按此新基线如实记录，不回改前文快照口径。
-- **状态图例**：✅ 已复刻（端到端可用）｜🟡 部分（路由/服务就绪但入口未通）｜📋 计划就绪（P2-x 计划文档已定形）｜❌ 未复刻｜➖ Java 形态在 Web 无对应。
+- **rebasedjs 复刻状态基线**：HEAD `704e1c5`（2026-09-04 由 `a09f050`+工作区口径就地更新，P2 阶段 12/12 已收官）——有路由的页面增至 9 个（RepoPage、LogPage、DiffPage + `/status`、`/branches`、`/merge`、`/conflicts`、`/stashes`、`/settings`，两端对称），另有内嵌模态 ResetDialog 与全屏 MergeView；活动跳转边 18 条（见 D.6）。
+- **状态图例**：✅ 已复刻（端到端可用）｜🟡 部分（路由/服务就绪但入口未通，或等价形态承载）｜📋 计划就绪（P3-x 计划文档已定形）｜❌ 未复刻｜➖ Java 形态在 Web 无对应。
 
 ### D.1 容器形态总览（导航语义的前提）
 
@@ -698,8 +714,8 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 3 | RepoPage → SettingsPage | 欢迎屏 Configure | PlatformActions.xml:1208-1209 | ❌ |
 | 4 | 主窗口 → RepoPage | File → Close Project | `CloseProjectsActionBase.kt:42-46`（`WelcomeFrame.showIfNoProjectOpened`） | ❌（LogPage 无回 `/` 入口） |
 | 5 | 任意处 → SettingsPage | File → Settings | PlatformActions.xml:509-510 | ➖（rebasedjs 改由 LogPage 顶栏进入，见 #6） |
-| 6 | LogPage → SettingsPage | Log tab 下拉 Show Settings（Vcs Log 设置子页） | `Vcs.Log.ShowSettingsAction`（vcs-log.xml:324）→ `VcsLogConfigurable` | ✅（等价边：顶栏设置按钮 → `/repos/:id/settings`，`app/repos/[repoId]/page.tsx:69`、`web-koa/src/pages/repo.tsx:68`，工作区接线） |
-| 7 | SettingsPage → LogPage | 关闭对话框回源页（模态隐含回边） | —（模态语义） | ✅（"返回日志"按钮，`settings/page.tsx:26`、`web-koa/src/pages/settings.tsx:23`，工作区接线） |
+| 6 | LogPage → SettingsPage | Log tab 下拉 Show Settings（Vcs Log 设置子页） | `Vcs.Log.ShowSettingsAction`（vcs-log.xml:324）→ `VcsLogConfigurable` | ✅（等价边：顶栏设置按钮 → `/repos/:id/settings`，`app/repos/[repoId]/page.tsx`、`web-koa/src/pages/repo.tsx`） |
+| 7 | SettingsPage → LogPage | 关闭对话框回源页（模态隐含回边） | —（模态语义） | ✅（"返回日志"按钮，`settings/page.tsx`、`web-koa/src/pages/settings.tsx`） |
 | 8 | GitHubPanel / GitLabPanel → SettingsPage | 面板菜单 Settings（账户子页） | `GHOpenSettingsAction.kt:13`、`GitLabOpenSettingsAction.kt:14` | ❌ |
 
 > SettingsPage 内部子页结构：Version Control 根页 + Git 子页（`GitVcsPanel`，含 SSH/GPG）+ Log 子页（`VcsLogConfigurableProvider`）+ GitHub/GitLab 账户子页——子页间为设置树切换，不逐条计边。
@@ -712,9 +728,9 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 10 | BranchPanel → LogPage | 分支菜单 Compare with Branch（对比视图） | `GitCompareWithBranchAction.kt:33` → `GitBrancher.compare`（GitBrancherImpl.java:191） | ❌ |
 | 11 | SearchPanel → LogPage | 提交结果回车定位 | `GitSearchEverywhereContributor.kt:179` → `VcsProjectLog.showRevisionInMainLog` | ❌ |
 | 12 | HistoryPanel → LogPage | Show Commit in Log | `ShowCommitInLogAction`（vcs-log.xml:235，action id `Vcs.Log.SelectInLog`） | ❌ |
-| 13 | LogPage → DiffPage | Changes 列表双击 / Ctrl+D；右键 Compare Revisions / Show Diff with Local | 统一通道 `ChangesBrowserBase.onDoubleClick:211` → `ShowDiffAction.java:114`（`ChangeDiffRequestChain` → `DiffManager.showDiff`）；`CompareRevisionsFromLogAction`、`Vcs.ShowDiffWithLocal`（vcs-log.xml:275-276） | 🟡（DiffPage 路由存在但 LogPage 无任何入口，仅手输 `?file=` 可达） |
-| 14 | LogPage → ResetDialog | 右键 Reset Current Branch to Here… | `Git.Reset.In.Log`=`GitResetAction` → `GitNewResetDialog`（backend.xml:345） | 📋 P2-D（ResetDialog 内嵌 LogPage，无独立路由） |
-| 15 | LogPage → Undo Commit | 右键 Undo Commit（ChangeListChooser 小对话框 → 后台 soft reset） | `Git.Uncommit`=`GitUncommitAction.java:60-70`（backend.xml:347） | 📋 P2-D |
+| 13 | LogPage → DiffPage | Changes 列表双击 / Ctrl+D；右键 Compare Revisions / Show Diff with Local | 统一通道 `ChangesBrowserBase.onDoubleClick:211` → `ShowDiffAction.java:114`（`ChangeDiffRequestChain` → `DiffManager.showDiff`）；`CompareRevisionsFromLogAction`、`Vcs.ShowDiffWithLocal`（vcs-log.xml:275-276） | 🟡（DiffPage 路由存在且有 StatusPage `onOpenDiff` 入口（#42），但 LogPage 侧仍无入口） |
+| 14 | LogPage → ResetDialog | 右键 Reset Current Branch to Here… | `Git.Reset.In.Log`=`GitResetAction` → `GitNewResetDialog`（backend.xml:345） | ✅（P2-D：等价入口为提交详情面板「Reset 当前分支到此处」按钮 → 内嵌 ResetDialog 模态，无独立路由） |
+| 15 | LogPage → Undo Commit | 右键 Undo Commit（ChangeListChooser 小对话框 → 后台 soft reset） | `Git.Uncommit`=`GitUncommitAction.java:60-70`（backend.xml:347） | ✅（P2-D：顶栏「撤销最近提交」Popconfirm → `reset/undo-commit`） |
 | 16 | LogPage → RebaseDialog（交互式编辑器） | 右键 Interactively Rebase from Here… | `GitInteractiveRebaseAction.kt:16-24` → `GitInteractiveRebaseDialog`（backend.xml:354） | ❌ P3 |
 | 17 | LogPage → PushDialog | 右键 Push Commits up to Here… | `GitPushUpToCommitAction.kt:60` → `VcsPushDialog`（backend.xml:355） | ❌ |
 | 18 | LogPage → New Branch 对话框 | 右键 New Branch… | `GitCreateNewBranchFromCommitAction.kt:24`（backend.xml:361-363） | ❌ |
@@ -746,10 +762,10 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 
 | # | 源 → 目标 | 手势/入口 | Java 证据 | rebasedjs |
 |---|-----------|-----------|-----------|-----------|
-| 40 | 工具窗口 → StatusPage | Local Changes tab | `Vcs.Show.Local.Changes`（VcsActions.xml:635） | 📋 P2-B（`/repos/:id/status` 路由 + LogPage 顶栏"变更"入口） |
-| 41 | StatusPage → CommitDialog | 提交按钮 / Ctrl+K；modal 与非模态提交面板二态切换 | `CommonCheckinProjectAction.kt:44`；分支 `CheckinActionUtil.kt:94-108` + `CommitModeManager.kt:39-44,91-118`；commit.modal 插件默认 modal（`ModalCommitModeProvider.kt:10`，AdvancedSettings `git.non.modal.commit`） | 📋 P2-B |
-| 42 | StatusPage → DiffPage | 双击变更条目；右键 Show Diff | 双击 `EditorTabPreview.kt:110-118`；`Diff.ShowDiff` → `ShowDiffAction.java:114` | 📋 P2-B（StatusPage `onOpenDiff` → 既有 `/diff?file=` 路由） |
-| 43 | StatusPage → ConflictsPanel | 冲突文件右键 Merge / Accept Theirs / Yours | `Git.ChangesView.Conflicts` 组 anchor=first 注入 ChangesViewPopupMenu（backend.xml:422-429）；`GitMergeConflictAction`（GitConflictActions.kt:78-86）→ showMergeWindow | 📋 P2-E |
+| 40 | 工具窗口 → StatusPage | Local Changes tab | `Vcs.Show.Local.Changes`（VcsActions.xml:635） | ✅（P2-B：等价边——LogPage 顶栏「变更」按钮 → `/repos/:id/status`，两端对称） |
+| 41 | StatusPage → CommitDialog | 提交按钮 / Ctrl+K；modal 与非模态提交面板二态切换 | `CommonCheckinProjectAction.kt:44`；分支 `CheckinActionUtil.kt:94-108` + `CommitModeManager.kt:39-44,91-118`；commit.modal 插件默认 modal（`ModalCommitModeProvider.kt:10`，AdvancedSettings `git.non.modal.commit`） | 🟡（P2-B：等效非模态形态——StatusPage 内嵌提交框，message + amend/signOff/noVerify；模态对话框未做） |
+| 42 | StatusPage → DiffPage | 双击变更条目；右键 Show Diff | 双击 `EditorTabPreview.kt:110-118`；`Diff.ShowDiff` → `ShowDiffAction.java:114` | ✅（P2-B：StatusPage `onOpenDiff` → 既有 `/diff?file=` 路由，staged 切换在 diff 页内完成） |
+| 43 | StatusPage → ConflictsPanel | 冲突文件右键 Merge / Accept Theirs / Yours | `Git.ChangesView.Conflicts` 组 anchor=first 注入 ChangesViewPopupMenu（backend.xml:422-429）；`GitMergeConflictAction`（GitConflictActions.kt:78-86）→ showMergeWindow | ❌（StatusPage 内无冲突入口；等价入口为 LogPage 操作条链接 #58 与 MergeDialog 冲突跳转 #56） |
 | 44 | StatusPage → PatchPanel | 右键 Create Patch | `CreatePatchFromChangesAction.java:44`（VcsActions.xml:208）；Stage 树 `GitStageCreatePatchActionProvider.kt:37-54` | ❌ |
 | 45 | StatusPage → ShelfPanel | Shelve Changes | `ChangesView.Shelve`=`ShelveChangesAction.kt:9` → `ShelveChangesCommitExecutor.java:65` | ❌ |
 | 46 | StatusPage → IgnoreDialog | 右键 Add to .gitignore / Exclude | `GitIgnoreFileActionGroup`（backend.xml:380-384，注入 ChangesViewPopupMenu / Git.FileActions / Unversioned 对话框三处）；`GitExcludeActions.kt:49` | ❌ |
@@ -762,27 +778,27 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 53 | 工具窗口 → ShelfPanel | Shelf tab | `Vcs.Show.Shelf`（VcsActions.xml:636） | ❌ |
 | 54 | ShelfPanel → StatusPage | Unshelve / Unshelve with Dialog（写回 LocalChangeList；**未找到自动切回 tab 的直接证据**） | `UnshelveChangesAction.kt:37`、`UnshelveWithDialogAction.java:43` | ❌ |
 | 55 | IgnoreDialog → 编辑器 | 写入后打开 .gitignore/exclude | `IgnoreFileAction.kt:82` | ❌ |
-| 56 | merge/rebase/update → ConflictsPanel | 冲突后自动出现 Conflicts tab（staging-area 开启时） | `GitConflictsToolWindowManager.java:26,56`（registry `git.merge.conflicts.toolwindow`）；冲突统一经 `GitConflictResolver`（GitMergeAction.java:190 等） | 📋 P2-E |
-| 57 | Git 菜单 → ConflictsPanel | Resolve Conflicts… | `GitResolveConflictsAction.java:67` → `AbstractVcsHelper.showMergeDialog` | 📋 P2-E |
-| 58 | 主工具栏 → ConflictsPanel | 进行中操作 widget 的 Resolve 按钮 | `GitMergeRebaseWidget`（backend.xml:539-553，`GitMergeRebaseWidgetGroup`） | 📋 P2-E（OperationStatus 旁"去解决冲突"链接） |
-| 59 | ConflictsPanel → 3-way 合并视图 | 双击冲突文件 | `GitConflictsPanel.kt:70-82`；独立 Frame `MergeConflictResolveUtil.kt:73` | 📋 P2-E（MergeView 全屏 Modal） |
-| 60 | ConflictsPanel → StatusPage | 全部解决完成 | `MergeConflictManager.showMergeConflicts`（MergeConflictManager.kt:58-70） | 📋 P2-E（"完成合并"回日志页） |
+| 56 | merge/rebase/update → ConflictsPanel | 冲突后自动出现 Conflicts tab（staging-area 开启时） | `GitConflictsToolWindowManager.java:26,56`（registry `git.merge.conflicts.toolwindow`）；冲突统一经 `GitConflictResolver`（GitMergeAction.java:190 等） | ✅（P2-E 等价：MergeDialog 冲突结果预填 SWR 缓存后自动跳 `/conflicts` 页） |
+| 57 | Git 菜单 → ConflictsPanel | Resolve Conflicts… | `GitResolveConflictsAction.java:67` → `AbstractVcsHelper.showMergeDialog` | ✅（等价边：LogPage 操作条旁「去解决冲突」链接，合并进行中才渲染） |
+| 58 | 主工具栏 → ConflictsPanel | 进行中操作 widget 的 Resolve 按钮 | `GitMergeRebaseWidget`（backend.xml:539-553，`GitMergeRebaseWidgetGroup`） | ✅（P2-E：OperationStatus 旁「去解决冲突」链接，`operation.kind==='merge'` 时渲染） |
+| 59 | ConflictsPanel → 3-way 合并视图 | 双击冲突文件 | `GitConflictsPanel.kt:70-82`；独立 Frame `MergeConflictResolveUtil.kt:73` | ✅（P2-E：「手动合并」开全屏 Modal 包 MergeView——左/右/结果三栏，保存走 manual 策略） |
+| 60 | ConflictsPanel → StatusPage | 全部解决完成 | `MergeConflictManager.showMergeConflicts`（MergeConflictManager.kt:58-70） | ✅（P2-E 等价：「完成合并」`merge/continue` 成功回日志页；另有「返回日志」按钮） |
 
 #### D.3.4 分支 / 操作域（BranchPanel、QuickActionsMenu、ResetDialog、MergeDialog、RebaseDialog、StashPanel、TagPanel、PushDialog、PullDialog、UpdateProjectDialog）
 
 | # | 源 → 目标 | 手势/入口 | Java 证据 | rebasedjs |
 |---|-----------|-----------|-----------|-----------|
-| 61 | 状态栏 → BranchPanel | 点击分支 widget | `GitBranchWidget.kt:68-71` → `GitBranchesTreePopupOnBackend` | ➖（Web 无状态栏；等价物=LogPage 顶栏"分支"按钮，📋 P2-C） |
-| 62 | Git 菜单 → BranchPanel | Branches… / Ctrl+Shift+` | `GitBranchesAction.java:26`（backend.xml:169-173 含快捷键） | 📋 P2-C |
+| 61 | 状态栏 → BranchPanel | 点击分支 widget | `GitBranchWidget.kt:68-71` → `GitBranchesTreePopupOnBackend` | ✅（P2-C 等价：Web 无状态栏，LogPage 顶栏「分支」按钮 → `/repos/:id/branches`） |
+| 62 | Git 菜单 → BranchPanel | Branches… / Ctrl+Shift+` | `GitBranchesAction.java:26`（backend.xml:169-173 含快捷键） | ✅（同 #61 等价边；快捷键未做） |
 | 63 | 主工具栏 → BranchPanel | 分支下拉按钮 | `GitBranchesComboBoxAction.java:68`（backend.xml:313-316） | ❌ |
 | 64 | QuickActionsMenu → BranchPanel | Branches… 菜单项 | `GitQuickListContentProvider.java:24` | ❌ |
-| 65 | BranchPanel → New Branch 对话框 | 弹窗顶部 New Branch… | `Git.Branches.List`（backend.xml:245-249）→ `GitCreateNewBranchAction` → `GitNewBranchDialog` | 📋 P2-C |
-| 66 | BranchPanel → GitRefDialog | Checkout Branch or Revision… | `GitCheckoutFromInputAction.kt:38` | 📋 P2-C |
+| 65 | BranchPanel → New Branch 对话框 | 弹窗顶部 New Branch… | `Git.Branches.List`（backend.xml:245-249）→ `GitCreateNewBranchAction` → `GitNewBranchDialog` | ✅（P2-C：新建分支 Modal——名称 + 起始点可选 + 「创建后检出」开关） |
+| 66 | BranchPanel → GitRefDialog | Checkout Branch or Revision… | `GitCheckoutFromInputAction.kt:38` | ✅（P2-C 等价：行内检出动作三态——既有分支 / 新建并检出 / detach 标签或提交） |
 | 67 | BranchPanel →（fetch） | 弹窗 Fetch 按钮（仅主弹窗可见） | `GitBranchPopupFetchAction.kt:21-24` | ❌ |
 | 68 | BranchPanel → PushDialog | 分支菜单 Push… | `GitPushBranchAction.kt:20` → `VcsPushDialog`（backend.xml:272） | ❌ |
 | 69 | BranchPanel → DiffPage | 分支菜单 Show Diff with Working Tree | `GitShowDiffWithRefAction.kt:25` → `GitBrancher.showDiffWithLocal` | ❌ |
 | 70 | BranchPanel → WorktreePanel | 分支菜单 New Working Tree | backend.xml:269（`Git.Branch.Backend` 组） | ❌ |
-| 71 | BranchPanel →（直接执行，不开对话框） | 分支菜单 Checkout / Merge into Current / Rebase onto / Pull(merge/rebase) / Update / Rename / Delete / Push Tags | backend.xml:251-283（`GitCheckoutAction`、`GitMergeRefAction.kt:19`、`GitRebaseBranchAction.kt:39`、`GitPullBranchAction.kt:25`、`GitUpdateSelectedBranchAction.kt:15` 等；**弹窗内无 Reset 项**——未找到直接证据） | 📋 P2-C（分支页动作） |
+| 71 | BranchPanel →（直接执行，不开对话框） | 分支菜单 Checkout / Merge into Current / Rebase onto / Pull(merge/rebase) / Update / Rename / Delete / Push Tags | backend.xml:251-283（`GitCheckoutAction`、`GitMergeRefAction.kt:19`、`GitRebaseBranchAction.kt:39`、`GitPullBranchAction.kt:25`、`GitUpdateSelectedBranchAction.kt:15` 等；**弹窗内无 Reset 项**——未找到直接证据） | 🟡（P2-C：Checkout / Rename / Delete（force）/ SetUpstream 已落地为行内直接动作；Merge into Current 经合并页（#79）；Rebase onto / Pull / Update / Push Tags 随 P3） |
 | 72 | 任意处 → QuickActionsMenu | Alt+` | `Vcs.QuickListPopupAction`（keymaps `$default.xml:1125-1127`） | ❌ |
 | 73 | 主工具栏「…」→ QuickActionsMenu | Show More Actions | `GitQuickActionsToolbarPopup.kt:35` → Vcs.Operations.Popup（backend.xml:318-319） | ❌ |
 | 74 | QuickActionsMenu → BranchPanel / PushDialog / StashPanel / ConflictsPanel / WorktreePanel | 菜单项（Branches/Push/Stash/Unstash/Resolve Conflicts/Working Trees/Unshallow） | `GitQuickListContentProvider.java:24-37` + VcsActions.xml:648-670 | ❌（随各域落地聚合） |
@@ -790,10 +806,10 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 76 | Git 菜单 / 主工具栏 → UpdateProjectDialog | Update Project / Ctrl+T | `CommonUpdateProjectAction`（VcsActions.xml:46-50）→ `GitUpdateOptionsDialogProvider.kt:21` → `GitUpdateOptionsDialog`；主工具栏按钮 PlatformActions.xml:1084 | ❌ |
 | 77 | Git 菜单 → PullDialog | Pull… | `GitPull.java:47` → `GitPullDialog`（backend.xml:156） | ❌ |
 | 78 | Git 菜单 →（直接 fetch，无对话框） | Fetch | `GitFetch.java:25`（backend.xml:157） | ❌ |
-| 79 | Git 菜单 → MergeDialog | Merge… | `GitMerge.java:35` → `GitMergeDialog`（backend.xml:160） | 📋 P2-E（`/merge` 路由 + LogPage 顶栏入口） |
+| 79 | Git 菜单 → MergeDialog | Merge… | `GitMerge.java:35` → `GitMergeDialog`（backend.xml:160） | ✅（P2-E 等价：LogPage 顶栏「合并」→ `/repos/:id/merge` 页面化对话框，取消=返回日志页） |
 | 80 | Git 菜单 → RebaseDialog | Rebase… | `GitRebase.java:67` → `GitRebaseDialog`（backend.xml:162） | ❌ |
-| 81 | Git 菜单 → ResetDialog（旧版） | Reset HEAD… | `GitResetHead.java:43` → `git4idea.ui.GitResetDialog`（backend.xml:176） | 📋 P2-D（rebasedjs 仅内嵌日志右键新版，无菜单入口） |
-| 82 | Git 菜单 → StashPanel | Local Changes 子菜单 Stash / Unstash / Show Stashes | `GitStash.java:23` → `GitStashDialog`；`GitUnstash.java:35-42`（有 Stash tab 激活 tab，否则模态 `GitUnstashDialog`）；`GitShowStashTabAction.kt:36` | ❌ |
+| 81 | Git 菜单 → ResetDialog（旧版） | Reset HEAD… | `GitResetHead.java:43` → `git4idea.ui.GitResetDialog`（backend.xml:176） | ✅（P2-D：落地为日志页内嵌新版 ResetDialog（#14）；菜单入口/旧版对话框不做） |
+| 82 | Git 菜单 → StashPanel | Local Changes 子菜单 Stash / Unstash / Show Stashes | `GitStash.java:23` → `GitStashDialog`；`GitUnstash.java:35-42`（有 Stash tab 激活 tab，否则模态 `GitUnstashDialog`）；`GitShowStashTabAction.kt:36` | ✅（P2-F 等价：LogPage 顶栏「贮藏」→ `/repos/:id/stashes`；save 表单与 apply/pop/drop/branch 在面板内） |
 | 83 | StashPanel → GitUnstashAsDialog | Stash 右键 Unstash As… | `GitStashActions.kt:62`（backend.xml:490、502-507） | ❌ |
 | 84 | StashPanel → DiffPage | Stash 变更右键 Show Diff | `Vcs.ShowDiffWithLocal.Before`（backend.xml:511-517） | ❌ |
 | 85 | Git 菜单 → TagPanel | Tag… | `GitTag.java:33` → `GitTagDialog`（backend.xml:175） | ❌ |
@@ -805,13 +821,13 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 | 91 | PushDialog →（GitRejectedPushUpdateDialog → GitUpdateProcess）| push 被拒弹"Update required"选 Merge/Rebase → 与 Update Project 同一更新引擎 → 成功后继续 push | `GitPushOperation.java:485-512`；`GitRejectedPushUpdateDialog.kt:48-62` | ❌ |
 | 92 | UpdateProjectDialog → SubmodulePanel | 更新流程内对 detached-HEAD 子模块跑 submodule update | `GitUpdateProcess.java:327-335`（`GitSubmoduleUpdater`） | ❌ |
 | 93 | UpdateProjectDialog →（reset --hard 到跟踪分支） | 对话框左下 Reset Current Branch to \<tracked\> | `GitUpdateOptionsDialog.kt:24-28`（`ResetToRemoteBranchAction`） | ❌ |
-| 94 | MergeDialog / RebaseDialog / 主工具栏 →（continue/abort/skip） | 进行中操作的继续/中止（Git 菜单 RebaseActions/MergeActions 组 + 主工具栏 widget） | backend.xml:131-140、:228-236、:539-553 | 📋 P2-A/E（OperationStatus 中止已通；continue 随 P2-E） |
+| 94 | MergeDialog / RebaseDialog / 主工具栏 →（continue/abort/skip） | 进行中操作的继续/中止（Git 菜单 RebaseActions/MergeActions 组 + 主工具栏 widget） | backend.xml:131-140、:228-236、:539-553 | ✅（P2-A/E：abort=LogPage OperationStatus 操作条（`operation/abort`）；merge 的 continue=ConflictsPanel「完成合并」（`merge/continue`）；skip 与 rebase 系随 P3） |
 
 #### D.3.5 远程 / 集成域（RemotePanel、WorktreePanel、SubmodulePanel、GitHubPanel、GitLabPanel）
 
 | # | 源 → 目标 | 手势/入口 | Java 证据 | rebasedjs |
 |---|-----------|-----------|-----------|-----------|
-| 95 | 任意远程操作 → 认证对话框（RemotePanel 一部分） | push/pull/fetch 401 自动弹出；对话框内嵌"Log in via GitHub/GitLab"按钮 → 托管登录流 | `GitHttpGuiAuthenticator.java:399-440` → `GitHttpLoginDialog.kt:36`（:400-406） | ❌（错误码 `AUTH_FAILED` 已预留） |
+| 95 | 任意远程操作 → 认证对话框（RemotePanel 一部分） | push/pull/fetch 401 自动弹出；对话框内嵌"Log in via GitHub/GitLab"按钮 → 托管登录流 | `GitHttpGuiAuthenticator.java:399-440` → `GitHttpLoginDialog.kt:36`（:400-406） | ❌（P3-A 认证回路；通用账户/令牌存储已落地 P2-H，错误码 `AUTH_FAILED` 已预留） |
 | 96 | Worktrees tab → 打开 worktree 项目 | 双击 worktree | `Git.WorkingTrees.Open`（backend.xml:577-579，双击快捷键注册） | ❌ |
 | 97 | GitHubPanel 列表 → 详情 tab + 时间线 | 双击 PR | `GHPROpenPullRequestAction.kt:24-25`（详情 tab + 编辑器时间线同时开） | ❌ |
 | 98 | GitHubPanel 详情 → PR diff | Changes 树打开 diff | `GHPRFilesManagerImpl.kt:37-46`（`GHPRDiffVirtualFile` 编辑器 tab） | ❌ |
@@ -838,17 +854,24 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 
 ### D.6 rebasedjs 跳转复刻状态汇总
 
-**已实现（3 条活动边，全部在 LogPage 枢纽上）**：
+**已实现（18 条活动边；除 RepoPage→LogPage 外均围绕 LogPage 枢纽与各子页路由）**：
 
 | 边 | 实现方式 |
 |----|----------|
 | RepoPage → LogPage | 打开仓库成功 `router.push/navigate(/repos/:id)`（`openRepoFlow` 两端同构） |
-| LogPage → SettingsPage | 顶栏设置按钮 → `/repos/:id/settings`（`onOpenSettings`，两端工作区接线） |
-| SettingsPage → LogPage | "返回日志"按钮（两端工作区接线） |
+| LogPage → SettingsPage / StatusPage / BranchPanel / MergeDialog / StashPanel | 顶栏五按钮（`onOpenSettings/Status/Branches/Merge/Stashes`）→ 各自路由 |
+| 各子页 → LogPage | 「返回日志」按钮（settings/status/branches/merge/stashes 五容器一致；conflicts 另有「完成合并」回跳） |
+| LogPage → ConflictsPanel | 合并进行中（`operation.kind==='merge'`）时操作条旁「去解决冲突」链接 |
+| MergeDialog → ConflictsPanel | 合并结果 conflicts：预填冲突列表 SWR 缓存后跳转（免首帧闪烁） |
+| ConflictsPanel → MergeView | 「手动合并」全屏 Modal（`conflicts/contents` 三阶段内容 → 保存走 manual 解决） |
+| ConflictsPanel → LogPage | 「完成合并」（`merge/continue` 成功）/ 返回日志 |
+| StatusPage → DiffPage | `onOpenDiff` → 既有 `/diff?file=` 路由（staged 切换在 diff 页内完成） |
+| StatusPage → 提交框 | CommitDialog 等效内嵌（非模态提交模式：message + amend/signOff/noVerify） |
+| LogPage → ResetDialog / Undo Commit | 提交详情面板「Reset 当前分支到此处」→ 内嵌模态 / 顶栏 Popconfirm（`reset`、`reset/undo-commit`） |
 
-**半通（1 条）**：LogPage → DiffPage——DiffPage 路由两端存在，但仅手输 `?file=` 可达，LogPage 无任何入口（待 P2-B StatusPage `onOpenDiff` 接通，D.3.2 #13）。
+**半通（1 条）**：LogPage → DiffPage——DiffPage 已有 StatusPage `onOpenDiff` 入口，但 LogPage 侧仍无任何入口（D.3.2 #13）。
 
-**计划就绪（📋，P2 计划已定形的边）**：LogPage 顶栏入口 ×3（→StatusPage P2-B、→BranchPanel P2-C、→MergeDialog P2-E）；LogPage 右键 →ResetDialog（P2-D，内嵌无路由）；StatusPage→DiffPage / StatusPage→CommitDialog（P2-B）；OperationStatus"去解决冲突"→ConflictsPanel、ConflictsPanel→3-way MergeView、ConflictsPanel"完成合并"→LogPage（P2-E）。
+**计划就绪（📋）**：P3-A 远程域各边（#75–#78、#86、#91、#95 等）——实施计划与契约（remote/fetch/pull/push/update schema + `refs.changed` 事件约定）均已就绪，待挂端点与 UI。
 
 **形态映射差异**（复刻时的等价判定依据）：Java 的多 tab 工具窗口 ↔ rebasedjs 多路由页面（`/repos/:id/<页>`，LogPage 为仓库枢纽页）；Java 模态对话框 ↔ 内嵌 Modal（ResetDialog）或独立路由（SettingsPage）；Java 状态栏 widget / 主工具栏 ↔ LogPage 顶栏按钮 + OperationStatus 操作条；Java Search Everywhere / 编辑器内嵌 Blame 暂无 Web 对应物。
 
@@ -858,8 +881,8 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 |------|------|
 | Java 版导航边（D.3 表收录，含"无独立 UI/直接执行"类） | 104 条（#1–#104） |
 | 其中出边最多的页面 | LogPage（出边 15+，仓库视图枢纽）；Git 主菜单承载入边 20+（最大全局入口面） |
-| rebasedjs 已复刻 | 3 条（+1 条半通），均为 P1/P2-A 页面范围内的边 |
-| rebasedjs 计划就绪 | 10 条（P2-B/C/D/E 计划文档已定形） |
+| rebasedjs 已复刻 | 18 条（+1 条半通），覆盖 P1/P2 页面范围：LogPage 顶栏五入口、各子页回边、合并→冲突→MergeView→完成合并链路、StatusPage→DiffPage/提交框、LogPage→ResetDialog/Undo Commit |
+| rebasedjs 计划就绪 | P3-A 远程域各边（计划 + 契约就绪，待端点与 UI） |
 | 经核查不存在的边 | 4 条（LogPage 右键直达 HistoryPanel、分支弹窗直达 LogPage、分支弹窗内 Reset、PR diff→时间线直接回跳）；另有 2 条更正口径：#39「Show Git Log for Command」非写 Console、#54 Unshelve 无自动切 tab 证据 |
 
 > 跳转关系与页面复刻状态（附录 C）正交：页面未复刻不代表边无规划——P2 各计划均以"LogPage 顶栏入口 + 独立路由"模式把新页面接入枢纽，与 Java 版"Git 主菜单 + 工具窗口 tab"的全局入口面形态对应。
