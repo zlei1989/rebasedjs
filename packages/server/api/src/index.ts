@@ -3,7 +3,7 @@ export { cloneRepo, getRepoById, initRepo, listRecentRepos, openRepo } from './r
 export { getRepoStatus } from './status';
 export { watchRepoStatus } from './events';
 export { getRepoConfig, setRepoConfig } from './config';
-export { abortOperation, getOperation } from './operation';
+export { abortOperation, continueOperation, getOperation } from './operation';
 export { getLogPage, streamLogEvents } from './log';
 export { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
 export { applyHunkStaging, applyStaging } from './staging';
@@ -18,5 +18,8 @@ export { getSettings, updateSettings } from './settings';
 export { applyChangelistAction, getChangelists } from './changelist';
 export { deleteAccount, listAccounts, upsertAccount } from './auth';
 export { applyRemoteAction, fetchRepo, getRemotes, pullRepo, pushRepo } from './remote';
+export { getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
+export { cherryPick, revert } from './pick';
+export { applyTagAction, getTags } from './tag';
 export { updateProject } from './update';
 export { toServiceError } from './errors';

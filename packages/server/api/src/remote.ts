@@ -64,14 +64,14 @@ export function buildAuthConfig(remoteUrl: string, token: string): string[] {
 }
 
 /**
- * 认证回路公共包装（fetch/pull/push 共用）：
+ * 认证回路公共包装（fetch/pull/push 共用，tag push 亦复用）：
  * ① 解析目标远程 URL（remoteName 缺省 = 全部远程，含 pushUrl）：查找键 = normalizeHost（去端口唯一约定），
  *    有 token 则以 extraConfig 注入 buildAuthConfig(remoteUrl, token) 条目
  *    （注入节 authority 取自 URL 本体、含非默认端口，见 buildAuthConfig）；
  * ② git 失败且 stderr 命中认证特征 → ServiceError('AUTH_FAILED', context: { host })（错误体只带 host，绝不含 token）；
  * ③ 其余错误原样透出（框架层经 toServiceError 折 GIT_ERROR）。
  */
-async function withAuth<T>(
+export async function withAuth<T>(
   repoPath: string,
   remoteName: string | undefined,
   gitOp: (extraConfig: string[]) => Promise<T>,

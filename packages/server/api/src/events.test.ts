@@ -65,7 +65,7 @@ describe('watchRepoStatus', () => {
     expect(events[2].payload).toEqual({ refs: [] });
   });
 
-  it('轮询中途操作状态变化（merge 冲突）→ 推送 operation.state-changed', { timeout: 30000 }, async () => {
+  it('轮询中途操作状态变化（merge 冲突）→ 推送 operation.state-changed', { timeout: 60000 }, async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
     const ac = new AbortController();
@@ -91,7 +91,7 @@ describe('watchRepoStatus', () => {
     expect(opFrames.map((e) => e.payload.kind)).toEqual(['none', 'merge']);
   });
 
-  it('轮询中途建分支 → 推送 refs.changed（payload.refs 含新分支完整 refname）', { timeout: 30000 }, async () => {
+  it('轮询中途建分支 → 推送 refs.changed（payload.refs 含新分支完整 refname）', { timeout: 60000 }, async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
     // 夹具无初始提交：先造 base 提交，refs 基线含主分支
