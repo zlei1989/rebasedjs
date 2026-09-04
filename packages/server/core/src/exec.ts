@@ -59,15 +59,17 @@ function killTree(pid: number): void {
 /** 执行 git 并收集完整输出（小输出场景）。
  *  timeoutMs 可选项：超时杀进程并以退出码 124 拒绝（防 git 传输 helper 挂起——如 Windows msys2 并发初始化失败导致 clone 无限等待）。
  *  input 可选项：写入 child.stdin 后 end（git apply、hash-object --stdin 等从 stdin 读数据的命令用）。
- *  extraConfig 可选项：逐项以 -c <entry> 注入（见 buildArgs）。 */
+ *  extraConfig 可选项：逐项以 -c <entry> 注入（见 buildArgs）。
+ *  env 可选项：调用方注入的额外环境变量（如交互式变基的 GIT_SEQUENCE_EDITOR/REBASED_TODO_FILE）；
+ *  合并顺序 process.env → opts.env → GIT_ENV——固定防挂起项（GIT_TERMINAL_PROMPT 等）不可被注入覆盖。 */
 export function runGit(
   args: string[],
-  opts: { cwd: string; signal?: AbortSignal; timeoutMs?: number; input?: string; extraConfig?: string[] },
+  opts: { cwd: string; signal?: AbortSignal; timeoutMs?: number; input?: string; extraConfig?: string[]; env?: Record<string, string> },
 ): Promise<GitResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', buildArgs(args, opts.extraConfig), {
       cwd: opts.cwd,
-      env: { ...process.env, ...GIT_ENV },
+      env: { ...process.env, ...opts.env, ...GIT_ENV },
       windowsHide: true,
     });
     if (opts.input !== undefined) {
