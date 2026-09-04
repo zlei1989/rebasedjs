@@ -1,6 +1,6 @@
 /** SSE 传输与仓库事件 hook：fetch 流解析 `data: ` 帧（与取消链路一致，不用 EventSource） */
 import { useEffect, useRef } from 'react';
-import { ServiceError, type OperationState, type RepoStatus, type SseEvent } from '@rebased/contracts';
+import { ServiceError, SSE_EVENT_REFS_CHANGED, type OperationState, type RepoStatus, type SseEvent } from '@rebased/contracts';
 
 export async function subscribeSse(url: string, onEvent: (event: { type: string; payload: unknown }) => void, signal?: AbortSignal): Promise<void> {
   const res = await fetch(url, { signal });
@@ -26,13 +26,15 @@ export async function subscribeSse(url: string, onEvent: (event: { type: string;
   }
 }
 
-/** 仓库事件处理器：onStatus 收 repo.state-changed；onOperation 收 operation.state-changed */
+/** 仓库事件处理器：onStatus 收 repo.state-changed；onOperation 收 operation.state-changed；onRefs 收 refs.changed */
 export interface RepoEventHandlers {
   onStatus?: (status: RepoStatus) => void;
   onOperation?: (operation: OperationState) => void;
+  /** refs.changed：payload.refs 为变化引用名列表（首帧为全量基线；空数组 = 指纹变化但名单未知） */
+  onRefs?: (refs: string[]) => void;
 }
 
-/** 订阅仓库推送：repo.state-changed → onStatus；operation.state-changed → onOperation；卸载即中止 */
+/** 订阅仓库推送：repo.state-changed → onStatus；operation.state-changed → onOperation；refs.changed → onRefs；卸载即中止 */
 export function useRepoEvents(repoId: string, handlers: RepoEventHandlers): void {
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
@@ -41,6 +43,7 @@ export function useRepoEvents(repoId: string, handlers: RepoEventHandlers): void
     void subscribeSse(`/api/repos/${repoId}/events`, (event: SseEvent) => {
       if (event.type === 'repo.state-changed') handlersRef.current.onStatus?.(event.payload as RepoStatus);
       else if (event.type === 'operation.state-changed') handlersRef.current.onOperation?.(event.payload as OperationState);
+      else if (event.type === SSE_EVENT_REFS_CHANGED) handlersRef.current.onRefs?.((event.payload as { refs: string[] }).refs);
     }, ac.signal).catch(() => {
       // 断流/取消：静默（重连策略由上层决定）
     });

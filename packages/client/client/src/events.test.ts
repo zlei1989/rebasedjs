@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ServiceError, serializeSseEvent, type OperationState, type RepoStatus } from '@rebased/contracts';
+import { ServiceError, serializeSseEvent, SSE_EVENT_REFS_CHANGED, type OperationState, type RepoStatus } from '@rebased/contracts';
 import { subscribeSse, useRepoEvents, type RepoEventHandlers } from './events';
 
 const STATUS: RepoStatus = { branch: 'main', upstream: null, headHash: 'a'.repeat(40), ahead: 0, behind: 0, entries: [] };
@@ -105,6 +105,32 @@ describe('useRepoEvents', () => {
     });
 
     expect(onOperation).toHaveBeenCalledWith(OPERATION);
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('refs.changed 事件触发 onRefs 回调（payload.refs 为变化引用名列表）', async () => {
+    const encoder = new TextEncoder();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({ start(c) { controller = c; } });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream, { status: 200 })));
+    const onRefs = vi.fn();
+
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(Probe, { repoId: 'r1', handlers: { onRefs } }));
+    });
+    // 首帧为全量基线；后续帧为变化列表——均按 payload.refs 透传
+    const baseline = ['refs/heads/main', 'refs/remotes/origin/main'];
+    const changed = ['refs/remotes/origin/main'];
+    await act(async () => {
+      controller.enqueue(encoder.encode(serializeSseEvent({ type: SSE_EVENT_REFS_CHANGED, payload: { refs: baseline } })));
+      controller.enqueue(encoder.encode(serializeSseEvent({ type: SSE_EVENT_REFS_CHANGED, payload: { refs: changed } })));
+    });
+
+    expect(onRefs).toHaveBeenNthCalledWith(1, baseline);
+    expect(onRefs).toHaveBeenNthCalledWith(2, changed);
     await act(async () => {
       renderer.unmount();
     });
