@@ -31,6 +31,8 @@ import { GET as getConflicts } from '../app/api/repos/[repoId]/conflicts/route';
 import { GET as getConflictContentsRoute } from '../app/api/repos/[repoId]/conflicts/contents/route';
 import { POST as postResolveConflict } from '../app/api/repos/[repoId]/conflicts/resolve/route';
 import { GET as getSettings, PUT as putSettings } from '../app/api/settings/route';
+import { GET as getAccounts, POST as postAccounts } from '../app/api/auth/accounts/route';
+import { POST as postAccountDelete } from '../app/api/auth/accounts/delete/route';
 
 /** Next 16：route 第二参的 params 为 Promise */
 function ctx(repoId: string): { params: Promise<{ repoId: string }> } {
@@ -90,6 +92,58 @@ afterEach(() => {
   delete process.env.REBASED_CONFIG_DIR;
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
   dirs = [];
+});
+
+describe('web-next auth 账户路由（应用级，无 repoId）', () => {
+  const jsonPost = (url: string, body: unknown) =>
+    new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('GET /api/auth/accounts：空配置返回 200 与空账户列表', async () => {
+    const res = await getAccounts();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ accounts: [] });
+  });
+
+  it('POST /api/auth/accounts：添加返回掩码视图且响应不含原 token', async () => {
+    const token = 'ghp_secret123456';
+    const res = await postAccounts(jsonPost('http://localhost/api/auth/accounts', { host: 'github.com', account: 'zhang', token }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(JSON.stringify(body)).not.toContain(token);
+    expect(body).toEqual({ accounts: [{ host: 'github.com', account: 'zhang', tokenPreview: 'ghp_***' }] });
+  });
+
+  it('POST /api/auth/accounts：同 host+account 重复添加覆盖（列表长度 1）', async () => {
+    await postAccounts(jsonPost('http://localhost/api/auth/accounts', { host: 'github.com', account: 'zhang', token: 'oldtoken123456' }));
+    const res = await postAccounts(jsonPost('http://localhost/api/auth/accounts', { host: 'github.com', account: 'zhang', token: 'newtoken654321' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.accounts).toHaveLength(1);
+    expect(body.accounts[0].tokenPreview).toBe('newt***');
+  });
+
+  it('POST /api/auth/accounts/delete：删除后列表移除该账户', async () => {
+    await postAccounts(jsonPost('http://localhost/api/auth/accounts', { host: 'github.com', account: 'zhang', token: 'ghp_abc123' }));
+    const res = await postAccountDelete(jsonPost('http://localhost/api/auth/accounts/delete', { host: 'github.com', account: 'zhang' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ accounts: [] });
+  });
+
+  it('POST /api/auth/accounts：空 token（zod 拒绝）返回 400 INVALID_QUERY', async () => {
+    const res = await postAccounts(jsonPost('http://localhost/api/auth/accounts', { host: 'github.com', account: 'zhang', token: '' }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('POST /api/auth/accounts/delete：删除不存在账户返回 400 INVALID_QUERY', async () => {
+    const res = await postAccountDelete(jsonPost('http://localhost/api/auth/accounts/delete', { host: 'github.com', account: 'nobody' }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
 });
 
 describe('web-next REST 路由', () => {

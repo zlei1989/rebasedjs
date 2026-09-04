@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, applyStashAction, continueMergeOperation, createCommit, getBranches, getChangelists, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, listRecentRepos, mergeBranchIntoCurrent, openRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, watchRepoStatus } from '@rebased/api';
-import { branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, applyStashAction, continueMergeOperation, createCommit, deleteAccount, getBranches, getChangelists, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -355,6 +355,35 @@ router.put('/api/settings', async (ctx) => {
   try {
     const patch = settingsPatchSchema.parse(ctx.request.body);
     ctx.body = updateSettings(patch);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/auth/accounts —— 账户列表（掩码视图）。应用级，无 repoId */
+router.get('/api/auth/accounts', async (ctx) => {
+  try {
+    ctx.body = listAccounts();
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/auth/accounts —— zod 校验 → upsertAccount（添加/覆盖）→ 返回刷新掩码视图 */
+router.post('/api/auth/accounts', async (ctx) => {
+  try {
+    const body = accountBodySchema.parse(ctx.request.body);
+    ctx.body = upsertAccount(body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/auth/accounts/delete —— zod 校验 → deleteAccount → 返回刷新掩码视图；账户不存在 → 400 INVALID_QUERY */
+router.post('/api/auth/accounts/delete', async (ctx) => {
+  try {
+    const body = accountDeleteBodySchema.parse(ctx.request.body);
+    ctx.body = deleteAccount(body);
   } catch (error) {
     handleApiError(error, ctx);
   }
