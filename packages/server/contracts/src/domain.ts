@@ -221,3 +221,48 @@ export interface PullOutcome { status: 'up-to-date' | 'updated' | 'conflicts'; }
 export interface PushOutcome { status: 'pushed' | 'rejected' | 'up-to-date'; hint?: string; }
 /** Update Project 结果 = fetch + pull 的组合视图 */
 export interface UpdateOutcome { fetched: string[]; pull: PullOutcome; }
+
+/** 溯源行（line-porcelain 逐字段）：lineno 为最终文件行号（1-based） */
+export interface BlameLine {
+  lineno: number;
+  hash: string;
+  shortHash: string;
+  author: string;
+  authorEmail: string;
+  dateIso: string;
+  content: string;
+  /** 该行由哪一行演化而来（前一次提交中的原行号；无则 null——如文件首创建） */
+  previousLineno: number | null;
+}
+
+/** 文件历史条目（git log --follow 序，最新在前） */
+export interface FileHistoryEntry {
+  hash: string;
+  shortHash: string;
+  subject: string;
+  author: string;
+  dateIso: string;
+}
+
+/** Committed Changes 条目：一个提交及其变更文件（name-status 解析） */
+export interface CommittedEntry {
+  hash: string;
+  shortHash: string;
+  subject: string;
+  author: string;
+  dateIso: string;
+  files: { path: string; status: 'A' | 'M' | 'D' | 'R' | 'C'; renameFrom?: string }[];
+}
+/** Committed Changes 分页视图：hasMore 表示存在后续页 */
+export interface CommittedPage { entries: CommittedEntry[]; hasMore: boolean; }
+
+/** 搜索命中：grep 命中为提交；pickaxe 命中同（match 为可选摘要） */
+export interface SearchResult {
+  hash: string;
+  shortHash: string;
+  subject: string;
+  author: string;
+  dateIso: string;
+}
+/** 搜索模式：grep=提交信息全文（--grep）；pickaxe=内容增量（-S） */
+export type SearchMode = 'grep' | 'pickaxe';

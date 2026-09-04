@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  blameQuerySchema,
   branchActionSchema,
   checkoutActionSchema,
   commitBodySchema,
+  committedQuerySchema,
   configPutBodySchema,
   diffQuerySchema,
+  historyQuerySchema,
   hunkStagingBodySchema,
   logQuerySchema,
   openRepoBodySchema,
@@ -25,6 +28,7 @@ import {
   updateBodySchema,
   rebaseBodySchema,
   rebaseTodoQuerySchema,
+  searchQuerySchema,
   interactiveRebaseBodySchema,
   pickBodySchema,
   tagActionSchema,
@@ -475,5 +479,60 @@ describe('tagActionSchema（标签写操作判别联合）', () => {
     expect(() => tagActionSchema.parse({ action: 'push', name: '' })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'create', name: 'v1', message: 1 })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'push', name: 'v1', remote: 1 })).toThrow();
+  });
+});
+
+describe('blameQuerySchema（溯源查询）', () => {
+  it('接受非空 file', () => {
+    expect(blameQuerySchema.parse({ file: 'src/a.txt' })).toEqual({ file: 'src/a.txt' });
+  });
+  it('拒绝空 file 与缺 file', () => {
+    expect(() => blameQuerySchema.parse({ file: '' })).toThrow();
+    expect(() => blameQuerySchema.parse({})).toThrow();
+  });
+});
+
+describe('historyQuerySchema（文件历史查询）', () => {
+  it('接受非空 file', () => {
+    expect(historyQuerySchema.parse({ file: 'src/a.txt' })).toEqual({ file: 'src/a.txt' });
+    expect(historyQuerySchema.parse({ file: 'b/c.md' })).toEqual({ file: 'b/c.md' });
+  });
+  it('拒绝空 file 与缺 file', () => {
+    expect(() => historyQuerySchema.parse({ file: '' })).toThrow();
+    expect(() => historyQuerySchema.parse({})).toThrow();
+  });
+});
+
+describe('committedQuerySchema（Committed Changes 分页查询）', () => {
+  it('默认 limit=50、skip=0；查询串数字被 coerce（沿用 log 端点风格）', () => {
+    expect(committedQuerySchema.parse({})).toEqual({ limit: 50, skip: 0 });
+    expect(committedQuerySchema.parse({ limit: '10', skip: '20' })).toEqual({ limit: 10, skip: 20 });
+  });
+  it('接受边界 limit=1/200 与 skip=0', () => {
+    expect(committedQuerySchema.parse({ limit: '1', skip: '0' })).toEqual({ limit: 1, skip: 0 });
+    expect(committedQuerySchema.parse({ limit: 200 }).limit).toBe(200);
+  });
+  it('拒绝 limit 越界（0/201）、非整数与负 skip', () => {
+    expect(() => committedQuerySchema.parse({ limit: 0 })).toThrow();
+    expect(() => committedQuerySchema.parse({ limit: 201 })).toThrow();
+    expect(() => committedQuerySchema.parse({ limit: 1.5 })).toThrow();
+    expect(() => committedQuerySchema.parse({ skip: -1 })).toThrow();
+    expect(() => committedQuerySchema.parse({ skip: 0.5 })).toThrow();
+  });
+});
+
+describe('searchQuerySchema（提交搜索查询）', () => {
+  it('q 必填；默认 mode=grep、limit=50；limit 查询串被 coerce', () => {
+    expect(searchQuerySchema.parse({ q: 'fix' })).toEqual({ q: 'fix', mode: 'grep', limit: 50 });
+    expect(searchQuerySchema.parse({ q: 'fix', mode: 'pickaxe', limit: '10' }))
+      .toEqual({ q: 'fix', mode: 'pickaxe', limit: 10 });
+  });
+  it('拒绝空 q、缺 q、枚举外 mode 与 limit 越界（0/101）', () => {
+    expect(() => searchQuerySchema.parse({ q: '' })).toThrow();
+    expect(() => searchQuerySchema.parse({})).toThrow();
+    expect(() => searchQuerySchema.parse({ q: 'fix', mode: 'diff' })).toThrow();
+    expect(() => searchQuerySchema.parse({ q: 'fix', limit: 0 })).toThrow();
+    expect(() => searchQuerySchema.parse({ q: 'fix', limit: 101 })).toThrow();
+    expect(() => searchQuerySchema.parse({ q: 'fix', limit: 1.5 })).toThrow();
   });
 });

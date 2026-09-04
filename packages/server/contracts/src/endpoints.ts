@@ -202,3 +202,24 @@ export const tagActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('push'), name: z.string().min(1), remote: z.string().optional() }),
 ]);
 export type TagAction = z.infer<typeof tagActionSchema>;
+
+/** 溯源查询：file 必填（相对仓库根路径） */
+export const blameQuerySchema = z.object({ file: z.string().min(1) });
+
+/** 文件历史查询：file 必填（git log --follow 跟随重命名） */
+export const historyQuerySchema = z.object({ file: z.string().min(1) });
+
+/** Committed Changes 分页查询：limit≤200、skip 游标（沿用 log 端点先例） */
+export const committedQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  skip: z.coerce.number().int().min(0).default(0),
+});
+export type CommittedPageQuery = z.infer<typeof committedQuerySchema>;
+
+/** 提交搜索查询：q 必填；mode 默认 grep；limit≤100 */
+export const searchQuerySchema = z.object({
+  q: z.string().min(1),
+  mode: z.enum(['grep', 'pickaxe']).default('grep'),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type SearchQuery = z.infer<typeof searchQuerySchema>;
