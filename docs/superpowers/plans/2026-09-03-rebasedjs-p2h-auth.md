@@ -216,3 +216,19 @@ export function useDeleteAccount(): { trigger: (body: AccountDeleteBody) => Prom
 - 类型一致性：AccountEntry/AccountList/AccountBody/AccountDeleteBody/三个 hook/SettingsPageProps 追加 跨任务签名已对齐。
 - 风险：token 明文落盘——0600 + 本地优先场景可接受，已在安全约束中明示；Windows chmod 语义差异尽力而为。
 - 端点无 repoId 属有意设计（账户是应用级资源），三件套退化为两件套已在 Task 3 注明。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+6/6 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: Yes**（无 Critical/Important；13 项 deferred minor 全部 safe-to-defer），正式关账。**至此 P2 阶段 12/12 功能域全部落地。**
+
+**终审亮点**：安全核心经逐路径核实——单出口掩码设计（toView 唯一出口）使泄露难以重新引入，且有三个独立层级（api 单测 + 两端 HTTP）的 `JSON.stringify 不含原 token` 断言锁定；0600 每次保存自愈旧权限；auth 簿记全同步读写、不触 P2-G 修复的 await 窗口竞态类；本期端点全部有真实 UI 消费方（对照 P2-C detach 死端点教训）。
+
+**Rulings / 采纳**：
+1. 本期范围裁定为可验证子集（令牌存储 + 管理 UI）；HTTPS 对话框 + credential helper 桥接后置 P3 remote——终审认可该论证。
+2. 终审建议采纳：P3 remote 计划第一件事=host 规范化约定（github.com vs https://github.com vs 大小写，防"存了查不到"）；P3 落地真实消费后补端到端泄露断言；merge.test.ts 偶发超时升级为正式观察项（两例目击）；`writeFileSync {mode:0o600}` 双保险并入 hardening ⑯。
+3. 掩码前 4 位对短 token 暴露比例高（理论性，真实 token 20+ 字符）——长度比例规则入 hardening ⑱。
+
+SDD 工作区已按规程删除，本提交为记录。
