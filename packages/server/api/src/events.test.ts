@@ -45,16 +45,14 @@ async function collect(repo: string, opts: { count: number; intervalMs?: number;
 describe('watchRepoStatus', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
-  it('首帧依次产 repo.state-changed 与 operation.state-changed（当前操作）', async () => {
+  it('首帧依次产 repo.state-changed、operation.state-changed 与 refs.changed（基线全量 refname 列表）', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
-    const p = collect(repo, { count: 2, intervalMs: 100 });
-    // 等首帧产完再写文件（本机首读约 1.1s）：写文件凑足状态帧，保证断言针对的是类型而非超时
-    await new Promise((r) => setTimeout(r, 2000));
-    writeFileSync(join(repo, 'a.txt'), 'hello');
-    const events = await p;
-    expect(events.map((e) => e.type)).toEqual(['repo.state-changed', 'operation.state-changed']);
+    const events = await collect(repo, { count: 3, intervalMs: 100 });
+    expect(events.map((e) => e.type)).toEqual(['repo.state-changed', 'operation.state-changed', 'refs.changed']);
     expect(events[1].payload).toEqual({ kind: 'none' });
+    // 无提交的空仓库：refs 基线为空列表
+    expect(events[2].payload).toEqual({ refs: [] });
   });
 
   it('轮询中途操作状态变化（merge 冲突）→ 推送 operation.state-changed', { timeout: 30000 }, async () => {
@@ -62,17 +60,17 @@ describe('watchRepoStatus', () => {
     dirs.push(repo);
     const ac = new AbortController();
     const seen: RepoStateEvent[] = [];
-    let firstTwoResolve!: () => void;
-    const firstTwo = new Promise<void>((r) => { firstTwoResolve = r; });
+    let firstThreeResolve!: () => void;
+    const firstThree = new Promise<void>((r) => { firstThreeResolve = r; });
     const watching = (async () => {
       for await (const e of watchRepoStatus(repo, { intervalMs: 100, signal: ac.signal })) {
         seen.push(e);
-        if (seen.length === 2) firstTwoResolve(); // 首帧 repo + operation 已消费
+        if (seen.length === 3) firstThreeResolve(); // 首帧 repo + operation + refs.changed 基线已消费
         if (e.type === 'operation.state-changed' && e.payload.kind === 'merge') break; // break 触发 generator return，完整退出轮询
       }
     })();
     try {
-      await firstTwo;
+      await firstThree;
       createMergeConflict(repo); // 流建立后制造 MERGE_HEAD → 下一轮轮询应检测出操作变化
       await watching;
     } finally {
@@ -83,19 +81,58 @@ describe('watchRepoStatus', () => {
     expect(opFrames.map((e) => e.payload.kind)).toEqual(['none', 'merge']);
   });
 
+  it('轮询中途建分支 → 推送 refs.changed（payload.refs 含新分支完整 refname）', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    // 夹具无初始提交：先造 base 提交，refs 基线含主分支
+    writeFileSync(join(repo, 'a.txt'), 'hello');
+    git(repo, ['add', 'a.txt']);
+    git(repo, ['commit', '-q', '-m', 'init']);
+    const ac = new AbortController();
+    const seen: RepoStateEvent[] = [];
+    let baselineResolve!: () => void;
+    const baseline = new Promise<void>((r) => { baselineResolve = r; });
+    const watching = (async () => {
+      for await (const e of watchRepoStatus(repo, { intervalMs: 100, signal: ac.signal })) {
+        seen.push(e);
+        if (seen.length === 3) baselineResolve(); // 首帧三帧（含 refs.changed 基线）已消费
+        if (seen.length > 3 && e.type === 'refs.changed') break; // 第二帧 refs.changed = 建分支后的变化帧
+      }
+    })();
+    try {
+      await baseline;
+      git(repo, ['branch', 'topic']); // 只动 refs，不动工作区/操作态 → 下一轮应只产 refs.changed
+      await watching;
+    } finally {
+      ac.abort(); // 兜底：超时/断言失败路径也确保生成器退出
+      await watching.catch(() => {});
+    }
+    const main = execFileSync('git', ['-C', repo, 'symbolic-ref', 'HEAD', '--short']).toString().trim();
+    expect(seen.slice(0, 3).map((e) => e.type)).toEqual(['repo.state-changed', 'operation.state-changed', 'refs.changed']);
+    // 基线帧：当前全量 refname 列表（本仓库仅主分支）
+    const baselineFrame = seen[2];
+    if (baselineFrame.type !== 'refs.changed') throw new Error('第 3 帧应为 refs.changed 基线');
+    expect(baselineFrame.payload.refs).toEqual([`refs/heads/${main}`]);
+    // 变化帧：diff 名单含新分支完整 refname
+    const last = seen[seen.length - 1];
+    if (last.type !== 'refs.changed') throw new Error('末帧应为 refs.changed 变化帧');
+    expect(last.payload.refs).toEqual(['refs/heads/topic']);
+  });
+
   it('首产当前状态，变化后产新事件', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
-    // 契约扩展后首帧为 repo + operation 两帧，状态变化帧是第 3 帧
-    const p = collect(repo, { count: 3, intervalMs: 100 });
-    // 等初始快照产完再写文件（本机首读约 1.1s，300ms 会输掉竞态）：事件 3 必须来自轮询 diff
+    // 契约扩展后首帧为 repo + operation + refs.changed 三帧，状态变化帧是第 4 帧
+    const p = collect(repo, { count: 4, intervalMs: 100 });
+    // 等初始快照产完再写文件（本机首读约 1.1s，300ms 会输掉竞态）：事件 4 必须来自轮询 diff
     await new Promise((r) => setTimeout(r, 2000));
     writeFileSync(join(repo, 'a.txt'), 'hello'); // 触发状态变化
     const events = await p;
-    expect(events).toHaveLength(3);
+    expect(events).toHaveLength(4);
     expect(events[0].type).toBe('repo.state-changed');
-    const last = events[2];
-    if (last.type !== 'repo.state-changed') throw new Error('第 3 帧应为状态变化事件');
+    expect(events[2].type).toBe('refs.changed');
+    const last = events[3];
+    if (last.type !== 'repo.state-changed') throw new Error('第 4 帧应为状态变化事件');
     expect(last.payload.branch).toBeTruthy();
   });
 

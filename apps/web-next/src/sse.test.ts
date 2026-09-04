@@ -103,7 +103,7 @@ describe('web-next SSE 路由', () => {
     expect(body).toContain('world');
   });
 
-  it('events：首帧 repo.state-changed、第二帧 operation.state-changed；request.signal abort 后流关闭', async () => {
+  it('events：首帧 repo.state-changed、第二帧 operation.state-changed、第三帧 refs.changed 基线；request.signal abort 后流关闭', async () => {
     const { repoId } = registerRepo();
     const ac = new AbortController();
     const res = await getEvents(new Request(`http://localhost/api/repos/${repoId}/events`, { signal: ac.signal }), ctx(repoId));
@@ -119,6 +119,12 @@ describe('web-next SSE 路由', () => {
     const secondText = decoder.decode(second.value);
     expect(secondText).toContain('"type":"operation.state-changed"');
     expect(secondText).toContain('"kind":"none"');
+    // 第三帧：refs.changed 基线（payload.refs 为当前全量 refname 列表，本仓库含主分支）
+    const third = await reader.read();
+    expect(third.done).toBe(false);
+    const thirdText = decoder.decode(third.value);
+    expect(thirdText).toContain('"type":"refs.changed"');
+    expect(thirdText).toContain('"refs":["refs/heads/');
     ac.abort(); // SSE 断开 → 取消链路：轮询生成器退出 → 流关闭
     await expect(reader.read()).resolves.toMatchObject({ done: true });
   });

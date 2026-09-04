@@ -181,7 +181,7 @@ export interface AccountList {
 /** 远程条目 */
 export interface RemoteInfo { name: string; fetchUrl: string; pushUrl: string; }
 export interface RemoteList { remotes: RemoteInfo[]; }
-/** fetch 结果：updatedRefs 为发生移动的引用（origin/main 等） */
+/** fetch 结果：updatedRefs 为发生移动的引用（完整 refname，如 refs/remotes/origin/main） */
 export interface FetchResult { updatedRefs: string[]; }
 /** pull/update 结果：up-to-date | updated | conflicts（合并冲突时附冲突列表由调用方查 conflicts 端点） */
 export interface PullOutcome { status: 'up-to-date' | 'updated' | 'conflicts'; }

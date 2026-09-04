@@ -1,12 +1,18 @@
-/** 仓库状态推送：轮询 status 与 operation，仅各自变化时产对应事件。
- *  事件序：首帧依次产 repo.state-changed（当前状态）与 operation.state-changed（当前操作），之后 diff 比较。 */
+/** 仓库状态推送：轮询 status、operation 与 refs 指纹，仅各自变化时产对应事件。
+ *  事件序：首帧依次产 repo.state-changed（当前状态）、operation.state-changed（当前操作）
+ *  与 refs.changed（基线：当前全量 refname 列表），之后 diff 比较。
+ *  refs 指纹覆盖 refs/heads + refs/remotes + refs/tags + refs/stash：
+ *  分支/标签/贮藏/远程引用的创建、删除与指向移动均会改变指纹并产 refs.changed（payload.refs 为变化名单）。 */
 import type { OperationState, RepoStatus } from '@rebased/contracts';
+import { SSE_EVENT_REFS_CHANGED } from '@rebased/contracts';
+import { diffRefsSnapshots, takeRefsSnapshot } from '@rebased/core';
 import { getOperation } from './operation';
 import { getRepoStatus } from './status';
 
 export type RepoStateEvent =
   | { type: 'repo.state-changed'; payload: RepoStatus }
-  | { type: 'operation.state-changed'; payload: OperationState };
+  | { type: 'operation.state-changed'; payload: OperationState }
+  | { type: typeof SSE_EVENT_REFS_CHANGED; payload: { refs: string[] } };
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -30,15 +36,18 @@ export async function* watchRepoStatus(repoPath: string, opts: { intervalMs?: nu
   const intervalMs = opts.intervalMs ?? 2000;
   let lastStatus = await getRepoStatus(repoPath);
   let lastOperation = await getOperation(repoPath);
+  let lastRefs = await takeRefsSnapshot(repoPath);
   yield { type: 'repo.state-changed', payload: lastStatus };
   yield { type: 'operation.state-changed', payload: lastOperation };
+  // refs 基线帧：客户端据此建立当前引用全集（排序输出，顺序稳定）
+  yield { type: SSE_EVENT_REFS_CHANGED, payload: { refs: Object.keys(lastRefs.refs).sort() } };
   while (!opts.signal?.aborted) {
     try {
       await sleep(intervalMs, opts.signal);
     } catch {
       return; // 中止：结束生成器
     }
-    const [status, operation] = await Promise.all([getRepoStatus(repoPath), getOperation(repoPath)]);
+    const [status, operation, refs] = await Promise.all([getRepoStatus(repoPath), getOperation(repoPath), takeRefsSnapshot(repoPath)]);
     if (!statusEquals(lastStatus, status)) {
       lastStatus = status;
       yield { type: 'repo.state-changed', payload: status };
@@ -46,6 +55,11 @@ export async function* watchRepoStatus(repoPath: string, opts: { intervalMs?: nu
     if (!operationEquals(lastOperation, operation)) {
       lastOperation = operation;
       yield { type: 'operation.state-changed', payload: operation };
+    }
+    if (refs.fingerprint !== lastRefs.fingerprint) {
+      // 指纹变化才产 refs.changed：payload 为两快照 diff 出的变化/新增/删除 refname 名单
+      yield { type: SSE_EVENT_REFS_CHANGED, payload: { refs: diffRefsSnapshots(lastRefs, refs) } };
+      lastRefs = refs;
     }
   }
 }
