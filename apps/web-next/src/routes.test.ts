@@ -3,7 +3,7 @@
  * 每个用例独立 REBASED_CONFIG_DIR（空注册表）；成功路径先注册临时 git 仓库再断言响应形状。
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -1106,6 +1106,19 @@ describe('web-next rebase/cherry-pick/revert/tags 路由', () => {
     expect(await res.json()).toEqual({ status: 'success' });
     expect(git(['log', '--format=%s', '-2']).trim().split('\n')).toEqual(['one', 'init']);
     expect(git(['show', 'HEAD:c.txt'])).toBe('two\n');
+  });
+
+  it('cherry-pick 端点：祖先提交（已在当前分支历史）→ 400 INVALID_QUERY 且不留空补丁停态', { timeout: RIG_TIMEOUT }, async () => {
+    const repoId = registerRepo();
+    makeLocalCommit('one.txt', 'one\n', 'one');
+    const one = git(['rev-parse', 'HEAD']).trim();
+    makeLocalCommit('two.txt', 'two\n', 'two');
+
+    const res = await postCherryPick(jsonPost(`${repoId}/cherry-pick`, { hashes: [one] }), ctx(repoId));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+    // 预检在 git 创建停态之前拦下（复刻终审实验：祖先摘樱桃不再进入空补丁停态）
+    expect(existsSync(join(lastRepoPath, '.git', 'CHERRY_PICK_HEAD'))).toBe(false);
   });
 
   it('revert 端点：还原祖先提交 → 200 success 且生成 Revert 提交', { timeout: RIG_TIMEOUT }, async () => {

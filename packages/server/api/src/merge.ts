@@ -2,7 +2,7 @@
 import { canContinueMerge, continueMerge, mergeBranch } from '@rebased/core';
 import { ServiceError, type MergeBody, type MergeOutcome, type RepoStatus } from '@rebased/contracts';
 import { getConflicts } from './conflict';
-import { getOperation } from './operation';
+import { assertNoOperationInProgress } from './operation';
 import { getRepoStatus } from './status';
 
 /**
@@ -11,9 +11,7 @@ import { getRepoStatus } from './status';
  * conflicts 时附带 getConflicts 列表；分支不存在等 git 失败透出 GitExitError（框架层折 GIT_ERROR）。
  */
 export async function mergeBranchIntoCurrent(repoPath: string, body: MergeBody): Promise<MergeOutcome> {
-  if ((await getOperation(repoPath)).kind !== 'none') {
-    throw new ServiceError('OPERATION_IN_PROGRESS', '已有进行中的操作，请先完成或中止');
-  }
+  await assertNoOperationInProgress(repoPath);
   const result = await mergeBranch(repoPath, body);
   const conflicts = result.status === 'conflicts' ? (await getConflicts(repoPath)).conflicts : [];
   return { status: result.status, conflicts };

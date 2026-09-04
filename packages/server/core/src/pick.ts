@@ -1,20 +1,24 @@
 /**
- * pick 原语：摘樱桃（cherry-pick）与还原（revert），支持多提交与冲突后继续。
- * 冲突判定同 P2-E：operation 原语见 cherry-pick/revert 操作态，或 ls-files -u 有未合并条目；
- * 其余非 0 退出原样抛 GitExitError。continue 一律带 -c core.editor=true（无 TTY 编辑器防护，P2-E 教训）。
+ * pick 原语：摘樱桃（cherry-pick）与还原（revert），支持多提交、冲突后继续与祖先判定。
+ * 冲突判定同 P2-E：仅 ls-files -u 有未合并条目——只凭操作态会把「空补丁停态」误判为冲突
+ * （见 hasConflicts 注释，P3-B 终审死循环根因）；其余非 0 退出原样抛 GitExitError。
+ * continue 一律带 -c core.editor=true（无 TTY 编辑器防护，P2-E 教训）。
  */
 import { listConflictedPaths } from './conflict';
 import { GitExitError, runGit } from './exec';
-import { getOperationState } from './operation';
 
 export interface CorePickResult {
   status: 'success' | 'conflicts';
 }
 
-/** 冲突判定：进行中的 cherry-pick/revert 操作态，或 ls-files -u 未合并条目 */
+/**
+ * 冲突判定：仅 ls-files -u 未合并条目非空。
+ * cherry-pick/revert 存在「空补丁停态」：git 留 CHERRY_PICK_HEAD/REVERT_HEAD 但不含任何未合并
+ * 条目（祖先摘樱桃、双重还原等补丁为空的情形——实测 ls-files -u 为 0）。若凭操作态归类
+ * conflicts，UI 会跳冲突页、看到 0 冲突并以「继续」无限空补丁重试——死循环；
+ * 空补丁因此按 GitExitError 原样透出（api 层以 isAncestor 预检在停态产生前拦下常态路径）。
+ */
 async function hasConflicts(cwd: string): Promise<boolean> {
-  const op = await getOperationState(cwd);
-  if (op.kind === 'cherry-pick' || op.kind === 'revert') return true;
   return (await listConflictedPaths(cwd)).length > 0;
 }
 
@@ -38,6 +42,22 @@ export async function cherryPickCommits(cwd: string, hashes: string[]): Promise<
 /** 还原一个或多个提交：git revert <hash>...（顺序即还原顺序，某步冲突即停） */
 export async function revertCommits(cwd: string, hashes: string[]): Promise<CorePickResult> {
   return runPick(cwd, ['revert', ...hashes]);
+}
+
+/**
+ * 祖先判定：git merge-base --is-ancestor <hash> HEAD；退出码 0 → true，1 → false（非祖先），
+ * 其余（无效 ref 等）原样抛 GitExitError。用于摘樱桃前的空补丁预检：
+ * 祖先提交的补丁已在当前分支历史中，摘樱桃必为空补丁（见 hasConflicts 注释），
+ * api 层在 git 创建停态之前以 INVALID_QUERY 拦下。
+ */
+export async function isAncestor(cwd: string, hash: string): Promise<boolean> {
+  try {
+    await runGit(['merge-base', '--is-ancestor', hash, 'HEAD'], { cwd });
+    return true;
+  } catch (e) {
+    if (e instanceof GitExitError && e.exitCode === 1) return false;
+    throw e;
+  }
 }
 
 /**

@@ -136,8 +136,9 @@ export function RepoPage(): React.ReactNode {
   // 交互模式基准（'' = 未输入，useRebaseTodo 挂 null key 不发请求）；容器持有 base，UI 输入经 onBaseChange 回写
   const [rebaseOpen, setRebaseOpen] = useState(false);
   const [rebaseBase, setRebaseBase] = useState('');
-  // 交互模式 todo 数据源：base 变化自动重取，old-data 期间 ui 以 todoLoading 禁用确定（Task 6 审查防御）
-  const { data: rebaseTodo, isLoading: rebaseTodoLoading } = useRebaseTodo(repoId, rebaseBase);
+  // 交互模式 todo 数据源：base 变化自动重取，old-data 期间 ui 以 todoLoading 禁用确定（Task 6 审查防御）；
+  // 加载失败（无效 base 等）经 todoError 透传 UI 显式呈现，避免误导性的「无待重放提交」（P3-B 终审）
+  const { data: rebaseTodo, isLoading: rebaseTodoLoading, error: rebaseTodoError } = useRebaseTodo(repoId, rebaseBase);
   // 变基结果分派：success → 提示（events 推送 headHash/refs 变化刷新日志）；conflicts → 警告 + 跳冲突页；
   // up-to-date → 提示；任何结果都关闭对话框并复位 base（失败路径同 reset/undo 先例，只提示不关窗——用户可改参重试）
   const dispatchRebaseOutcome = (outcome: RebaseOutcome): void => {
@@ -304,6 +305,7 @@ export function RepoPage(): React.ReactNode {
         base={rebaseBase}
         todo={rebaseTodo}
         todoLoading={rebaseTodoLoading}
+        todoError={rebaseTodoError?.message}
         confirming={rebasing || interactiveRebasing}
         onBaseChange={setRebaseBase}
         onRebaseOnto={onRebaseOnto}

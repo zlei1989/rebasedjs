@@ -6,14 +6,7 @@
 import { listTodoCommits, rebaseOnto, runInteractiveRebase, verifyCommitish } from '@rebased/core';
 import { ServiceError } from '@rebased/contracts';
 import type { InteractiveRebaseBody, RebaseBody, RebaseOutcome, TodoEntry } from '@rebased/contracts';
-import { getOperation } from './operation';
-
-/** 预检无进行中操作：操作态在场说明上次操作未收尾，直接发起会产生嵌套操作（→ OPERATION_IN_PROGRESS） */
-async function assertNoOperationInProgress(repoPath: string): Promise<void> {
-  if ((await getOperation(repoPath)).kind !== 'none') {
-    throw new ServiceError('OPERATION_IN_PROGRESS', '已有进行中的操作，请先完成或中止');
-  }
-}
+import { assertNoOperationInProgress } from './operation';
 
 /** rebase onto：预检无进行中操作 + onto 有效性（verifyCommitish → INVALID_REF）；core 三分支状态透传 */
 export async function rebaseBranch(repoPath: string, body: RebaseBody): Promise<RebaseOutcome> {

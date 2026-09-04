@@ -1,6 +1,6 @@
-/** 摘樱桃/还原功能测试：success/conflicts 两态、无效哈希 INVALID_REF 预检、进行中操作预检。 */
+/** 摘樱桃/还原功能测试：success/conflicts 两态、无效哈希 INVALID_REF 预检、祖先提交 INVALID_QUERY 预检、进行中操作预检。 */
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { cherryPick, revert } from './pick';
@@ -87,6 +87,18 @@ describe('cherryPick', () => {
       code: 'INVALID_REF',
       message: '引用不存在或不是提交：ghost',
     });
+  });
+
+  it('祖先提交（已在当前分支历史中）→ INVALID_QUERY 空补丁预检，且不留下停态', async () => {
+    const repo = makeRepo();
+    const { one } = makePickRepo(repo); // HEAD 在 one 之上，one 为祖先
+
+    await expect(cherryPick(repo, { hashes: [one] })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '该提交已在当前分支历史中，无需摘樱桃',
+    });
+    // 预检在 git 创建空补丁停态之前拦下
+    expect(existsSync(join(repo, '.git', 'CHERRY_PICK_HEAD'))).toBe(false);
   });
 
   it('已有进行中操作 → OPERATION_IN_PROGRESS', async () => {

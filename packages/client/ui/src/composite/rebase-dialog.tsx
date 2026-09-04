@@ -18,6 +18,9 @@ export interface RebaseDialogProps {
   /** 交互模式数据源（容器按 base 注入） */
   todo?: TodoEntry[];
   todoLoading?: boolean;
+  /** 交互模式 todo 加载失败信息（容器透传 useRebaseTodo 的 error.message）：
+   *  非空时渲染错误文案替代「无待重放提交」并禁用确定——无效 base 不能再以误导性空列表呈现 */
+  todoError?: string;
   /** 交互模式提交（entries 为编辑后全量列表，顺序即新顺序） */
   onInteractiveRebase: (body: { base: string; entries: { hash: string; action: RebaseTodoAction }[] }) => void;
   onCancel: () => void;
@@ -110,6 +113,7 @@ export function RebaseDialog(props: RebaseDialogProps): React.ReactNode {
     onRebaseOnto,
     todo,
     todoLoading,
+    todoError,
     onInteractiveRebase,
     onCancel,
     confirming,
@@ -129,15 +133,22 @@ export function RebaseDialog(props: RebaseDialogProps): React.ReactNode {
     setRows(buildRows(todo));
   }, [todoKey]);
 
-  /** 交互模式可提交：基准非空、有行、且非全部 drop（全 drop 的重放无意义，服务端也不接受空清单） */
-  const interactiveOk = (base ?? '').trim() !== '' && rows.length > 0 && rows.some((row) => row.action !== 'drop');
+  /** 交互模式可提交：基准非空、有行、非全部 drop、无加载失败（全 drop 的重放无意义，服务端也不接受空清单） */
+  const interactiveOk =
+    (base ?? '').trim() !== '' && rows.length > 0 && rows.some((row) => row.action !== 'drop') && !todoError;
 
-  /** 复位全部内部状态（取消/提交后）：模式回简单、输入清空、行回数据源基线 */
+  /** 复位全部内部状态（关闭后重开时）：模式回简单、输入清空、行回数据源基线 */
   const reset = (): void => {
     setMode('simple');
     setOnto('');
     setRows(buildRows(todo));
   };
+
+  /** 关闭 → 打开的每次转换都复位：容器在成功/冲突/取消时关窗，下次打开重新开始；
+   *  提交动作本身不复位——失败时容器保持打开，编辑须保留供用户改参重试（P3-B 终审修复） */
+  useEffect(() => {
+    if (open) reset();
+  }, [open]);
 
   /** 取消：先复位再通知父级（Modal 默认不卸载子树，重开不能残留上次编辑） */
   const close = (): void => {
@@ -145,21 +156,19 @@ export function RebaseDialog(props: RebaseDialogProps): React.ReactNode {
     onCancel();
   };
 
-  /** 简单模式提交：onto 去空白后传出 {onto} */
+  /** 简单模式提交：onto 去空白后传出 {onto}（编辑保留，复位归关窗时机） */
   const submitSimple = (): void => {
     if (onto.trim() === '') return;
     onRebaseOnto({ onto: onto.trim() });
-    reset();
   };
 
-  /** 交互模式提交：entries 为编辑后的全量列表（顺序即新顺序），base 来自 props */
+  /** 交互模式提交：entries 为编辑后的全量列表（顺序即新顺序），base 来自 props（编辑保留，复位归关窗时机） */
   const submitInteractive = (): void => {
     if (!interactiveOk) return;
     onInteractiveRebase({
       base: (base ?? '').trim(),
       entries: rows.map(({ hash, action }) => ({ hash, action })),
     });
-    reset();
   };
 
   /** 上移/下移：与相邻行交换（delta=-1 上移）；越界（首/末行）不作变更——对照 Java 排序约束；
@@ -222,6 +231,10 @@ export function RebaseDialog(props: RebaseDialogProps): React.ReactNode {
             </Flex>
             {todoLoading ? (
               <Spin data-testid="rebase-todo-loading" />
+            ) : todoError ? (
+              <Typography.Text type="danger" data-testid="rebase-todo-error">
+                {todoError}
+              </Typography.Text>
             ) : rows.length === 0 ? (
               <Typography.Text type="secondary">无待重放提交（base..HEAD 为空）</Typography.Text>
             ) : (

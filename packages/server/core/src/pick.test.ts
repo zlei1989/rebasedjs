@@ -1,10 +1,11 @@
-/** 摘樱桃/还原原语测试：success/conflicts 两态及 continuePick 解决后完成。 */
+/** 摘樱桃/还原原语测试：success/conflicts 两态、空补丁停态、isAncestor 预检及 continuePick 解决后完成。 */
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { runGit } from './exec';
-import { getOperationState } from './operation';
-import { cherryPickCommits, continuePick, revertCommits } from './pick';
+import { listConflictedPaths } from './conflict';
+import { GitExitError, runGit } from './exec';
+import { abortGitOperation, getOperationState } from './operation';
+import { cherryPickCommits, continuePick, isAncestor, revertCommits } from './pick';
 import { resetToRef } from './reset';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
@@ -87,6 +88,36 @@ describe('cherryPickCommits', () => {
     const { stdout: subject } = await runGit(['log', '--format=%s', '-1'], { cwd: repo });
     expect(subject.trim()).toBe('one');
     expect((await runGit(['show', 'HEAD:a.txt'], { cwd: repo })).stdout).toBe('resolved\n');
+  });
+
+  it('祖先提交摘樱桃（空补丁停态）→ 不判 conflicts，原样抛 GitExitError', async () => {
+    const repo = makeRepo();
+    const { one } = await makePickRepo(repo); // HEAD 在 one 之上，one 为祖先
+
+    // git 留 CHERRY_PICK_HEAD 但 ls-files -u 为空：仅凭操作态归类 conflicts 会把空补丁
+    // 误判为冲突（UI 无限「继续」循环）；正确行为是原样抛 GitExitError（api 层有 isAncestor 预检兜底）
+    await expect(cherryPickCommits(repo, [one])).rejects.toBeInstanceOf(GitExitError);
+    expect((await getOperationState(repo)).kind).toBe('cherry-pick');
+    expect(await listConflictedPaths(repo)).toEqual([]);
+    // 清理空补丁停态，避免残留
+    await abortGitOperation(repo, 'cherry-pick');
+  });
+});
+
+describe('isAncestor', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('祖先提交 → true；head 自身 → true；非祖先（已脱离历史）→ false；无效 ref 抛 GitExitError', async () => {
+    const repo = makeRepo();
+    const { base, one } = await makePickRepo(repo);
+
+    expect(await isAncestor(repo, one)).toBe(true);
+    expect(await isAncestor(repo, 'HEAD')).toBe(true);
+
+    await resetToRef(repo, base, 'hard');
+    expect(await isAncestor(repo, one)).toBe(false);
+
+    await expect(isAncestor(repo, 'ghost')).rejects.toBeInstanceOf(GitExitError);
   });
 });
 

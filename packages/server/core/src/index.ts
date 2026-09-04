@@ -37,7 +37,7 @@ export { diffRefsSnapshots, takeRefsSnapshot } from './refs';
 export type { RefsSnapshot } from './refs';
 export { continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase } from './rebase';
 export type { CoreRebaseResult } from './rebase';
-export { cherryPickCommits, continuePick, revertCommits } from './pick';
+export { cherryPickCommits, continuePick, isAncestor, revertCommits } from './pick';
 export type { CorePickResult } from './pick';
 export { createTag, deleteTag, listTags, pushTag } from './tag';
 export type { CoreTag } from './tag';

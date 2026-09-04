@@ -8,7 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 import { createServer, get as httpGet, type IncomingMessage, type Server } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -1079,6 +1079,19 @@ describe('web-koa rebase/cherry-pick/revert/tags 端点', () => {
     expect(await res.json()).toEqual({ status: 'success' });
     expect(git(repoPath, ['log', '--format=%s', '-2']).trim().split('\n')).toEqual(['one', 'init']);
     expect(git(repoPath, ['show', 'HEAD:c.txt'])).toBe('two\n');
+  });
+
+  it('cherry-pick 端点：祖先提交（已在当前分支历史）→ 400 INVALID_QUERY 且不留空补丁停态', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    makeLocalCommit(repoPath, 'one.txt', 'one\n', 'one');
+    const one = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'two.txt', 'two\n', 'two');
+
+    const res = await jsonPost(`/api/repos/${repoId}/cherry-pick`, { hashes: [one] });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+    // 预检在 git 创建停态之前拦下（复刻终审实验：祖先摘樱桃不再进入空补丁停态）
+    expect(existsSync(join(repoPath, '.git', 'CHERRY_PICK_HEAD'))).toBe(false);
   });
 
   it('revert 端点：还原祖先提交 → 200 success 且生成 Revert 提交', { timeout: RIG_TIMEOUT }, async () => {

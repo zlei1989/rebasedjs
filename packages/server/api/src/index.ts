@@ -3,7 +3,7 @@ export { cloneRepo, getRepoById, initRepo, listRecentRepos, openRepo } from './r
 export { getRepoStatus } from './status';
 export { watchRepoStatus } from './events';
 export { getRepoConfig, setRepoConfig } from './config';
-export { abortOperation, continueOperation, getOperation } from './operation';
+export { abortOperation, assertNoOperationInProgress, continueOperation, getOperation } from './operation';
 export { getLogPage, streamLogEvents } from './log';
 export { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
 export { applyHunkStaging, applyStaging } from './staging';

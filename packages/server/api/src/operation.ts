@@ -9,6 +9,16 @@ export async function getOperation(repoPath: string): Promise<OperationState> {
   return { kind: s.kind, step: s.step, total: s.total };
 }
 
+/**
+ * 预检无进行中操作（→ OPERATION_IN_PROGRESS）：merge/rebase/cherry-pick/revert 发起类操作共用。
+ * 操作态在场说明上次操作未收尾，直接发起会产生嵌套操作或让 core 把既有操作态误判为冲突结果。
+ */
+export async function assertNoOperationInProgress(repoPath: string): Promise<void> {
+  if ((await getOperation(repoPath)).kind !== 'none') {
+    throw new ServiceError('OPERATION_IN_PROGRESS', '已有进行中的操作，请先完成或中止');
+  }
+}
+
 export async function abortOperation(repoPath: string): Promise<OperationState> {
   const current = await getOperation(repoPath);
   if (current.kind === 'none') {

@@ -216,6 +216,31 @@ describe('RebaseDialog', () => {
     expect(screen.getByRole('button', { name: /确\s*定/ })).toBeDisabled();
   });
 
+  it('todoError 渲染错误文案替代「无待重放提交」且确定禁用', () => {
+    const h = makeHandlers();
+    render(<RebaseDialog open base="ghost" todoError="引用不存在或不是提交：ghost" {...h} />);
+    switchToInteractive();
+    expect(screen.getByTestId('rebase-todo-error')).toHaveTextContent('引用不存在或不是提交：ghost');
+    expect(screen.queryByText('无待重放提交（base..HEAD 为空）')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /确\s*定/ })).toBeDisabled();
+  });
+
+  it('提交后（失败路径容器不关窗）编辑保留可重试；关窗重开才复位', async () => {
+    const h = makeHandlers();
+    const { rerender } = render(<RebaseDialog open todo={TODO} base="main" {...h} />);
+    switchToInteractive();
+    await changeAction(H1, 'drop');
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(h.onInteractiveRebase).toHaveBeenCalledTimes(1);
+    // 容器在失败时保持打开：本地编辑不得被提交动作清掉（重试不丢）
+    expect(within(screen.getByTestId(`todo-row-${H1}`)).getByText('drop')).toBeInTheDocument();
+    // 关窗重开才复位为默认 pick
+    rerender(<RebaseDialog open={false} todo={TODO} base="main" {...h} />);
+    rerender(<RebaseDialog open todo={TODO} base="main" {...h} />);
+    switchToInteractive();
+    expect(within(screen.getByTestId(`todo-row-${H1}`)).getByText('pick')).toBeInTheDocument();
+  });
+
   it('数据源变化（换 base 的新 todo）时行重建为默认 pick', async () => {
     const h = makeHandlers();
     const { rerender } = render(<RebaseDialog open todo={TODO} base="main" {...h} />);
