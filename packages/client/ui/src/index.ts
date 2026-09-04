@@ -25,6 +25,8 @@ export {
   groupByChangelist,
 } from './composite/status-page';
 export { BranchPanel, type BranchPanelProps } from './composite/branch-panel';
+export { BlameView, type BlameViewProps } from './composite/blame-view';
+export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
 export { StashPanel, type StashPanelProps } from './composite/stash-panel';
 export { ResetDialog, type ResetDialogProps } from './composite/reset-dialog';
 export { MergeDialog, type MergeDialogProps } from './composite/merge-dialog';
