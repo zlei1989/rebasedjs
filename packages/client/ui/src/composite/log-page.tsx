@@ -44,6 +44,10 @@ export interface LogPageProps {
   onOpenUpdate?: () => void;
   /** 远程管理页入口回调；缺省时「更多」菜单不含远程管理项 */
   onOpenRemotes?: () => void;
+  /** 变基对话框入口回调；缺省时「更多」菜单不含变基项 */
+  onOpenRebase?: () => void;
+  /** 标签页入口回调；缺省时「更多」菜单不含标签项 */
+  onOpenTags?: () => void;
   /** 冲突页入口回调；仅当 operation.kind==='merge' 时渲染「去解决冲突」链接，缺省不渲染 */
   onOpenConflicts?: () => void;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
@@ -52,6 +56,10 @@ export interface LogPageProps {
   undoCommitting?: boolean;
   /** 透传给 CommitDetailsPanel 的「Reset 当前分支到此处」回调；缺省详情面板不渲染该按钮 */
   onResetHere?: (hash: string) => void;
+  /** 透传给 CommitDetailsPanel 的「摘樱桃」回调；缺省详情面板不渲染该按钮 */
+  onCherryPick?: (hash: string) => void;
+  /** 透传给 CommitDetailsPanel 的「还原」回调；缺省详情面板不渲染该按钮 */
+  onRevert?: (hash: string) => void;
 }
 
 export function LogPage({
@@ -72,13 +80,20 @@ export function LogPage({
   onOpenPush,
   onOpenUpdate,
   onOpenRemotes,
+  onOpenRebase,
+  onOpenTags,
   onOpenConflicts,
   onUndoCommit,
   undoCommitting,
   onResetHere,
+  onCherryPick,
+  onRevert,
 }: LogPageProps): React.ReactNode {
-  // 「更多」菜单项：仅装配容器注入回调的远程操作入口；全缺省时连「更多」按钮都不渲染
+  // 「更多」菜单项：仅装配容器注入回调的入口（本地操作 变基/标签 + 远程操作 拉取/推送/更新项目/远程管理）；
+  // 全缺省时连「更多」按钮都不渲染
   const moreItems = [
+    ...(onOpenRebase ? [{ key: 'rebase', label: '变基' }] : []),
+    ...(onOpenTags ? [{ key: 'tags', label: '标签' }] : []),
     ...(onOpenPull ? [{ key: 'pull', label: '拉取' }] : []),
     ...(onOpenPush ? [{ key: 'push', label: '推送' }] : []),
     ...(onOpenUpdate ? [{ key: 'update', label: '更新项目' }] : []),
@@ -86,7 +101,9 @@ export function LogPage({
   ];
   /** 「更多」菜单点击分发：按 key 调对应入口回调 */
   const onMoreClick = (key: string): void => {
-    if (key === 'pull') onOpenPull?.();
+    if (key === 'rebase') onOpenRebase?.();
+    else if (key === 'tags') onOpenTags?.();
+    else if (key === 'pull') onOpenPull?.();
     else if (key === 'push') onOpenPush?.();
     else if (key === 'update') onOpenUpdate?.();
     else if (key === 'remotes') onOpenRemotes?.();
@@ -199,7 +216,12 @@ export function LogPage({
             data-testid="commit-details"
             style={{ width: 320, flexShrink: 0, borderLeft: '1px solid #f0f0f0', overflow: 'auto' }}
           >
-            <CommitDetailsPanel commit={selectedCommit} onResetHere={onResetHere} />
+            <CommitDetailsPanel
+              commit={selectedCommit}
+              onResetHere={onResetHere}
+              onCherryPick={onCherryPick}
+              onRevert={onRevert}
+            />
           </div>
         ) : null}
       </div>

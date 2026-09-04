@@ -251,4 +251,70 @@ describe('LogPage', () => {
     render(<LogPage repoName="alpha" status={status} commits={commits} />);
     expect(screen.queryByRole('button', { name: '更多' })).not.toBeInTheDocument();
   });
+
+  it('传入 onOpenRebase 时「更多」菜单含变基项，点击触发回调', async () => {
+    const onOpenRebase = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenRebase={onOpenRebase} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('变基'));
+    expect(onOpenRebase).toHaveBeenCalledTimes(1);
+  });
+
+  it('传入 onOpenTags 时「更多」菜单含标签项，点击触发回调', async () => {
+    const onOpenTags = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenTags={onOpenTags} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('标签'));
+    expect(onOpenTags).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传 onOpenRebase/onOpenTags 时「更多」菜单不含变基/标签项', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={() => {}} />);
+    await openMoreMenu();
+    expect(screen.queryByText('变基')).not.toBeInTheDocument();
+    expect(screen.queryByText('标签')).not.toBeInTheDocument();
+  });
+
+  it('仅传 onOpenRebase 时「更多」菜单只含变基项（标签与远程项缺省）', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenRebase={() => {}} />);
+    await openMoreMenu();
+    expect(screen.getByText('变基')).toBeInTheDocument();
+    expect(screen.queryByText('标签')).not.toBeInTheDocument();
+    expect(screen.queryByText('拉取')).not.toBeInTheDocument();
+  });
+
+  it('仅传 onOpenTags 时「更多」菜单只含标签项', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenTags={() => {}} />);
+    await openMoreMenu();
+    expect(screen.getByText('标签')).toBeInTheDocument();
+    expect(screen.queryByText('变基')).not.toBeInTheDocument();
+    expect(screen.queryByText('推送')).not.toBeInTheDocument();
+  });
+
+  it('传入 onCherryPick 时透传给详情面板，点击回调携带选中提交 hash', () => {
+    const onCherryPick = vi.fn();
+    const selected = makeCommit({ hash: 'c9selected0001' });
+    render(
+      <LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} onCherryPick={onCherryPick} />,
+    );
+    fireEvent.click(screen.getByTestId('cherry-pick'));
+    expect(onCherryPick).toHaveBeenCalledWith('c9selected0001');
+  });
+
+  it('传入 onRevert 时透传给详情面板，点击回调携带选中提交 hash', () => {
+    const onRevert = vi.fn();
+    const selected = makeCommit({ hash: 'c9selected0001' });
+    render(
+      <LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} onRevert={onRevert} />,
+    );
+    fireEvent.click(screen.getByTestId('revert'));
+    expect(onRevert).toHaveBeenCalledWith('c9selected0001');
+  });
+
+  it('未传 onCherryPick/onRevert 时详情面板不渲染摘樱桃/还原按钮', () => {
+    const selected = makeCommit({ hash: 'c9selected0001' });
+    render(<LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} />);
+    expect(screen.queryByTestId('cherry-pick')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('revert')).not.toBeInTheDocument();
+  });
 });

@@ -2,23 +2,45 @@
  * rebase 原语：onto 变基、交互式变基（sequence-editor shim）、todo 数据源、继续变基。
  * 冲突判定同 P2-E：operation 原语见 rebase 态（rebase-merge/rebase-apply，含 step/total），
  * 或 ls-files -u 有未合并条目；其余非 0 退出原样抛 GitExitError。
- * 交互式 todo 的「程序化编辑」经 GIT_SEQUENCE_EDITOR 指向同目录 git-sequence-editor.mjs shim 实现
- * （机制与引号约定见该文件头注释）。
+ * 交互式 todo 的「程序化编辑」经 GIT_SEQUENCE_EDITOR 指向 shim 脚本实现：
+ * git 以 `sh -c '<编辑器命令> "$@"' <编辑器命令> <todo路径>` 调用编辑器（见 SHIM_SOURCE 头注释），
+ * shim 读取 env REBASED_TODO_FILE 指向的「已备 todo」并覆盖写入 git 传入的 todo 路径。
+ * shim 文件内容以字符串常量内嵌（本模块为运行时唯一真源），执行时落盘到临时目录——
+ * 不再经 import.meta.url 解析包内文件路径（webpack 打包会把 new URL(..., import.meta.url)
+ * 资产化为跨 realm URL 对象，fileURLToPath 拒绝，web-next 整站 API 500；见 Task 8 冒烟修复）。
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { listConflictedPaths } from './conflict';
 import { GitExitError, runGit } from './exec';
 import { getOperationState } from './operation';
 
+/**
+ * shim 脚本源（零依赖，仅 node 内置模块）：
+ * git 经过 sh -c 把 todo 路径作为末参传给编辑器命令，本脚本读取 process.argv 末参（todo 路径），
+ * 把 process.env.REBASED_TODO_FILE 指向的「服务端已备好」的 todo 内容覆盖写入——todo 编辑完全程序化，无需交互。
+ * 失败语义：REBASED_TODO_FILE 未设置或读写失败时以非零退出——git 将中止变基且不留下
+ * rebase 状态，上层按 GitExitError 原样透出（api 层预检已保证参数合法，此处属于防御）。
+ */
+const SHIM_SOURCE = `import { readFileSync, writeFileSync } from 'node:fs';
+
+const todoPath = process.argv[process.argv.length - 1];
+const preparedPath = process.env.REBASED_TODO_FILE;
+
+if (preparedPath === undefined || preparedPath === '') {
+  throw new Error('REBASED_TODO_FILE 未设置，无法获取已备好的 todo 内容');
+}
+if (todoPath === undefined) {
+  throw new Error('todo 路径未作为末参传入');
+}
+
+writeFileSync(todoPath, readFileSync(preparedPath, 'utf8'));
+`;
+
 export interface CoreRebaseResult {
   status: 'success' | 'conflicts' | 'up-to-date';
 }
-
-/** shim 绝对路径：git 经 sh -c 调用编辑器，路径必须可执行且可被 sh 解析（见文件头） */
-const SEQUENCE_EDITOR_SHIM = fileURLToPath(new URL('./git-sequence-editor.mjs', import.meta.url));
 
 /** HEAD 哈希（无提交的空仓库返回 null，与 remote.ts 的私有 headHash 同款语义） */
 async function headHash(cwd: string): Promise<string | null> {
@@ -89,7 +111,8 @@ function quoteForSh(value: string): string {
  * 交互式变基：entries 经 api 层校验后写入临时 todo 文件，再以
  * env GIT_SEQUENCE_EDITOR=<已引号包裹的 node+shim 路径> 与 REBASED_TODO_FILE=<临时文件>
  * 执行 git rebase -i <base>；shim 以 git 传入的 todo 路径（末参）覆写已备 todo——实现程序化编辑。
- * 冲突判定同 rebaseOnto；完成后清理临时 todo 文件（成功/冲突/异常均清理）。
+ * shim 源一并落盘到同一临时目录（见 SHIM_SOURCE 头注释：绕过打包器对 import.meta.url 的破坏）。
+ * 冲突判定同 rebaseOnto；完成后清理临时目录（成功/冲突/异常均清理）。
  */
 export async function runInteractiveRebase(
   cwd: string,
@@ -97,10 +120,12 @@ export async function runInteractiveRebase(
 ): Promise<CoreRebaseResult> {
   const todoDir = await mkdtemp(join(tmpdir(), 'rebased-todo-'));
   const todoFile = join(todoDir, 'todo');
+  const shimFile = join(todoDir, 'git-sequence-editor.mjs');
   try {
     const lines = opts.entries.map((entry) => `${entry.action} ${entry.hash}`).join('\n');
     await writeFile(todoFile, `${lines}\n`, 'utf8');
-    const editor = `${quoteForSh(process.execPath)} ${quoteForSh(SEQUENCE_EDITOR_SHIM)}`;
+    await writeFile(shimFile, SHIM_SOURCE, 'utf8');
+    const editor = `${quoteForSh(process.execPath)} ${quoteForSh(shimFile)}`;
     return await rebaseWithStatus(cwd, ['rebase', '-i', opts.base], {
       GIT_SEQUENCE_EDITOR: editor,
       REBASED_TODO_FILE: todoFile,

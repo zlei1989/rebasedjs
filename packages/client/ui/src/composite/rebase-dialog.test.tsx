@@ -207,6 +207,15 @@ describe('RebaseDialog', () => {
     expect(screen.getByRole('button', { name: /确\s*定/ })).toBeDisabled();
   });
 
+  it('todoLoading 时确定禁用（新 base 旧行数据窗口防御）', () => {
+    const h = makeHandlers();
+    render(<RebaseDialog open todo={TODO} todoLoading base="main" {...h} />);
+    switchToInteractive();
+    expect(screen.getByTestId('rebase-todo-loading')).toBeInTheDocument();
+    // 旧行仍在本地状态（SWR 新 key 重取期间），todoLoading 期间不得用旧行提交新 base
+    expect(screen.getByRole('button', { name: /确\s*定/ })).toBeDisabled();
+  });
+
   it('数据源变化（换 base 的新 todo）时行重建为默认 pick', async () => {
     const h = makeHandlers();
     const { rerender } = render(<RebaseDialog open todo={TODO} base="main" {...h} />);

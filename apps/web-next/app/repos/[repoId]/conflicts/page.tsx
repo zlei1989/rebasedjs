@@ -1,21 +1,22 @@
 'use client';
 
 /**
- * 冲突页容器：useConflicts + useResolveConflict + useContinueMerge + useOperation 注入 ui ConflictsPanel；
+ * 冲突页容器：useConflicts + useResolveConflict + useContinueOperation + useOperation 注入 ui ConflictsPanel；
  * 「手动合并」开全屏 Modal 包 MergeView（选中 path → useConflictContents 拉三版本内容 → onSave 走 manual 解决 → 关 Modal）；
- * 「完成合并」→ useContinueMerge 成功返回日志页；操作失败统一 message.error。
+ * 「继续」→ useContinueOperation（按 operation.kind 分派 merge/rebase/cherry-pick/revert，success 返回日志页；
+ * 按钮文案由 operationKind 透传 ConflictsPanel 泛化——merge→完成合并/其他→继续xx）；操作失败统一 message.error。
  * 本页自订阅 events（仓库作用域页面一致性约定）：外部 CLI git add 解决冲突时重验证冲突列表；
- * 中止合并不在本页做——由日志页 OperationStatus 操作条承接（P2-A），故 operation 仅用于展示进行中提示。
+ * 中止操作不在本页做——由日志页 OperationStatus 操作条承接（P2-A），故 operation 仅用于展示进行中提示与 continue 分派。
  */
 import {
   useConflictContents,
   useConflicts,
-  useContinueMerge,
+  useContinueOperation,
   useOperation,
   useRepoEvents,
   useResolveConflict,
 } from '@rebased/client';
-import { ConflictsPanel, MergeView } from '@rebased/ui';
+import { ConflictsPanel, MergeView, continueKindLabel } from '@rebased/ui';
 import { Button, Flex, message, Modal, Typography } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
@@ -26,7 +27,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { data: conflictList, mutate: mutateConflicts } = useConflicts(repoId);
   const { data: operation } = useOperation(repoId);
   const { trigger: resolveConflict, isMutating: resolving } = useResolveConflict(repoId);
-  const { trigger: continueMerge, isMutating: continuing } = useContinueMerge(repoId);
+  const { trigger: continueOperation, isMutating: continuing } = useContinueOperation(repoId);
   // 手动合并目标路径；'' 表示 Modal 关闭（useConflictContents 空串挂 null key 不发请求，可无条件挂载）
   const [mergePath, setMergePath] = useState('');
   const { data: contents } = useConflictContents(repoId, mergePath);
@@ -43,14 +44,28 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
       .then(() => setMergePath(''))
       .catch(onError);
   };
-  // 完成合并：全部解决后 git merge --continue，成功返回日志页（响应已回写 status 缓存）
+  // 继续操作：全部解决后按 operation.kind 分派（merge/rebase/cherry-pick/revert）执行 --continue，
+  // 成功返回日志页（响应已由 useContinueOperation 回写 status 缓存）；文案按操作种类泛化
   const onContinue = (): void => {
-    continueMerge()
+    continueOperation()
       .then(() => {
-        void message.success('合并完成');
+        void message.success('操作完成');
         back();
       })
       .catch(onError);
+  };
+  // 进行中操作名词（提示文案用）：merge→合并、rebase→变基、cherry-pick→摘樱桃、revert→还原；none→空
+  const progressName = (kind: string | undefined): string => {
+    switch (kind) {
+      case 'rebase':
+        return '变基';
+      case 'cherry-pick':
+        return '摘樱桃';
+      case 'revert':
+        return '还原';
+      default:
+        return '合并';
+    }
   };
   // 冲突列表未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!conflictList) return null;
@@ -60,10 +75,10 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
       <Button type="link" onClick={back}>
         返回日志
       </Button>
-      {/* 进行中合并提示：中止入口在日志页操作条（P2-A），本页只做展示 */}
-      {operation?.kind === 'merge' ? (
+      {/* 进行中操作提示：中止入口在日志页操作条（P2-A），本页只做展示；文案按 kind 泛化（merge→完成合并/其他→继续xx） */}
+      {operation && operation.kind !== 'none' ? (
         <Typography.Text type="secondary" style={{ padding: '0 16px' }}>
-          合并进行中：解决全部冲突后点击「完成合并」；中止合并请返回日志页操作条。
+          {progressName(operation.kind)}进行中：解决全部冲突后点击「{continueKindLabel(operation.kind)}」；中止请返回日志页操作条。
         </Typography.Text>
       ) : null}
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板状态随之重置 */}
@@ -72,6 +87,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         conflicts={conflictList}
         resolving={resolving}
         continuing={continuing}
+        operationKind={operation?.kind}
         onResolve={(body) => {
           resolveConflict(body).catch(onError);
         }}

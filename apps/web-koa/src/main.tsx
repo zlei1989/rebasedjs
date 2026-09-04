@@ -17,6 +17,7 @@ import { RepoDiffPage } from './pages/diff';
 import { RepoSettingsPage } from './pages/settings';
 import { RepoStashesPage } from './pages/stashes';
 import { RepoStatusPage } from './pages/status';
+import { RepoTagsPage } from './pages/tags';
 
 createRoot(document.getElementById('root')!).render(
   <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
@@ -33,6 +34,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/repos/:repoId/settings" element={<RepoSettingsPage />} />
           <Route path="/repos/:repoId/stashes" element={<RepoStashesPage />} />
           <Route path="/repos/:repoId/status" element={<RepoStatusPage />} />
+          <Route path="/repos/:repoId/tags" element={<RepoTagsPage />} />
         </Routes>
       </BrowserRouter>
     </AntApp>

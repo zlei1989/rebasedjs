@@ -186,7 +186,8 @@ export function RebaseDialog(props: RebaseDialogProps): React.ReactNode {
       open={open}
       okText={mode === 'simple' ? '开始' : '确定'}
       cancelText="取消"
-      okButtonProps={{ disabled: mode === 'simple' ? onto.trim() === '' : !interactiveOk }}
+      // 交互模式在 todoLoading 期间也禁用：SWR 换 base 重取时本地仍有旧行，不得拿旧行提交新 base（Task 6 审查防御）
+      okButtonProps={{ disabled: mode === 'simple' ? onto.trim() === '' : !interactiveOk || !!todoLoading }}
       confirmLoading={confirming}
       onOk={mode === 'simple' ? submitSimple : submitInteractive}
       onCancel={close}

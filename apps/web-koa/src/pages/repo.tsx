@@ -3,30 +3,51 @@
  * 注入 ui LogPage（与 web-next 容器同构；repoId 取 useParams 而非 Next params）。
  * 流式语义（Ruling 6）：stream 是同一查询的渐进式渲染而非快照后的新增，
  * 故 commits 经 mergeLogCommits 合成——流连接中以流为主列表，REST 快照作首屏与 hash 去重兜底。
- * 远程操作区：顶栏「更多」四入口（拉取/推送/更新项目/远程管理）+ pull/push/update 对话框（页面化 Modal 不如对话框内联——Java 版即为对话框）。
+ * 远程操作区：顶栏「更多」入口（变基/标签/拉取/推送/更新项目/远程管理）+ pull/push/update 对话框（页面化 Modal 不如对话框内联——Java 版即为对话框）。
+ * 变基区：RebaseDialog 双模式状态机——简单模式 → useRebase；交互模式 → base 本地状态驱动
+ * useRebaseTodo 重取（onBaseChange）+ useInteractiveRebase 提交；结果 success → 提示关闭（events 推送刷新日志）；
+ * conflicts → 警告 + 跳冲突页（操作态经 events 推送，conflicts 页自行加载）。
+ * 摘樱桃/还原区：CommitDetailsPanel 回调 → 容器 Modal.confirm 确认 → useCherryPick/useRevert；
+ * 结果 conflicts → 警告 + 跳冲突页。
  * AuthDialog 全局于本容器（认证重试回路范式，后续页面需要认证的远程操作复用此装配）：
  * 操作失败 err instanceof ServiceError 且 code==='AUTH_FAILED' → 开 AuthDialog（host 自 err.context）
  * → onOk = upsertAccount({host, account, token}) → 成功后重试原操作一次；取消即放弃。
  */
 import {
   useAbortOperation,
+  useCherryPick,
+  useInteractiveRebase,
   useLogPage,
   useLogStream,
   useOperation,
   usePull,
   usePush,
+  useRebase,
+  useRebaseTodo,
   useRecentRepos,
   useRemotes,
   useRepoEvents,
   useRepoStatus,
   useReset,
+  useRevert,
   useUndoCommit,
   useUpdateProject,
   useUpsertAccount,
 } from '@rebased/client';
-import { ServiceError, type CommitInfo, type PullBody, type PushBody, type ResetBody, type UpdateBody } from '@rebased/contracts';
-import { AuthDialog, LogPage, PullDialog, PushDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
-import { message } from 'antd';
+import {
+  ServiceError,
+  type CommitInfo,
+  type InteractiveRebaseBody,
+  type PickOutcome,
+  type PullBody,
+  type PushBody,
+  type RebaseBody,
+  type RebaseOutcome,
+  type ResetBody,
+  type UpdateBody,
+} from '@rebased/contracts';
+import { AuthDialog, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
+import { Modal, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
@@ -104,6 +125,69 @@ export function RepoPage(): React.ReactNode {
     undoCommit()
       .then(() => void message.success('已撤销最近提交'))
       .catch((err: unknown) => void message.error(err instanceof Error ? err.message : String(err)));
+  };
+  // 操作失败统一以服务端中文 message 提示，避免未捕获 rejection（与 reset/undo 内联 catch 并存）
+  const onError = (err: unknown): void => {
+    void message.error(err instanceof Error ? err.message : String(err));
+  };
+  // === 变基区（RebaseDialog 双模式状态机）===
+  const { trigger: rebase, isMutating: rebasing } = useRebase(repoId);
+  const { trigger: interactiveRebase, isMutating: interactiveRebasing } = useInteractiveRebase(repoId);
+  // 交互模式基准（'' = 未输入，useRebaseTodo 挂 null key 不发请求）；容器持有 base，UI 输入经 onBaseChange 回写
+  const [rebaseOpen, setRebaseOpen] = useState(false);
+  const [rebaseBase, setRebaseBase] = useState('');
+  // 交互模式 todo 数据源：base 变化自动重取，old-data 期间 ui 以 todoLoading 禁用确定（Task 6 审查防御）
+  const { data: rebaseTodo, isLoading: rebaseTodoLoading } = useRebaseTodo(repoId, rebaseBase);
+  // 变基结果分派：success → 提示（events 推送 headHash/refs 变化刷新日志）；conflicts → 警告 + 跳冲突页；
+  // up-to-date → 提示；任何结果都关闭对话框并复位 base（失败路径同 reset/undo 先例，只提示不关窗——用户可改参重试）
+  const dispatchRebaseOutcome = (outcome: RebaseOutcome): void => {
+    if (outcome.status === 'conflicts') {
+      void message.warning('变基存在冲突，请解决后完成');
+      void navigate(`/repos/${repoId}/conflicts`);
+    } else if (outcome.status === 'up-to-date') {
+      void message.info('已是最新');
+    } else {
+      void message.success('变基完成');
+    }
+    setRebaseBase('');
+    setRebaseOpen(false);
+  };
+  const onRebaseOnto = (body: RebaseBody): void => {
+    rebase(body).then(dispatchRebaseOutcome).catch(onError);
+  };
+  const onInteractiveRebase = (body: InteractiveRebaseBody): void => {
+    interactiveRebase(body).then(dispatchRebaseOutcome).catch(onError);
+  };
+  // === 摘樱桃/还原区（CommitDetailsPanel 回调 → 容器确认 → hook）===
+  const { trigger: cherryPick } = useCherryPick(repoId);
+  const { trigger: revert } = useRevert(repoId);
+  // pick 结果分派：success → 提示（events 推送 headHash 变化刷新日志）；conflicts → 警告 + 跳冲突页
+  const dispatchPickOutcome = (outcome: PickOutcome): void => {
+    if (outcome.status === 'conflicts') {
+      void message.warning('存在冲突，请解决后完成');
+      void navigate(`/repos/${repoId}/conflicts`);
+    } else {
+      void message.success('操作完成');
+    }
+  };
+  // 摘樱桃/还原：Modal.confirm 确认后调 hook（确认弹窗由容器持有，按钮提示语按操作区分）
+  const onCherryPick = (hash: string): void => {
+    Modal.confirm({
+      title: '摘樱桃',
+      content: '确认将选中提交摘到当前分支？',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => cherryPick({ hashes: [hash] }).then(dispatchPickOutcome).catch(onError),
+    });
+  };
+  const onRevert = (hash: string): void => {
+    Modal.confirm({
+      title: '还原',
+      content: '确认反转选中提交（生成 Revert 提交）？',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => revert({ hashes: [hash] }).then(dispatchPickOutcome).catch(onError),
+    });
   };
   /**
    * 远程数据传输操作的公共出口（认证重试回路装配点，范式供后续页面复用）：
@@ -204,10 +288,30 @@ export function RepoPage(): React.ReactNode {
         onOpenMerge={() => navigate(`/repos/${repoId}/merge`)}
         onOpenStashes={() => navigate(`/repos/${repoId}/stashes`)}
         onOpenConflicts={() => navigate(`/repos/${repoId}/conflicts`)}
+        onOpenRebase={() => setRebaseOpen(true)}
+        onOpenTags={() => navigate(`/repos/${repoId}/tags`)}
+        onCherryPick={onCherryPick}
+        onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}
         onOpenPush={() => setOpenDialog('push')}
         onOpenUpdate={() => setOpenDialog('update')}
         onOpenRemotes={() => navigate(`/repos/${repoId}/remotes`)}
+      />
+      {/* 变基对话框：双模式状态机（简单 → useRebase；交互 → base 驱动 todo 重取 + useInteractiveRebase 提交）；
+          取消即复位（RebaseDialog 内部状态自行复位，base 归空使 useRebaseTodo 挂 null key 停止重取） */}
+      <RebaseDialog
+        open={rebaseOpen}
+        base={rebaseBase}
+        todo={rebaseTodo}
+        todoLoading={rebaseTodoLoading}
+        confirming={rebasing || interactiveRebasing}
+        onBaseChange={setRebaseBase}
+        onRebaseOnto={onRebaseOnto}
+        onInteractiveRebase={onInteractiveRebase}
+        onCancel={() => {
+          setRebaseBase('');
+          setRebaseOpen(false);
+        }}
       />
       <ResetDialog
         open={resetTarget !== null}
