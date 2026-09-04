@@ -72,6 +72,8 @@ export async function listTodoCommits(cwd: string, base: string): Promise<{ hash
   for (const line of stdout.split('\n')) {
     if (line === '') continue;
     const sep = line.indexOf('\0');
+    // 缺 NUL 分隔符（git 控制格式下不可触发，防御性）→ 跳过该行，行为与 tag.ts 的字段守卫一致
+    if (sep === -1) continue;
     commits.push({ hash: line.slice(0, sep), subject: line.slice(sep + 1) });
   }
   return commits;

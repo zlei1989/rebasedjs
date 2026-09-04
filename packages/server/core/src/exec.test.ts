@@ -89,6 +89,21 @@ describe('防交互挂起（GIT_TERMINAL_PROMPT=0）', () => {
 });
 
 describe('streamGit 取消语义', () => {
+  it('env 注入透传给子进程（shell 别名读取环境变量）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    // git 对 ! 开头的别名经 sh -c 展开，能读到 git 子进程 env（合并顺序见 exec.ts）：
+    // 若 env 未注入，$REBASED_ENV 展开为空，输出不含 'bar'。
+    let out = '';
+    for await (const chunk of streamGit(['-c', 'alias.self=!echo $REBASED_ENV', 'self'], {
+      cwd: repo,
+      env: { REBASED_ENV: 'bar' },
+    })) {
+      out += chunk;
+    }
+    expect(out).toContain('bar');
+  });
+
   it('已中止的 signal 预检：不启动进程直接抛 130', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);

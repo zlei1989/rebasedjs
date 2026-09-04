@@ -116,13 +116,18 @@ export function runGit(
 
 /** 流式执行 git（大输出场景：log 图、diff），逐块产出 stdout 文本。
  *  取消语义与 runGit 对齐：abort 后绝不正常完成，统一以 exitCode 130 拒绝；
- *  消费者提前 break 时杀子进程树并清理监听，避免悬挂。 */
-export async function* streamGit(args: string[], opts: { cwd: string; signal?: AbortSignal }): AsyncGenerator<string, void, unknown> {
+ *  消费者提前 break 时杀子进程树并清理监听，避免悬挂。
+ *  env 可选项：调用方注入的额外环境变量，合并顺序与 runGit 完全一致
+ *  （process.env → opts.env → GIT_ENV，固定防挂起项不可被注入覆盖）。 */
+export async function* streamGit(
+  args: string[],
+  opts: { cwd: string; signal?: AbortSignal; env?: Record<string, string> },
+): AsyncGenerator<string, void, unknown> {
   // 预检：signal 已中止则不启动进程
   if (opts.signal?.aborted) throw new GitExitError(args, 130, '', '');
   const child = spawn('git', buildArgs(args), {
     cwd: opts.cwd,
-    env: { ...process.env, ...GIT_ENV },
+    env: { ...process.env, ...opts.env, ...GIT_ENV },
     windowsHide: true,
   });
   let stderr = '';
