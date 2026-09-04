@@ -997,3 +997,222 @@ describe('web-koa remotes/fetch/pull/push/update 端点', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
   });
 });
+
+describe('web-koa rebase/cherry-pick/revert/tags 端点', () => {
+  /** 本组用例 git 进程密集（变基/摘樱桃/裸仓库对端 + log 复核），统一放宽用例超时 */
+  const RIG_TIMEOUT = 120000;
+  /** 在指定仓库上执行 git（返回 stdout） */
+  const git = (repoPath: string, args: string[]): string =>
+    execFileSync('git', ['-C', repoPath, ...args], { encoding: 'utf8' });
+  const jsonPost = (path: string, body: unknown) =>
+    fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const jsonGet = (path: string) => fetch(`${base}${path}`);
+
+  it('rebase 端点：main 上 rebase onto side → 200 success 且历史线性', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    const main = git(repoPath, ['symbolic-ref', '--short', 'HEAD']).trim();
+    git(repoPath, ['checkout', '-q', '-b', 'side']);
+    makeLocalCommit(repoPath, 'side.txt', 'side\n', 'side');
+    git(repoPath, ['checkout', '-q', main]);
+    makeLocalCommit(repoPath, 'main.txt', 'main\n', 'main');
+
+    const res = await jsonPost(`/api/repos/${repoId}/rebase`, { onto: 'side' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(git(repoPath, ['log', '--format=%s', '-3']).trim().split('\n')).toEqual(['main', 'side', 'init']);
+  });
+
+  it('rebase/todo 端点：base..HEAD 反序返回全量提交（哈希+主题）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    const base = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'one.txt', 'one\n', 'one');
+    const one = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'two.txt', 'two\n', 'two');
+    const two = git(repoPath, ['rev-parse', 'HEAD']).trim();
+
+    const res = await jsonGet(`/api/repos/${repoId}/rebase/todo?base=${base}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([
+      { hash: one, subject: 'one' },
+      { hash: two, subject: 'two' },
+    ]);
+  });
+
+  it('rebase/interactive 端点：drop 中间提交 → 200 success 且 git log 复核（中间提交消失）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    const base = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'one.txt', 'one\n', 'one');
+    const one = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'two.txt', 'two\n', 'two');
+    const two = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'three.txt', 'three\n', 'three');
+    const three = git(repoPath, ['rev-parse', 'HEAD']).trim();
+
+    const res = await jsonPost(`/api/repos/${repoId}/rebase/interactive`, {
+      base,
+      entries: [
+        { hash: one, action: 'pick' },
+        { hash: two, action: 'drop' },
+        { hash: three, action: 'pick' },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(git(repoPath, ['log', '--format=%s', '-3']).trim().split('\n')).toEqual(['three', 'one', 'init']);
+    expect(git(repoPath, ['ls-tree', '-r', '--name-only', 'HEAD']).split('\n')).toContain('one.txt');
+    expect(git(repoPath, ['ls-tree', '-r', '--name-only', 'HEAD']).split('\n')).not.toContain('two.txt');
+  });
+
+  it('cherry-pick 端点：祖先提交摘樱桃 → 200 success', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    const base = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'c.txt', 'two\n', 'one');
+    const one = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    git(repoPath, ['reset', '-q', '--hard', base]);
+
+    const res = await jsonPost(`/api/repos/${repoId}/cherry-pick`, { hashes: [one] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(git(repoPath, ['log', '--format=%s', '-2']).trim().split('\n')).toEqual(['one', 'init']);
+    expect(git(repoPath, ['show', 'HEAD:c.txt'])).toBe('two\n');
+  });
+
+  it('revert 端点：还原祖先提交 → 200 success 且生成 Revert 提交', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    makeLocalCommit(repoPath, 'a.txt', 'one\n', 'one');
+    const one = git(repoPath, ['rev-parse', 'HEAD']).trim();
+
+    const res = await jsonPost(`/api/repos/${repoId}/revert`, { hashes: [one] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(git(repoPath, ['log', '--format=%s', '-1']).trim()).toBe('Revert "one"');
+    expect(git(repoPath, ['show', 'HEAD:a.txt'])).toBe('hello\n');
+  });
+
+  it('operation/continue 端点：无进行中操作（无请求体 POST）返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await fetch(`${base}/api/repos/${repoId}/operation/continue`, { method: 'POST' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('rebase 冲突全流程：rebase→conflicts 列表→resolve theirs→operation/continue→操作态清零', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    makeConflictScenario(repoPath);
+
+    // POST rebase：双向改同一行 → 200 RebaseOutcome{status:'conflicts'}
+    const rebaseRes = await jsonPost(`/api/repos/${repoId}/rebase`, { onto: 'side' });
+    expect(rebaseRes.status).toBe(200);
+    expect(await rebaseRes.json()).toEqual({ status: 'conflicts' });
+
+    // 操作态为 rebase
+    const opRes = await jsonGet(`/api/repos/${repoId}/operation`);
+    expect(((await opRes.json()) as { kind: string }).kind).toBe('rebase');
+
+    // GET conflicts：冲突路径齐
+    const listRes = await jsonGet(`/api/repos/${repoId}/conflicts`);
+    expect(await listRes.json()).toEqual({ conflicts: [{ path: 'a.txt', stages: [1, 2, 3] }] });
+
+    // POST conflicts/resolve：theirs 采纳 → 列表变空
+    const resolveRes = await jsonPost(`/api/repos/${repoId}/conflicts/resolve`, {
+      strategy: 'theirs',
+      path: 'a.txt',
+    });
+    expect(resolveRes.status).toBe(200);
+    expect(await resolveRes.json()).toEqual({ conflicts: [] });
+
+    // POST operation/continue（无请求体）：rebase --continue → 200 RepoStatus
+    const continueRes = await fetch(`${base}/api/repos/${repoId}/operation/continue`, { method: 'POST' });
+    expect(continueRes.status).toBe(200);
+    expect(await continueRes.json()).toMatchObject({ entries: [] });
+
+    // 操作态清零
+    const opAfter = await jsonGet(`/api/repos/${repoId}/operation`);
+    expect(await opAfter.json()).toEqual({ kind: 'none' });
+  });
+
+  it('tags 端点：GET 空 → create 轻量/附注 → push 裸仓库 → delete 往返', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath, bare } = makeRemoteRig();
+    const head = git(repoPath, ['rev-parse', 'HEAD']).trim();
+
+    const getRes = await jsonGet(`/api/repos/${repoId}/tags`);
+    expect(getRes.status).toBe(200);
+    expect(await getRes.json()).toEqual({ tags: [] });
+
+    // 轻量标签：hash 即提交哈希，subject 即提交主题，annotated=false
+    const createLight = await jsonPost(`/api/repos/${repoId}/tags`, { action: 'create', name: 'v1', ref: 'HEAD' });
+    expect(createLight.status).toBe(200);
+    let list = (await createLight.json()) as { tags: Array<{ name: string; hash: string; subject: string | null; annotated: boolean }> };
+    expect(list.tags).toEqual([{ name: 'v1', hash: head, subject: 'init', annotated: false }]);
+
+    // 附注标签：annotated=true，subject 为附注消息
+    const createAnnotated = await jsonPost(`/api/repos/${repoId}/tags`, {
+      action: 'create',
+      name: 'v2',
+      message: '发布 1.0',
+    });
+    expect(createAnnotated.status).toBe(200);
+    list = (await createAnnotated.json()) as typeof list;
+    const v2 = list.tags.find((t) => t.name === 'v2');
+    expect(v2?.annotated).toBe(true);
+    expect(v2?.subject).toBe('发布 1.0');
+
+    // push 到裸仓库对端：200 刷新列表且对端 refs/tags/v1 可见
+    const pushRes = await jsonPost(`/api/repos/${repoId}/tags`, {
+      action: 'push',
+      name: 'v1',
+      remote: 'origin',
+    });
+    expect(pushRes.status).toBe(200);
+    expect(((await pushRes.json()) as { tags: unknown[] }).tags).toHaveLength(2);
+    const bareTag = git(bare, ['rev-parse', 'refs/tags/v1']).trim();
+    expect(bareTag).toBe(head);
+
+    // delete：200 刷新列表仅剩 v1
+    const deleteRes = await jsonPost(`/api/repos/${repoId}/tags`, { action: 'delete', name: 'v2' });
+    expect(deleteRes.status).toBe(200);
+    expect(await deleteRes.json()).toEqual({ tags: [{ name: 'v1', hash: head, subject: 'init', annotated: false }] });
+  });
+
+  it('tags 端点：create 重名 → 400 INVALID_QUERY；delete 不存在 → 400 INVALID_REF', async () => {
+    const { repoId } = registerRepo();
+    await jsonPost(`/api/repos/${repoId}/tags`, { action: 'create', name: 'v1' });
+    const dupRes = await jsonPost(`/api/repos/${repoId}/tags`, { action: 'create', name: 'v1' });
+    expect(dupRes.status).toBe(400);
+    expect(await dupRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+    const delRes = await jsonPost(`/api/repos/${repoId}/tags`, { action: 'delete', name: 'ghost' });
+    expect(delRes.status).toBe(400);
+    expect(await delRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
+  it('zod 反例：空 onto / 空 entries / 空 hashes / 缺 base / 未知 tag action 均返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const results = await Promise.all([
+      jsonPost(`/api/repos/${repoId}/rebase`, { onto: '' }),
+      jsonPost(`/api/repos/${repoId}/rebase/interactive`, { base: 'HEAD', entries: [] }),
+      jsonPost(`/api/repos/${repoId}/cherry-pick`, { hashes: [] }),
+      jsonGet(`/api/repos/${repoId}/rebase/todo`),
+      jsonPost(`/api/repos/${repoId}/tags`, { action: 'rename', name: 'v1' }),
+    ]);
+    for (const res of results) {
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+    }
+  });
+
+  it('未注册 repoId：rebase/tags/operation-continue 返回 404 REPO_NOT_FOUND', async () => {
+    const rebaseRes = await jsonPost('/api/repos/nope/rebase', { onto: 'side' });
+    expect(rebaseRes.status).toBe(404);
+    expect(await rebaseRes.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+    const tagsRes = await jsonGet('/api/repos/nope/tags');
+    expect(tagsRes.status).toBe(404);
+    expect(await tagsRes.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+    const contRes = await fetch(`${base}/api/repos/nope/operation/continue`, { method: 'POST' });
+    expect(contRes.status).toBe(404);
+    expect(await contRes.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+});

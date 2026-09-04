@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyRemoteAction, applyReset, applyStaging, applyStashAction, continueMergeOperation, createCommit, deleteAccount, fetchRepo, getBranches, getChangelists, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRemotes, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, pullRepo, pushRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
-import { accountBodySchema, accountDeleteBodySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, fetchBodySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, pullBodySchema, pushBodySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyRemoteAction, applyReset, applyStaging, applyStashAction, applyTagAction, cherryPick, continueMergeOperation, continueOperation, createCommit, deleteAccount, fetchRepo, getBranches, getChangelists, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRebaseTodo, getRemotes, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, pullRepo, pushRepo, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, fetchBodySchema, hunkStagingBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -167,6 +167,15 @@ router.post('/api/repos/:repoId/operation/abort', async (ctx) => {
   }
 });
 
+/** POST /api/repos/:repoId/operation/continue —— 继续进行中操作（按 kind 分派 merge/rebase/cherry-pick/revert；无请求体）→ 200 RepoStatus；无态 → 400 INVALID_QUERY */
+router.post('/api/repos/:repoId/operation/continue', async (ctx) => {
+  try {
+    ctx.body = await continueOperation(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
 /** POST /api/repos/:repoId/staging —— zod 校验请求体 → applyStaging（文件级 stage/unstage/discard）→ 200 RepoStatus */
 router.post('/api/repos/:repoId/staging', async (ctx) => {
   try {
@@ -269,6 +278,56 @@ router.post('/api/repos/:repoId/merge', async (ctx) => {
 router.post('/api/repos/:repoId/merge/continue', async (ctx) => {
   try {
     ctx.body = await continueMergeOperation(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/rebase —— zod 校验请求体 → rebaseBranch（onto 变基）→ 200 RebaseOutcome；无效 onto → 400 INVALID_REF */
+router.post('/api/repos/:repoId/rebase', async (ctx) => {
+  try {
+    const body = rebaseBodySchema.parse(ctx.request.body);
+    ctx.body = await rebaseBranch(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/rebase/todo —— zod 校验查询（base）→ getRebaseTodo（base..HEAD 全量，反序）→ 200 TodoEntry[] */
+router.get('/api/repos/:repoId/rebase/todo', async (ctx) => {
+  try {
+    const query = rebaseTodoQuerySchema.parse(ctx.query);
+    ctx.body = await getRebaseTodo(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.base);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/rebase/interactive —— zod 校验请求体 → runInteractiveRebaseService（清单全量校验后 sequence-editor 执行）→ 200 RebaseOutcome */
+router.post('/api/repos/:repoId/rebase/interactive', async (ctx) => {
+  try {
+    const body = interactiveRebaseBodySchema.parse(ctx.request.body);
+    ctx.body = await runInteractiveRebaseService(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/cherry-pick —— zod 校验请求体 → cherryPick（逐哈希预检后按序应用）→ 200 PickOutcome */
+router.post('/api/repos/:repoId/cherry-pick', async (ctx) => {
+  try {
+    const body = pickBodySchema.parse(ctx.request.body);
+    ctx.body = await cherryPick(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/revert —— zod 校验请求体 → revert（逐哈希预检后生成 Revert 提交）→ 200 PickOutcome */
+router.post('/api/repos/:repoId/revert', async (ctx) => {
+  try {
+    const body = pickBodySchema.parse(ctx.request.body);
+    ctx.body = await revert(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }
@@ -398,6 +457,25 @@ router.post('/api/repos/:repoId/update', async (ctx) => {
   try {
     const body = updateBodySchema.parse(ctx.request.body);
     ctx.body = await updateProject(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/tags —— 标签列表（TagList）→ 错误映射 */
+router.get('/api/repos/:repoId/tags', async (ctx) => {
+  try {
+    ctx.body = await getTags(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/tags —— zod 校验 action → applyTagAction（create/delete/push）→ 200 刷新 TagList；重名 → 400 INVALID_QUERY，不存在 → 400 INVALID_REF */
+router.post('/api/repos/:repoId/tags', async (ctx) => {
+  try {
+    const body = tagActionSchema.parse(ctx.request.body);
+    ctx.body = await applyTagAction(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }
