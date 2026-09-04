@@ -16,4 +16,5 @@ export { getConflictContents, getConflicts, resolveConflict } from './conflict';
 export { applyStashAction, getStashes } from './stash';
 export { getSettings, updateSettings } from './settings';
 export { applyChangelistAction, getChangelists } from './changelist';
+export { deleteAccount, listAccounts, upsertAccount } from './auth';
 export { toServiceError } from './errors';
