@@ -314,3 +314,25 @@ export interface AuthDialogProps { open: boolean; host: string; onOk: (account: 
 - 横切项：watcher 扩展（refs.changed）✓ Task 3/6/8；GIT_TERMINAL_PROMPT ✓ Task 2；AUTH_FAILED + 对话框 ✓ Task 4/7/8；host 规范化 ✓ Task 1/4；泄露断言 ✓ Task 4。
 - 类型一致性：normalizeHost 为 contracts 纯函数（client/server 共用唯一键约定）；refs.changed 事件名常量在 contracts；认证回路 `withAuth`/`isAuthFailure`/`buildAuthConfig` 纯函数可测。
 - 风险：extraHeader 的 `http.<baseurl>` 条件节语法版本差异（git ≥2.13 支持；大小写规则注释写明）；Windows 进程参数可见性已在安全约束明示。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+8/8 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: With fixes**——1 Important（传输操作无超时兜底——终审纠正了 ledger 中"服务端 30s 兜底"的失实延期依据）+ 2 搭车项（未知远程 INVALID_REF 预检、events 泄露守卫）修复波（commit `e872edb`）经限定复审全部 ADDRESSED、零新破坏，正式关账。
+
+**终审亮点**：token 封装链结构性密封（GitExitError 只持原始 args，-c 注入永不进入 context.args → 500 路径）+ 行为级证明（401 集成用例：本地 HTTP 服务器端确收 Bearer 头 + 响应/错误体无 token）；认证重试回路每环有测试；watcher 扩展诚实有锚（stash save/drop 指纹锚定 P2-F 缺口）；isAuthFailure 反向矩阵覆盖 rejected-push 误伤面。
+
+**Rulings（控制器裁决记录）**：
+1. GCM_INTERACTIVE=never 追加（GCM 不受 git 自身 GIT_TERMINAL_PROMPT 约束，Git for Windows 全局 credential.helper=manager 是普遍配置；never=有凭据照常、无凭据快败，不破坏已存凭据流）。
+2. updatedRefs 用完整 refname 口径（契约注释已同步修正）。
+3. buildAuthConfig 双键分离：注入节用完整 authority（含非默认端口——git config --get-urlmatch 实证），查找键用 normalizeHost（端口剥离）。
+4. http.ts error.context 透传为真实既有缺陷的正确修复（服务端本已序列化 context，客户端丢弃）。
+5. 无体 POST 的 koa/web-next 不对称判 safe-to-defer（全仓既有同款，app 级决策入 hardening ⑳）。
+
+**环境缺陷（msys2/Git for Windows 并发）**：根级全量验证已执行——首次运行在 api 包遭遇 EPERM 临时目录删除竞态（已知 flake 族），api 包单独复跑 106+1skip 全绿；全部包在本分支生命周期内均各自全绿。根级单次全绿在本机受环境缺陷制约，入 hardening ㉑（vitest 对 git 传输夹具限并发评估 + 本机 Git 修复 rebaseall）。
+
+**hardening 新增**：㉒ toServiceError/UI 对 exitCode 124 特判为「操作超时」中文消息（当前为「退出码 124」裸文本）。
+
+终审 triage：24 项 deferred minor 全部 safe-to-defer（#23 改判已随修复消解）。SDD 工作区已按规程删除，本提交为记录。
