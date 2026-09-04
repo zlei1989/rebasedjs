@@ -8,7 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 import { createServer, get as httpGet, type IncomingMessage, type Server } from 'node:http';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -65,6 +65,37 @@ function readBody(res: IncomingMessage): Promise<string> {
     res.on('end', () => resolve(body));
     res.on('error', reject);
   });
+}
+
+/** 裸仓库对端装置：注册仓库 + bare 当 origin + push -u 建 upstream；裸仓库 HEAD 指默认分支（配方同 api 层 remote 测试） */
+function makeRemoteRig(): { repoId: string; repoPath: string; bare: string; defaultBranch: string } {
+  const { repoId, repoPath } = registerRepo();
+  const defaultBranch = execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+  const bare = tmpDir('rebased-web-koa-bare-');
+  execFileSync('git', ['init', '-q', '--bare', bare]);
+  execFileSync('git', ['-C', repoPath, 'remote', 'add', 'origin', bare]);
+  execFileSync('git', ['-C', repoPath, 'push', '-q', '-u', 'origin', defaultBranch]);
+  execFileSync('git', ['-C', bare, 'symbolic-ref', 'HEAD', `refs/heads/${defaultBranch}`]);
+  return { repoId, repoPath, bare, defaultBranch };
+}
+
+/** 第二 clone 对端：提交并推到裸仓库默认分支（制造远端新提交/分叉） */
+function pushRemoteCommit(bare: string, defaultBranch: string, filename: string, content: string): void {
+  const other = tmpDir('rebased-web-koa-other-');
+  execFileSync('git', ['clone', '-q', bare, other]);
+  execFileSync('git', ['-C', other, 'config', 'user.email', 'test@example.com']);
+  execFileSync('git', ['-C', other, 'config', 'user.name', 'Test User']);
+  writeFileSync(join(other, filename), content);
+  execFileSync('git', ['-C', other, 'add', filename]);
+  execFileSync('git', ['-C', other, 'commit', '-q', '-m', `remote: ${filename}`]);
+  execFileSync('git', ['-C', other, 'push', '-q', 'origin', `HEAD:${defaultBranch}`]);
+}
+
+/** 本地新提交（在指定仓库工作区上） */
+function makeLocalCommit(repoPath: string, filename: string, content: string, message: string): void {
+  writeFileSync(join(repoPath, filename), content);
+  execFileSync('git', ['-C', repoPath, 'add', filename]);
+  execFileSync('git', ['-C', repoPath, 'commit', '-q', '-m', message]);
 }
 
 beforeAll(async () => {
@@ -824,5 +855,145 @@ describe('web-koa auth 账户端点（应用级，无 repoId）', () => {
     const res = await postJson('/api/auth/accounts/delete', { host: 'github.com', account: 'nobody' });
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+});
+
+describe('web-koa remotes/fetch/pull/push/update 端点', () => {
+  /** 裸仓库装置用例 git 进程密集（本机单次 git 进程启动约秒级），统一放宽用例超时 */
+  const RIG_TIMEOUT = 120000;
+  const postJson = (path: string, body: unknown) =>
+    fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('remotes 端点：GET 空列表 → add → setUrl → remove 往返均返回刷新 RemoteList', async () => {
+    const { repoId } = registerRepo();
+    const getRes = await fetch(`${base}/api/repos/${repoId}/remotes`);
+    expect(getRes.status).toBe(200);
+    expect(await getRes.json()).toEqual({ remotes: [] });
+
+    const addRes = await postJson(`/api/repos/${repoId}/remotes`, { action: 'add', name: 'origin', url: 'https://example.com/a.git' });
+    expect(addRes.status).toBe(200);
+    expect(await addRes.json()).toEqual({
+      remotes: [{ name: 'origin', fetchUrl: 'https://example.com/a.git', pushUrl: 'https://example.com/a.git' }],
+    });
+
+    const setUrlRes = await postJson(`/api/repos/${repoId}/remotes`, { action: 'setUrl', name: 'origin', url: 'https://example.com/b.git' });
+    expect(setUrlRes.status).toBe(200);
+    expect(((await setUrlRes.json()) as { remotes: unknown[] }).remotes).toEqual([
+      { name: 'origin', fetchUrl: 'https://example.com/b.git', pushUrl: 'https://example.com/b.git' },
+    ]);
+
+    const removeRes = await postJson(`/api/repos/${repoId}/remotes`, { action: 'remove', name: 'origin' });
+    expect(removeRes.status).toBe(200);
+    expect(await removeRes.json()).toEqual({ remotes: [] });
+  });
+
+  it('remotes 端点：add 重名 → 400 INVALID_QUERY；remove 不存在 → 400 INVALID_REF', async () => {
+    const { repoId } = registerRepo();
+    await postJson(`/api/repos/${repoId}/remotes`, { action: 'add', name: 'origin', url: 'https://example.com/a.git' });
+    const dupRes = await postJson(`/api/repos/${repoId}/remotes`, { action: 'add', name: 'origin', url: 'https://example.com/x.git' });
+    expect(dupRes.status).toBe(400);
+    expect(await dupRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+    const removeRes = await postJson(`/api/repos/${repoId}/remotes`, { action: 'remove', name: 'nope' });
+    expect(removeRes.status).toBe(400);
+    expect(await removeRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
+  it('remotes 端点：未知 action（zod 拒绝）返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await postJson(`/api/repos/${repoId}/remotes`, { action: 'wat', name: 'origin' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('remotes 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await fetch(`${base}/api/repos/nope/remotes`);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('fetch 端点：对端新提交后 fetch 返回 200 FetchResult（updatedRefs 含对应引用）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, bare, defaultBranch } = makeRemoteRig();
+    pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+    const res = await postJson(`/api/repos/${repoId}/fetch`, {}); // fetch 体可空 {}
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { updatedRefs: string[] };
+    expect(body.updatedRefs).toContain(`refs/remotes/origin/${defaultBranch}`);
+  });
+
+  it('fetch 端点：remote 非字符串（zod 拒绝）返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await postJson(`/api/repos/${repoId}/fetch`, { remote: 123 });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('pull 端点：对端新提交 pull 返回 200 updated 且工作区同步', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath, bare, defaultBranch } = makeRemoteRig();
+    pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+    const res = await postJson(`/api/repos/${repoId}/pull`, { remote: 'origin' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'updated' });
+    expect(readFileSync(join(repoPath, 'b.txt'), 'utf8')).toBe('from-other');
+  });
+
+  it('pull 端点：rebase 非布尔（zod 拒绝）返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await postJson(`/api/repos/${repoId}/pull`, { rebase: 'yes' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('push 端点：本地新提交 push 返回 200 pushed 且对端可见', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath, bare, defaultBranch } = makeRemoteRig();
+    makeLocalCommit(repoPath, 'b.txt', 'local', 'local commit');
+    const res = await postJson(`/api/repos/${repoId}/push`, { remote: 'origin', branch: defaultBranch });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'pushed' });
+    const bareHead = execFileSync('git', ['-C', bare, 'rev-parse', defaultBranch], { encoding: 'utf8' }).trim();
+    expect(bareHead).toBe(execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim());
+  });
+
+  it('push 端点：分叉后 push 返回 200 rejected + 中文 hint（业务结果，不做 409 特判）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath, bare, defaultBranch } = makeRemoteRig();
+    pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+    makeLocalCommit(repoPath, 'c.txt', 'local', 'local commit');
+    const res = await postJson(`/api/repos/${repoId}/push`, { remote: 'origin', branch: defaultBranch });
+    expect(res.status).toBe(200); // PushOutcome.rejected 是 200 业务结果，409 保留给真冲突
+    expect(await res.json()).toEqual({ status: 'rejected', hint: '远端有更新的提交，请先拉取/变基' });
+  });
+
+  it('push 端点：forceWithLease 非布尔（zod 拒绝）返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await postJson(`/api/repos/${repoId}/push`, { forceWithLease: 'yes' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('update 端点：merge 策略返回 200 UpdateOutcome（fetched + pull.updated 且工作区同步）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath, bare, defaultBranch } = makeRemoteRig();
+    pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+    const res = await postJson(`/api/repos/${repoId}/update`, { strategy: 'merge' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { fetched: string[]; pull: { status: string } };
+    expect(body.pull.status).toBe('updated');
+    expect(body.fetched).toContain(`refs/remotes/origin/${defaultBranch}`);
+    expect(readFileSync(join(repoPath, 'b.txt'), 'utf8')).toBe('from-other');
+  });
+
+  it('update 端点：非法 strategy（zod 拒绝）返回 400 INVALID_QUERY', async () => {
+    const { repoId } = registerRepo();
+    const res = await postJson(`/api/repos/${repoId}/update`, { strategy: 'ff-only' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('update 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
+    const res = await postJson('/api/repos/nope/update', { strategy: 'merge' });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
   });
 });

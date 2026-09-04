@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyReset, applyStaging, applyStashAction, continueMergeOperation, createCommit, deleteAccount, getBranches, getChangelists, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
-import { accountBodySchema, accountDeleteBodySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyRemoteAction, applyReset, applyStaging, applyStashAction, continueMergeOperation, createCommit, deleteAccount, fetchRepo, getBranches, getChangelists, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRemotes, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, pullRepo, pushRepo, resolveConflict, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, fetchBodySchema, hunkStagingBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, pullBodySchema, pushBodySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -336,6 +336,68 @@ router.post('/api/repos/:repoId/changelists', async (ctx) => {
   try {
     const body = changelistActionSchema.parse(ctx.request.body);
     ctx.body = await applyChangelistAction(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/remotes —— 远程列表（RemoteList）→ 错误映射 */
+router.get('/api/repos/:repoId/remotes', async (ctx) => {
+  try {
+    ctx.body = await getRemotes(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/remotes —— zod 校验 action → applyRemoteAction（add/remove/setUrl）→ 200 刷新 RemoteList；add 重名 → 400 INVALID_QUERY，remove/setUrl 不存在 → 400 INVALID_REF */
+router.post('/api/repos/:repoId/remotes', async (ctx) => {
+  try {
+    const body = remoteActionSchema.parse(ctx.request.body);
+    ctx.body = await applyRemoteAction(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/fetch —— zod 校验请求体（可空 {}）→ fetchRepo → 200 FetchResult；认证失败 → 401 AUTH_FAILED（context.host 供对话框预填） */
+router.post('/api/repos/:repoId/fetch', async (ctx) => {
+  try {
+    const body = fetchBodySchema.parse(ctx.request.body);
+    ctx.body = await fetchRepo(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/pull —— zod 校验请求体 → pullRepo（remote?/rebase?）→ 200 PullOutcome；认证失败 → 401 AUTH_FAILED */
+router.post('/api/repos/:repoId/pull', async (ctx) => {
+  try {
+    const body = pullBodySchema.parse(ctx.request.body);
+    ctx.body = await pullRepo(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/**
+ * POST /api/repos/:repoId/push —— zod 校验请求体 → pushRepo → 200 PushOutcome。
+ * rejected（non-fast-forward）是 200 业务结果（附中文 hint），路由层无 409 特判；认证失败 → 401 AUTH_FAILED。
+ */
+router.post('/api/repos/:repoId/push', async (ctx) => {
+  try {
+    const body = pushBodySchema.parse(ctx.request.body);
+    ctx.body = await pushRepo(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/update —— zod 校验请求体（strategy: merge|rebase）→ updateProject（fetch 全远程 + 策略化 pull）→ 200 UpdateOutcome */
+router.post('/api/repos/:repoId/update', async (ctx) => {
+  try {
+    const body = updateBodySchema.parse(ctx.request.body);
+    ctx.body = await updateProject(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }
