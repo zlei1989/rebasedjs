@@ -4,6 +4,90 @@
 - **参照系**：`D:\zhanglei1120\Github\rebased`（Java/Kotlin 版 Rebased，基于 IntelliJ 平台的 Git 客户端）
 - **审计对象**：`D:\zhanglei1120\Github\rebasedjs`（TS + React 全栈重写，pnpm monorepo）
 - **依据**：`docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md`（下称"架构 spec"，其结论已对 Java 源码逐一核查）+ 本次对两个项目源码的直接盘点（附录 B 含抽查证据）
+- **进度更新**：2026-09-04 复核（基线 HEAD `704e1c5`，P2 阶段 12/12 收官、P3-A 契约就绪）——**最新复刻进度以「〇、进度更新」为准**；§一/§二/附录 C 主体保持 2026-09-03（`cbb7dfa`）快照口径，附录 D 保持 `a09f050`+工作区口径，均不回改。
+
+---
+
+## 〇、进度更新（2026-09-04，基线 `704e1c5`）
+
+> 本节为当前唯一权威进度口径；与后文快照冲突时以本节为准。核查方法同附录 C（逐文件实测两端路由、容器、组件与契约）。
+
+### 0.1 总览
+
+| 口径 | 快照（`cbb7dfa`） | 当前（`704e1c5`） |
+|------|------------------|------------------|
+| 操作页面/面板（30 个） | 3 ✅ | **10 ✅ + 2 🟡 等效**（33%+） |
+| 功能域（36 + 2 可选） | 5 + events | **17**（P1 5 + P2 12，≈47%） |
+| 端点路径 / HTTP 方法 | 9 / 10 | **29 / 35**（两端完全对称） |
+| 半使用接口 | 3（diff/stream、GET/PUT settings） | **2**（diff/stream 分块渲染、staging/hunks 无 UI 入口）；GET/PUT settings 已被 SettingsPage 完全消费 |
+| 服务层未暴露能力 | 3 | **2**（`getFileDiff` 已挂 `diff/patch`；`initRepo`/`cloneRepo` 仍无端点无 UI） |
+| `@rebased/api` 公共出口 | 15 函数 | **39 函数** |
+| zod schema / 领域类型 | 4 / 10 | **23 / 33**（含 P3-A 远程/update 契约 5 schema + 6 类型 + `refs.changed` 事件常量，就绪未挂端点；余 18 / 27 全部在用） |
+| SSE 事件类型在用 | 4 | **5**（新增 `operation.state-changed`，events 首帧双事件；`refs.changed` 为 P3-A 预留约定） |
+| 错误码实际产生 / 预留 | 4 / 8 | **6 / 6**（新增实际产生 `INVALID_REF`、`OPERATION_IN_PROGRESS`） |
+
+P2 阶段 12 个功能域（operation、reset、staging、changelist、commit、branch、checkout、merge、stash、conflict、config、auth）按 P2-A→P2-H 八波全部落地并关账（计划与关账记录见 `docs/superpowers/plans/2026-09-03-rebasedjs-p2*.md`）。
+
+### 0.2 页面进度对照（相对附录 C.0 的变化）
+
+| 页面 | 快照 | 当前 | 落点与说明 |
+|------|------|------|-----------|
+| StatusPage | ❌ | ✅ | `/repos/:id/status` 两端路由；已修改/未跟踪/已暂存分组 + 变更列表子分组（P2-G）、文件级 stage/unstage/discard、行内补丁预览（`diff/patch`）、提交框、`onOpenDiff` → DiffPage；本页自订阅 events |
+| CommitDialog | ❌ | 🟡 等效 | 以 StatusPage 内嵌提交框承载（对齐 Java 非模态提交模式）：message 必填 + amend/signOff/noVerify 三选项（`commitBodySchema`）；模态对话框形态未做 |
+| ResetDialog | ❌ | ✅ | 内嵌 LogPage 模态（无独立路由）：soft/mixed/hard 三模式 + ref 预检（`INVALID_REF`）；Undo Commit 经 LogPage 顶栏 Popconfirm |
+| BranchPanel | ❌ | ✅ | `/repos/:id/branches` 两端路由；分支列表（current 标记）+ create（可带 startPoint）/delete（force）/rename/setUpstream + 检出（branch/newBranch/detach） |
+| MergeDialog | ❌ | ✅ | `/repos/:id/merge` 页面化对话框（open 常驻，取消=返回日志页）；noFf/squash/noCommit/message 四选项；结果三分支：已是最新留页 / 成功返回 / 冲突预填缓存跳 ConflictsPanel |
+| ConflictsPanel | ❌ | ✅ | `/repos/:id/conflicts` 两端路由；冲突列表 + ours/theirs/delete 整侧解决 + manual 经全屏 Modal 包 **MergeView**（3-way，`conflicts/contents` 三阶段内容）+「完成合并」（`merge/continue`）；中止入口在 LogPage 操作条 |
+| StashPanel | ❌ | ✅ | `/repos/:id/stashes` 两端路由；save（含 includeUntracked）/apply/pop/drop/branch（stash 转分支） |
+| SettingsPage | ❌ | ✅ | `/repos/:id/settings` 两端路由；应用设置读写（GET/PUT settings 由此变为完全使用）+ git 配置白名单 8 键读写（P2-A）+ 账户/令牌管理卡片（P2-H，host/account/token，令牌只读掩码、配置文件 0600） |
+| QuickActionsMenu | ❌ | 🟡 等效（部分） | LogPage 顶栏聚合 6 入口（变更/分支/合并/贮藏/设置 + 合并中"去解决冲突"链接）+ OperationStatus 操作条（中止）；无独立聚合菜单组件 |
+| 其余 18 页面 | ❌ | ❌ | 不变（RebaseDialog、TagPanel、RemotePanel、PushDialog、PullDialog、UpdateProjectDialog、BlameView、HistoryPanel、CommittedChangesPanel、SearchPanel、PatchPanel、ShelfPanel、WorktreePanel、SubmodulePanel、IgnoreDialog、GitHubPanel、GitLabPanel、GitConsole，均属 P3–P4） |
+
+### 0.3 接口增量（新增 20 路径 / 25 方法，全部两端对称）
+
+| 端点 | 用途 | 客户端消费 | 状态 |
+|------|------|-----------|------|
+| `GET/PUT /api/repos/:id/config` | git 配置白名单 8 键读写 | SettingsPage（`useRepoConfig`/`useSetConfig`） | ✅ |
+| `GET /api/repos/:id/operation` | 进行中操作查询 | LogPage OperationStatus、ConflictsPanel 提示 | ✅ |
+| `POST /api/repos/:id/operation/abort` | 中止进行中操作 | LogPage 操作条 | ✅ |
+| `POST /api/repos/:id/staging` | 文件级 stage/unstage/discard | StatusPage | ✅ |
+| `POST /api/repos/:id/staging/hunks` | hunk 级暂存（按 `diff/patch` hunk 索引） | `useHunkStaging` 就绪，UI 无入口 | ⚠️ 半使用 |
+| `GET /api/repos/:id/diff/patch` | unified patch 全文（`getFileDiff` 由此暴露） | StatusPage 行内补丁预览 | ✅ |
+| `POST /api/repos/:id/commit` | 提交（amend/signOff/noVerify；身份预检提示先配置 user.name/email） | StatusPage 提交框 | ✅ |
+| `GET/POST /api/repos/:id/branches` | 分支列表 / create/delete/rename/setUpstream | BranchPanel、MergeDialog（数据源） | ✅ |
+| `POST /api/repos/:id/checkout` | 检出 branch/newBranch/detach | BranchPanel | ✅ |
+| `POST /api/repos/:id/reset` + `/reset/undo-commit` | 三模式 reset / 撤销最近提交 | LogPage ResetDialog / 顶栏 | ✅ |
+| `POST /api/repos/:id/merge` + `/merge/continue` | 合并（四选项）/ 完成合并 | MergeDialog / ConflictsPanel | ✅ |
+| `GET /api/repos/:id/conflicts` + `/conflicts/contents` + `POST /conflicts/resolve` | 冲突列表 / 三阶段内容 / 四策略解决 | ConflictsPanel、MergeView | ✅ |
+| `GET/POST /api/repos/:id/stashes` | 贮藏列表 / save/apply/pop/drop/branch | StashPanel | ✅ |
+| `GET/POST /api/repos/:id/changelists` | 变更列表查询 / create/rename/delete/setDefault/move | StatusPage 分组与管理 | ✅ |
+| `GET/POST /api/auth/accounts` + `POST /api/auth/accounts/delete` | 账户/令牌存储（应用级，无 repoId） | SettingsPage 账户卡片 | ✅ |
+
+存量 9 路径中：`GET/PUT /api/settings` 由半使用转为完全使用（SettingsPage）；`GET /api/repos/:id/events` 首帧扩展为 `repo.state-changed` + `operation.state-changed` 双事件；`diff/stream` 仍为半使用（分块文本未接入 Monaco 渲染，容器注释明示留待后续）。
+
+### 0.4 导航边增量（相对附录 D.6）
+
+活动跳转边由 3 条增至 **18 条**（半通仍为 LogPage→DiffPage 1 条：DiffPage 现有 StatusPage `onOpenDiff` 入口，LogPage 侧仍无直达入口）：
+
+| 边 | 实现 |
+|----|------|
+| LogPage → StatusPage / BranchPanel / MergeDialog / StashPanel / SettingsPage | 顶栏五按钮（`onOpenStatus/Branches/Merge/Stashes/Settings`）→ 各自路由 |
+| 各子页 → LogPage | "返回日志"按钮（status/branches/merge/stashes/settings 五容器一致） |
+| LogPage → ConflictsPanel | 合并进行中时操作条旁"去解决冲突"链接（`operation.kind==='merge'` 才渲染） |
+| MergeDialog → ConflictsPanel | 合并结果 conflicts：预填冲突列表 SWR 缓存后跳转（免首帧闪烁） |
+| ConflictsPanel → MergeView | "手动合并"全屏 Modal（`conflicts/contents` → 保存走 manual 解决） |
+| ConflictsPanel → LogPage | "完成合并"（`merge/continue` 成功）/ 返回日志 |
+| StatusPage → DiffPage | `onOpenDiff` → 既有 `/diff?file=` 路由（D.3.3 #42 接通） |
+| StatusPage → 提交框 | CommitDialog 等效内嵌（D.3.3 #41 以非模态模式落地） |
+| LogPage → ResetDialog / Undo Commit | 行内"Reset 到此处"开内嵌模态 / 顶栏 Popconfirm（D.3.2 #14/#15） |
+
+形态映射沿用附录 D 口径：Java 模态对话框 ↔ 独立路由页面化（MergeDialog）或内嵌模态（ResetDialog、MergeView）；Java 工具窗口 tab ↔ `/repos/:id/<页>` 路由 + 顶栏入口。
+
+### 0.5 下一步建议（更新 §三）
+
+1. 消化 2 个半使用接口：diff/stream 分块渲染接入 Monaco；hunk 级暂存 UI（`useHunkStaging` + `diff/patch` 索引已就绪）。
+2. 为 `initRepo`/`cloneRepo` 补端点与 RepoPage 入口（原建议②不变）。
+3. 进入 P3：实施计划 `docs/superpowers/plans/2026-09-03-rebasedjs-p3a-remote-update.md`（remote/update/认证回路/watcher 扩展）已就绪，其契约（remote/fetch/pull/push/update 5 schema + RemoteInfo/FetchResult/PullOutcome/PushOutcome/UpdateOutcome 等 6 类型 + `refs.changed` 事件约定）已落地待挂端点；其后按 spec §7 为 rebase（含交互式）/cherry-pick/revert/tag/blame/history/committed/search/patch/shelf/console/ignore/github。
 
 ---
 
@@ -31,6 +115,8 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 
 ### 1.2 当前项目（rebasedjs）实现了多少个？
 
+> ⚠️ 本节为 2026-09-03 快照；最新进度（10/30 页面、17/36 功能域）见「〇、进度更新」。
+
 **结论：已实现 3 个操作页面，对应 5 个功能域（P1 阶段全量）+ 1 个 SSE 推送基础设施。**
 
 已实现的 3 个页面（`packages/client/ui/src/composite/`，web-next 与 web-koa 各挂 3 条路由、共享同一套组件）：
@@ -55,6 +141,8 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 ## 二、问题 2：当前项目全部接口的用途与使用情况
 
 ### 2.1 接口总表（9 个端点路径、10 个 HTTP 方法，web-next 与 web-koa 完全对称）
+
+> ⚠️ 本节为 2026-09-03 快照；当前 29 路径 / 35 方法，增量与使用状态见「〇、进度更新」§0.3。
 
 实现位置：web-next `app/api/**/route.ts`（9 个 route 文件）；web-koa `src/routes/repos.ts`（10 个路由注册）。每个路由只做三件事：zod 校验 → 调 `@rebased/api` → 错误映射。
 
@@ -91,6 +179,8 @@ RepoPage、LogPage、DiffPage、StatusPage（Local Changes + 暂存区）、Comm
 ---
 
 ## 三、结论
+
+> ⚠️ 本节为 2026-09-03 快照结论；当前结论与下一步建议见「〇、进度更新」§0.1/§0.5。
 
 1. **页面口径**：Java 版 Rebased 面向用户的操作页面/面板/对话框共 **30 个**（功能域口径 36 个 + 2 个可选）；当前 rebasedjs 实现了其中 **3 个**（RepoPage / LogPage / DiffPage），即 **P1 阶段的全部目标页面**，在两个下游应用（web-next:3030、web-koa:3031/5173）中对称可用。
 2. **接口口径**：当前项目共 **9 个端点路径（10 个 HTTP 方法）**，两端实现完全对称，**全部被客户端使用、无死接口**；其中 3 个为"已接通待消费"的预接线状态（diff/stream 分块渲染、settings 读写接入 UI）。服务层有 3 个已实现但未暴露端点的能力（`getFileDiff`、`initRepo`、`cloneRepo`）。
