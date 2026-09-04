@@ -129,3 +129,18 @@ export type ChangelistAction = z.infer<typeof changelistActionSchema>;
 /** 冲突内容查询：path 必填 */
 export const conflictContentsQuerySchema = z.object({ path: z.string().min(1) });
 export type ConflictContentsQuery = z.infer<typeof conflictContentsQuerySchema>;
+
+/** 添加/覆盖账户：host 为主机名（如 github.com、gitlab.example.com）；token 写入端一次性接收，之后只读掩码 */
+export const accountBodySchema = z.object({
+  host: z.string().min(1),
+  account: z.string().min(1),
+  token: z.string().min(1),
+});
+export type AccountBody = z.infer<typeof accountBodySchema>;
+
+/** 删除账户 */
+export const accountDeleteBodySchema = z.object({
+  host: z.string().min(1),
+  account: z.string().min(1),
+});
+export type AccountDeleteBody = z.infer<typeof accountDeleteBodySchema>;

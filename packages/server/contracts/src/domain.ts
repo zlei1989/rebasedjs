@@ -167,3 +167,13 @@ export interface MergeOutcome {
   status: 'success' | 'conflicts' | 'up-to-date';
   conflicts: ConflictEntry[];
 }
+
+/** 账户条目（掩码视图）：token 本体永不下行；tokenPreview 为前 4 位 + '***'（便于用户辨认自己贴的是哪个 token） */
+export interface AccountEntry {
+  host: string;
+  account: string;
+  tokenPreview: string;
+}
+export interface AccountList {
+  accounts: AccountEntry[];
+}

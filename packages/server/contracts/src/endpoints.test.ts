@@ -16,6 +16,8 @@ import {
   stagingBodySchema,
   stashActionSchema,
   changelistActionSchema,
+  accountBodySchema,
+  accountDeleteBodySchema,
 } from './endpoints';
 
 describe('P1 端点 schema', () => {
@@ -266,6 +268,35 @@ describe('changelistActionSchema（变更列表操作判别联合）', () => {
     expect(() => changelistActionSchema.parse({ action: 'move', paths: [], targetId: 'cl-1' })).toThrow();
     expect(() => changelistActionSchema.parse({ action: 'move', paths: [''], targetId: 'cl-1' })).toThrow();
     expect(() => changelistActionSchema.parse({ action: 'move', paths: ['a.txt'], targetId: '' })).toThrow();
+  });
+});
+
+describe('accountBodySchema（添加/覆盖账户）', () => {
+  it('接受 host/account/token 全非空', () => {
+    expect(accountBodySchema.parse({ host: 'github.com', account: 'zhang', token: 'ghp_abc123' }))
+      .toEqual({ host: 'github.com', account: 'zhang', token: 'ghp_abc123' });
+    expect(accountBodySchema.parse({ host: 'gitlab.example.com', account: '张三', token: 'x' }).host)
+      .toBe('gitlab.example.com');
+  });
+  it('拒绝空 host/account/token 与缺字段', () => {
+    expect(() => accountBodySchema.parse({ host: '', account: 'zhang', token: 'ghp_abc123' })).toThrow();
+    expect(() => accountBodySchema.parse({ host: 'github.com', account: '', token: 'ghp_abc123' })).toThrow();
+    expect(() => accountBodySchema.parse({ host: 'github.com', account: 'zhang', token: '' })).toThrow();
+    expect(() => accountBodySchema.parse({ host: 'github.com', account: 'zhang' })).toThrow();
+    expect(() => accountBodySchema.parse({})).toThrow();
+  });
+});
+
+describe('accountDeleteBodySchema（删除账户）', () => {
+  it('接受非空 host 与 account', () => {
+    expect(accountDeleteBodySchema.parse({ host: 'github.com', account: 'zhang' }))
+      .toEqual({ host: 'github.com', account: 'zhang' });
+  });
+  it('拒绝空 host/account 与缺字段', () => {
+    expect(() => accountDeleteBodySchema.parse({ host: '', account: 'zhang' })).toThrow();
+    expect(() => accountDeleteBodySchema.parse({ host: 'github.com', account: '' })).toThrow();
+    expect(() => accountDeleteBodySchema.parse({ host: 'github.com' })).toThrow();
+    expect(() => accountDeleteBodySchema.parse({})).toThrow();
   });
 });
 
