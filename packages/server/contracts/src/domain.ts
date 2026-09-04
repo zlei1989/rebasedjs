@@ -231,7 +231,7 @@ export interface BlameLine {
   authorEmail: string;
   dateIso: string;
   content: string;
-  /** 该行由哪一行演化而来（前一次提交中的原行号；无则 null——如文件首创建） */
+  /** 该行在责任提交版本中的源行号（源自块头 orig 字段）；在无位移编辑/重命名场景恰等同于前一次提交中的行号，插入/位移编辑时可能指向无关行——精确映射留待增强；无则 null——如文件首创建 */
   previousLineno: number | null;
 }
 
