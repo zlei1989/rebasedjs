@@ -18,6 +18,11 @@ import {
   changelistActionSchema,
   accountBodySchema,
   accountDeleteBodySchema,
+  remoteActionSchema,
+  fetchBodySchema,
+  pullBodySchema,
+  pushBodySchema,
+  updateBodySchema,
 } from './endpoints';
 
 describe('P1 端点 schema', () => {
@@ -307,5 +312,74 @@ describe('conflictContentsQuerySchema（冲突内容查询）', () => {
   it('拒绝空 path 与缺 path', () => {
     expect(() => conflictContentsQuerySchema.parse({ path: '' })).toThrow();
     expect(() => conflictContentsQuerySchema.parse({})).toThrow();
+  });
+});
+
+describe('remoteActionSchema（远程写操作判别联合）', () => {
+  it('接受 add 带非空 name 与 url', () => {
+    expect(remoteActionSchema.parse({ action: 'add', name: 'origin', url: 'https://github.com/u/r.git' }))
+      .toEqual({ action: 'add', name: 'origin', url: 'https://github.com/u/r.git' });
+  });
+  it('接受 remove 与 setUrl', () => {
+    expect(remoteActionSchema.parse({ action: 'remove', name: 'origin' }))
+      .toEqual({ action: 'remove', name: 'origin' });
+    expect(remoteActionSchema.parse({ action: 'setUrl', name: 'origin', url: 'git@github.com:u/r.git' }))
+      .toEqual({ action: 'setUrl', name: 'origin', url: 'git@github.com:u/r.git' });
+  });
+  it('拒绝枚举外 action、缺字段与空 name/url', () => {
+    expect(() => remoteActionSchema.parse({ action: 'rename', name: 'a' })).toThrow();
+    expect(() => remoteActionSchema.parse({ action: 'add', name: 'origin' })).toThrow();
+    expect(() => remoteActionSchema.parse({ action: 'add', name: '', url: 'x' })).toThrow();
+    expect(() => remoteActionSchema.parse({ action: 'add', name: 'origin', url: '' })).toThrow();
+    expect(() => remoteActionSchema.parse({ action: 'remove' })).toThrow();
+    expect(() => remoteActionSchema.parse({ action: 'remove', name: '' })).toThrow();
+    expect(() => remoteActionSchema.parse({ action: 'setUrl', name: 'origin' })).toThrow();
+    expect(() => remoteActionSchema.parse({ action: 'setUrl', name: 'origin', url: '' })).toThrow();
+  });
+});
+
+describe('fetchBodySchema（fetch 请求体）', () => {
+  it('接受空体（默认全部远程）与指定 remote', () => {
+    expect(fetchBodySchema.parse({})).toEqual({});
+    expect(fetchBodySchema.parse({ remote: 'origin' })).toEqual({ remote: 'origin' });
+  });
+  it('拒绝非字符串 remote', () => {
+    expect(() => fetchBodySchema.parse({ remote: 1 })).toThrow();
+  });
+});
+
+describe('pullBodySchema（pull 请求体）', () => {
+  it('接受空体、指定 remote 与 rebase 开关', () => {
+    expect(pullBodySchema.parse({})).toEqual({});
+    expect(pullBodySchema.parse({ remote: 'origin', rebase: true }))
+      .toEqual({ remote: 'origin', rebase: true });
+  });
+  it('拒绝非布尔 rebase', () => {
+    expect(() => pullBodySchema.parse({ rebase: 'yes' })).toThrow();
+  });
+});
+
+describe('pushBodySchema（push 请求体）', () => {
+  it('接受空体与全选项', () => {
+    expect(pushBodySchema.parse({})).toEqual({});
+    expect(pushBodySchema.parse({
+      remote: 'origin', branch: 'main', forceWithLease: true, setUpstream: true,
+    })).toEqual({ remote: 'origin', branch: 'main', forceWithLease: true, setUpstream: true });
+  });
+  it('拒绝非布尔开关与非字符串 branch', () => {
+    expect(() => pushBodySchema.parse({ forceWithLease: 'yes' })).toThrow();
+    expect(() => pushBodySchema.parse({ setUpstream: 1 })).toThrow();
+    expect(() => pushBodySchema.parse({ branch: 1 })).toThrow();
+  });
+});
+
+describe('updateBodySchema（Update Project 请求体）', () => {
+  it('接受 merge / rebase 策略', () => {
+    expect(updateBodySchema.parse({ strategy: 'merge' })).toEqual({ strategy: 'merge' });
+    expect(updateBodySchema.parse({ strategy: 'rebase' })).toEqual({ strategy: 'rebase' });
+  });
+  it('拒绝枚举外 strategy 与缺 strategy', () => {
+    expect(() => updateBodySchema.parse({ strategy: 'fast-forward' })).toThrow();
+    expect(() => updateBodySchema.parse({})).toThrow();
   });
 });

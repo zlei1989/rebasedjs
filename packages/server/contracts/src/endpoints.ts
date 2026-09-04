@@ -144,3 +144,32 @@ export const accountDeleteBodySchema = z.object({
   account: z.string().min(1),
 });
 export type AccountDeleteBody = z.infer<typeof accountDeleteBodySchema>;
+
+/** 远程写操作（判别联合）：add 新增；remove 删除；setUrl 同时改写 fetch/push URL */
+export const remoteActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('add'), name: z.string().min(1), url: z.string().min(1) }),
+  z.object({ action: z.literal('remove'), name: z.string().min(1) }),
+  z.object({ action: z.literal('setUrl'), name: z.string().min(1), url: z.string().min(1) }),
+]);
+export type RemoteAction = z.infer<typeof remoteActionSchema>;
+
+/** fetch 请求体：remote 缺省表示全部远程 */
+export const fetchBodySchema = z.object({ remote: z.string().optional() });
+export type FetchBody = z.infer<typeof fetchBodySchema>;
+
+/** pull 请求体：remote 缺省取当前分支上游；rebase 对应 git pull --rebase */
+export const pullBodySchema = z.object({ remote: z.string().optional(), rebase: z.boolean().optional() });
+export type PullBody = z.infer<typeof pullBodySchema>;
+
+/** push 请求体：forceWithLease 为安全强推（--force-with-lease）；setUpstream 对应 -u */
+export const pushBodySchema = z.object({
+  remote: z.string().optional(),
+  branch: z.string().optional(),
+  forceWithLease: z.boolean().optional(),
+  setUpstream: z.boolean().optional(),
+});
+export type PushBody = z.infer<typeof pushBodySchema>;
+
+/** Update Project 请求体：strategy 决定 fetch 后的合并方式（merge | rebase） */
+export const updateBodySchema = z.object({ strategy: z.enum(['merge', 'rebase']) });
+export type UpdateBody = z.infer<typeof updateBodySchema>;
