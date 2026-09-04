@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyRemoteAction, applyReset, applyStaging, applyStashAction, applyTagAction, cherryPick, continueMergeOperation, continueOperation, createCommit, deleteAccount, fetchRepo, getBranches, getChangelists, getConflictContents, getConflicts, getFileDiff, getLogPage, getOperation, getRebaseTodo, getRemotes, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, pullRepo, pushRepo, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
-import { accountBodySchema, accountDeleteBodySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, fetchBodySchema, hunkStagingBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyRemoteAction, applyReset, applyStaging, applyStashAction, applyTagAction, cherryPick, continueMergeOperation, continueOperation, createCommit, deleteAccount, fetchRepo, getBranches, getChangelists, getCommittedPage, getConflictContents, getConflicts, getFileBlame, getFileDiff, getFileHistory, getLogPage, getOperation, getRebaseTodo, getRemotes, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, pullRepo, pushRepo, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, fetchBodySchema, historyQuerySchema, hunkStagingBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -201,6 +201,46 @@ router.get('/api/repos/:repoId/diff/patch', async (ctx) => {
   try {
     const query = diffQuerySchema.parse(ctx.query);
     ctx.body = await getFileDiff(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/blame —— zod 校验查询 → getFileBlame（单文件逐行溯源）→ 200 BlameLine[]；缺 file → 400，文件不存在 → 400 INVALID_REF */
+router.get('/api/repos/:repoId/blame', async (ctx) => {
+  try {
+    const query = blameQuerySchema.parse(ctx.query);
+    ctx.body = await getFileBlame(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.file);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/history —— zod 校验查询 → getFileHistory（--follow 跟随重命名）→ 200 FileHistoryEntry[]；缺 file → 400 */
+router.get('/api/repos/:repoId/history', async (ctx) => {
+  try {
+    const query = historyQuerySchema.parse(ctx.query);
+    ctx.body = await getFileHistory(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.file);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/committed —— zod 校验查询 → getCommittedPage（limit/skip 分页，hasMore 多取 1 试探）→ 200 CommittedPage */
+router.get('/api/repos/:repoId/committed', async (ctx) => {
+  try {
+    const query = committedQuerySchema.parse(ctx.query);
+    ctx.body = await getCommittedPage(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/search —— zod 校验查询 → searchCommitsService（grep/pickaxe 两模式）→ 200 SearchResult[]；缺 q → 400 */
+router.get('/api/repos/:repoId/search', async (ctx) => {
+  try {
+    const query = searchQuerySchema.parse(ctx.query);
+    ctx.body = await searchCommitsService(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query);
   } catch (error) {
     handleApiError(error, ctx);
   }
