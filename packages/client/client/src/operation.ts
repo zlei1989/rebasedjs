@@ -1,7 +1,7 @@
-/** 进行中操作 hooks：GET 查询 + abort 突变（POST 空体，响应回写查询缓存） */
+/** 进行中操作 hooks：GET 查询 + abort/continue 突变（POST 空体，响应分别回写 operation/status 缓存键） */
 import useSWR, { useSWRConfig, type SWRResponse } from 'swr';
 import useSWRMutation from 'swr/mutation';
-import type { OperationState } from '@rebased/contracts';
+import type { OperationState, RepoStatus } from '@rebased/contracts';
 import { getJson, postJson } from './http';
 
 /** 进行中操作状态：GET /api/repos/:repoId/operation */
@@ -24,6 +24,26 @@ export function useAbortOperation(repoId: string): { trigger: () => Promise<Oper
       // revalidate:false 避免随后的 GET 覆盖刚回写的新值
       await mutate(`/api/repos/${repoId}/operation`, state, { revalidate: false });
       return state;
+    },
+    isMutating,
+  };
+}
+
+/** 继续当前操作（mutation）：POST operation/continue（无请求体），响应 RepoStatus 回写 status 缓存键；
+ *  跨键 useSWRConfig().mutate 假设所有 hooks 共享同一 SWRConfig provider（应用当前依赖全局缓存） */
+export function useContinueOperation(repoId: string): { trigger: () => Promise<RepoStatus>; isMutating: boolean } {
+  // continue 端点与 status 查询键不同，无法用 populateCache；改用上下文 mutate 回写 useRepoStatus 缓存
+  const { mutate } = useSWRConfig();
+  const { trigger, isMutating } = useSWRMutation(
+    `/api/repos/${repoId}/operation/continue`,
+    (key: string) => postJson<RepoStatus>(key, {}),
+  );
+  return {
+    trigger: async () => {
+      const status = await trigger();
+      // revalidate:false 避免随后的 GET 覆盖刚回写的新值
+      await mutate(`/api/repos/${repoId}/status`, status, { revalidate: false });
+      return status;
     },
     isMutating,
   };
