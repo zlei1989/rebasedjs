@@ -28,6 +28,7 @@ export { BranchPanel, type BranchPanelProps } from './composite/branch-panel';
 export { StashPanel, type StashPanelProps } from './composite/stash-panel';
 export { ResetDialog, type ResetDialogProps } from './composite/reset-dialog';
 export { MergeDialog, type MergeDialogProps } from './composite/merge-dialog';
+export { RebaseDialog, type RebaseDialogProps } from './composite/rebase-dialog';
 export {
   ConflictsPanel,
   conflictKindLabel,
