@@ -1,6 +1,13 @@
 /**
  * git CLI 执行原语：参数数组防注入、强制无分页、LC_ALL=C、可取消。
  * 平台差异（Windows 杀进程树）集中在本文件处理。
+ *
+ * GIT_TERMINAL_PROMPT=0 / GIT_ASKPASS=''：禁止 git 向终端或 askpass 索要凭据——
+ * 无凭据的 HTTPS 操作立即以 'terminal prompts disabled' 失败（进上层 AUTH_FAILED 检测路径），
+ * 而非挂起等待永不到来的输入（Windows 下 git 可经 CONIN$ 打开控制台无限阻塞，实测 30s 超时被迫杀进程）。
+ * GCM_INTERACTIVE=never：Git Credential Manager（Windows 常见全局 credential.helper=manager）不受
+ * GIT_TERMINAL_PROMPT 约束——401 时会弹交互 UI 无限挂起（本机实测复现）；never 模式下
+ * GCM 有已存凭据照常返回、无凭据即刻失败回落 git 自身检测路径，两全。
  */
 import { spawn } from 'node:child_process';
 
@@ -8,6 +15,9 @@ export interface GitResult {
   stdout: string;
   stderr: string;
 }
+
+/** 两处 spawn（runGit/streamGit）共用的固定 env：LC_ALL=C 固定英文输出；其余防交互挂起（见文件头） */
+const GIT_ENV = { LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GCM_INTERACTIVE: 'never' };
 
 export class GitExitError extends Error {
   readonly args: string[];
@@ -26,8 +36,11 @@ export class GitExitError extends Error {
   }
 }
 
-function buildArgs(args: string[]): string[] {
-  return ['--no-pager', '-c', 'core.pager=cat', ...args];
+function buildArgs(args: string[], extraConfig?: string[]): string[] {
+  // extraConfig 逐项作为一个 -c <entry> 注入，位于既有 -c core.pager=cat 之后、命令参数之前
+  // （同 key 后出覆盖先出，调用方配置优先；token 注入的唯一通道——进程参数可见性为已知接受面，见计划安全约束）
+  const extra = (extraConfig ?? []).flatMap((entry) => ['-c', entry]);
+  return ['--no-pager', '-c', 'core.pager=cat', ...extra, ...args];
 }
 
 function killTree(pid: number): void {
@@ -45,12 +58,16 @@ function killTree(pid: number): void {
 
 /** 执行 git 并收集完整输出（小输出场景）。
  *  timeoutMs 可选项：超时杀进程并以退出码 124 拒绝（防 git 传输 helper 挂起——如 Windows msys2 并发初始化失败导致 clone 无限等待）。
- *  input 可选项：写入 child.stdin 后 end（git apply、hash-object --stdin 等从 stdin 读数据的命令用）。 */
-export function runGit(args: string[], opts: { cwd: string; signal?: AbortSignal; timeoutMs?: number; input?: string }): Promise<GitResult> {
+ *  input 可选项：写入 child.stdin 后 end（git apply、hash-object --stdin 等从 stdin 读数据的命令用）。
+ *  extraConfig 可选项：逐项以 -c <entry> 注入（见 buildArgs）。 */
+export function runGit(
+  args: string[],
+  opts: { cwd: string; signal?: AbortSignal; timeoutMs?: number; input?: string; extraConfig?: string[] },
+): Promise<GitResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn('git', buildArgs(args), {
+    const child = spawn('git', buildArgs(args, opts.extraConfig), {
       cwd: opts.cwd,
-      env: { ...process.env, LC_ALL: 'C' },
+      env: { ...process.env, ...GIT_ENV },
       windowsHide: true,
     });
     if (opts.input !== undefined) {
@@ -103,7 +120,7 @@ export async function* streamGit(args: string[], opts: { cwd: string; signal?: A
   if (opts.signal?.aborted) throw new GitExitError(args, 130, '', '');
   const child = spawn('git', buildArgs(args), {
     cwd: opts.cwd,
-    env: { ...process.env, LC_ALL: 'C' },
+    env: { ...process.env, ...GIT_ENV },
     windowsHide: true,
   });
   let stderr = '';

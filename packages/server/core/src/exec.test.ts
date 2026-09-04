@@ -1,4 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitExitError, runGit, streamGit } from './exec';
@@ -43,6 +45,47 @@ describe('runGit', () => {
     ac.abort();
     await expect(p).rejects.toBeInstanceOf(GitExitError);
   });
+});
+
+describe('extraConfig 注入', () => {
+  it('逐项以 -c 注入生效，且位于既有 core.pager=cat 之后（后出覆盖先出）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    // buildArgs 固定注入 -c core.pager=cat；extraConfig 追加在其后，故调用方值覆盖默认值
+    const pager = await runGit(['config', '--get', 'core.pager'], { cwd: repo, extraConfig: ['core.pager=less'] });
+    expect(pager.stdout.trim()).toBe('less');
+    // 任意配置项注入：core.abbrev 在本地 config 中不存在，唯一来源即 extraConfig
+    const abbrev = await runGit(['config', '--get', 'core.abbrev'], { cwd: repo, extraConfig: ['core.abbrev=40'] });
+    expect(abbrev.stdout.trim()).toBe('40');
+  });
+});
+
+describe('防交互挂起（GIT_TERMINAL_PROMPT=0）', () => {
+  it('无凭据 http 请求快速失败（terminal prompts disabled）而非挂起等输入', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    // 本地 401 服务器模拟需认证的 HTTP 远程：git 收到 401 后会尝试索要凭据，
+    // GIT_TERMINAL_PROMPT=0 使其立即失败（stderr 特征 'terminal prompts disabled'），
+    // 缺失该 env 时 Windows 下 git 可经 CONIN$ 打开控制台无限挂起（超时退出码 124）。
+    const server = createServer((_req, res) => {
+      res.writeHead(401, { 'Content-Type': 'text/plain' });
+      res.end('Unauthorized');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const err: unknown = await runGit(['ls-remote', `http://127.0.0.1:${port}/x.git`], { cwd: repo, timeoutMs: 30000 }).then(
+        () => new Error('应当失败却成功了'),
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(GitExitError);
+      const gerr = err as GitExitError;
+      expect(gerr.exitCode).not.toBe(124); // 非超时：证明未挂起
+      expect(gerr.stderr).toContain('terminal prompts disabled');
+    } finally {
+      server.close();
+    }
+  }, 40000);
 });
 
 describe('streamGit 取消语义', () => {
