@@ -215,3 +215,17 @@ export function useChangelistAction(repoId: string): { trigger: (action: Changel
 - 类型一致性：Changelist/ChangelistView/ChangelistAction/groupByChangelist/StatusPageProps 追加 跨任务签名已对齐。
 - 风险：簿记与真实仓库状态漂移（外部 CLI 改动）——读取时修剪已兜底；watcher 缺口（assignments 变化不产事件）由 status 变化的 onStatus 重验证 + SWR focus 兜底，注释如实声明。
 - 分层说明：本计划 api 直接扩展 config-store（应用簿记属服务层职责，core 只管 git CLI），无 core 任务——与 P2-A settings 同先例。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+6/6 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: With fixes**——1 Important（getChangelists 读路径写回竞态：await 期间并发配置写入被整体覆盖）+ 1 Minor（簿记字段手改损坏无容错）修复波（commit `e883892`）经限定复审全部 ADDRESSED、零新破坏（复审者专项核实：修剪为纯删除不复活失效条目、并发 ACTION 不丢失、needsInit 与自愈对齐、竞态测试对旧实现确失败），正式关账。
+
+**Rulings / 设计要点**：
+1. git 无原生 changelist → 应用层簿记（config-store 按 repoId）+ 读取时修剪合并——config-store 并发写竞态的发现直接促成了「await 后重读合并」模式，后续所有读-改-写路径参照。
+2. 「按 changelist 提交」后置（我们的提交粒度是暂存区，与 Java active-changelist 语义不同，计划已明示）。
+3. config-store「原子写」名不副实为 pre-existing → P3 backlog（真原子写=临时文件+rename）。
+
+终审 triage：15 项 deferred minor 全部 safe-to-defer。SDD 工作区已按规程删除，本提交为记录。
