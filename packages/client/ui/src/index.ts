@@ -34,5 +34,13 @@ export {
   type ConflictsPanelProps,
 } from './composite/conflicts-panel';
 export { MergeView, type MergeViewProps } from './composite/merge-view';
+export { RemotePanel, type RemotePanelProps } from './composite/remote-panel';
+export { PushDialog, type PushDialogProps } from './composite/push-dialog';
+export { PullDialog, type PullDialogProps } from './composite/pull-dialog';
+export {
+  UpdateProjectDialog,
+  type UpdateProjectDialogProps,
+} from './composite/update-project-dialog';
+export { AuthDialog, type AuthDialogProps } from './composite/auth-dialog';
 export type { MonacoEditorInnerProps, MonacoLazyLoader, MonacoLazyProps } from './base/monaco-lazy';
 export { relativeToHome } from './composite/repo-page-utils';
