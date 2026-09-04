@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * 设置页容器：useSettings + useRepoConfig + useSetConfig 注入 ui SettingsPage；
- * 顶部返回按钮回日志页；保存失败经 message.error 呈现（与 web-koa 容器同构）。
+ * 设置页容器：useSettings + useRepoConfig + useSetConfig + 账户三 hooks 注入 ui SettingsPage；
+ * 顶部返回按钮回日志页；保存失败经 message.error 呈现，账户增删成功经 message.success 反馈（与 web-koa 容器同构）。
  */
-import { useRepoConfig, useSetConfig, useSettings } from '@rebased/client';
+import { useAccounts, useDeleteAccount, useRepoConfig, useSetConfig, useSettings, useUpsertAccount } from '@rebased/client';
 import { SettingsPage } from '@rebased/ui';
 import { Button, Flex, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -16,6 +16,10 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { settings, update } = useSettings();
   const { data: config } = useRepoConfig(repoId);
   const { trigger } = useSetConfig(repoId);
+  // 账户为应用级资源（无 repoId）：列表查询 + 添加/覆盖、删除突变
+  const { data: accounts } = useAccounts();
+  const { trigger: upsertAccount } = useUpsertAccount();
+  const { trigger: deleteAccount } = useDeleteAccount();
   // 保存失败统一以服务端中文 message 提示，避免未捕获 rejection
   const onError = (err: unknown): void => {
     void message.error(err instanceof Error ? err.message : String(err));
@@ -33,6 +37,17 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onPatchSettings={(patch) => update(patch).catch(onError)}
         config={config}
         onSetConfig={(key, value) => trigger({ key, value }).catch(onError)}
+        accounts={accounts}
+        onAddAccount={(body) =>
+          upsertAccount(body)
+            .then(() => void message.success('账户已保存'))
+            .catch(onError)
+        }
+        onDeleteAccount={(body) =>
+          deleteAccount(body)
+            .then(() => void message.success('账户已删除'))
+            .catch(onError)
+        }
       />
     </Flex>
   );
