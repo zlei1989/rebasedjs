@@ -1,0 +1,64 @@
+/**
+ * blame 功能：单文件逐行溯源（git blame --line-porcelain 的 core 原语 → contracts 形状）。
+ *
+ * 入参在此校验（预检先于 git 调用）：路径越界 → INVALID_QUERY '非法的文件路径'；
+ * 文件不存在（工作区 stat）→ INVALID_REF '文件不存在：…'。
+ *
+ * 日期透传（P3-C 审查裁定）：BlameLine.dateIso 为 core 已转换的 ISO 字符串
+ * （author-time epoch 秒 → toISOString，UTC Z 结尾）；history/committed/search 的 %aI 为带时区偏移格式——
+ * 两种均为合法 ISO 日期字符串（UTC Z 或带偏移），本层不做归一转换，消费方一律用 new Date() 解析。
+ */
+import { statSync, type Stats } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
+import { fileBlame, type CoreBlameLine } from '@rebased/core';
+import { ServiceError, type BlameLine } from '@rebased/contracts';
+
+/**
+ * 预检：路径边界 + 文件存在性（blame/history 共用）。
+ * 边界沿用 diff.ts 的 assertValidQuery 手法——file 含 `..` 路径段或为绝对路径即非法；
+ * 另加 resolve+relative 兜底：Windows 盘符相对路径（如 C:foo）能逃过 isAbsolute 检查，
+ * 凡 resolve 后仍在仓库根之外的一律按越界拦截。
+ * 存在性：stat 失败（缺失）或非普通文件（目录等）→ INVALID_REF——本预检只认工作区现存文件，
+ * 已删除（仅存在于历史）的文件按不存在处理。
+ */
+export function assertValidFilePath(repoPath: string, file: string): void {
+  if (file.split(/[\\/]/).includes('..') || isAbsolute(file)) {
+    throw new ServiceError('INVALID_QUERY', '非法的文件路径');
+  }
+  const root = resolve(repoPath);
+  const resolved = resolve(root, file);
+  const rel = relative(root, resolved);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new ServiceError('INVALID_QUERY', '非法的文件路径');
+  }
+  let stat: Stats;
+  try {
+    stat = statSync(resolved);
+  } catch {
+    throw new ServiceError('INVALID_REF', `文件不存在：${file}`);
+  }
+  if (!stat.isFile()) {
+    throw new ServiceError('INVALID_REF', `文件不存在：${file}`);
+  }
+}
+
+/** core 溯源行 → contracts BlameLine（字段同构，映射在此收敛，core 不依赖 contracts） */
+function toBlameLine(line: CoreBlameLine): BlameLine {
+  return {
+    lineno: line.lineno,
+    hash: line.hash,
+    shortHash: line.shortHash,
+    author: line.author,
+    authorEmail: line.authorEmail,
+    dateIso: line.dateIso,
+    content: line.content,
+    previousLineno: line.previousLineno,
+  };
+}
+
+/** 单文件逐行溯源：预检通过后调用 core，逐行映射；文件行数不大，一次全量返回 */
+export async function getFileBlame(repoPath: string, file: string): Promise<BlameLine[]> {
+  assertValidFilePath(repoPath, file);
+  const lines = await fileBlame(repoPath, file);
+  return lines.map(toBlameLine);
+}

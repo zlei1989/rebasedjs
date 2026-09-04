@@ -229,6 +229,7 @@ export interface BlameLine {
   shortHash: string;
   author: string;
   authorEmail: string;
+  /** 日期为 ISO 字符串（blame 的 author-time epoch 秒 → UTC Z；与 %aI 带偏移格式均为合法 ISO 日期字符串）；消费方用 new Date() 解析 */
   dateIso: string;
   content: string;
   /** 该行在责任提交版本中的源行号（源自块头 orig 字段）；在无位移编辑/重命名场景恰等同于前一次提交中的行号，插入/位移编辑时可能指向无关行——精确映射留待增强；无则 null——如文件首创建 */
@@ -241,8 +242,12 @@ export interface FileHistoryEntry {
   shortHash: string;
   subject: string;
   author: string;
+  /** 日期为 ISO 字符串（git %aI，带时区偏移；与 blame 的 UTC Z 均为合法 ISO 日期字符串）；消费方用 new Date() 解析 */
   dateIso: string;
 }
+
+/** git name-status 变更状态码：A 新增 / M 修改 / D 删除 / R 重命名 / C 复制 / T 类型变更（typechange——如普通文件→符号链接，git --name-status 真实输出） */
+export type CommittedFileStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T';
 
 /** Committed Changes 条目：一个提交及其变更文件（name-status 解析） */
 export interface CommittedEntry {
@@ -250,8 +255,9 @@ export interface CommittedEntry {
   shortHash: string;
   subject: string;
   author: string;
+  /** 日期为 ISO 字符串（git %aI，带时区偏移；与 blame 的 UTC Z 均为合法 ISO 日期字符串）；消费方用 new Date() 解析 */
   dateIso: string;
-  files: { path: string; status: 'A' | 'M' | 'D' | 'R' | 'C'; renameFrom?: string }[];
+  files: { path: string; status: CommittedFileStatus; renameFrom?: string }[];
 }
 /** Committed Changes 分页视图：hasMore 表示存在后续页 */
 export interface CommittedPage { entries: CommittedEntry[]; hasMore: boolean; }
@@ -262,6 +268,7 @@ export interface SearchResult {
   shortHash: string;
   subject: string;
   author: string;
+  /** 日期为 ISO 字符串（git %aI，带时区偏移；与 blame 的 UTC Z 均为合法 ISO 日期字符串）；消费方用 new Date() 解析 */
   dateIso: string;
 }
 /** 搜索模式：grep=提交信息全文（--grep）；pickaxe=内容增量（-S） */
