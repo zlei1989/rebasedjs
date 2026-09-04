@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { applyChangelistAction, getChangelists } from './changelist';
+import { loadConfig, saveConfig } from './lib/config-store';
 import { openRepo } from './repo';
+import { getSettings, updateSettings } from './settings';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 let configDir: string;
@@ -117,5 +119,42 @@ describe('changelist 功能', () => {
     await expect(applyChangelistAction(repo, { action: 'create', name: 'x' })).rejects.toMatchObject({
       code: 'REPO_NOT_FOUND',
     });
+  });
+
+  it('读路径写回不覆盖 await 期间的并发配置修改（终审竞态修复）', async () => {
+    const repo = await registeredRepo();
+    // 首次读取触发 fresh 回写；回写发生在 await getRepoStatus 之后——在其间并发改 settings。
+    // getChangelists 同步段（loadConfig → 调起 getRepoStatus）执行完才让出事件循环，
+    // 紧接的 updateSettings 同步落盘，必落在其 await 窗口内，构造确定性竞态
+    const pending = getChangelists(repo);
+    updateSettings({ logInEditor: false });
+    const view = await pending;
+
+    expect(view.lists).toEqual([{ id: 'default', name: '默认', isDefault: true }]);
+    // 过期整体写会把 settings 覆盖回 true；合并写回应保留并发修改
+    expect(getSettings().logInEditor).toBe(false);
+    // 簿记初始化本身也已落盘
+    const info = await openRepo(repo);
+    expect(loadConfig().changelists?.[info.id]?.lists[0]?.id).toBe('default');
+  });
+
+  it('手改损坏的 changelists 字段自愈：非对象/无 lists 数组当作无簿记初始化', async () => {
+    const repo = await registeredRepo();
+    const info = await openRepo(repo);
+
+    // 损坏①：changelists 整体不是对象
+    const c1 = loadConfig();
+    c1.changelists = 'garbage' as never;
+    saveConfig(c1);
+    const v1 = await getChangelists(repo);
+    expect(v1.lists).toEqual([{ id: 'default', name: '默认', isDefault: true }]);
+
+    // 损坏②：单仓库簿记 lists 不是数组
+    const c2 = loadConfig();
+    c2.changelists = { [info.id]: { lists: 'nope' } } as never;
+    saveConfig(c2);
+    const v2 = await getChangelists(repo);
+    expect(v2.lists).toEqual([{ id: 'default', name: '默认', isDefault: true }]);
+    expect(v2.assignments).toEqual({});
   });
 });

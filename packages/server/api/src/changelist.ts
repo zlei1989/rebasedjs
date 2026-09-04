@@ -21,10 +21,24 @@ function repoIdOf(config: AppConfig, repoPath: string): string {
   return repo.id;
 }
 
-/** 取簿记，无则初始化默认列表（调用方负责落盘时机） */
+/** 判定簿记形状合法：lists 为数组且 assignments 为对象（手改损坏的字段不算数） */
+function isBook(raw: unknown): raw is ChangelistBook {
+  return (
+    typeof raw === 'object' &&
+    raw !== null &&
+    Array.isArray((raw as ChangelistBook).lists) &&
+    typeof (raw as ChangelistBook).assignments === 'object' &&
+    (raw as ChangelistBook).assignments !== null
+  );
+}
+
+/** 取簿记；无簿记或形状损坏（手改配置）时初始化默认列表——自愈而非抛 500（调用方负责落盘时机） */
 function bookOf(config: AppConfig, repoId: string): ChangelistBook {
-  config.changelists ??= {};
-  config.changelists[repoId] ??= { lists: [structuredClone(DEFAULT_LIST)], assignments: {} };
+  // changelists 整体非对象 → 重置为空注册表
+  if (typeof config.changelists !== 'object' || config.changelists === null) config.changelists = {};
+  if (!isBook(config.changelists[repoId])) {
+    config.changelists[repoId] = { lists: [structuredClone(DEFAULT_LIST)], assignments: {} };
+  }
   return config.changelists[repoId];
 }
 
@@ -33,18 +47,21 @@ function bookOf(config: AppConfig, repoId: string): ChangelistBook {
  * 仓库无簿记时初始化默认列表「默认」（id 固定 'default'）
  */
 export async function getChangelists(repoPath: string): Promise<ChangelistView> {
-  const config = loadConfig();
-  const repoId = repoIdOf(config, repoPath);
-  const fresh = config.changelists?.[repoId] === undefined;
-  const book = bookOf(config, repoId);
-
+  // await 前的读仅用于 repoId 反查；簿记读写全部放在 await 之后，避免持有过期配置对象
+  const repoId = repoIdOf(loadConfig(), repoPath);
   const status = await getRepoStatus(repoPath);
   const live = new Set(status.entries.map((e) => e.path));
+
+  // 竞态防线（P2-G 终审）：await 后重新 loadConfig 再合并写回——只删失效路径条目、簿记缺失才初始化，
+  // 不做整体替换；否则 await 期间的并发配置写入（openRepo/updateSettings/变更列表操作）会被过期整体写覆盖
+  const config = loadConfig();
+  const needsInit = !isBook(config.changelists?.[repoId]);
+  const book = bookOf(config, repoId);
   // 修剪：剔除 status 已不存在的路径（提交/还原/删除后簿记失效）
   const assignments = Object.fromEntries(Object.entries(book.assignments).filter(([path]) => live.has(path)));
   const pruned = Object.keys(assignments).length !== Object.keys(book.assignments).length;
-  // 修剪有变化或首次初始化时回写配置，复用既有原子保存
-  if (pruned || fresh) {
+  // 修剪有变化或簿记初始化/自愈时回写配置，复用既有原子保存
+  if (pruned || needsInit) {
     book.assignments = assignments;
     saveConfig(config);
   }
