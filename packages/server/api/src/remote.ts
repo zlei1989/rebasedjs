@@ -78,6 +78,11 @@ async function withAuth<T>(
 ): Promise<T> {
   const remotes = await listRemotes(repoPath);
   const targets = remoteName === undefined ? remotes : remotes.filter((r) => r.name === remoteName);
+  // 指定远程不存在：预检抛 INVALID_REF（与 CRUD 预检语义统一），
+  // 不透出 git 的 '...does not appear to be a git repository' 500（P3-A 终审 Finding 2）
+  if (remoteName !== undefined && targets.length === 0) {
+    throw new ServiceError('INVALID_REF', `远程不存在：${remoteName}`, { context: { name: remoteName } });
+  }
   const tokenByHost = new Map<string, string | null>();
   const entries = new Set<string>();
   let host: string | undefined;

@@ -1,6 +1,8 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -214,6 +216,56 @@ describe('pushBranch', () => {
       git(repo, ['checkout', '-q', defaultBranch]);
     },
   );
+});
+
+describe('传输超时兜底（P3-A 终审 Finding 1）', () => {
+  // 停滞服务器：接受连接后永不响应（网络停滞类挂起——凭据提示类已由 GIT_TERMINAL_PROMPT 覆盖）。
+  // 三个原语各传小 timeoutMs 触发 exec.ts 既有 124 超时路径，断言以 GitExitError 124 拒绝而非无限挂起。
+  let server: Server | undefined;
+  let stallUrl = '';
+
+  afterAll(() => server?.close());
+
+  /** 惰性起服务器（同 describe 内三用例共享一台）+ 指向它的仓库（含 base 提交） */
+  async function makeStallRepo(): Promise<{ repo: string; defaultBranch: string }> {
+    if (server === undefined) {
+      const s = createServer(() => {
+        // 永不写响应：socket 挂起，git 停在 info/refs 读取上
+      });
+      server = s;
+      await new Promise<void>((resolve) => s.listen(0, '127.0.0.1', resolve));
+      const { port } = s.address() as AddressInfo;
+      stallUrl = `http://127.0.0.1:${port}/repo.git`;
+    }
+    const repo = track(createTmpRepo());
+    const defaultBranch = makeBaseCommit(repo);
+    git(repo, ['remote', 'add', 'origin', stallUrl]);
+    return { repo, defaultBranch };
+  }
+
+  it('fetchRemote 停滞 → GitExitError 124（非挂起）', { timeout: 30000 }, async () => {
+    const { repo } = await makeStallRepo();
+    await expect(fetchRemote(repo, { remote: 'origin', timeoutMs: 2000 })).rejects.toMatchObject({
+      name: 'GitExitError',
+      exitCode: 124,
+    });
+  });
+
+  it('pullRemote 停滞 → GitExitError 124（非挂起）', { timeout: 30000 }, async () => {
+    const { repo } = await makeStallRepo();
+    await expect(pullRemote(repo, { remote: 'origin', timeoutMs: 2000 })).rejects.toMatchObject({
+      name: 'GitExitError',
+      exitCode: 124,
+    });
+  });
+
+  it('pushBranch 停滞 → GitExitError 124（非挂起）', { timeout: 30000 }, async () => {
+    const { repo, defaultBranch } = await makeStallRepo();
+    await expect(pushBranch(repo, { remote: 'origin', branch: defaultBranch, timeoutMs: 2000 })).rejects.toMatchObject({
+      name: 'GitExitError',
+      exitCode: 124,
+    });
+  });
 });
 
 describe('isShallowRepo', () => {

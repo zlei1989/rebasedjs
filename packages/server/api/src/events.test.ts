@@ -1,12 +1,22 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { upsertAccount } from './auth';
 import { watchRepoStatus } from './events';
 import type { RepoStateEvent } from './events';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
+
+/** events 泄露守卫探针 token：结构上不应出现在任何事件载荷中 */
+const EVENTS_PROBE_TOKEN = 'events-leak-probe-token-1a2b3c4d5e6f';
+
+beforeAll(() => {
+  // 账户簿记写入应用配置：测试隔离到临时目录，绝不触碰真实 ~/.rebasedjs
+  process.env.REBASED_CONFIG_DIR = mkdtempSync(join(tmpdir(), 'rebased-api-config-'));
+});
 
 function git(dir: string, args: string[]): void {
   execFileSync('git', ['-C', dir, ...args]);
@@ -144,5 +154,15 @@ describe('watchRepoStatus', () => {
     setTimeout(() => ac.abort(), 200);
     const events = await p; // abort 后自然结束，不抛错
     expect(events.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('泄露守卫：账户簿记中的探针 token 不出现在 events 首帧三帧（hardening ⑲）', async () => {
+    upsertAccount({ host: 'events-probe.example.com', account: 'tester', token: EVENTS_PROBE_TOKEN });
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const events = await collect(repo, { count: 3, intervalMs: 100 });
+    expect(events.map((e) => e.type)).toEqual(['repo.state-changed', 'operation.state-changed', 'refs.changed']);
+    // 结构保证的可执行化：token 只经 extraConfig 单次调用注入，任何事件帧序列化后不得含 token 本体
+    expect(JSON.stringify(events)).not.toContain(EVENTS_PROBE_TOKEN);
   });
 });

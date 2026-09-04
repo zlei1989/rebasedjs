@@ -15,6 +15,15 @@ export interface CoreRemote {
   pushUrl: string;
 }
 
+/**
+ * 传输操作（fetch/pull/push）的统一超时兜底：120s。
+ * GIT_TERMINAL_PROMPT/GCM_INTERACTIVE 只关闭凭据提示类挂起；网络停滞类（TCP 连上无字节、
+ * 代理/VPN 异常）仍会无限挂起 HTTP 请求并泄漏 git 进程，故传输调用一律带超时，
+ * 超时经 exec.ts 既有 124 退出码路径以 GitExitError 透出（上层折 GIT_ERROR）。
+ * 各原语 opts.timeoutMs 可覆盖该默认值（测试用小值真实触发 124 路径）。
+ */
+const TRANSFER_TIMEOUT_MS = 120_000;
+
 /** 远程列表：git remote -v 解析（同名 fetch/push 两行聚合；缺 push 行时 pushUrl=fetchUrl） */
 export async function listRemotes(cwd: string): Promise<CoreRemote[]> {
   const { stdout } = await runGit(['remote', '-v'], { cwd });
@@ -54,12 +63,15 @@ export async function setRemoteUrl(cwd: string, name: string, url: string): Prom
  * fetch：git fetch [--all 或指定远程]；返回发生移动（含新增/删除）的引用完整 refname 列表。
  * 判定方式：fetch 前后各取一次 refs 快照做 diff（复用 watcher 指纹原语）。
  */
-export async function fetchRemote(cwd: string, opts: { remote?: string; extraConfig?: string[] }): Promise<{ updatedRefs: string[] }> {
+export async function fetchRemote(
+  cwd: string,
+  opts: { remote?: string; extraConfig?: string[]; timeoutMs?: number },
+): Promise<{ updatedRefs: string[] }> {
   const before = await takeRefsSnapshot(cwd);
   const args = ['fetch'];
   if (opts.remote !== undefined) args.push(opts.remote);
   else args.push('--all');
-  await runGit(args, { cwd, extraConfig: opts.extraConfig });
+  await runGit(args, { cwd, extraConfig: opts.extraConfig, timeoutMs: opts.timeoutMs ?? TRANSFER_TIMEOUT_MS });
   const after = await takeRefsSnapshot(cwd);
   return { updatedRefs: diffRefsSnapshots(before, after) };
 }
@@ -88,14 +100,14 @@ async function hasConflicts(cwd: string): Promise<boolean> {
  */
 export async function pullRemote(
   cwd: string,
-  opts: { remote?: string; rebase?: boolean; extraConfig?: string[] },
+  opts: { remote?: string; rebase?: boolean; extraConfig?: string[]; timeoutMs?: number },
 ): Promise<{ status: 'up-to-date' | 'updated' | 'conflicts' }> {
   const before = await headHash(cwd);
   const args = ['pull'];
   if (opts.rebase === true) args.push('--rebase');
   if (opts.remote !== undefined) args.push(opts.remote);
   try {
-    await runGit(args, { cwd, extraConfig: opts.extraConfig });
+    await runGit(args, { cwd, extraConfig: opts.extraConfig, timeoutMs: opts.timeoutMs ?? TRANSFER_TIMEOUT_MS });
   } catch (err) {
     if (err instanceof GitExitError && (await hasConflicts(cwd))) return { status: 'conflicts' };
     throw err;
@@ -113,7 +125,7 @@ export async function pullRemote(
  */
 export async function pushBranch(
   cwd: string,
-  opts: { remote?: string; branch?: string; forceWithLease?: boolean; setUpstream?: boolean; extraConfig?: string[] },
+  opts: { remote?: string; branch?: string; forceWithLease?: boolean; setUpstream?: boolean; extraConfig?: string[]; timeoutMs?: number },
 ): Promise<{ status: 'pushed' | 'rejected' | 'up-to-date'; hint?: string }> {
   const args = ['push'];
   if (opts.setUpstream === true) args.push('-u');
@@ -121,7 +133,7 @@ export async function pushBranch(
   if (opts.remote !== undefined) args.push(opts.remote);
   if (opts.branch !== undefined) args.push(opts.branch);
   try {
-    const { stdout, stderr } = await runGit(args, { cwd, extraConfig: opts.extraConfig });
+    const { stdout, stderr } = await runGit(args, { cwd, extraConfig: opts.extraConfig, timeoutMs: opts.timeoutMs ?? TRANSFER_TIMEOUT_MS });
     const upToDate = stdout.includes('Everything up-to-date') || stderr.includes('Everything up-to-date');
     return { status: upToDate ? 'up-to-date' : 'pushed' };
   } catch (err) {

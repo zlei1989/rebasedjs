@@ -116,6 +116,18 @@ describe('远程 CRUD', () => {
 
 describe('fetch/pull/push 三状态', () => {
   it(
+    '指定不存在的远程 → INVALID_REF 远程不存在（与 CRUD 预检语义统一，不透出 git 的 500）',
+    { timeout: RIG_TIMEOUT },
+    async () => {
+      const { repo, defaultBranch } = makeRemoteRig();
+      const expected = { code: 'INVALID_REF', message: expect.stringContaining('远程不存在：ghost') };
+      await expect(fetchRepo(repo, { remote: 'ghost' })).rejects.toMatchObject(expected);
+      await expect(pullRepo(repo, { remote: 'ghost' })).rejects.toMatchObject(expected);
+      await expect(pushRepo(repo, { remote: 'ghost', branch: defaultBranch })).rejects.toMatchObject(expected);
+    },
+  );
+
+  it(
     '对端新提交 → fetchRepo 报移动引用；无变化 → 空；响应体不含已存 token',
     { timeout: RIG_TIMEOUT },
     async () => {
