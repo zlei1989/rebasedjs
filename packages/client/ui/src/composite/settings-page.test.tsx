@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { CONFIG_KEYS, type GitConfigView, type SettingsState } from '@rebased/contracts';
+import { CONFIG_KEYS, type AccountList, type GitConfigView, type SettingsState } from '@rebased/contracts';
 import { SettingsPage } from './settings-page';
 
 /** 测试设置工厂：补全 SettingsState 必填字段 */
@@ -108,5 +108,135 @@ describe('SettingsPage', () => {
   it('config 未就绪显示 Skeleton，不渲染配置行', () => {
     render(<SettingsPage settings={makeSettings()} onPatchSettings={vi.fn()} onSetConfig={vi.fn()} />);
     expect(screen.queryByTestId('config-input-user.name')).not.toBeInTheDocument();
+  });
+});
+
+/** 测试账户列表工厂：两条掩码账户（token 本体不下行，仅有 tokenPreview） */
+function makeAccounts(): AccountList {
+  return {
+    accounts: [
+      { host: 'github.com', account: 'alice', tokenPreview: 'abcd***' },
+      { host: 'gitlab.example.com', account: 'bob', tokenPreview: 'efgh***' },
+    ],
+  };
+}
+
+describe('SettingsPage 账户卡片', () => {
+  it('缺省账户 props 时不渲染「账户」卡片（向后兼容）', () => {
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('账户')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('add-account-button')).not.toBeInTheDocument();
+  });
+
+  it('渲染账户行：host + account + tokenPreview + 删除按钮', () => {
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+        accounts={makeAccounts()}
+        onAddAccount={vi.fn()}
+        onDeleteAccount={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('账户')).toBeInTheDocument();
+    expect(screen.getByText('github.com')).toBeInTheDocument();
+    expect(screen.getByText('alice')).toBeInTheDocument();
+    expect(screen.getByText('abcd***')).toBeInTheDocument();
+    expect(screen.getByText('gitlab.example.com')).toBeInTheDocument();
+    expect(screen.getByText('efgh***')).toBeInTheDocument();
+    expect(screen.getByTestId('delete-account-github.com-alice')).toBeInTheDocument();
+    expect(screen.getByTestId('delete-account-gitlab.example.com-bob')).toBeInTheDocument();
+  });
+
+  it('账户列表为空时显示空提示', () => {
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        onSetConfig={vi.fn()}
+        accounts={{ accounts: [] }}
+        onAddAccount={vi.fn()}
+        onDeleteAccount={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('暂无账户')).toBeInTheDocument();
+  });
+
+  it('添加 Modal：任一字段为空时确定禁用；三字段齐后提交 {host, account, token}', async () => {
+    const onAddAccount = vi.fn();
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        onSetConfig={vi.fn()}
+        accounts={makeAccounts()}
+        onAddAccount={onAddAccount}
+        onDeleteAccount={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('add-account-button'));
+    const hostInput = await screen.findByTestId('account-host-input');
+    const nameInput = screen.getByTestId('account-name-input');
+    const tokenInput = screen.getByTestId('account-token-input');
+    const ok = screen.getByTestId('add-account-submit');
+    expect(ok).toBeDisabled();
+    fireEvent.change(hostInput, { target: { value: 'gitee.com' } });
+    fireEvent.change(nameInput, { target: { value: 'carol' } });
+    expect(ok).toBeDisabled();
+    fireEvent.change(tokenInput, { target: { value: 'secret-token' } });
+    expect(ok).not.toBeDisabled();
+    fireEvent.click(ok);
+    expect(onAddAccount).toHaveBeenCalledTimes(1);
+    expect(onAddAccount).toHaveBeenCalledWith({
+      host: 'gitee.com',
+      account: 'carol',
+      token: 'secret-token',
+    });
+  });
+
+  it('添加 Modal 取消后重开：输入复位不残留', async () => {
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        onSetConfig={vi.fn()}
+        accounts={makeAccounts()}
+        onAddAccount={vi.fn()}
+        onDeleteAccount={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('add-account-button'));
+    fireEvent.change(await screen.findByTestId('account-host-input'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }));
+    fireEvent.click(screen.getByTestId('add-account-button'));
+    const hostInput = await screen.findByTestId('account-host-input');
+    expect(hostInput).toHaveValue('');
+  });
+
+  it('删除经 Popconfirm 确认后以 {host, account} 调 onDeleteAccount', async () => {
+    const onDeleteAccount = vi.fn();
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        onSetConfig={vi.fn()}
+        accounts={makeAccounts()}
+        onAddAccount={vi.fn()}
+        onDeleteAccount={onDeleteAccount}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('delete-account-github.com-alice'));
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
+    expect(onDeleteAccount).toHaveBeenCalledTimes(1);
+    expect(onDeleteAccount).toHaveBeenCalledWith({ host: 'github.com', account: 'alice' });
   });
 });
