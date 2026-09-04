@@ -329,3 +329,18 @@ export interface TagPanelProps { tags: TagList; onAction: (action: TagAction) =>
 - §4.5.2 RebaseDialog 对照：entry 状态机（五动作）✓、上移/下移约束 ✓、冲突标记（结果反馈 + conflicts 页）✓。
 - 类型一致性：RebaseOutcome/PickOutcome/TodoEntry/RebaseTodoAction/TagEntry/TagList/TagAction/组件 Props 跨任务签名已对齐；operation/continue 泛化复用 P2-A kind 检测与 P2-E canContinueMerge（squash 退化）。
 - 风险：GIT_SEQUENCE_EDITOR shim 的 Windows 路径引号（sh -c 调用约定，测试在 Windows 本机验证）；reword 不改信息等于 pick（测试聚焦结构性变更）；todo 清单校验防错基（服务端全量哈希比对）。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+8/8 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: With fixes**——1 Critical（摘樱桃"空补丁停态"误判 conflicts → 冲突页死循环，隔离实验实测复现）+ 1 Important（交互变基无效 base 错误被吞）+ 1 触发项（helper 第三处复制）修复波（commit `9413a31`）经限定复审全部 ADDRESSED、零新破坏（isAncestor 退出码分流、预检先于变更、提取语义逐字、todoError 渲染优先级四个核查点均无问题），正式关账。
+
+**Rulings（控制器裁决记录）**：
+1. **revert 不做 isAncestor 预检——接受（有据）**：`git revert <祖先>` exit 0 是 git 常规成功主路径（既有三个绿测试即反例）；二次还原（唯一空态场景）不留 REVERT_HEAD/sequencer 无循环；revert 空态由收紧后的 hasConflicts 兜底（单次明确错误）。附件证据与理由已写入 api/pick.ts 注释；复审者从 diff 验证属实。
+2. **hasConflicts 判定模式不得跨语义照搬**：P2-E 的"op 态或 ls-files -u"对 merge 成立（MERGE_HEAD ⇒ 可继续），对 cherry-pick 不成立（CHERRY_PICK_HEAD ≠ 冲突）——本波实测复现的 plan-defect，收紧为仅未合并条目判 conflicts。
+3. 祖先拦截会挡掉"先 revert 再重新 cherry-pick 该祖先"的合法流程（终审条款形式所致）——保留观察，后续可精化为「isAncestor 且补丁为空」。
+4. 终审亮点归档：continue 泛化正交无回归；防误基设计（全量哈希比对 + todoLoading 兜底 + 服务端 TOCTOU 兜）；shim 方案横穿三隐患（webpack import.meta.url 资产化、dist 不随编译输出、sh 元字符转义）；编辑器防护无死角；Task 8 冒烟发现的整站 500（webpack 跨 realm URL）为跨任务正确修复。
+
+终审 triage：18 项 deferred minor 全部 safe-to-defer（#5 已随触发项落地）。SDD 工作区已按规程删除，本提交为记录。
