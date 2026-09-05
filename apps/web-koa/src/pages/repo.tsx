@@ -49,13 +49,17 @@ import {
 import { AuthDialog, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
 import { Modal, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { mergeLogCommits } from '../log-merge';
 
 export function RepoPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
+  // 深链选中：blame/history/search 页的提交行跳回本页 ?select=<hash>，初始化选中提交（加载窗口外的提交
+  // 无法命中列表，详情面板不渲染——已知限制，见报告）
+  const [searchParams] = useSearchParams();
+  const select = searchParams.get('select');
   const { data: page, mutate: mutateLog } = useLogPage(repoId);
   const [refreshKey, setRefreshKey] = useState(0);
   const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId, refreshKey);
@@ -96,7 +100,8 @@ export function RepoPage(): React.ReactNode {
     },
   });
   const { data: repos } = useRecentRepos();
-  const [selectedHash, setSelectedHash] = useState<string | null>(null);
+  // ?select= 深链初始化：首次挂载即选中目标提交（后续选中仍由 onSelectCommit 经本地 state 驱动）
+  const [selectedHash, setSelectedHash] = useState<string | null>(select ?? null);
   // stream.error 一次性呈现（Task 7 终审 deferred 接通）：error 置位即断开订阅，effect 仅触发一次
   useEffect(() => {
     if (streamError) void message.error(streamError);
@@ -291,6 +296,10 @@ export function RepoPage(): React.ReactNode {
         onOpenConflicts={() => navigate(`/repos/${repoId}/conflicts`)}
         onOpenRebase={() => setRebaseOpen(true)}
         onOpenTags={() => navigate(`/repos/${repoId}/tags`)}
+        onOpenBlame={() => navigate(`/repos/${repoId}/blame`)}
+        onOpenHistory={() => navigate(`/repos/${repoId}/history`)}
+        onOpenCommitted={() => navigate(`/repos/${repoId}/committed`)}
+        onOpenSearch={() => navigate(`/repos/${repoId}/search`)}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}

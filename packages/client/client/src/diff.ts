@@ -5,9 +5,12 @@ import type { DiffFile, FileVersions } from '@rebased/contracts';
 import { getJson } from './http';
 import { subscribeSse } from './events';
 
-/** 拉取单文件两侧全文：GET /api/repos/:repoId/diff?file&staged（端点返回 FileVersions，Monaco 两侧全文） */
-export function useFileDiff(repoId: string, file: string, staged = false) {
+/** 拉取单文件两侧全文：GET /api/repos/:repoId/diff?file&staged&from&to（端点返回 FileVersions，Monaco 两侧全文）；
+ *  from/to 可选成对传——定提交对比（如 committed 浏览器打开某提交的变更：from=<hash>~1、to=<hash>） */
+export function useFileDiff(repoId: string, file: string, staged = false, from?: string, to?: string) {
   const params = new URLSearchParams({ file, staged: String(staged) });
+  if (from !== undefined) params.set('from', from);
+  if (to !== undefined) params.set('to', to);
   return useSWR<FileVersions>(`/api/repos/${repoId}/diff?${params.toString()}`, getJson);
 }
 

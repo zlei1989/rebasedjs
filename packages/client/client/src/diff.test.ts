@@ -42,6 +42,32 @@ describe('useFileDiff', () => {
       renderer.unmount();
     });
   });
+
+  it('传入 from/to 时查询串携带两参（committed 打开定提交对比：from=<hash>~1、to=<hash>）', async () => {
+    const versions: FileVersions = { before: 'old', after: 'new' };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(versions), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: FileVersions; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useFileDiff('r-diff-6', 'a.ts', false, 'abc1234~1', 'abc1234');
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(Probe));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result?.data).toEqual(versions));
+    });
+
+    // URLSearchParams 将 ~ 百分号编码为 %7E（服务端解码还原），断言按序列化结果
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-diff-6/diff?file=a.ts&staged=false&from=abc1234%7E1&to=abc1234');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
 });
 
 describe('useDiffPatch', () => {

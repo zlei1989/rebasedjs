@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
@@ -74,6 +74,34 @@ describe('diff 功能', () => {
     dirs.push(repo);
     await expect(getFileVersions(repo, { file: 'a.txt', from: 'HEAD', staged: false }))
       .rejects.toMatchObject({ code: 'INVALID_QUERY' });
+  });
+
+  it('getFileVersions from/to：路径在 from 侧不存在（新增 A）→ before 为空串（git diff A B -- path 语义）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    writeFileSync(join(repo, 'b.txt'), 'b1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'add b']);
+    const to = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD']).toString().trim();
+    const v = await getFileVersions(repo, { file: 'b.txt', from: `${to}~1`, to, staged: false });
+    expect(v).toEqual({ before: '', after: 'b1' });
+  });
+
+  it('getFileVersions from/to：路径在 to 侧不存在（删除 D）→ after 为空串', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'b.txt'), 'b1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    rmSync(join(repo, 'b.txt'));
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'del b']);
+    const to = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD']).toString().trim();
+    const v = await getFileVersions(repo, { file: 'b.txt', from: `${to}~1`, to, staged: false });
+    expect(v).toEqual({ before: 'b1', after: '' });
   });
 
   it('file 含 .. 路径段时抛 INVALID_QUERY（防工作区直读逃逸仓库根）', async () => {

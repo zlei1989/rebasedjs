@@ -41,4 +41,27 @@ describe('DiffPage', () => {
     fireEvent.click(toggle);
     expect(onToggleWhitespace).toHaveBeenCalledWith(true);
   });
+
+  it('传入 renameFrom 时渲染重命名提示行且不渲染伪 diff（monaco 视图缺席）', async () => {
+    render(
+      <DiffPage
+        versions={versions}
+        file="renamed.txt"
+        renameFrom="b.txt"
+        staged={false}
+        loader={stubLoader}
+      />,
+    );
+    expect(screen.getByText('renamed.txt')).toBeInTheDocument();
+    const hint = screen.getByTestId('diff-rename-hint');
+    expect(hint.textContent).toContain('b.txt');
+    expect(hint.textContent).toContain('renamed.txt');
+    expect(await screen.queryByText('stub-diff-editor')).not.toBeInTheDocument();
+  });
+
+  it('未传 renameFrom 时不渲染重命名提示行', async () => {
+    render(<DiffPage versions={versions} file="src/app.ts" staged={false} loader={stubLoader} />);
+    expect(screen.queryByTestId('diff-rename-hint')).not.toBeInTheDocument();
+    expect(await screen.findByText('stub-diff-editor')).toBeInTheDocument();
+  });
 });

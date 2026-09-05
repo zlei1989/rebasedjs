@@ -54,8 +54,17 @@ import { use, useEffect, useMemo, useState } from 'react';
 import { useSWRConfig } from 'swr';
 import { mergeLogCommits } from '../../../src/log-merge';
 
-export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
+export default function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ repoId: string }>;
+  searchParams: Promise<{ select?: string }>;
+}): React.ReactNode {
   const { repoId } = use(params);
+  // 深链选中：blame/history/search 页的提交行跳回本页 ?select=<hash>，初始化选中提交（加载窗口外的提交
+  // 无法命中列表，详情面板不渲染——已知限制，见报告）
+  const { select } = use(searchParams);
   const router = useRouter();
   const { data: page, mutate: mutateLog } = useLogPage(repoId);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -97,7 +106,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     },
   });
   const { data: repos } = useRecentRepos();
-  const [selectedHash, setSelectedHash] = useState<string | null>(null);
+  // ?select= 深链初始化：首次挂载即选中目标提交（后续选中仍由 onSelectCommit 经本地 state 驱动）
+  const [selectedHash, setSelectedHash] = useState<string | null>(select ?? null);
   // stream.error 一次性呈现（Task 7 终审 deferred 接通）：error 置位即断开订阅，effect 仅触发一次
   useEffect(() => {
     if (streamError) void message.error(streamError);
@@ -292,6 +302,10 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onOpenConflicts={() => router.push(`/repos/${repoId}/conflicts`)}
         onOpenRebase={() => setRebaseOpen(true)}
         onOpenTags={() => router.push(`/repos/${repoId}/tags`)}
+        onOpenBlame={() => router.push(`/repos/${repoId}/blame`)}
+        onOpenHistory={() => router.push(`/repos/${repoId}/history`)}
+        onOpenCommitted={() => router.push(`/repos/${repoId}/committed`)}
+        onOpenSearch={() => router.push(`/repos/${repoId}/search`)}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}

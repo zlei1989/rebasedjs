@@ -2,8 +2,9 @@
  * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/合并/贮藏/设置入口 + 「更多」下拉）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  * 合并中（operation.kind==='merge'）时顶栏在操作条旁追加「去解决冲突」链接（onOpenConflicts 注入才渲染）。
- * 顶栏收敛：五个页面导航按钮保留为主按钮区；远程相关操作（拉取/推送/更新项目/远程管理）收进「更多」Dropdown，
- * 仅在容器注入对应回调时出现对应菜单项，四个回调全缺省时不渲染「更多」按钮。
+ * 顶栏收敛：五个页面导航按钮保留为主按钮区；P3-C 只读浏览（溯源/历史/已提交/搜索）与远程相关操作
+ * （拉取/推送/更新项目/远程管理）收进「更多」Dropdown，仅在容器注入对应回调时出现对应菜单项，
+ * 回调全缺省时不渲染「更多」按钮。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
 import { Button, Dropdown, Popconfirm } from 'antd';
@@ -50,6 +51,14 @@ export interface LogPageProps {
   onOpenTags?: () => void;
   /** 冲突页入口回调；仅当 operation.kind==='merge' 时渲染「去解决冲突」链接，缺省不渲染 */
   onOpenConflicts?: () => void;
+  /** 溯源页入口回调；缺省时「更多」菜单不含溯源项 */
+  onOpenBlame?: () => void;
+  /** 文件历史页入口回调；缺省时「更多」菜单不含历史项 */
+  onOpenHistory?: () => void;
+  /** 已提交变更浏览页入口回调；缺省时「更多」菜单不含已提交项 */
+  onOpenCommitted?: () => void;
+  /** 提交搜索页入口回调；缺省时「更多」菜单不含搜索项 */
+  onOpenSearch?: () => void;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
   onUndoCommit?: () => void;
   /** 撤销请求进行中：撤销按钮 loading 态 */
@@ -83,15 +92,23 @@ export function LogPage({
   onOpenRebase,
   onOpenTags,
   onOpenConflicts,
+  onOpenBlame,
+  onOpenHistory,
+  onOpenCommitted,
+  onOpenSearch,
   onUndoCommit,
   undoCommitting,
   onResetHere,
   onCherryPick,
   onRevert,
 }: LogPageProps): React.ReactNode {
-  // 「更多」菜单项：仅装配容器注入回调的入口（本地操作 变基/标签 + 远程操作 拉取/推送/更新项目/远程管理）；
-  // 全缺省时连「更多」按钮都不渲染
+  // 「更多」菜单项：仅装配容器注入回调的入口（P3-C 只读浏览 溯源/历史/已提交/搜索 + 本地操作 变基/标签
+  // + 远程操作 拉取/推送/更新项目/远程管理）；全缺省时连「更多」按钮都不渲染
   const moreItems = [
+    ...(onOpenBlame ? [{ key: 'blame', label: '溯源' }] : []),
+    ...(onOpenHistory ? [{ key: 'history', label: '历史' }] : []),
+    ...(onOpenCommitted ? [{ key: 'committed', label: '已提交' }] : []),
+    ...(onOpenSearch ? [{ key: 'search', label: '搜索' }] : []),
     ...(onOpenRebase ? [{ key: 'rebase', label: '变基' }] : []),
     ...(onOpenTags ? [{ key: 'tags', label: '标签' }] : []),
     ...(onOpenPull ? [{ key: 'pull', label: '拉取' }] : []),
@@ -101,7 +118,11 @@ export function LogPage({
   ];
   /** 「更多」菜单点击分发：按 key 调对应入口回调 */
   const onMoreClick = (key: string): void => {
-    if (key === 'rebase') onOpenRebase?.();
+    if (key === 'blame') onOpenBlame?.();
+    else if (key === 'history') onOpenHistory?.();
+    else if (key === 'committed') onOpenCommitted?.();
+    else if (key === 'search') onOpenSearch?.();
+    else if (key === 'rebase') onOpenRebase?.();
     else if (key === 'tags') onOpenTags?.();
     else if (key === 'pull') onOpenPull?.();
     else if (key === 'push') onOpenPush?.();

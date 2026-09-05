@@ -1,6 +1,6 @@
 /** diff 功能：单文件全文与流式事件，core 原语 → contracts 形状，入参在此校验。 */
 import { isAbsolute } from 'node:path';
-import { collectFileDiff, readFileAtRev, streamFileDiff } from '@rebased/core';
+import { GitExitError, collectFileDiff, readFileAtRev, streamFileDiff } from '@rebased/core';
 import { ServiceError, type DiffEvent, type DiffFile, type DiffQuery, type FileVersions } from '@rebased/contracts';
 
 /**
@@ -33,13 +33,35 @@ export async function* streamDiffEvents(repoPath: string, query: DiffQuery, opts
   }
 }
 
-/** 单文件两侧全文：staged→HEAD vs 暂存区；工作区→HEAD vs 工作区；from/to→两侧版本。 */
+/**
+ * git show <rev>:<path> 因「该 rev 上不存在该路径」失败的 stderr 判别：
+ * 工作区存在同名路径 → 'path ... exists on disk, but not in <rev>'；工作区也不存在 → 'path ... does not exist in <rev>'。
+ * 特征串判定沿 conflict.ts 手法；其余退出码 128（无效 rev/ambiguous 等）不匹配，按原错误上抛（调用方错）。
+ */
+function isMissingPathAtRev(err: unknown): boolean {
+  return (
+    err instanceof GitExitError && err.exitCode === 128 && /(exists on disk, but not in|does not exist in)/.test(err.stderr)
+  );
+}
+
+/** from/to 定提交对比的单侧读取：该侧无此路径（新增 A / 删除 D / 重命名目标 R 均有一侧缺失）时返回 ''——
+ *  与 `git diff A B -- path` 语义一致（文件仅在 B 侧 → 全新增；仅在 A 侧 → 全删除；两侧同 → 常规对比） */
+async function readFileOrMissing(repoPath: string, file: string, rev: string | undefined): Promise<string> {
+  try {
+    return await readFileAtRev(repoPath, { file, rev });
+  } catch (err) {
+    if (isMissingPathAtRev(err)) return '';
+    throw err;
+  }
+}
+
+/** 单文件两侧全文：staged→HEAD vs 暂存区；工作区→HEAD vs 工作区；from/to→两侧版本（单侧缺失 → 空串）。 */
 export async function getFileVersions(repoPath: string, query: DiffQuery, opts: { signal?: AbortSignal } = {}): Promise<FileVersions> {
   assertValidQuery(query);
   if (query.from !== undefined && query.to !== undefined) {
     const [before, after] = await Promise.all([
-      readFileAtRev(repoPath, { file: query.file, rev: query.from }),
-      readFileAtRev(repoPath, { file: query.file, rev: query.to }),
+      readFileOrMissing(repoPath, query.file, query.from),
+      readFileOrMissing(repoPath, query.file, query.to),
     ]);
     return { before, after };
   }

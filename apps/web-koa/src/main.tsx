@@ -8,12 +8,16 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
 import './index.css';
 import { ReposPage } from './pages';
+import { RepoBlamePage } from './pages/blame';
 import { RepoBranchesPage } from './pages/branches';
+import { RepoCommittedPage } from './pages/committed';
 import { RepoConflictsPage } from './pages/conflicts';
+import { RepoHistoryPage } from './pages/history';
 import { RepoMergePage } from './pages/merge';
 import { RepoPage } from './pages/repo';
 import { RepoRemotesPage } from './pages/remotes';
 import { RepoDiffPage } from './pages/diff';
+import { RepoSearchPage } from './pages/search';
 import { RepoSettingsPage } from './pages/settings';
 import { RepoStashesPage } from './pages/stashes';
 import { RepoStatusPage } from './pages/status';
@@ -26,7 +30,11 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<ReposPage />} />
           <Route path="/repos/:repoId" element={<RepoPage />} />
+          <Route path="/repos/:repoId/blame" element={<RepoBlamePage />} />
           <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
+          <Route path="/repos/:repoId/committed" element={<RepoCommittedPage />} />
+          <Route path="/repos/:repoId/history" element={<RepoHistoryPage />} />
+          <Route path="/repos/:repoId/search" element={<RepoSearchPage />} />
           <Route path="/repos/:repoId/merge" element={<RepoMergePage />} />
           <Route path="/repos/:repoId/remotes" element={<RepoRemotesPage />} />
           <Route path="/repos/:repoId/conflicts" element={<RepoConflictsPage />} />
