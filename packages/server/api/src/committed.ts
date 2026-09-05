@@ -2,8 +2,9 @@
  * committed 功能：Committed Changes 分页浏览（历史提交及其变更文件）。
  * 入参 query 由调用方经 committedQuerySchema 解析（limit≤200/skip 游标），本层直接透传 core。
  * 映射要点：core 以 string 透传 name-status 码（忠于 git 输出），此处窄化到契约联合
- * CommittedFileStatus（含 T——typechange，git --name-status 真实输出，P3-C 审查裁定补入）。
- * 日期透传：dateIso 为 %aI 原样透传（带时区偏移的 ISO），消费方用 new Date() 解析。
+ * CommittedFileStatus（含 T——typechange，git --name-status 真实输出，P3-C 审查裁定补入）；
+ * parents 为 %P 解析的父哈希数组（根提交 []），容器打开 diff 据此定 from（终审 Must-fix 2）。
+ * 日期透传：dateIso 为 %aI 原样透传（带作者时区偏移的 ISO；ui 消费方 formatCommitDate 直取字符串字段）。
  */
 import { committedPage, type CoreCommittedEntry } from '@rebased/core';
 import type { CommittedEntry, CommittedFileStatus, CommittedPage, CommittedPageQuery } from '@rebased/contracts';
@@ -16,6 +17,7 @@ function toCommittedEntry(entry: CoreCommittedEntry): CommittedEntry {
     subject: entry.subject,
     author: entry.author,
     dateIso: entry.dateIso,
+    parents: entry.parents,
     files: entry.files.map((f) => ({
       path: f.path,
       // git name-status 在正常提交遍历下仅产出 A/M/D/R/C/T（core 已取状态首字母，如 R100→R），此处窄化到契约联合

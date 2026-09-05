@@ -8,7 +8,7 @@ import { freshCache } from './testing/fresh-cache';
 
 const PAGE: CommittedPage = {
   entries: [
-    { hash: 'cccccc', shortHash: 'cccccc', subject: 'extend', author: 'Cara', dateIso: '2024-01-03T00:00:00Z', files: [{ path: 'a.txt', status: 'M' }] },
+    { hash: 'cccccc', shortHash: 'cccccc', subject: 'extend', author: 'Cara', dateIso: '2024-01-03T00:00:00Z', parents: ['bbbbbb'], files: [{ path: 'a.txt', status: 'M' }] },
   ],
   hasMore: true,
 };

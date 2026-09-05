@@ -18,6 +18,8 @@ export interface DiffViewerProps {
   ignoreWhitespace: boolean;
   onToggleWhitespace?: (ignoreWhitespace: boolean) => void;
   language?: string;
+  /** from/to 定提交对比模式（true 时隐藏 staged/工作区切换——该模式与 staged 互斥，服务端 XOR 校验会给 400） */
+  fromTo?: boolean;
   /** 测试注入点：替换 monaco 加载器（默认懒加载真实 monaco） */
   loader?: MonacoDiffLoader;
 }
@@ -29,6 +31,7 @@ export function DiffViewer({
   ignoreWhitespace,
   onToggleWhitespace,
   language,
+  fromTo,
   loader,
 }: DiffViewerProps): React.ReactNode {
   // 默认并排（UX 对齐 #4）
@@ -44,14 +47,17 @@ export function DiffViewer({
           value={sideBySide ? 'side' : 'inline'}
           onChange={(v) => setSideBySide(v === 'side')}
         />
-        <Segmented
-          options={[
-            { label: '工作区', value: 'worktree' },
-            { label: '已暂存', value: 'staged' },
-          ]}
-          value={staged ? 'staged' : 'worktree'}
-          onChange={(v) => onToggleStaged?.(v === 'staged')}
-        />
+        {/* from/to 模式：对比对象是两定提交，staged/工作区切换无意义且服务端互斥（400），隐藏 */}
+        {fromTo ? null : (
+          <Segmented
+            options={[
+              { label: '工作区', value: 'worktree' },
+              { label: '已暂存', value: 'staged' },
+            ]}
+            value={staged ? 'staged' : 'worktree'}
+            onChange={(v) => onToggleStaged?.(v === 'staged')}
+          />
+        )}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <Switch checked={ignoreWhitespace} onChange={(checked) => onToggleWhitespace?.(checked)} />
           忽略空白

@@ -41,6 +41,9 @@ describe('getCommittedPage 服务', () => {
     expect(page.entries[1].dateIso).toBe(git(repo, 'log', '-1', '--format=%aI', h1));
     expect(page.entries[0].files).toEqual([{ path: 'b.txt', status: 'A' }]);
     expect(page.entries[1].files).toEqual([{ path: 'a.txt', status: 'A' }]);
+    // %P 父哈希透传：second 的父为 first；first 为根提交（无父）→ []
+    expect(page.entries[0].parents).toEqual([h1]);
+    expect(page.entries[1].parents).toEqual([]);
   });
 
   // git mv 重命名：status 'R' + renameFrom 指向旧路径

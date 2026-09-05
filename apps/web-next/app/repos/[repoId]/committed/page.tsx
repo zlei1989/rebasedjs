@@ -47,13 +47,21 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     setFirstLoaded(false);
   }, [repoId]);
   /**
-   * 文件点击 → diff 页：from=父提交（<hash>~1）、to=提交本身；R 重命名文件（renameFrom 非空）附加原名——
-   * diff 端点只接受单文件路径（重命名需要两侧不同路径），页面读 renameFrom 后显示提示行而非伪 diff
+   * 文件点击 → diff 页：from=真实父提交（parents[0]，终审 Must-fix 2——固定 `<hash>~1` 对根提交无父会 128）、
+   * to=提交本身；根提交（无父）→ 仅带 root=1 标记，diff 页渲染「无父版本」提示行；
+   * R 重命名文件（renameFrom 非空）附加原名——diff 端点只接受单文件路径，页面读 renameFrom 后显示提示行而非伪 diff
    */
   const onOpenFile = (path: string, hash: string): void => {
     const entry = entries.find((e) => e.hash === hash);
     const renameFrom = entry?.files.find((f) => f.path === path)?.renameFrom;
-    const params = new URLSearchParams({ file: path, from: `${hash}~1`, to: hash });
+    const parents = entry?.parents ?? [];
+    const params = new URLSearchParams({ file: path });
+    if (parents.length > 0) {
+      params.set('from', parents[0]);
+      params.set('to', hash);
+    } else {
+      params.set('root', '1');
+    }
     if (renameFrom) params.set('renameFrom', renameFrom);
     router.push(`/repos/${repoId}/diff?${params.toString()}`);
   };

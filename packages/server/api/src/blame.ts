@@ -4,9 +4,9 @@
  * 入参在此校验（预检先于 git 调用）：路径越界 → INVALID_QUERY '非法的文件路径'；
  * 文件不存在（工作区 stat）→ INVALID_REF '文件不存在：…'。
  *
- * 日期透传（P3-C 审查裁定）：BlameLine.dateIso 为 core 已转换的 ISO 字符串
- * （author-time epoch 秒 → toISOString，UTC Z 结尾）；history/committed/search 的 %aI 为带时区偏移格式——
- * 两种均为合法 ISO 日期字符串（UTC Z 或带偏移），本层不做归一转换，消费方一律用 new Date() 解析。
+ * 日期透传（P3-C 终审裁定）：BlameLine.dateIso 为 core 已转换的 ISO 字符串——author-time epoch 秒 +
+ * author-tz 时区偏移 → %aI 等价的「作者时区墙钟」偏移 ISO（无 author-tz 时回退 UTC Z）；
+ * 与 history/committed/search 的 %aI 显示口径一致（ui 的 formatCommitDate 直取字符串字段，不做日期解析）。
  */
 import { statSync, type Stats } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';

@@ -229,7 +229,7 @@ export interface BlameLine {
   shortHash: string;
   author: string;
   authorEmail: string;
-  /** 日期为 ISO 字符串（blame 的 author-time epoch 秒 → UTC Z；与 %aI 带偏移格式均为合法 ISO 日期字符串）；消费方用 new Date() 解析 */
+  /** 日期为 ISO 字符串（git %aI 同口径的作者时区偏移墙钟；ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;
   content: string;
   /** 该行在责任提交版本中的源行号（源自块头 orig 字段）；在无位移编辑/重命名场景恰等同于前一次提交中的行号，插入/位移编辑时可能指向无关行——精确映射留待增强；无则 null——如文件首创建 */
@@ -242,7 +242,7 @@ export interface FileHistoryEntry {
   shortHash: string;
   subject: string;
   author: string;
-  /** 日期为 ISO 字符串（git %aI，带时区偏移；与 blame 的 UTC Z 均为合法 ISO 日期字符串）；消费方用 new Date() 解析 */
+  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；blame 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;
 }
 
@@ -255,20 +255,22 @@ export interface CommittedEntry {
   shortHash: string;
   subject: string;
   author: string;
-  /** 日期为 ISO 字符串（git %aI，带时区偏移；与 blame 的 UTC Z 均为合法 ISO 日期字符串）；消费方用 new Date() 解析 */
+  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；blame 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;
+  /** 父提交哈希（git %P，空格分隔解析）；根提交为空数组——容器打开根提交 diff 时据此降级为提示 */
+  parents: string[];
   files: { path: string; status: CommittedFileStatus; renameFrom?: string }[];
 }
 /** Committed Changes 分页视图：hasMore 表示存在后续页 */
 export interface CommittedPage { entries: CommittedEntry[]; hasMore: boolean; }
 
-/** 搜索命中：grep 命中为提交；pickaxe 命中同（match 为可选摘要） */
+/** 搜索命中：grep 命中为提交；pickaxe 命中同 */
 export interface SearchResult {
   hash: string;
   shortHash: string;
   subject: string;
   author: string;
-  /** 日期为 ISO 字符串（git %aI，带时区偏移；与 blame 的 UTC Z 均为合法 ISO 日期字符串）；消费方用 new Date() 解析 */
+  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；blame 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;
 }
 /** 搜索模式：grep=提交信息全文（--grep）；pickaxe=内容增量（-S） */

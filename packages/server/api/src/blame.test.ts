@@ -53,10 +53,11 @@ describe('getFileBlame 服务', () => {
       previousLineno: null,
     });
     expect(lines[1]).toMatchObject({ lineno: 2, hash: h2, shortHash: h2.slice(0, 7), previousLineno: 2 });
-    // 日期：blame 为 author-time epoch → toISOString（UTC Z 结尾），原样透传
-    expect(lines[1].dateIso).toBe(new Date(Number(git(repo, 'log', '-1', '--format=%at', h2)) * 1000).toISOString());
+    // 日期：%aI 等价口径（author-tz 时区偏移墙钟；与 history/committed/search 显示一致），原样透传
+    expect(lines[1].dateIso).toBe(git(repo, 'log', '-1', '--format=%aI', h2));
     for (const line of lines) {
-      expect(line.dateIso).toMatch(/Z$/);
+      // 合法 ISO：带时区偏移（±HH:MM）或 UTC Z 回退
+      expect(line.dateIso).toMatch(/(Z|[+-]\d{2}:\d{2})$/);
       expect(Number.isNaN(new Date(line.dateIso).getTime())).toBe(false);
     }
   });

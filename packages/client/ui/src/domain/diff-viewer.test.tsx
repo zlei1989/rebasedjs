@@ -67,4 +67,19 @@ describe('DiffViewer', () => {
     fireEvent.click(screen.getByText('工作区'));
     expect(onToggleStaged).toHaveBeenCalledWith(false);
   });
+
+  it('fromTo 模式隐藏 staged/工作区切换（与 from/to 互斥，服务端 400——终审 Must-fix 3）', () => {
+    render(
+      <DiffViewer
+        versions={versions}
+        staged={false}
+        ignoreWhitespace={false}
+        fromTo
+        loader={stubLoader}
+      />,
+    );
+    expect(screen.queryByText('工作区')).not.toBeInTheDocument();
+    expect(screen.queryByText('已暂存')).not.toBeInTheDocument();
+    expect(screen.getByText('并排')).toBeInTheDocument();
+  });
 });

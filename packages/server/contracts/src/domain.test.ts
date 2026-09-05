@@ -18,6 +18,7 @@ describe('CommittedEntry.files.status（git name-status 码）', () => {
       subject: 's',
       author: 'a',
       dateIso: '2024-01-01T00:00:00Z',
+      parents: [],
       files: [{ path: 'f.txt', status: 'T' }],
     };
     expect(entry.files[0].status).toBe('T');

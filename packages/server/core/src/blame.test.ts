@@ -19,9 +19,9 @@ function commitFile(repo: string, file: string, content: string, msg: string): s
   return git(repo, 'rev-parse', 'HEAD');
 }
 
-/** 提交作者时间（epoch 秒）→ blamer 期望的 ISO 字符串（精确断言时间转换） */
+/** 提交作者严格 ISO（%aI：作者时区偏移墙钟）→ blamer 期望的 dateIso（对齐 history/committed/search 口径） */
 function authorIso(repo: string, hash: string): string {
-  return new Date(Number(git(repo, 'log', '-1', '--format=%at', hash)) * 1000).toISOString();
+  return git(repo, 'log', '-1', '--format=%aI', hash);
 }
 
 describe('blame 原语', () => {
@@ -79,5 +79,29 @@ describe('blame 原语', () => {
     expect(lines[2].content).toBe('charlie');
     expect(lines[2].hash).toBe(h1);
     expect(lines[2].previousLineno).toBeNull();
+  });
+
+  // 非 UTC 作者时区：dateIso 为 %aI 等价偏移 ISO（author-tz 参与墙钟，而非 UTC 截断——终审 Must-fix 1）
+  it('非 UTC 作者时区：dateIso 含作者时区偏移（与 %aI 严格一致）', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commitFile(repo, 'f.txt', 'alpha\nbeta', 'first');
+    writeFileSync(join(repo, 'f.txt'), 'alpha\nBETA');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    // 显式作者时间 + 偏移：wall clock 10:00 +08:00（epoch 为 02:00Z——若按 UTC 截断会错 8 小时）
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'second'], {
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: '2026-01-01T10:00:00+08:00',
+        GIT_COMMITTER_DATE: '2026-01-01T10:00:00+08:00',
+      },
+    });
+    const h2 = git(repo, 'rev-parse', 'HEAD');
+
+    const lines = await fileBlame(repo, 'f.txt');
+
+    expect(lines[1].hash).toBe(h2);
+    expect(lines[1].dateIso).toBe('2026-01-01T10:00:00+08:00');
+    expect(lines[1].dateIso).toBe(git(repo, 'log', '-1', '--format=%aI', h2));
   });
 });

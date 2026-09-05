@@ -154,6 +154,10 @@ export function CommittedChangesPanel({
           >
             {!selected ? (
               <EmptyState title="选择一个提交查看变更文件" />
+            ) : selected.files.length === 0 && selected.parents.length > 1 ? (
+              /* 合并提交：git log --name-status 默认不输出 merge 的文件变更（合并结果按 diff-tree 展示），
+                 空文件列表以 merge 提示替代误导性的「无文件变更」（终审 Minor） */
+              <EmptyState title="合并提交" description="git 对合并提交默认不列出文件变更；请到日志页查看合并结果" />
             ) : selected.files.length === 0 ? (
               <EmptyState title="该提交无文件变更" />
             ) : (

@@ -1331,6 +1331,10 @@ describe('web-next blame/history/committed/search 路由', () => {
     expect(full.entries[0].files).toEqual([{ path: 'c.txt', status: 'A' }]);
     expect(full.entries[1].subject).toBe('second');
     expect(full.entries[1].files).toEqual([{ path: 'b.txt', status: 'A' }]);
+    // %P 父哈希透传：非根提交单父；根提交（init）无父 → []（容器据此降级根提交 diff，终审 Must-fix 2）
+    expect(full.entries[0].parents).toHaveLength(1);
+    expect(full.entries[0].parents[0]).toMatch(/^[0-9a-f]{40}$/);
+    expect(full.entries[2].parents).toEqual([]);
 
     const pageRes = await getCommitted(new Request(`http://localhost/api/repos/${repoId}/committed?limit=1`), ctx(repoId));
     const page = await pageRes.json();

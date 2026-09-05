@@ -41,6 +41,22 @@ describe('committed 原语', () => {
     expect(page.entries[1].dateIso).toBe(git(repo, 'log', '-1', '--format=%aI', h1));
     expect(page.entries[0].files).toEqual([{ path: 'b.txt', status: 'A' }]);
     expect(page.entries[1].files).toEqual([{ path: 'a.txt', status: 'A' }]);
+    // %P 父哈希透传：second 的父为 first；first 为根提交（无父）→ []
+    expect(page.entries[0].parents).toEqual([h1]);
+    expect(page.entries[1].parents).toEqual([]);
+  });
+
+  // 根提交（单提交仓库）：parents 为空数组——容器据此对根提交的 diff 打开降级（终审 Must-fix 2）
+  it('单提交仓库：根提交 parents 为空数组', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const h1 = commitFile(repo, 'a.txt', 'alpha', 'create alpha');
+
+    const page = await committedPage(repo, { limit: 10, skip: 0 });
+
+    expect(page.entries).toHaveLength(1);
+    expect(page.entries[0].hash).toBe(h1);
+    expect(page.entries[0].parents).toEqual([]);
   });
 
   // git mv 重命名：name-status 输出 R100<old><new> → status 'R' + renameFrom

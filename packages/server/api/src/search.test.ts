@@ -84,4 +84,13 @@ describe('searchCommitsService 服务', () => {
 
     expect(hits).toEqual([]);
   });
+
+  // 非法正则：grep 按正则交给 git（`[`/`fix(` 等）→ git 128 'Invalid regular expression'
+  // → INVALID_QUERY（调用方输入问题），而非 GIT_ERROR 500（终审 Minor）
+  it('grep 非法正则：INVALID_QUERY 搜索表达式不是合法的正则表达式', { timeout: 30000 }, async () => {
+    const { repo } = buildSearchRepo();
+
+    await expect(searchCommitsService(repo, { q: '[', mode: 'grep', limit: 10 }))
+      .rejects.toMatchObject({ code: 'INVALID_QUERY', message: '搜索表达式不是合法的正则表达式' });
+  });
 });

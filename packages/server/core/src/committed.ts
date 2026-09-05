@@ -1,10 +1,10 @@
 /**
  * committed 原语：git log --name-status 提交浏览分页（历史提交及其变更文件）。
  *
- * 输出布局（实测 git 2.47）：`--format=%H%x00%h%x00%s%x00%an%x00%aI` 每提交一节——
+ * 输出布局（实测 git 2.47）：`--format=%H%x00%h%x00%s%x00%an%x00%aI%x00%P` 每提交一节——
  * 格式行（含 NUL）在前，其后若干 name-status 文件行（`status\tpath` 或 `R100\told\tnew`），
  * 节间以空行分隔。文件行不含 NUL，故按行切分后「含 NUL = 提交头行、不含 = 文件行」可唯一区分
- * （subject 由 %s 保证无换行/NUL）。
+ * （subject 由 %s 保证无换行/NUL；%P 父哈希空格分隔，根提交为空串）。
  *
  * 路径引号（本文件关键点）：非 -z 布局下，git 对需引号路径整字段包裹 C 引号（`"..."`）——
  * 含非 ASCII 字节（LC_ALL=C 下按字节八进制转义，如 `"\346\226\207…"`）、控制字符、
@@ -16,18 +16,21 @@ import { runGit } from './exec';
 
 /** 提交条目：逐字段对应 contracts 的 CommittedEntry（core 层持 Core 前缀镜像，api 层映射）。
  *  status 用 string 而非契约枚举：git name-status 除 A/M/D/R/C 还可输出 T（类型变更）等，
- *  core 层忠于 git 输出不做窄化（窄化是契约层/映射层的职责，见 Task 4 映射）。 */
+ *  core 层忠于 git 输出不做窄化（窄化是契约层/映射层的职责，见 Task 4 映射）。
+ *  parents：%P 空格分隔的父哈希；根提交为空数组（容器打开根提交 diff 时据此降级——from=<hash>~1 对
+ *  根提交无父版本，会以 128 抛错，见终审 Must-fix 2）。 */
 export interface CoreCommittedEntry {
   hash: string;
   shortHash: string;
   subject: string;
   author: string;
   dateIso: string;
+  parents: string[];
   files: { path: string; status: string; renameFrom?: string }[];
 }
 
-/** %H%x00%h%x00%s%x00%an%x00%aI —— 格式行 5 字段、字段间 NUL（与 history/search 同一布局） */
-const COMMITTED_FORMAT = '%H%x00%h%x00%s%x00%an%x00%aI';
+/** %H%x00%h%x00%s%x00%an%x00%aI%x00%P —— 格式行 6 字段、字段间 NUL（%P 父哈希，根提交为空字段） */
+const COMMITTED_FORMAT = '%H%x00%h%x00%s%x00%an%x00%aI%x00%P';
 
 /**
  * 还原 git 的 C 引号路径字面量。
@@ -73,7 +76,7 @@ function unquotePath(field: string): string {
 
 /**
  * 解析 --name-status 全文为提交条目数组。
- * 单遍按行：空行跳过（节间分隔）；含 NUL 的行为提交头行（5 字段 NUL 切分，末尾字段剥 \r）；
+ * 单遍按行：空行跳过（节间分隔）；含 NUL 的行为提交头行（6 字段 NUL 切分，末尾字段剥 \r）；
  * 其余为文件行——按首个 \t 切状态与路径段，R/C 带得分前缀（如 R100 → 'R'）且有两段路径，
  * 第一段为 renameFrom、第二段为 path；段内统一引号还原。
  */
@@ -83,10 +86,18 @@ function parseCommitted(stdout: string): CoreCommittedEntry[] {
   for (const line of stdout.split('\n')) {
     if (line === '') continue;
     if (line.includes('\0')) {
-      const [hash, shortHash, subject, author, dateIso] = line.split('\0');
-      // 字段数防御（与 history 的 parseHistoryRecords 同款）：格式行约定 5 字段，缺字段整行丢弃
+      const [hash, shortHash, subject, author, dateIso, parentsField = ''] = line.split('\0');
+      // 字段数防御（与 history 的 parseHistoryRecords 同款）：格式行约定 6 字段，缺字段整行丢弃
       if (hash === undefined || shortHash === undefined || subject === undefined || author === undefined || dateIso === undefined) continue;
-      current = { hash, shortHash, subject, author, dateIso: dateIso.replace(/\r$/, ''), files: [] };
+      current = {
+        hash,
+        shortHash,
+        subject,
+        author,
+        dateIso: dateIso.replace(/\r$/, ''),
+        parents: parentsField.replace(/\r$/, '').split(' ').filter((p) => p !== ''),
+        files: [],
+      };
       entries.push(current);
       continue;
     }

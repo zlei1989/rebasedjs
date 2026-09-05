@@ -10,6 +10,7 @@ function makeEntry(partial: Partial<CommittedEntry> & { hash: string }): Committ
     subject: `subject ${partial.hash}`,
     author: `author ${partial.hash}`,
     dateIso: '2026-01-02T03:04:00Z',
+    parents: [],
     files: [],
     ...partial,
   };
@@ -93,6 +94,17 @@ describe('CommittedChangesPanel 文件列表（选中提交）', () => {
       />,
     );
     expect(screen.getByText('该提交无文件变更')).toBeInTheDocument();
+  });
+
+  it('合并提交（files 空且 parents>1）渲染合并提示而非「无文件变更」（终审 Minor）', () => {
+    render(
+      <CommittedChangesPanel
+        page={makePage([makeEntry({ hash: 'merge-1', parents: ['p1', 'p2'] })])}
+        selectedHash="merge-1"
+      />,
+    );
+    expect(screen.getByText('合并提交')).toBeInTheDocument();
+    expect(screen.queryByText('该提交无文件变更')).not.toBeInTheDocument();
   });
 });
 

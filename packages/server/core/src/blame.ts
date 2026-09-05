@@ -33,10 +33,13 @@ const HEADER_RE = /^[0-9a-f]{40,64} (\d+) (\d+)(?: (\d+))?$/;
 /**
  * 解析 --line-porcelain 全文为逐行溯源数组。
  * 算法（单遍状态机）：起始行重置本块累积的 hash/orig/final 与头字段；
- * 头字段按前缀识别（author/author-mail/author-time/previous），其余（author-tz、committer*、summary、
+ * 头字段按前缀识别（author/author-mail/author-time/author-tz/previous），其余（committer*、summary、
  * boundary、filename、merged）不计——filename 的 C 引号转义不参与解析；
  * 遇到 \t 内容行即把本块沉淀为一条记录（\t 后原样取内容，可为空、可含 \t），
  * 块间无分隔符，靠起始行行首重置；最后一块由 EOF 收尾。
+ * 日期：author-time（epoch 秒）+ author-tz（+0800 形）→ %aI 等价的「作者时区墙钟」偏移 ISO——
+ * 与 history/committed/search 的 %aI 显示口径一致（ui 的 formatCommitDate 直取字符串，若产出 UTC Z
+ * 则非 UTC 作者的墙钟会错到前一天，见终审裁定）；无 author-tz 时回退 toISOString（UTC Z）。
  */
 export function parseBlamePorcelain(stdout: string): CoreBlameLine[] {
   const result: CoreBlameLine[] = [];
@@ -46,6 +49,7 @@ export function parseBlamePorcelain(stdout: string): CoreBlameLine[] {
   let author = '';
   let authorMail = '';
   let authorTimeSecs = 0;
+  let authorTz = '';
   let hasPrevious = false;
   for (const line of stdout.split('\n')) {
     const head = line.match(HEADER_RE);
@@ -57,6 +61,7 @@ export function parseBlamePorcelain(stdout: string): CoreBlameLine[] {
       author = '';
       authorMail = '';
       authorTimeSecs = 0;
+      authorTz = '';
       hasPrevious = false;
     } else if (line.startsWith('\t')) {
       result.push({
@@ -65,7 +70,7 @@ export function parseBlamePorcelain(stdout: string): CoreBlameLine[] {
         shortHash: hash.slice(0, 7),
         author,
         authorEmail: authorMail.replace(/^<|>$/g, ''),
-        dateIso: new Date(authorTimeSecs * 1000).toISOString(),
+        dateIso: formatAuthorIso(authorTimeSecs, authorTz),
         content: line.slice(1),
         previousLineno: hasPrevious ? origLineno : null,
       });
@@ -75,11 +80,25 @@ export function parseBlamePorcelain(stdout: string): CoreBlameLine[] {
       authorMail = line.slice('author-mail '.length);
     } else if (line.startsWith('author-time ')) {
       authorTimeSecs = Number(line.slice('author-time '.length));
+    } else if (line.startsWith('author-tz ')) {
+      authorTz = line.slice('author-tz '.length);
     } else if (line.startsWith('previous ')) {
       hasPrevious = true;
     }
   }
   return result;
+}
+
+/** author-time（epoch 秒）+ author-tz（±HHMM 形）→ %aI 等价偏移 ISO（如 +0800 → 2026-01-01T10:00:00+08:00）。
+ *  算法：墙钟 = UTC 时刻 + 时区偏移（分钟级），再取 UTC 字段拼装——不依赖运行时区，结果确定；
+ *  tz 形不合法/缺失时回退 toISOString（UTC Z，尽力口径）。 */
+function formatAuthorIso(epochSecs: number, tz: string): string {
+  const m = /^([+-])(\d{2})(\d{2})$/.exec(tz);
+  if (!m) return new Date(epochSecs * 1000).toISOString();
+  const offsetMin = (Number(m[2]) * 60 + Number(m[3])) * (m[1] === '-' ? -1 : 1);
+  const wall = new Date(epochSecs * 1000 + offsetMin * 60000);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${wall.getUTCFullYear()}-${pad(wall.getUTCMonth() + 1)}-${pad(wall.getUTCDate())}T${pad(wall.getUTCHours())}:${pad(wall.getUTCMinutes())}:${pad(wall.getUTCSeconds())}${m[1]}${m[2]}:${m[3]}`;
 }
 
 /** 单文件逐行溯源：--line-porcelain 一次取全量（文件行数不大，无分页场景） */

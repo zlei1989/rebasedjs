@@ -1276,7 +1276,7 @@ describe('web-koa blame/history/committed/search 端点', () => {
 
     const fullRes = await fetch(`${base}/api/repos/${repoId}/committed`);
     expect(fullRes.status).toBe(200);
-    const full = (await fullRes.json()) as { entries: Array<{ subject: string; author: string; files: Array<{ path: string; status: string }> }>; hasMore: boolean };
+    const full = (await fullRes.json()) as { entries: Array<{ subject: string; author: string; parents: string[]; files: Array<{ path: string; status: string }> }>; hasMore: boolean };
     expect(full.entries).toHaveLength(3);
     expect(full.hasMore).toBe(false);
     // 最新在前：entries[0] 为 third 提交且变更文件集正确
@@ -1284,6 +1284,10 @@ describe('web-koa blame/history/committed/search 端点', () => {
     expect(full.entries[0].files).toEqual([{ path: 'c.txt', status: 'A' }]);
     expect(full.entries[1].subject).toBe('second');
     expect(full.entries[1].files).toEqual([{ path: 'b.txt', status: 'A' }]);
+    // %P 父哈希透传：非根提交单父；根提交（init）无父 → []（容器据此降级根提交 diff，终审 Must-fix 2）
+    expect(full.entries[0].parents).toHaveLength(1);
+    expect(full.entries[0].parents[0]).toMatch(/^[0-9a-f]{40}$/);
+    expect(full.entries[2].parents).toEqual([]);
 
     const pageRes = await fetch(`${base}/api/repos/${repoId}/committed?limit=1`);
     const page = (await pageRes.json()) as typeof full;

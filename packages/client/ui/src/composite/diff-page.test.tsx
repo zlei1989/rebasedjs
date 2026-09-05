@@ -64,4 +64,21 @@ describe('DiffPage', () => {
     expect(screen.queryByTestId('diff-rename-hint')).not.toBeInTheDocument();
     expect(await screen.findByText('stub-diff-editor')).toBeInTheDocument();
   });
+
+  it('rootCommit 时渲染根提交提示行且不渲染伪 diff（终审 Must-fix 2）', async () => {
+    render(
+      <DiffPage versions={versions} file="a.txt" staged={false} rootCommit loader={stubLoader} />,
+    );
+    // 文件路径为页头独立元素；提示行确认内容 + 无伪 diff（monaco 视图缺席）
+    expect(screen.getByText('a.txt')).toBeInTheDocument();
+    expect(screen.getByTestId('diff-root-hint')).toBeInTheDocument();
+    expect(await screen.queryByText('stub-diff-editor')).not.toBeInTheDocument();
+  });
+
+  it('fromTo 模式透传：staged/工作区切换不可见（终审 Must-fix 3）', async () => {
+    render(<DiffPage versions={versions} file="src/app.ts" staged={false} fromTo loader={stubLoader} />);
+    expect(screen.queryByText('工作区')).not.toBeInTheDocument();
+    expect(screen.queryByText('已暂存')).not.toBeInTheDocument();
+    expect(await screen.findByText('stub-diff-editor')).toBeInTheDocument();
+  });
 });
