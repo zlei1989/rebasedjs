@@ -348,3 +348,19 @@ export function SearchPanel(props: SearchPanelProps): React.ReactNode;
 - 类型一致性：BlameLine/FileHistoryEntry/CommittedEntry/CommittedPage/SearchResult/四 query schema/组件 Props 跨任务签名已对齐。
 - 简化裁定：CommitDetailsPanel 不加文件列表（四页面用页内输入 + 空态引导；「提交详情文件列表」独立增强后置）；committed 打开 diff 的 from/to 映射由容器解析 `${hash}~1`（diff 端点已支持 from/to）。
 - 风险：`--name-status` 的非 -z 解析对含引号文件名的还原——复用 core 既有引号还原手法并在注释写明；blame porcelain 的 previous 字段在重命名场景的语义已标注。
+
+
+---
+
+## 关账记录（2026-09-03）
+
+9/9 任务完成并通过逐任务审查；全分支终审结论 **Ready to merge: With fixes**——1 Important（日期漂移：blame UTC 墙钟 vs %aI 作者时区，终审查了真实消费者发现 ui formatCommitDate 只做字符串截取不解析 Date——per-task 裁定问了正确问题但没查消费者）+ 2 条计划缺陷（根提交 `~1` 无效——计划 Task 9 冒烟假定恒有父提交；from/to 下 staged 切换无效可达）+ 2 Minor，修复波（commit `db24c8e`，25 文件）经限定复审全部 ADDRESSED、零新破坏，正式关账。
+
+**Rulings（控制器裁决记录）**：
+1. previousLineno 用块头 orig 代理（brief 的 `previous <hash> <lineno>` 为事实错误，git 实际 `<hash> <路径>`；代理方向正确，两处字段注释已联动修正近似边界）。
+2. committed 缺失侧 → `''`（P1 缺口扩权修复，范围克制：仅 from/to 分支，M/工作区/staged 零接触）；R 重命名由容器显示"涉及重命名"提示行（双路径 rename diff 超单文件契约，后续增强）。
+3. 时间语义统一为「%aI 等价偏移 ISO + 消费方字符串截取」（author-tz 解析 + formatAuthorIso）；四处"new Date() 消费"JSDoc 谎言同步纠正（api/history.ts:4-5 两条残余 doc 断言已记 Minor 待下次触碰）。
+4. 根提交降级为提示行（无父 → 不发 diff 请求，diff 容器丢弃 to-only 路径的 XOR 语义）；merge 提交显示「合并提交」提示。
+5. 契约 status 联合补 'T'（typechange，brief 缺口）。
+
+终审 triage：16 项 deferred 中 #3（JSDoc 删句）/ #9（根提交）/ #10（staged 切换）随修复波落地，其余 safe-to-defer；hardening 新增 ㉔-㉗（见任务 9 Minor 结转）。SDD 工作区已按规程删除，本提交为记录。
