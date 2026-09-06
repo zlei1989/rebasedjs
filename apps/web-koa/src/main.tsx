@@ -13,6 +13,7 @@ import { RepoBranchesPage } from './pages/branches';
 import { RepoCommittedPage } from './pages/committed';
 import { RepoConflictsPage } from './pages/conflicts';
 import { RepoConsolePage } from './pages/console';
+import { RepoGithubPage } from './pages/github';
 import { RepoHistoryPage } from './pages/history';
 import { RepoIgnorePage } from './pages/ignore';
 import { RepoMergePage } from './pages/merge';
@@ -51,6 +52,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/repos/:repoId/shelves" element={<RepoShelvesPage />} />
           <Route path="/repos/:repoId/console" element={<RepoConsolePage />} />
           <Route path="/repos/:repoId/ignore" element={<RepoIgnorePage />} />
+          <Route path="/repos/:repoId/github" element={<RepoGithubPage />} />
         </Routes>
       </BrowserRouter>
     </AntApp>

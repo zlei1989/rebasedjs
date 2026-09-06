@@ -16,6 +16,7 @@
 import {
   useAbortOperation,
   useCherryPick,
+  useGithubStatus,
   useInteractiveRebase,
   useLogPage,
   useLogStream,
@@ -64,6 +65,8 @@ export function RepoPage(): React.ReactNode {
   const [refreshKey, setRefreshKey] = useState(0);
   const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId, refreshKey);
   const { data: status, mutate } = useRepoStatus(repoId);
+  // GitHub 面板可用性：检测到 GitHub 远程才给 LogPage 注入入口（对齐 Java 行为）；失败静默隐藏（渐进增强）
+  const { data: githubStatus } = useGithubStatus(repoId);
   const { data: operation, mutate: mutateOperation } = useOperation(repoId);
   const { trigger: abortOperation, isMutating: abortingOperation } = useAbortOperation(repoId);
   const { trigger: resetTrigger, isMutating: resetting } = useReset(repoId);
@@ -304,6 +307,8 @@ export function RepoPage(): React.ReactNode {
         onOpenShelves={() => navigate(`/repos/${repoId}/shelves`)}
         onOpenConsole={() => navigate(`/repos/${repoId}/console`)}
         onOpenIgnore={() => navigate(`/repos/${repoId}/ignore`)}
+        onOpenGithub={() => navigate(`/repos/${repoId}/github`)}
+        githubAvailable={githubStatus?.detected === true}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}

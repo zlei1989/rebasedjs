@@ -17,6 +17,7 @@
 import {
   useAbortOperation,
   useCherryPick,
+  useGithubStatus,
   useInteractiveRebase,
   useLogPage,
   useLogStream,
@@ -70,6 +71,8 @@ export default function Page({
   const [refreshKey, setRefreshKey] = useState(0);
   const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId, refreshKey);
   const { data: status, mutate } = useRepoStatus(repoId);
+  // GitHub 面板可用性：检测到 GitHub 远程才给 LogPage 注入入口（对齐 Java 行为）；失败静默隐藏（渐进增强）
+  const { data: githubStatus } = useGithubStatus(repoId);
   const { data: operation, mutate: mutateOperation } = useOperation(repoId);
   const { trigger: abortOperation, isMutating: abortingOperation } = useAbortOperation(repoId);
   const { trigger: resetTrigger, isMutating: resetting } = useReset(repoId);
@@ -310,6 +313,8 @@ export default function Page({
         onOpenShelves={() => router.push(`/repos/${repoId}/shelves`)}
         onOpenConsole={() => router.push(`/repos/${repoId}/console`)}
         onOpenIgnore={() => router.push(`/repos/${repoId}/ignore`)}
+        onOpenGithub={() => router.push(`/repos/${repoId}/github`)}
+        githubAvailable={githubStatus?.detected === true}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}

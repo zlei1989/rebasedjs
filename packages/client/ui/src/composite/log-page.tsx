@@ -68,6 +68,10 @@ export interface LogPageProps {
   onOpenConsole?: () => void;
   /** 忽略配置页入口回调；缺省时「更多」菜单不含忽略项 */
   onOpenIgnore?: () => void;
+  /** GitHub 面板页入口回调；与 githubAvailable 同传（均为有效值）时「更多」菜单才含 GitHub 面板项 */
+  onOpenGithub?: () => void;
+  /** GitHub 面板可用性（容器经 useGithubStatus 检测到 GitHub 远程）：false/缺省不渲染 GitHub 面板菜单项 */
+  githubAvailable?: boolean;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
   onUndoCommit?: () => void;
   /** 撤销请求进行中：撤销按钮 loading 态 */
@@ -109,6 +113,8 @@ export function LogPage({
   onOpenShelves,
   onOpenConsole,
   onOpenIgnore,
+  onOpenGithub,
+  githubAvailable,
   onUndoCommit,
   undoCommitting,
   onResetHere,
@@ -132,6 +138,8 @@ export function LogPage({
     ...(onOpenShelves ? [{ key: 'shelves', label: '搁置' }] : []),
     ...(onOpenConsole ? [{ key: 'console', label: '控制台' }] : []),
     ...(onOpenIgnore ? [{ key: 'ignore', label: '忽略' }] : []),
+    // GitHub 面板：仅在容器检测到 GitHub 远程（githubAvailable）且注入导航回调时渲染（对齐 Java 检测到远程才显示工具窗口）
+    ...(onOpenGithub !== undefined && githubAvailable ? [{ key: 'github', label: 'GitHub 面板' }] : []),
   ];
   /** 「更多」菜单点击分发：按 key 调对应入口回调 */
   const onMoreClick = (key: string): void => {
@@ -149,6 +157,7 @@ export function LogPage({
     else if (key === 'shelves') onOpenShelves?.();
     else if (key === 'console') onOpenConsole?.();
     else if (key === 'ignore') onOpenIgnore?.();
+    else if (key === 'github') onOpenGithub?.();
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

@@ -373,6 +373,45 @@ describe('LogPage', () => {
     expect(screen.queryByText('忽略')).not.toBeInTheDocument();
   });
 
+  it('传入 onOpenGithub 且 githubAvailable 时「更多」菜单含 GitHub 面板项，点击触发回调', async () => {
+    const onOpenGithub = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onOpenPull={() => {}}
+        onOpenGithub={onOpenGithub}
+        githubAvailable
+      />,
+    );
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('GitHub 面板'));
+    expect(onOpenGithub).toHaveBeenCalledTimes(1);
+  });
+
+  it('githubAvailable=false 时即使传入 onOpenGithub 也不渲染 GitHub 面板项', async () => {
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onOpenPull={() => {}}
+        onOpenGithub={() => {}}
+        githubAvailable={false}
+      />,
+    );
+    await openMoreMenu();
+    expect(screen.getByText('拉取')).toBeInTheDocument();
+    expect(screen.queryByText('GitHub 面板')).not.toBeInTheDocument();
+  });
+
+  it('未传 onOpenGithub/githubAvailable 时「更多」菜单不含 GitHub 面板项', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={() => {}} />);
+    await openMoreMenu();
+    expect(screen.queryByText('GitHub 面板')).not.toBeInTheDocument();
+  });
+
   it('传入 onCherryPick 时透传给详情面板，点击回调携带选中提交 hash', () => {
     const onCherryPick = vi.fn();
     const selected = makeCommit({ hash: 'c9selected0001' });
