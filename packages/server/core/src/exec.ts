@@ -19,6 +19,55 @@ export interface GitResult {
 /** 两处 spawn（runGit/streamGit）共用的固定 env：LC_ALL=C 固定英文输出；其余防交互挂起（见文件头） */
 const GIT_ENV = { LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GCM_INTERACTIVE: 'never' };
 
+/** 命令执行日志条目：args 为 buildArgs 之后的最终参数数组（token 剥离后）；stderrTail 为输出尾部 ≤500 字符；atIso 为执行时间 */
+export interface ExecLogEntry {
+  args: string[];
+  exitCode: number;
+  durationMs: number;
+  stderrTail: string;
+  atIso: string;
+}
+
+/** 环形缓冲容量：每个仓库（按 cwd 键控）最多保留最近 200 条 */
+const EXEC_LOG_CAP = 200;
+const execLogByCwd = new Map<string, ExecLogEntry[]>();
+
+function tail500(text: string): string {
+  return text.length > 500 ? text.slice(text.length - 500) : text;
+}
+
+/** token 剥离：-c 后值匹配 /extraheader=/i（大小写不敏感——git config 键大小写不敏感，
+ *  P3-A buildAuthConfig 注入形态 http.<authority>.extraHeader=... 可能任意大小写）→ 该
+ *  -c 与值两个元素均不进日志；其余原样保留。token 文本绝不落盘。 */
+function stripSensitivePairs(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '-c' && i + 1 < args.length && /extraheader=/i.test(args[i + 1])) {
+      i++;
+      continue;
+    }
+    out.push(args[i]);
+  }
+  return out;
+}
+
+function recordExec(cwd: string, finalArgs: string[], exitCode: number, durationMs: number, stderr: string): void {
+  let list = execLogByCwd.get(cwd);
+  if (list === undefined) {
+    list = [];
+    execLogByCwd.set(cwd, list);
+  }
+  list.push({ args: stripSensitivePairs(finalArgs), exitCode, durationMs, stderrTail: tail500(stderr), atIso: new Date().toISOString() });
+  if (list.length > EXEC_LOG_CAP) list.shift();
+}
+
+/** 按 cwd 键控的环形缓冲（cap 200/仓库）；runGit/streamGit 成功与失败均记录（失败含非零退出；spawn 失败 exitCode -1）
+ *  limit 截断：返回最近 limit 条（旧→新）。 */
+export function getExecLog(cwd: string, limit: number): ExecLogEntry[] {
+  if (limit <= 0) return [];
+  return (execLogByCwd.get(cwd) ?? []).slice(-limit);
+}
+
 export class GitExitError extends Error {
   readonly args: string[];
   readonly exitCode: number;
@@ -67,7 +116,16 @@ export function runGit(
   opts: { cwd: string; signal?: AbortSignal; timeoutMs?: number; input?: string; extraConfig?: string[]; env?: Record<string, string> },
 ): Promise<GitResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn('git', buildArgs(args, opts.extraConfig), {
+    const finalArgs = buildArgs(args, opts.extraConfig);
+    const startedAt = Date.now();
+    // 每条命令恰好记录一次：close 覆盖成功/非零退出/中止(130)/超时(124)；error 覆盖 spawn 失败（exitCode -1）
+    let recorded = false;
+    const recordOnce = (exitCode: number, stderr: string): void => {
+      if (recorded) return;
+      recorded = true;
+      recordExec(opts.cwd, finalArgs, exitCode, Date.now() - startedAt, stderr);
+    };
+    const child = spawn('git', finalArgs, {
       cwd: opts.cwd,
       env: { ...process.env, ...opts.env, ...GIT_ENV },
       windowsHide: true,
@@ -100,11 +158,16 @@ export function runGit(
       aborted = true;
     };
     opts.signal?.addEventListener('abort', onAbort, { once: true });
-    child.on('error', reject);
+    child.on('error', (e) => {
+      // spawn 失败（git 缺失、cwd 不存在等）：无进程、无 close 事件，记 exitCode -1（stderrTail 记错误消息尾部）
+      recordOnce(-1, e.message);
+      reject(e);
+    });
     child.on('close', (code) => {
       if (timeoutId !== undefined) clearTimeout(timeoutId);
       // close 后 abort 事件若再来（或悬挂）不再触发 killTree
       opts.signal?.removeEventListener('abort', onAbort);
+      recordOnce(aborted ? 130 : timedOut ? 124 : (code ?? 1), stderr);
       // 中止优先于退出码：即使子进程恰好以 0 退出，也要按取消语义拒绝
       if (aborted) reject(new GitExitError(args, 130, stdout, stderr));
       else if (timedOut) reject(new GitExitError(args, 124, stdout, stderr));
@@ -123,9 +186,14 @@ export async function* streamGit(
   args: string[],
   opts: { cwd: string; signal?: AbortSignal; env?: Record<string, string> },
 ): AsyncGenerator<string, void, unknown> {
+  const finalArgs = buildArgs(args);
   // 预检：signal 已中止则不启动进程
-  if (opts.signal?.aborted) throw new GitExitError(args, 130, '', '');
-  const child = spawn('git', buildArgs(args), {
+  if (opts.signal?.aborted) {
+    recordExec(opts.cwd, finalArgs, 130, 0, '');
+    throw new GitExitError(args, 130, '', '');
+  }
+  const startedAt = Date.now();
+  const child = spawn('git', finalArgs, {
     cwd: opts.cwd,
     env: { ...process.env, ...opts.env, ...GIT_ENV },
     windowsHide: true,
@@ -157,6 +225,10 @@ export async function* streamGit(
       yield chunk;
     }
     completed = true;
+  } catch (e) {
+    // stdout 流异常（罕见，如管道损坏）：记 exitCode -1（错误消息尾部），保留原始异常传播
+    recordExec(opts.cwd, finalArgs, -1, Date.now() - startedAt, e instanceof Error ? e.message : String(e));
+    throw e;
   } finally {
     opts.signal?.removeEventListener('abort', onAbort);
     // 仅消费者提前退出（break/throw）时杀进程；自然结束不动已退出 pid；spawn 失败时 pid 为 undefined，跳过
@@ -164,6 +236,9 @@ export async function* streamGit(
   }
   const code = await closed;
   if (aborted || spawnError || code !== 0) {
+    // 生成失败（非零退出/中止/spawn 失败）记一次：spawn 失败 stderrTail 记错误消息尾部
+    recordExec(opts.cwd, finalArgs, aborted ? 130 : spawnError ? -1 : (code ?? 1), Date.now() - startedAt, spawnError ? spawnError.message : stderr);
     throw new GitExitError(args, aborted ? 130 : (code ?? 1), '', stderr);
   }
+  recordExec(opts.cwd, finalArgs, 0, Date.now() - startedAt, stderr);
 }

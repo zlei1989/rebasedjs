@@ -1,11 +1,11 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { collectFileDiff } from './diff';
 import { runGit } from './exec';
 import { getStatus } from './status';
-import { applyPatch, cleanUntracked, discardPaths, stagePaths, unstagePaths } from './staging';
+import { applyPatch, checkApplyPatch, cleanUntracked, discardPaths, stagePaths, unstagePaths } from './staging';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -90,5 +90,28 @@ describe('staging 原语', () => {
     const { stdout } = await runGit(['diff', '--cached'], { cwd: repo });
     expect(stdout).toContain('+bottom-change');
     expect(stdout).not.toContain('+top-change');
+  });
+
+  it('checkApplyPatch 坏补丁：check 失败即抛，工作区零变更（status 前后一致）', async () => {
+    // 夹具：临时 git 仓库，无首提交（apply 只作用于工作区文件，无需 HEAD/身份）
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'f.txt'), 'v1\n');
+    const before = await getStatus(repo);
+    const badPatch = ['diff --git a/f.txt b/f.txt', '--- a/f.txt', '+++ b/f.txt', '@@ -1 +1 @@', '-v9', '+v2'].join('\n') + '\n';
+
+    await expect(checkApplyPatch(repo, badPatch, {})).rejects.toMatchObject({ name: 'GitExitError', exitCode: 1 });
+    expect(readFileSync(join(repo, 'f.txt'), 'utf8')).toBe('v1\n');
+    expect(await getStatus(repo)).toEqual(before);
+  });
+
+  it('checkApplyPatch 好补丁：check 通过后 apply，文件更新', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'f.txt'), 'v1\n');
+    const goodPatch = ['diff --git a/f.txt b/f.txt', '--- a/f.txt', '+++ b/f.txt', '@@ -1 +1 @@', '-v1', '+v2'].join('\n') + '\n';
+
+    await checkApplyPatch(repo, goodPatch, {});
+    expect(readFileSync(join(repo, 'f.txt'), 'utf8')).toBe('v2\n');
   });
 });

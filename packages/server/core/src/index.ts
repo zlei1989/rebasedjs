@@ -1,5 +1,6 @@
 /** core 公共出口：git CLI 引擎原语。testing 夹具与内部实现不进本出口。 */
-export { GitExitError, runGit, streamGit } from './exec';
+export { GitExitError, getExecLog, runGit, streamGit } from './exec';
+export type { ExecLogEntry } from './exec';
 export { cloneGitRepo, findRepoRoot, initGitRepo } from './repo';
 export { getStatus, parsePorcelainV2 } from './status';
 export type { CoreChangeEntry, CoreStatus } from './status';
@@ -20,7 +21,7 @@ export { getGitConfigEntries, setGitConfigLocal } from './config';
 export type { CoreConfigEntry } from './config';
 export { getOperationState, abortGitOperation } from './operation';
 export type { CoreOperation } from './operation';
-export { applyPatch, cleanUntracked, discardPaths, stagePaths, unstagePaths } from './staging';
+export { applyPatch, checkApplyPatch, cleanUntracked, discardPaths, stagePaths, unstagePaths } from './staging';
 export { commitStaged } from './commit';
 export {
   createBranch,

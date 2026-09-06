@@ -29,3 +29,11 @@ export async function applyPatch(cwd: string, patch: string, opts: { cached?: bo
   const args = ['apply', ...(opts.cached ? ['--cached'] : []), ...(opts.reverse ? ['-R'] : [])];
   await runGit(args, { cwd, input: patch });
 }
+
+/** check+apply 两段：先 git apply --check（失败即抛，不产生半程变更），通过才 apply。
+ *  与 applyPatch 相同参数语义（cached/reverse），但保证失败时工作区零变更。 */
+export async function checkApplyPatch(cwd: string, patch: string, opts: { cached?: boolean; reverse?: boolean }): Promise<void> {
+  const args = ['apply', ...(opts.cached ? ['--cached'] : []), ...(opts.reverse ? ['-R'] : [])];
+  await runGit([...args, '--check'], { cwd, input: patch });
+  await runGit(args, { cwd, input: patch });
+}

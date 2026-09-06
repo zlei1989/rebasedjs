@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GitExitError, runGit, streamGit } from './exec';
+import { GitExitError, getExecLog, runGit, streamGit } from './exec';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -150,5 +150,84 @@ describe('streamGit 取消语义', () => {
       return out;
     };
     await expect(collect()).rejects.toThrow();
+  });
+});
+
+describe('getExecLog 环形缓冲', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('成功与失败均记录（失败记实际非零 exitCode，args 为 buildArgs 后的最终数组）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    await runGit(['rev-parse', '--is-inside-work-tree'], { cwd: repo });
+    await expect(runGit(['rev-parse', 'no-such-rev'], { cwd: repo })).rejects.toBeInstanceOf(GitExitError);
+
+    const log = getExecLog(repo, 10);
+    expect(log).toHaveLength(2);
+    expect(log[0].exitCode).toBe(0);
+    expect(log[1].exitCode).toBe(128);
+    expect(log[0].args).toContain('--no-pager');
+    expect(log[0].args).toContain('rev-parse');
+    expect(log[1].args).toContain('rev-parse');
+    expect(typeof log[0].durationMs).toBe('number');
+    expect(log[0].durationMs).toBeGreaterThanOrEqual(0);
+    expect(log[0].atIso).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(log[1].atIso).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(log[1].stderrTail.length).toBeGreaterThan(0);
+  });
+
+  it('limit 截断：只返回最近 N 条（旧→新）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    await runGit(['rev-parse', '--show-toplevel'], { cwd: repo });
+    await runGit(['rev-parse', '--show-prefix'], { cwd: repo });
+    await runGit(['rev-parse', '--show-cdup'], { cwd: repo });
+
+    const log = getExecLog(repo, 1);
+    expect(log).toHaveLength(1);
+    expect(log[0].args).toContain('--show-cdup');
+  });
+
+  it('token 剥离：-c 值含 extraHeader= 的整对不进日志（大小写不敏感）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    // P3-A buildAuthConfig 注入形态 http.<authority>.extraHeader=...（大小写任意）；命令本身与 token 无关
+    await runGit(['config', '--get', 'core.pager'], {
+      cwd: repo,
+      extraConfig: ['http.x.extraHeader=Authorization: Bearer SECRET123'],
+    });
+
+    const log = getExecLog(repo, 10);
+    expect(log).toHaveLength(1);
+    const args = log[0].args;
+    const joined = args.join('\n');
+    expect(joined).not.toContain('extraHeader');
+    expect(joined).not.toContain('SECRET123');
+    expect(args.filter((a) => a === '-c')).toHaveLength(1); // 仅余 buildArgs 固定的 core.pager=cat
+  });
+
+  it('spawn 失败记 exitCode -1（stderrTail 为错误消息尾部）', async () => {
+    const bad = join(tmpdir(), `no-such-exec-dir-${Math.random().toString(36).slice(2)}`);
+    await expect(runGit(['rev-parse'], { cwd: bad })).rejects.toThrow();
+
+    const log = getExecLog(bad, 10);
+    expect(log).toHaveLength(1);
+    expect(log[0].exitCode).toBe(-1);
+    expect(log[0].stderrTail.length).toBeGreaterThan(0);
+  });
+
+  it('streamGit 成功与失败均记录（每条一次，非逐 chunk）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    let out = '';
+    for await (const c of streamGit(['rev-parse', '--is-inside-work-tree'], { cwd: repo })) out += c;
+    expect(out.trim()).toBe('true');
+    const collect = async (): Promise<void> => {
+      for await (const c of streamGit(['rev-parse', 'no-such-rev'], { cwd: repo })) void c;
+    };
+    await expect(collect()).rejects.toBeInstanceOf(GitExitError);
+
+    const log = getExecLog(repo, 10);
+    expect(log.map((e) => e.exitCode)).toEqual([0, 128]);
   });
 });
