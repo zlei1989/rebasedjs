@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyRemoteAction, applyReset, applyStaging, applyStashAction, applyTagAction, cherryPick, continueMergeOperation, continueOperation, createCommit, deleteAccount, fetchRepo, getBranches, getChangelists, getCommittedPage, getConflictContents, getConflicts, getFileBlame, getFileDiff, getFileHistory, getLogPage, getOperation, getRebaseTodo, getRemotes, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, pullRepo, pushRepo, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
-import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, diffQuerySchema, fetchBodySchema, historyQuerySchema, hunkStagingBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, cherryPick, continueMergeOperation, continueOperation, createCommit, createPatch, deleteAccount, deletePatch, fetchRepo, getBranches, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, pullRepo, pushRepo, putIgnore, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -564,6 +564,113 @@ router.post('/api/auth/accounts/delete', async (ctx) => {
   try {
     const body = accountDeleteBodySchema.parse(ctx.request.body);
     ctx.body = deleteAccount(body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/patches —— 补丁列表（PatchList）→ 错误映射 */
+router.get('/api/repos/:repoId/patches', async (ctx) => {
+  try {
+    ctx.body = await getPatches(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/patches/create —— zod 校验请求体 → createPatch（工作区/from/to/staged 数据源）→ 200 刷新 PatchList */
+router.post('/api/repos/:repoId/patches/create', async (ctx) => {
+  try {
+    const body = patchCreateBodySchema.parse(ctx.request.body);
+    ctx.body = await createPatch(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/patches/apply —— zod 校验请求体 → applyPatchService（check+apply 两段）→ 200 RepoStatus；补丁不存在 → 400 INVALID_REF，失败映射 INVALID_QUERY */
+router.post('/api/repos/:repoId/patches/apply', async (ctx) => {
+  try {
+    const body = patchApplyBodySchema.parse(ctx.request.body);
+    ctx.body = await applyPatchService(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/patches/delete —— zod 校验请求体 → deletePatch → 200 刷新 PatchList；补丁不存在 → 400 INVALID_REF */
+router.post('/api/repos/:repoId/patches/delete', async (ctx) => {
+  try {
+    const body = patchDeleteBodySchema.parse(ctx.request.body);
+    ctx.body = await deletePatch(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/shelves —— 搁置列表（ShelfList）→ 错误映射 */
+router.get('/api/repos/:repoId/shelves', async (ctx) => {
+  try {
+    ctx.body = await getShelves(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/shelves —— zod 校验 action（save/restore/drop 判别联合）→ applyShelfAction → 200 刷新 ShelfList；save 重名 → 400 INVALID_QUERY，restore/drop 不存在 → 400 INVALID_REF */
+router.post('/api/repos/:repoId/shelves', async (ctx) => {
+  try {
+    const body = shelfActionSchema.parse(ctx.request.body);
+    ctx.body = await applyShelfAction(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/console —— zod 校验查询（limit 默认 100，coerce 数字）→ getConsole → 200 ConsoleEntry[]（旧→新，id 从 1 递增） */
+router.get('/api/repos/:repoId/console', async (ctx) => {
+  try {
+    const query = consoleQuerySchema.parse(ctx.query);
+    ctx.body = await getConsole(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.limit);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/ignore —— 忽略配置读（.gitignore 与 .git/info/exclude）→ 错误映射 */
+router.get('/api/repos/:repoId/ignore', async (ctx) => {
+  try {
+    ctx.body = await getIgnore(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** PUT /api/repos/:repoId/ignore —— zod 校验请求体 → putIgnore（整写目标文件，exclude 先建 .git/info/）→ 200 刷新视图 */
+router.put('/api/repos/:repoId/ignore', async (ctx) => {
+  try {
+    const body = ignorePutBodySchema.parse(ctx.request.body);
+    ctx.body = await putIgnore(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/ignore/add —— zod 校验请求体（契约仅 {path}）→ addIgnore（固定追加到 .gitignore）→ 200 刷新视图 */
+router.post('/api/repos/:repoId/ignore/add', async (ctx) => {
+  try {
+    const body = ignoreAddBodySchema.parse(ctx.request.body);
+    ctx.body = await addIgnore(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/ignore/templates —— 内建忽略模板（无参 GET，服务不触盘）；repoId 仍校验（与其余 repo 域端点一致：未注册 → 404 REPO_NOT_FOUND） */
+router.get('/api/repos/:repoId/ignore/templates', async (ctx) => {
+  try {
+    resolveRepo(z.string().min(1).parse(ctx.params.repoId));
+    ctx.body = getIgnoreTemplates();
   } catch (error) {
     handleApiError(error, ctx);
   }
