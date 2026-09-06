@@ -276,10 +276,17 @@ export interface SearchResult {
 /** 搜索模式：grep=提交信息全文（--grep）；pickaxe=内容增量（-S） */
 export type SearchMode = 'grep' | 'pickaxe';
 
+/** patch 条目：name 为 patch 名；size 为字节数；createdAtIso 为创建时间 */
 export interface PatchEntry { name: string; size: number; createdAtIso: string; }
+/** patch 列表视图 */
 export interface PatchList { patches: PatchEntry[]; }
+/** shelf 条目：name 为 shelf 名；untrackedCount 为未跟踪文件数 */
 export interface ShelfEntry { name: string; createdAtIso: string; untrackedCount: number; }
+/** shelf 列表视图 */
 export interface ShelfList { shelves: ShelfEntry[]; }
+/** 控制台命令执行记录：exitCode 退出码；durationMs 耗时毫秒；stderrTail 错误输出尾部；atIso 执行时间 */
 export interface ConsoleEntry { id: number; args: string[]; exitCode: number; durationMs: number; stderrTail: string; atIso: string; }
+/** 忽略配置视图：gitignore 与 exclude 两文件全文 */
 export interface IgnoreContents { gitignore: string; exclude: string; }
+/** 忽略规则模板：id 标识；name 展示名；content 模板内容 */
 export interface IgnoreTemplate { id: string; name: string; content: string; }

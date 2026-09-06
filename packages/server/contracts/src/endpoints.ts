@@ -228,13 +228,20 @@ export const patchCreateBodySchema = z.object({
   name: z.string().min(1).regex(/^[\w.-]+$/),
   from: z.string().optional(), to: z.string().optional(), staged: z.boolean().optional(),
 });
+export type PatchCreateBody = z.infer<typeof patchCreateBodySchema>;
 export const patchApplyBodySchema = z.object({ name: z.string().min(1) });
+export type PatchApplyBody = z.infer<typeof patchApplyBodySchema>;
 export const patchDeleteBodySchema = z.object({ name: z.string().min(1) });
+export type PatchDeleteBody = z.infer<typeof patchDeleteBodySchema>;
 export const shelfActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('save'), name: z.string().min(1).regex(/^[\w.-]+$/) }),
   z.object({ action: z.literal('restore'), name: z.string().min(1) }),
   z.object({ action: z.literal('drop'), name: z.string().min(1) }),
 ]);
+export type ShelfAction = z.infer<typeof shelfActionSchema>;
 export const consoleQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
+export type ConsoleQuery = z.infer<typeof consoleQuerySchema>;
 export const ignorePutBodySchema = z.object({ target: z.enum(['gitignore', 'exclude']), content: z.string().max(200_000) });
+export type IgnorePutBody = z.infer<typeof ignorePutBodySchema>;
 export const ignoreAddBodySchema = z.object({ path: z.string().min(1) });
+export type IgnoreAddBody = z.infer<typeof ignoreAddBodySchema>;
