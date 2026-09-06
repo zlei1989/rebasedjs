@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, addGithubPrComment, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, checkoutGithubPr, cherryPick, continueMergeOperation, continueOperation, createCommit, createPatch, deleteAccount, deletePatch, fetchRepo, getBranches, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getGithubPrDetail, getGithubPrFiles, getGithubPrs, getGithubPrTimeline, getGithubStatus, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, mergeGithubPr, openRepo, pullRepo, pushRepo, putIgnore, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, submitGithubPrReview, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
-import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, githubCommentBodySchema, githubMergeBodySchema, githubPrNumberSchema, githubPrQuerySchema, githubReviewBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, addGithubPrComment, addGitlabMrComment, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, checkoutGithubPr, checkoutGitlabMr, cherryPick, continueMergeOperation, continueOperation, createCommit, createGitlabMr, createPatch, deleteAccount, deletePatch, fetchRepo, getBranches, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getGithubPrDetail, getGithubPrFiles, getGithubPrs, getGithubPrTimeline, getGithubStatus, getGitlabMrDetail, getGitlabMrFiles, getGitlabMrs, getGitlabMrTimeline, getGitlabStatus, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, mergeGithubPr, mergeGitlabMr, openRepo, pullRepo, pushRepo, putIgnore, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, submitGithubPrReview, submitGitlabMrReview, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, githubCommentBodySchema, githubMergeBodySchema, githubPrNumberSchema, githubPrQuerySchema, githubReviewBodySchema, gitlabCommentBodySchema, gitlabMergeBodySchema, gitlabMrCreateBodySchema, gitlabMrIidSchema, gitlabMrQuerySchema, gitlabReviewBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -763,6 +763,108 @@ router.post('/api/repos/:repoId/github/prs/:number/checkout', async (ctx) => {
   try {
     const { number } = githubPrNumberSchema.parse({ number: ctx.params.number });
     ctx.body = await checkoutGithubPr(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), number);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/gitlab/status —— GitLab 域可用性三态（服务层不抛错）→ 200 GitLabStatus；未注册 repo → 404 */
+router.get('/api/repos/:repoId/gitlab/status', async (ctx) => {
+  try {
+    ctx.body = await getGitlabStatus(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/gitlab/mrs —— zod 校验查询（state 缺省 opened）→ getGitlabMrs → 200 GitLabMrList；state 非法 → 400 */
+router.get('/api/repos/:repoId/gitlab/mrs', async (ctx) => {
+  try {
+    const query = gitlabMrQuerySchema.parse(ctx.query);
+    ctx.body = await getGitlabMrs(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.state);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/gitlab/mrs —— zod 校验请求体 → createGitlabMr → 200 重查 GitLabMrDetail；body 缺字段 → 400 */
+router.post('/api/repos/:repoId/gitlab/mrs', async (ctx) => {
+  try {
+    const body = gitlabMrCreateBodySchema.parse(ctx.request.body);
+    ctx.body = await createGitlabMr(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/gitlab/mrs/:iid —— gitlabMrIidSchema 校验路径参数 → getGitlabMrDetail → 200 GitLabMrDetail；iid 非法 → 400 */
+router.get('/api/repos/:repoId/gitlab/mrs/:iid', async (ctx) => {
+  try {
+    const { iid } = gitlabMrIidSchema.parse({ iid: ctx.params.iid });
+    ctx.body = await getGitlabMrDetail(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), iid);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/gitlab/mrs/:iid/timeline —— 路径参数校验 → getGitlabMrTimeline（notes+reviews 合并升序）→ 200 GitLabTimeline */
+router.get('/api/repos/:repoId/gitlab/mrs/:iid/timeline', async (ctx) => {
+  try {
+    const { iid } = gitlabMrIidSchema.parse({ iid: ctx.params.iid });
+    ctx.body = await getGitlabMrTimeline(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), iid);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/gitlab/mrs/:iid/comments —— zod 校验请求体 → addGitlabMrComment → 200 刷新 GitLabTimeline；body 空/超长 → 400 */
+router.post('/api/repos/:repoId/gitlab/mrs/:iid/comments', async (ctx) => {
+  try {
+    const { iid } = gitlabMrIidSchema.parse({ iid: ctx.params.iid });
+    const body = gitlabCommentBodySchema.parse(ctx.request.body);
+    ctx.body = await addGitlabMrComment(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), iid, body.body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/gitlab/mrs/:iid/files —— 路径参数校验 → getGitlabMrFiles → 200 GitLabMrFiles（diff 缺省 → ''） */
+router.get('/api/repos/:repoId/gitlab/mrs/:iid/files', async (ctx) => {
+  try {
+    const { iid } = gitlabMrIidSchema.parse({ iid: ctx.params.iid });
+    ctx.body = await getGitlabMrFiles(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), iid);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/gitlab/mrs/:iid/review —— zod 校验请求体 → submitGitlabMrReview → 200 刷新 GitLabMrDetail；event 非法 → 400 */
+router.post('/api/repos/:repoId/gitlab/mrs/:iid/review', async (ctx) => {
+  try {
+    const { iid } = gitlabMrIidSchema.parse({ iid: ctx.params.iid });
+    const body = gitlabReviewBodySchema.parse(ctx.request.body);
+    ctx.body = await submitGitlabMrReview(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), iid, body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/gitlab/mrs/:iid/merge —— zod 校验请求体 → mergeGitlabMr → 200 GitLabMrMergeResult；squash 类型非法 → 400 */
+router.post('/api/repos/:repoId/gitlab/mrs/:iid/merge', async (ctx) => {
+  try {
+    const { iid } = gitlabMrIidSchema.parse({ iid: ctx.params.iid });
+    const body = gitlabMergeBodySchema.parse(ctx.request.body);
+    ctx.body = await mergeGitlabMr(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), iid, body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/gitlab/mrs/:iid/checkout —— 路径参数校验（无请求体）→ checkoutGitlabMr → 200 {branchName:'mr-N'}；无远程 → 400 */
+router.post('/api/repos/:repoId/gitlab/mrs/:iid/checkout', async (ctx) => {
+  try {
+    const { iid } = gitlabMrIidSchema.parse({ iid: ctx.params.iid });
+    ctx.body = await checkoutGitlabMr(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), iid);
   } catch (error) {
     handleApiError(error, ctx);
   }
