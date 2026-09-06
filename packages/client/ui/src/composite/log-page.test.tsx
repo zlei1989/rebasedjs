@@ -332,6 +332,47 @@ describe('LogPage', () => {
     expect(screen.queryByText('搜索')).not.toBeInTheDocument();
   });
 
+  it('传入 onOpenPatches 时「更多」菜单含补丁项，点击触发回调', async () => {
+    const onOpenPatches = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPatches={onOpenPatches} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('补丁'));
+    expect(onOpenPatches).toHaveBeenCalledTimes(1);
+  });
+
+  it('传入 onOpenShelves 时「更多」菜单含搁置项，点击触发回调', async () => {
+    const onOpenShelves = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenShelves={onOpenShelves} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('搁置'));
+    expect(onOpenShelves).toHaveBeenCalledTimes(1);
+  });
+
+  it('传入 onOpenConsole 时「更多」菜单含控制台项，点击触发回调', async () => {
+    const onOpenConsole = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenConsole={onOpenConsole} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('控制台'));
+    expect(onOpenConsole).toHaveBeenCalledTimes(1);
+  });
+
+  it('传入 onOpenIgnore 时「更多」菜单含忽略项，点击触发回调', async () => {
+    const onOpenIgnore = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenIgnore={onOpenIgnore} />);
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('忽略'));
+    expect(onOpenIgnore).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传四入口回调时「更多」菜单不含补丁/搁置/控制台/忽略项', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={() => {}} />);
+    await openMoreMenu();
+    expect(screen.queryByText('补丁')).not.toBeInTheDocument();
+    expect(screen.queryByText('搁置')).not.toBeInTheDocument();
+    expect(screen.queryByText('控制台')).not.toBeInTheDocument();
+    expect(screen.queryByText('忽略')).not.toBeInTheDocument();
+  });
+
   it('传入 onCherryPick 时透传给详情面板，点击回调携带选中提交 hash', () => {
     const onCherryPick = vi.fn();
     const selected = makeCommit({ hash: 'c9selected0001' });

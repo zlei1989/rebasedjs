@@ -3,7 +3,8 @@
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  * 合并中（operation.kind==='merge'）时顶栏在操作条旁追加「去解决冲突」链接（onOpenConflicts 注入才渲染）。
  * 顶栏收敛：五个页面导航按钮保留为主按钮区；P3-C 只读浏览（溯源/历史/已提交/搜索）与远程相关操作
- * （拉取/推送/更新项目/远程管理）收进「更多」Dropdown，仅在容器注入对应回调时出现对应菜单项，
+ * （拉取/推送/更新项目/远程管理）及 P3-D 四入口（补丁/搁置/控制台/忽略）收进「更多」Dropdown，
+ * 仅在容器注入对应回调时出现对应菜单项，
  * 回调全缺省时不渲染「更多」按钮。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
@@ -59,6 +60,14 @@ export interface LogPageProps {
   onOpenCommitted?: () => void;
   /** 提交搜索页入口回调；缺省时「更多」菜单不含搜索项 */
   onOpenSearch?: () => void;
+  /** 补丁页入口回调；缺省时「更多」菜单不含补丁项 */
+  onOpenPatches?: () => void;
+  /** 搁置页入口回调；缺省时「更多」菜单不含搁置项 */
+  onOpenShelves?: () => void;
+  /** 控制台页入口回调；缺省时「更多」菜单不含控制台项 */
+  onOpenConsole?: () => void;
+  /** 忽略配置页入口回调；缺省时「更多」菜单不含忽略项 */
+  onOpenIgnore?: () => void;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
   onUndoCommit?: () => void;
   /** 撤销请求进行中：撤销按钮 loading 态 */
@@ -96,6 +105,10 @@ export function LogPage({
   onOpenHistory,
   onOpenCommitted,
   onOpenSearch,
+  onOpenPatches,
+  onOpenShelves,
+  onOpenConsole,
+  onOpenIgnore,
   onUndoCommit,
   undoCommitting,
   onResetHere,
@@ -103,7 +116,7 @@ export function LogPage({
   onRevert,
 }: LogPageProps): React.ReactNode {
   // 「更多」菜单项：仅装配容器注入回调的入口（P3-C 只读浏览 溯源/历史/已提交/搜索 + 本地操作 变基/标签
-  // + 远程操作 拉取/推送/更新项目/远程管理）；全缺省时连「更多」按钮都不渲染
+  // + 远程操作 拉取/推送/更新项目/远程管理 + P3-D 补丁/搁置/控制台/忽略）；全缺省时连「更多」按钮都不渲染
   const moreItems = [
     ...(onOpenBlame ? [{ key: 'blame', label: '溯源' }] : []),
     ...(onOpenHistory ? [{ key: 'history', label: '历史' }] : []),
@@ -115,6 +128,10 @@ export function LogPage({
     ...(onOpenPush ? [{ key: 'push', label: '推送' }] : []),
     ...(onOpenUpdate ? [{ key: 'update', label: '更新项目' }] : []),
     ...(onOpenRemotes ? [{ key: 'remotes', label: '远程管理' }] : []),
+    ...(onOpenPatches ? [{ key: 'patches', label: '补丁' }] : []),
+    ...(onOpenShelves ? [{ key: 'shelves', label: '搁置' }] : []),
+    ...(onOpenConsole ? [{ key: 'console', label: '控制台' }] : []),
+    ...(onOpenIgnore ? [{ key: 'ignore', label: '忽略' }] : []),
   ];
   /** 「更多」菜单点击分发：按 key 调对应入口回调 */
   const onMoreClick = (key: string): void => {
@@ -128,6 +145,10 @@ export function LogPage({
     else if (key === 'push') onOpenPush?.();
     else if (key === 'update') onOpenUpdate?.();
     else if (key === 'remotes') onOpenRemotes?.();
+    else if (key === 'patches') onOpenPatches?.();
+    else if (key === 'shelves') onOpenShelves?.();
+    else if (key === 'console') onOpenConsole?.();
+    else if (key === 'ignore') onOpenIgnore?.();
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

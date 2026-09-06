@@ -3,7 +3,7 @@
  * 注入 ui LogPage（与 web-next 容器同构；repoId 取 useParams 而非 Next params）。
  * 流式语义（Ruling 6）：stream 是同一查询的渐进式渲染而非快照后的新增，
  * 故 commits 经 mergeLogCommits 合成——流连接中以流为主列表，REST 快照作首屏与 hash 去重兜底。
- * 远程操作区：顶栏「更多」入口（变基/标签/拉取/推送/更新项目/远程管理）+ pull/push/update 对话框（页面化 Modal 不如对话框内联——Java 版即为对话框）。
+ * 远程操作区：顶栏「更多」入口（变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略）+ pull/push/update 对话框（页面化 Modal 不如对话框内联——Java 版即为对话框）。
  * 变基区：RebaseDialog 双模式状态机——简单模式 → useRebase；交互模式 → base 本地状态驱动
  * useRebaseTodo 重取（onBaseChange）+ useInteractiveRebase 提交；结果 success → 提示关闭（events 推送刷新日志）；
  * conflicts → 警告 + 跳冲突页（操作态经 events 推送，conflicts 页自行加载）。
@@ -300,6 +300,10 @@ export function RepoPage(): React.ReactNode {
         onOpenHistory={() => navigate(`/repos/${repoId}/history`)}
         onOpenCommitted={() => navigate(`/repos/${repoId}/committed`)}
         onOpenSearch={() => navigate(`/repos/${repoId}/search`)}
+        onOpenPatches={() => navigate(`/repos/${repoId}/patches`)}
+        onOpenShelves={() => navigate(`/repos/${repoId}/shelves`)}
+        onOpenConsole={() => navigate(`/repos/${repoId}/console`)}
+        onOpenIgnore={() => navigate(`/repos/${repoId}/ignore`)}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}

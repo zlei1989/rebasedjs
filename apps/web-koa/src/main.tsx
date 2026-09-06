@@ -12,13 +12,17 @@ import { RepoBlamePage } from './pages/blame';
 import { RepoBranchesPage } from './pages/branches';
 import { RepoCommittedPage } from './pages/committed';
 import { RepoConflictsPage } from './pages/conflicts';
+import { RepoConsolePage } from './pages/console';
 import { RepoHistoryPage } from './pages/history';
+import { RepoIgnorePage } from './pages/ignore';
 import { RepoMergePage } from './pages/merge';
+import { RepoPatchesPage } from './pages/patches';
 import { RepoPage } from './pages/repo';
 import { RepoRemotesPage } from './pages/remotes';
 import { RepoDiffPage } from './pages/diff';
 import { RepoSearchPage } from './pages/search';
 import { RepoSettingsPage } from './pages/settings';
+import { RepoShelvesPage } from './pages/shelves';
 import { RepoStashesPage } from './pages/stashes';
 import { RepoStatusPage } from './pages/status';
 import { RepoTagsPage } from './pages/tags';
@@ -43,6 +47,10 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/repos/:repoId/stashes" element={<RepoStashesPage />} />
           <Route path="/repos/:repoId/status" element={<RepoStatusPage />} />
           <Route path="/repos/:repoId/tags" element={<RepoTagsPage />} />
+          <Route path="/repos/:repoId/patches" element={<RepoPatchesPage />} />
+          <Route path="/repos/:repoId/shelves" element={<RepoShelvesPage />} />
+          <Route path="/repos/:repoId/console" element={<RepoConsolePage />} />
+          <Route path="/repos/:repoId/ignore" element={<RepoIgnorePage />} />
         </Routes>
       </BrowserRouter>
     </AntApp>
