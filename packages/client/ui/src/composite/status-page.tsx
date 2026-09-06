@@ -47,6 +47,8 @@ export interface StatusPageProps {
   changelists?: ChangelistView;
   /** 列表管理（新建/重命名/删除/设默认）与条目「移动到列表」回调；与 changelists 同时提供才生效 */
   onChangelistAction?: (action: ChangelistAction) => void;
+  /** 行内「忽略」入口（未跟踪组）：未传时不渲染该按钮（向后兼容） */
+  onIgnore?: (path: string) => void;
 }
 
 /** porcelain X 码（暂存区列）：M/A/D/R/C 视为已暂存 */
@@ -130,6 +132,7 @@ function ChangeGroup({
   actions,
   changelists,
   onChangelistAction,
+  onIgnore,
 }: {
   title: string;
   group: ChangeGroupKind;
@@ -140,6 +143,8 @@ function ChangeGroup({
   actions: (selected: string[]) => React.ReactNode;
   changelists?: ChangelistView;
   onChangelistAction?: (action: ChangelistAction) => void;
+  /** 行内「忽略」入口：仅未跟踪组渲染（缺省不渲染，向后兼容） */
+  onIgnore?: (path: string) => void;
 }): React.ReactNode {
   const [selected, setSelected] = useState<string[]>([]);
   const paths = useMemo(() => entries.map((e) => e.path), [entries]);
@@ -207,6 +212,14 @@ function ChangeGroup({
                 移动到列表
               </Button>
             </Dropdown>
+          </Flex>
+        )}
+        {/* 「忽略」行操作：仅未跟踪组渲染（缺省不渲染，向后兼容）；点击不触发行选中 */}
+        {group === 'untracked' && onIgnore !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Button size="small" type="text" data-testid={`ignore-${group}-${entry.path}`} onClick={() => onIgnore(entry.path)}>
+              忽略
+            </Button>
           </Flex>
         )}
       </Flex>
@@ -411,6 +424,7 @@ export function StatusPage({
   onOpenDiff,
   changelists,
   onChangelistAction,
+  onIgnore,
 }: StatusPageProps): React.ReactNode {
   const grouped = useMemo(() => groupChanges(status.entries), [status.entries]);
 
@@ -527,6 +541,7 @@ export function StatusPage({
             onOpenDiff={onOpenDiff}
             changelists={changelistMode ? changelists : undefined}
             onChangelistAction={onChangelistAction}
+            onIgnore={onIgnore}
             actions={(selected) => (
               <>
                 <Button

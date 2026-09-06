@@ -377,3 +377,51 @@ describe('StatusPage changelists', () => {
     expect(screen.queryByTestId('subtitle-unstaged-cl-feat')).toBeNull();
   });
 });
+
+describe('StatusPage 忽略入口', () => {
+  it('onIgnore 提供时未跟踪行渲染「忽略」按钮，点击以路径调 onIgnore', () => {
+    const onIgnore = vi.fn();
+    render(
+      <StatusPage status={makeStatus([{ path: 'new.ts', code: '??' }])} {...makeHandlers()} onIgnore={onIgnore} />,
+    );
+    const button = screen.getByTestId('ignore-untracked-new.ts');
+    expect(button).toHaveTextContent('忽略');
+    fireEvent.click(button);
+    expect(onIgnore).toHaveBeenCalledTimes(1);
+    expect(onIgnore).toHaveBeenCalledWith('new.ts');
+  });
+
+  it('点击「忽略」不触发行选中（onSelectPatch 不被调用）', () => {
+    const onSelectPatch = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([{ path: 'new.ts', code: '??' }])}
+        {...makeHandlers()}
+        onSelectPatch={onSelectPatch}
+        onIgnore={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('ignore-untracked-new.ts'));
+    expect(onSelectPatch).not.toHaveBeenCalled();
+  });
+
+  it('onIgnore 缺省时未跟踪行不渲染「忽略」（向后兼容）', () => {
+    render(<StatusPage status={makeStatus([{ path: 'new.ts', code: '??' }])} {...makeHandlers()} />);
+    expect(screen.queryByTestId('ignore-untracked-new.ts')).not.toBeInTheDocument();
+  });
+
+  it('onIgnore 仅作用于未跟踪组：暂存/工作区行不渲染「忽略」', () => {
+    render(
+      <StatusPage
+        status={makeStatus([
+          { path: 'a.ts', code: 'M.' },
+          { path: 'b.ts', code: '.M' },
+        ])}
+        {...makeHandlers()}
+        onIgnore={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('ignore-staged-a.ts')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ignore-unstaged-b.ts')).not.toBeInTheDocument();
+  });
+});
