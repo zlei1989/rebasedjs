@@ -50,6 +50,9 @@ import {
   gitlabCommentBodySchema,
   gitlabReviewBodySchema,
   gitlabMergeBodySchema,
+  worktreeCreateBodySchema,
+  worktreeRemoveBodySchema,
+  submoduleUpdateBodySchema,
 } from './endpoints';
 import type {
   GitHubPrDetail,
@@ -62,6 +65,10 @@ import type {
   GitLabRepoRef,
   GitLabStatus,
   GitLabTimelineEntry,
+  WorktreeEntry,
+  WorktreeList,
+  SubmoduleEntry,
+  SubmoduleList,
 } from './domain';
 
 describe('P1 端点 schema', () => {
@@ -880,5 +887,83 @@ describe('GitLab 域类型对齐', () => {
   it('GitLabStatus.repo/account 可选', () => {
     expectTypeOf<GitLabStatus['repo']>().toEqualTypeOf<GitLabRepoRef | undefined>();
     expectTypeOf<GitLabStatus['account']>().toEqualTypeOf<string | undefined>();
+  });
+});
+
+describe('worktreeCreateBodySchema（worktree 创建请求体）', () => {
+  it('接受 path 必填；branch/newBranch 可选（缺省为 undefined）', () => {
+    expect(worktreeCreateBodySchema.parse({ path: '../wt' })).toEqual({ path: '../wt' });
+    expect(worktreeCreateBodySchema.parse({ path: '../wt', branch: 'main' }).branch).toBe('main');
+    expect(worktreeCreateBodySchema.parse({ path: '../wt' }).branch).toBeUndefined();
+    expect(worktreeCreateBodySchema.parse({ path: '../wt', newBranch: 'feat/x' }).newBranch).toBe('feat/x');
+    expect(worktreeCreateBodySchema.parse({ path: '../wt' }).newBranch).toBeUndefined();
+  });
+  it('branch 与 newBranch 可同时给出（互斥约束归服务层，schema 只测形状）', () => {
+    expect(worktreeCreateBodySchema.parse({ path: '../wt', branch: 'main', newBranch: 'feat/x' }))
+      .toEqual({ path: '../wt', branch: 'main', newBranch: 'feat/x' });
+  });
+  it('拒绝空 path、缺 path 与空 branch/newBranch', () => {
+    expect(worktreeCreateBodySchema.safeParse({ path: '' }).success).toBe(false);
+    expect(worktreeCreateBodySchema.safeParse({}).success).toBe(false);
+    expect(worktreeCreateBodySchema.safeParse({ path: '../wt', branch: '' }).success).toBe(false);
+    expect(worktreeCreateBodySchema.safeParse({ path: '../wt', newBranch: '' }).success).toBe(false);
+  });
+  it('拒绝非字符串 path/branch/newBranch', () => {
+    expect(worktreeCreateBodySchema.safeParse({ path: 1 }).success).toBe(false);
+    expect(worktreeCreateBodySchema.safeParse({ path: '../wt', branch: 1 }).success).toBe(false);
+    expect(worktreeCreateBodySchema.safeParse({ path: '../wt', newBranch: null }).success).toBe(false);
+  });
+});
+
+describe('worktreeRemoveBodySchema（worktree 删除请求体）', () => {
+  it('接受 path 必填与可选 force（缺省为 undefined）', () => {
+    expect(worktreeRemoveBodySchema.parse({ path: '../wt' })).toEqual({ path: '../wt' });
+    expect(worktreeRemoveBodySchema.parse({ path: '../wt', force: true }))
+      .toEqual({ path: '../wt', force: true });
+    expect(worktreeRemoveBodySchema.parse({ path: '../wt', force: false }).force).toBe(false);
+    expect(worktreeRemoveBodySchema.parse({ path: '../wt' }).force).toBeUndefined();
+  });
+  it('拒绝空 path、缺 path 与非布尔 force（\'yes\'）', () => {
+    expect(worktreeRemoveBodySchema.safeParse({ path: '' }).success).toBe(false);
+    expect(worktreeRemoveBodySchema.safeParse({}).success).toBe(false);
+    expect(worktreeRemoveBodySchema.safeParse({ path: '../wt', force: 'yes' }).success).toBe(false);
+    expect(worktreeRemoveBodySchema.safeParse({ path: '../wt', force: 1 }).success).toBe(false);
+  });
+});
+
+describe('submoduleUpdateBodySchema（submodule 更新请求体）', () => {
+  it('接受空体与可选 name/recursive（缺省为 undefined）', () => {
+    expect(submoduleUpdateBodySchema.parse({})).toEqual({});
+    expect(submoduleUpdateBodySchema.parse({ name: 'libs/foo' })).toEqual({ name: 'libs/foo' });
+    expect(submoduleUpdateBodySchema.parse({ name: 'libs/foo', recursive: true }))
+      .toEqual({ name: 'libs/foo', recursive: true });
+    expect(submoduleUpdateBodySchema.parse({}).name).toBeUndefined();
+    expect(submoduleUpdateBodySchema.parse({}).recursive).toBeUndefined();
+  });
+  it('拒绝空 name 与非布尔 recursive（\'yes\'）', () => {
+    expect(submoduleUpdateBodySchema.safeParse({ name: '' }).success).toBe(false);
+    expect(submoduleUpdateBodySchema.safeParse({ recursive: 'yes' }).success).toBe(false);
+    expect(submoduleUpdateBodySchema.safeParse({ name: 'libs/foo', recursive: 1 }).success).toBe(false);
+  });
+});
+
+describe('worktree 域类型对齐', () => {
+  it('WorktreeEntry 键集与 branch 可空（分离 HEAD）', () => {
+    expectTypeOf<keyof WorktreeEntry>().toEqualTypeOf<'path' | 'branch' | 'detached' | 'head'>();
+    expectTypeOf<WorktreeEntry['branch']>().toEqualTypeOf<string | null>();
+    expectTypeOf<keyof WorktreeList>().toEqualTypeOf<'worktrees'>();
+  });
+});
+
+describe('submodule 域类型对齐', () => {
+  it('SubmoduleEntry.status 四值枚举；branch/commitSha 可选', () => {
+    expectTypeOf<SubmoduleEntry['status']>().toEqualTypeOf<
+      'uninitialized' | 'checked-out' | 'different-commit' | 'conflict'
+    >();
+    expectTypeOf<SubmoduleEntry['branch']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<SubmoduleEntry['commitSha']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<keyof SubmoduleEntry>()
+      .toEqualTypeOf<'name' | 'path' | 'url' | 'branch' | 'status' | 'commitSha'>();
+    expectTypeOf<keyof SubmoduleList>().toEqualTypeOf<'submodules'>();
   });
 });

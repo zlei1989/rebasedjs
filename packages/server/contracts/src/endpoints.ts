@@ -280,3 +280,17 @@ export type GitLabReviewBody = z.infer<typeof gitlabReviewBodySchema>;
 /** MR 合并请求体：squash 对应 squash 合并，可选 */
 export const gitlabMergeBodySchema = z.object({ squash: z.boolean().optional() });
 export type GitLabMergeBody = z.infer<typeof gitlabMergeBodySchema>;
+
+/** worktree 创建请求体：path 必填；branch 检出既有分支、newBranch 新建并检出（二者互斥归服务层校验，schema 只测形状） */
+export const worktreeCreateBodySchema = z.object({
+  path: z.string().min(1),
+  branch: z.string().min(1).optional(),
+  newBranch: z.string().min(1).optional(),
+});
+export type WorktreeCreateBody = z.infer<typeof worktreeCreateBodySchema>;
+/** worktree 删除请求体：force 对应 git worktree remove --force（有未合并检出时强删） */
+export const worktreeRemoveBodySchema = z.object({ path: z.string().min(1), force: z.boolean().optional() });
+export type WorktreeRemoveBody = z.infer<typeof worktreeRemoveBodySchema>;
+/** submodule 更新请求体：name 指定子模块（缺省全量）；recursive 递归更新子模块的子模块 */
+export const submoduleUpdateBodySchema = z.object({ name: z.string().min(1).optional(), recursive: z.boolean().optional() });
+export type SubmoduleUpdateBody = z.infer<typeof submoduleUpdateBodySchema>;

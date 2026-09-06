@@ -330,3 +330,12 @@ export interface GitLabMrFiles { files: GitLabMrFile[]; }
 export interface GitLabMrMergeResult { merged: boolean; message: string; }
 /** MR 检出结果：branchName 为本地分支名（mr-N） */
 export interface GitLabMrCheckoutResult { branchName: string; }
+
+/** worktree 条目：branch 为绑定分支（分离 HEAD 时为 null）；detached 标记分离 HEAD；head 为 HEAD 提交哈希 */
+export interface WorktreeEntry { path: string; branch: string | null; detached: boolean; head: string; }
+/** worktree 列表视图 */
+export interface WorktreeList { worktrees: WorktreeEntry[]; }
+/** submodule 条目：status 四值（uninitialized=未初始化 / checked-out=按期望检出 / different-commit=检出提交与期望漂移 / conflict=冲突）；branch 为期望分支名；commitSha 为当前检出提交 */
+export interface SubmoduleEntry { name: string; path: string; url: string; branch?: string; status: 'uninitialized' | 'checked-out' | 'different-commit' | 'conflict'; commitSha?: string; }
+/** submodule 列表视图 */
+export interface SubmoduleList { submodules: SubmoduleEntry[]; }
