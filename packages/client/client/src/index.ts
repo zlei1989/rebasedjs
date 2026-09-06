@@ -31,3 +31,14 @@ export { useConflicts, useConflictContents, useResolveConflict } from './conflic
 export { useAccounts, useUpsertAccount, useDeleteAccount } from './auth';
 export { useRemotes, useRemoteAction, useFetch, usePull, usePush } from './remote';
 export { useUpdateProject } from './update';
+export {
+  useGithubStatus,
+  useGithubPrs,
+  useGithubPrDetail,
+  useGithubTimeline,
+  useGithubPrFiles,
+  useAddGithubComment,
+  useSubmitGithubReview,
+  useMergeGithubPr,
+  useCheckoutGithubPr,
+} from './github';
