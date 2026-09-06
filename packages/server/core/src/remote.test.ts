@@ -111,6 +111,31 @@ describe('fetchRemote', () => {
       expect(status.ahead).toBe(0);
     },
   );
+
+  it(
+    'refspec +refs/pull/N/head：FETCH_HEAD 解析到目标提交（GitHub PR 检出用；缺省行为不变）',
+    { timeout: RIG_TIMEOUT },
+    async () => {
+      const { repo, bare, defaultBranch } = makeRemoteRig();
+      // refs/pull/7/head 指向与默认分支尖不同的提交（同头则缺省 fetch 也会把 FETCH_HEAD 指过去，无法区分）
+      const other = track(mkdtempSync(join(tmpdir(), 'rebased-core-other-')));
+      execFileSync('git', ['clone', '-q', bare, other]);
+      git(other, ['config', 'user.email', 'test@example.com']);
+      git(other, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(other, 'pr.txt'), 'pr-content');
+      git(other, ['add', 'pr.txt']);
+      git(other, ['commit', '-q', '-m', 'pr commit']);
+      const target = git(other, ['rev-parse', 'HEAD']);
+      expect(target).not.toBe(git(bare, ['rev-parse', defaultBranch]));
+      git(other, ['push', '-q', 'origin', 'HEAD:refs/pull/7/head']);
+
+      const res = await fetchRemote(repo, { remote: 'origin', refspec: '+refs/pull/7/head' });
+      // 原始 refspec 不写远程跟踪引用（不在 4 个指纹命名空间内）：updatedRefs 为空，
+      // 但 FETCH_HEAD 已被 git 写入并指向该提交——后续 checkout -b pr-7 FETCH_HEAD 依赖此行为
+      expect(res.updatedRefs).toEqual([]);
+      expect(git(repo, ['rev-parse', '--verify', 'FETCH_HEAD'])).toBe(target);
+    },
+  );
 });
 
 describe('pullRemote', () => {

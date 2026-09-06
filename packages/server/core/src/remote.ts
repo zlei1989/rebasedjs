@@ -60,17 +60,22 @@ export async function setRemoteUrl(cwd: string, name: string, url: string): Prom
 }
 
 /**
- * fetch：git fetch [--all 或指定远程]；返回发生移动（含新增/删除）的引用完整 refname 列表。
+ * fetch：git fetch [--all 或指定远程 [refspec]]；返回发生移动（含新增/删除）的引用完整 refname 列表。
  * 判定方式：fetch 前后各取一次 refs 快照做 diff（复用 watcher 指纹原语）。
+ * refspec 仅与显式 remote 组合（无 remote 时 --all 与 refspec 语义互斥，抛错拒绝）。
  */
 export async function fetchRemote(
   cwd: string,
-  opts: { remote?: string; extraConfig?: string[]; timeoutMs?: number },
+  opts: { remote?: string; refspec?: string; extraConfig?: string[]; timeoutMs?: number },
 ): Promise<{ updatedRefs: string[] }> {
+  if (opts.refspec !== undefined && opts.remote === undefined) {
+    throw new Error('fetchRemote: refspec 需要显式 remote（refspec 与 --all 互斥）');
+  }
   const before = await takeRefsSnapshot(cwd);
   const args = ['fetch'];
   if (opts.remote !== undefined) args.push(opts.remote);
   else args.push('--all');
+  if (opts.refspec !== undefined) args.push(opts.refspec);
   await runGit(args, { cwd, extraConfig: opts.extraConfig, timeoutMs: opts.timeoutMs ?? TRANSFER_TIMEOUT_MS });
   const after = await takeRefsSnapshot(cwd);
   return { updatedRefs: diffRefsSnapshots(before, after) };

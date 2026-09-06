@@ -26,6 +26,18 @@ export { getConsole } from './console';
 export { addIgnore, getIgnore, getIgnoreTemplates, putIgnore } from './ignore';
 export { deleteAccount, listAccounts, upsertAccount } from './auth';
 export { applyRemoteAction, fetchRepo, getRemotes, pullRepo, pushRepo } from './remote';
+export {
+  addGithubPrComment,
+  checkoutGithubPr,
+  getGithubPrDetail,
+  getGithubPrFiles,
+  getGithubPrs,
+  getGithubPrTimeline,
+  getGithubStatus,
+  mergeGithubPr,
+  parseGithubRemoteUrl,
+  submitGithubPrReview,
+} from './github';
 export { getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
 export { cherryPick, revert } from './pick';
 export { applyTagAction, getTags } from './tag';
