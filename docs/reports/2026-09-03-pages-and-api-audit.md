@@ -91,6 +91,55 @@ P2 阶段 12 个功能域（operation、reset、staging、changelist、commit、
 
 ---
 
+## 〇、进度更新（2026-09-06，P3-D 关账，基线 `e9314ec`）
+
+> P3-D（补丁/搁置/控制台/忽略）已按计划落地并关账（计划+关账记录：`docs/superpowers/plans/2026-09-03-rebasedjs-p3d-patch-shelf-console-ignore.md`；实现区间 `7b6fc6c..e9314ec`，关账 `f3b3a2b`）。本节的增量口径与 0.1–0.4 同构；附录 C/D 的对应行留待下次全量复核时就地更新（本节不改写旧快照）。
+
+### 0.6 总览（增量对照 0.1）
+
+| 口径 | 上一基线（`704e1c5`） | 当前（`e9314ec`） |
+|------|------------------|------------------|
+| 操作页面/面板（30 个） | 10 ✅ + 2 🟡 等效 | **14 ✅ + 2 🟡 等效**（≈53%） |
+| 功能域 | 17 | **21**（P1 5 + P2 12 + P3-D 4：patch/shelf/console/ignore） |
+| 端点路径 / HTTP 方法 | 29 / 35 | **40 / 46**（新增 11 方法，两端完全对称） |
+| SSE 事件类型在用 | 5 | 5（本批无新事件；console 为拉取式历史列表） |
+| `@rebased/api` 公共出口 | 39 函数 | **50 函数**（+11：patch/shelf/console/ignore 服务） |
+
+### 0.7 页面进度（对应附录 C 之 PatchPanel/ShelfPanel/IgnoreDialog/GitConsole）
+
+| 页面 | 快照 | 当前 | 落点与说明 |
+|------|------|------|-----------|
+| PatchPanel | ❌ | ✅ | `/repos/:id/patches` 两端路由；列表（名/大小/时间）+ 创建 Modal（工作区/暂存/提交区间三态，from/to 单侧缺省=HEAD）+ 应用（`git apply --check` 先行、空补丁 no-op）/删除（Popconfirm） |
+| ShelfPanel | ❌ | ✅ | `/repos/:id/shelves` 两端路由；save（工作区+暂存 diff + 未跟踪文件随档）/restore（空补丁跳过 apply 仅回拷；同名冲突跳过不覆盖）/drop；重名 save→INVALID_QUERY、不存在→INVALID_REF |
+| IgnoreDialog | ❌ | ✅ | `/repos/:id/ignore` 两端路由；target 切换（.gitignore / .git/info/exclude）+ 模板替换预览 + 编辑保存；**StatusPage 未跟踪行「忽略」一键入口**（Modal.confirm → addIgnore → status 键补刷，追加 `/path` 幂等） |
+| GitConsole | ❌ | ✅ | `/repos/:id/console` 两端路由；core exec 环形缓冲（cap 200/仓库，按 cwd 键控）+ **token 剥离**（`-c`+`/extraheader=/i` 整对删除，大小写不敏感）+ stderr 尾 500 字符；列表（时间/args/退出码徽标/耗时/stderr 尾）+ 刷新 |
+
+### 0.8 接口增量（新增 11 方法，全部两端对称）
+
+| 端点 | 用途 | 客户端消费 | 状态 |
+|------|------|-----------|------|
+| `GET /api/repos/:id/patches` | 补丁列表 | PatchPanel | ✅ |
+| `POST /api/repos/:id/patches/create` | 创建补丁（工作区/暂存/提交区间） | PatchPanel 创建 Modal | ✅ |
+| `POST /api/repos/:id/patches/apply` | 应用补丁（check 先行） | PatchPanel | ✅ |
+| `POST /api/repos/:id/patches/delete` | 删除补丁 | PatchPanel | ✅ |
+| `GET/POST /api/repos/:id/shelves` | 搁置列表 / save·restore·drop | ShelfPanel | ✅ |
+| `GET /api/repos/:id/console?limit=` | 命令执行记录（token 已剥离） | ConsolePanel（default 100） | ✅ |
+| `GET/PUT /api/repos/:id/ignore` | .gitignore / exclude 读写 | IgnoreDialog | ✅ |
+| `POST /api/repos/:id/ignore/add` | 一键忽略（追加 `/path` 到 .gitignore） | StatusPage 忽略入口 | ✅ |
+| `GET /api/repos/:id/ignore/templates` | 内建模板（Node/Python/通用） | IgnoreDialog | ✅ |
+
+### 0.9 导航边增量（对应附录 D.6）
+
+活动跳转边由 18 条增至 **22 条**：LogPage「更多」菜单新增四入口 → PatchPanel / ShelfPanel / GitConsole / IgnoreDialog（`onOpenPatches/Shelves/Console/Ignore`，缺省不渲染，向后兼容）；四页面回边均为「返回日志」。另 StatusPage→忽略为动作边（含确认框）非导航边。
+
+### 0.10 下一步建议（更新 §三）
+
+1. 进入 **P3-E**：github 域（GitHubPanel + PR 流），按 spec §7 规划（其后 P4：gitlab/worktree/submodule/browse + 可选 terminal/local-history）。
+2. 排期项（P3-D 已记录）：unborn HEAD 建补丁/搁置（新仓库默认态 GIT_ERROR，方案：staged→`git diff --cached`、缺省→两段拼接）；core vitest 并行 30s 超时 flake（`fileParallelism:false` 或提高 testTimeout）；execLogByCwd 仓库级淘汰；`addIgnore` path 字符集收紧；存档名 `.`/`..` 边界统一 INVALID_QUERY。
+3. 半使用接口不变（diff/stream 分块渲染、staging/hunks 无 UI 入口）。
+
+---
+
 ## 一、问题 1：操作页面数量与实现对照
 
 ### 1.1 Java 版 Rebased 有多少个操作页面？
