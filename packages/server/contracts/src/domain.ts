@@ -293,7 +293,7 @@ export interface IgnoreTemplate { id: string; name: string; content: string; }
 
 /** GitHub 远程仓库引用：remoteUrl 为 git 配置 push 原始 URL（parseGithubRemoteUrl 的输入源） */
 export interface GitHubRepoRef { owner: string; name: string; remoteUrl: string; }
-/** GitHub 域可用性：detected=false 时无 repo/account 字段（未检测到 GitHub 远程或未配置 token） */
+/** GitHub 域可用性：detected=false 仅当仓库无 GitHub 形态远程或解析异常（此时无 repo/account 字段）；有远程但未配置令牌时 detected=true 且无 account 字段，有令牌时附 account */
 export interface GitHubStatus { detected: boolean; repo?: GitHubRepoRef; account?: string; }
 /** PR 摘要：state 为打开/关闭（GitHub API 的 open 状态含合并后待关的已合并 PR，merged 单独标识） */
 export interface GitHubPrSummary { number: number; title: string; author: string; state: 'open' | 'closed'; merged: boolean; baseRef: string; headRef: string; createdAtIso: string; updatedAtIso: string; }

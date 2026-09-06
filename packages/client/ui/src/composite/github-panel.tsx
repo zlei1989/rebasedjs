@@ -315,7 +315,12 @@ function PrDetailBlock({
           onChange={(e) => setComment(e.target.value)}
         />
         <Flex gap={8} wrap>
-          <Button type="primary" data-testid="github-send-comment" disabled={acting} onClick={sendComment}>
+          <Button
+            type="primary"
+            data-testid="github-send-comment"
+            disabled={acting || comment.trim() === ''}
+            onClick={sendComment}
+          >
             发送评论
           </Button>
           <Popconfirm

@@ -3,7 +3,8 @@
  * state 徽标 open 绿 closed 灰 / 已合并标记 / 更新时间 / 单击选中 / 选中高亮）、详情（标题 /
  * 元信息 / reviewDecision 徽标四种与 NONE 省略 / 增删行 / 主体）、时间线两种 kind、文件
  * patch 展开（空 patch 不渲染展开）、合并 Modal 三方法载荷、评论 / Approve / Request changes
- * 回调、检出回调、空态与局部 loading、acting 禁用、刷新按钮缺省不渲染。
+ * 回调、检出回调、空态与局部 loading、acting 禁用、刷新按钮缺省不渲染、空评论拦截
+ * （空/纯空白时发送按钮禁用、非空恢复可用）。
  */
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -271,6 +272,32 @@ describe('GitHubPanel 评论与审查', () => {
     expect(callbacks.onComment).toHaveBeenCalledTimes(1);
     expect(callbacks.onComment).toHaveBeenCalledWith('请补充测试');
     expect(screen.getByTestId('github-comment-input')).toHaveValue('');
+  });
+
+  it('空评论拦截：空与纯空白输入时发送按钮禁用，点击不调 onComment', () => {
+    const { callbacks } = renderPanel();
+    const input = screen.getByTestId('github-comment-input');
+    const send = screen.getByTestId('github-send-comment');
+
+    expect(send).toBeDisabled();
+    fireEvent.change(input, { target: { value: '' } });
+    expect(send).toBeDisabled();
+    fireEvent.change(input, { target: { value: '   ' } });
+    expect(send).toBeDisabled();
+
+    fireEvent.click(send);
+    expect(callbacks.onComment).not.toHaveBeenCalled();
+  });
+
+  it('空评论拦截：输入非空内容后发送按钮恢复可用', () => {
+    renderPanel();
+    const input = screen.getByTestId('github-comment-input');
+    const send = screen.getByTestId('github-send-comment');
+
+    fireEvent.change(input, { target: { value: '\t \n' } });
+    expect(send).toBeDisabled();
+    fireEvent.change(input, { target: { value: '  有内容  ' } });
+    expect(send).toBeEnabled();
   });
 
   it('「Approve」Popconfirm 确认后调 onReview("APPROVE")', async () => {
