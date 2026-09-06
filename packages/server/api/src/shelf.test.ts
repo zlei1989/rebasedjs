@@ -1,0 +1,161 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { applyShelfAction, getShelves } from './shelf';
+import { getConfigDir } from './lib/config-store';
+import { openRepo } from './repo';
+import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+
+let configDir: string;
+const dirs: string[] = [];
+
+beforeAll(() => {
+  // 配置目录隔离：每个测试文件独立 REBASED_CONFIG_DIR，避免污染用户配置
+  configDir = mkdtempSync(join(tmpdir(), 'rebased-api-config-'));
+  process.env.REBASED_CONFIG_DIR = configDir;
+});
+
+afterAll(() => {
+  dirs.forEach(cleanupTmpRepo);
+  rmSync(configDir, { recursive: true, force: true });
+});
+
+/** 造带初始提交的仓库（shelf 按 repoId 键控，需先 openRepo 注册） */
+async function repoWithCommit(file: string, content: string): Promise<string> {
+  const repo = createTmpRepo();
+  dirs.push(repo);
+  writeFileSync(join(repo, file), content);
+  execFileSync('git', ['-C', repo, 'add', '.']);
+  execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+  await openRepo(repo);
+  return repo;
+}
+
+/** 该仓库的 shelf 目录：<configDir>/shelves/<repoId>/ */
+async function shelvesDir(repo: string): Promise<string> {
+  const { id } = await openRepo(repo);
+  return join(getConfigDir(), 'shelves', id);
+}
+
+describe('shelf 功能', () => {
+  it('初始空列表；未注册 repoPath 抛 REPO_NOT_FOUND', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    expect((await getShelves(repo)).shelves).toEqual([]);
+    const unregistered = createTmpRepo();
+    dirs.push(unregistered);
+    await expect(getShelves(unregistered)).rejects.toMatchObject({ code: 'REPO_NOT_FOUND' });
+  });
+
+  it('save：patch.diff 存 git diff HEAD 全文，未跟踪文件递归复制到 untracked/（保留相对路径），保存不清理工作区', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    writeFileSync(join(repo, 'new.txt'), 'new');
+    mkdirSync(join(repo, 'dir'), { recursive: true });
+    writeFileSync(join(repo, 'dir', 'sub.txt'), 'sub');
+
+    const list = await applyShelfAction(repo, { action: 'save', name: 'wip' });
+    expect(list.shelves).toHaveLength(1);
+    expect(list.shelves[0]).toMatchObject({ name: 'wip', untrackedCount: 2 });
+    expect(list.shelves[0]!.createdAtIso).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    const dir = join(await shelvesDir(repo), 'wip');
+    const diff = readFileSync(join(dir, 'patch.diff'), 'utf8');
+    expect(diff).toContain('diff --git a/a.txt b/a.txt');
+    expect(diff).toContain('+v2');
+    expect(readFileSync(join(dir, 'untracked', 'new.txt'), 'utf8')).toBe('new');
+    expect(readFileSync(join(dir, 'untracked', 'dir', 'sub.txt'), 'utf8')).toBe('sub');
+    // 保存不清理工作区
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
+    expect(readFileSync(join(repo, 'new.txt'), 'utf8')).toBe('new');
+  });
+
+  it('save：diff HEAD = 工作区+暂存全量', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+    writeFileSync(join(repo, 'a.txt'), 'v3');
+
+    await applyShelfAction(repo, { action: 'save', name: 'all' });
+    const diff = readFileSync(join(await shelvesDir(repo), 'all', 'patch.diff'), 'utf8');
+    expect(diff).toContain('+v3');
+    expect(diff).not.toContain('+v2');
+  });
+
+  it('save 重名 → INVALID_QUERY', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    await applyShelfAction(repo, { action: 'save', name: 'dup' });
+    await expect(applyShelfAction(repo, { action: 'save', name: 'dup' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '搁置已存在：dup',
+    });
+  });
+
+  it('restore：tracked 补丁应用回工作区、未跟踪文件回拷，shelf 保留', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    writeFileSync(join(repo, 'new.txt'), 'new');
+    await applyShelfAction(repo, { action: 'save', name: 'wip' });
+    execFileSync('git', ['-C', repo, 'checkout', '--', 'a.txt']);
+    rmSync(join(repo, 'new.txt'));
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v1');
+
+    const list = await applyShelfAction(repo, { action: 'restore', name: 'wip' });
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
+    expect(readFileSync(join(repo, 'new.txt'), 'utf8')).toBe('new');
+    expect(list.shelves).toHaveLength(1);
+  });
+
+  it('restore：目标存在且与存档不同 → 跳过不覆盖（保留用户版本）', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    writeFileSync(join(repo, 'new.txt'), 'shelf');
+    await applyShelfAction(repo, { action: 'save', name: 'wip' });
+    execFileSync('git', ['-C', repo, 'checkout', '--', 'a.txt']);
+    writeFileSync(join(repo, 'new.txt'), 'user');
+
+    await applyShelfAction(repo, { action: 'restore', name: 'wip' });
+    expect(readFileSync(join(repo, 'new.txt'), 'utf8')).toBe('user');
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
+  });
+
+  it('restore 坏补丁：与 patch apply 相同的 INVALID_QUERY 映射', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    writeFileSync(join(repo, 'new.txt'), 'new');
+    await applyShelfAction(repo, { action: 'save', name: 'wip' });
+    execFileSync('git', ['-C', repo, 'checkout', '--', 'a.txt']);
+    writeFileSync(join(repo, 'a.txt'), 'v3');
+
+    let err: unknown;
+    try {
+      await applyShelfAction(repo, { action: 'restore', name: 'wip' });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toMatchObject({ code: 'INVALID_QUERY' });
+    expect((err as Error).message).toMatch(/^补丁无法应用：error: patch failed: a\.txt:\d+$/);
+  });
+
+  it('drop：删除 shelf 目录并刷新列表；restore/drop 不存在 → INVALID_REF', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    await applyShelfAction(repo, { action: 'save', name: 'wip' });
+    expect(existsSync(join(await shelvesDir(repo), 'wip'))).toBe(true);
+
+    const list = await applyShelfAction(repo, { action: 'drop', name: 'wip' });
+    expect(list.shelves).toEqual([]);
+    expect(existsSync(join(await shelvesDir(repo), 'wip'))).toBe(false);
+
+    await expect(applyShelfAction(repo, { action: 'drop', name: 'ghost' })).rejects.toMatchObject({
+      code: 'INVALID_REF',
+      message: '搁置不存在：ghost',
+    });
+    await expect(applyShelfAction(repo, { action: 'restore', name: 'ghost' })).rejects.toMatchObject({
+      code: 'INVALID_REF',
+      message: '搁置不存在：ghost',
+    });
+  });
+});
