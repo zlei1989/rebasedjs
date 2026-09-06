@@ -50,3 +50,7 @@ export { cherryPickCommits, continuePick, isAncestor, revertCommits } from './pi
 export type { CorePickResult } from './pick';
 export { createTag, deleteTag, listTags, pushTag } from './tag';
 export type { CoreTag } from './tag';
+export { addWorktree, listWorktrees, pruneWorktrees, removeWorktree } from './worktree';
+export type { WorktreeEntry } from './worktree';
+export { listSubmodules, updateSubmodules } from './submodule';
+export type { SubmoduleEntry } from './submodule';
