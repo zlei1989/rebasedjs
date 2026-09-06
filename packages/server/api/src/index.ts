@@ -38,6 +38,19 @@ export {
   parseGithubRemoteUrl,
   submitGithubPrReview,
 } from './github';
+export {
+  addGitlabMrComment,
+  checkoutGitlabMr,
+  createGitlabMr,
+  getGitlabMrDetail,
+  getGitlabMrFiles,
+  getGitlabMrs,
+  getGitlabMrTimeline,
+  getGitlabStatus,
+  mergeGitlabMr,
+  parseGitlabRemoteUrl,
+  submitGitlabMrReview,
+} from './gitlab';
 export { getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
 export { cherryPick, revert } from './pick';
 export { applyTagAction, getTags } from './tag';
