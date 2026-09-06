@@ -1,7 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { IgnoreAddBody } from '@rebased/contracts';
 import { addIgnore, getIgnore, getIgnoreTemplates, putIgnore } from './ignore';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
@@ -67,13 +66,11 @@ describe('ignore 功能', () => {
     expect(v.gitignore).toBe('/a.txt\n/b\n');
   });
 
-  it('addIgnore target=exclude：同样追加到 .git/info/exclude 且幂等', async () => {
+  it('addIgnore：固定追加到 .gitignore（契约仅 {path}，无 target 分支）', async () => {
     const r = repo();
-    const body: IgnoreAddBody & { target: 'exclude' } = { path: 'dist', target: 'exclude' };
-    const v1 = await addIgnore(r, body);
-    expect(v1.exclude.includes('/dist\n')).toBe(true);
-    const v2 = await addIgnore(r, body);
-    expect(v2.exclude).toBe(v1.exclude);
+    const v = await addIgnore(r, { path: 'dist' });
+    expect(v.gitignore).toBe('/dist\n');
+    expect(existsSync(join(r, '.gitignore'))).toBe(true);
   });
 
   it('getIgnoreTemplates：内建 Node / Python / 通用 三模板（内容可供直接落盘）', () => {

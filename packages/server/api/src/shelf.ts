@@ -67,7 +67,10 @@ function listShelves(dir: string): ShelfEntry[] {
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
-/** save：diff HEAD 写 patch.diff；未跟踪（?? 项，未跟踪目录折叠为 dir/）递归复制，跳过 .git */
+/**
+ * save：diff HEAD 写 patch.diff；未跟踪（?? 项，未跟踪目录折叠为 dir/）递归复制，跳过 .git。
+ * 折叠目录整树复制：目录内被忽略文件也会随档（与逐文件收集的差异），v1 接受；目录层级深。
+ */
 async function saveShelf(repoPath: string, name: string): Promise<void> {
   const dir = shelfDirOf(repoPath, name);
   if (existsSync(dir)) throw new ServiceError('INVALID_QUERY', `搁置已存在：${name}`);
@@ -81,6 +84,7 @@ async function saveShelf(repoPath: string, name: string): Promise<void> {
   for (const rel of untracked) {
     const dest = join(dir, 'untracked', rel);
     mkdirSync(dirname(dest), { recursive: true });
+    // cpSync 按普通文件复制：符号链接往返降级为常规文件（链接位不保真），v1 接受
     cpSync(join(repoPath, rel), dest, {
       recursive: true,
       filter: (p) => !p.split(sep).includes('.git'),
@@ -126,13 +130,20 @@ function copyBackUntracked(shelfUntracked: string, repoPath: string): void {
   }
 }
 
-/** restore：apply patch.diff（check 先行，失败映射同 patch apply）→ untracked/ 回拷；shelf 本身保留 */
+/**
+ * restore：apply patch.diff（check 先行，失败映射同 patch apply）→ untracked/ 回拷；shelf 本身保留。
+ * 纯未跟踪 shelf 的 patch.diff 为 0 字节（git diff HEAD 无 tracked 变更），空输入 git apply 会以
+ * exit 128「No valid patches in input」失败——此时跳过 apply（无可应用变更），仅回拷未跟踪文件。
+ */
 async function restoreShelf(repoPath: string, name: string): Promise<void> {
   const dir = shelfDirOf(repoPath, name);
   if (!existsSync(dir)) throw new ServiceError('INVALID_REF', `搁置不存在：${name}`);
   const patchFile = join(dir, 'patch.diff');
   if (!existsSync(patchFile)) throw new ServiceError('INVALID_REF', `搁置不存在：${name}`);
-  await applyPatchText(repoPath, readFileSync(patchFile, 'utf8'));
+  const patch = readFileSync(patchFile, 'utf8');
+  if (patch.trim().length > 0) {
+    await applyPatchText(repoPath, patch);
+  }
   copyBackUntracked(join(dir, 'untracked'), repoPath);
 }
 

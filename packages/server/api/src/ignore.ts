@@ -9,7 +9,11 @@ import type { IgnoreAddBody, IgnoreContents, IgnorePutBody, IgnoreTemplate } fro
 /** 忽略目标：gitignore = 仓库根 .gitignore；exclude = .git/info/exclude */
 type IgnoreTarget = 'gitignore' | 'exclude';
 
-/** target → 仓库内相对路径 */
+/**
+ * target → 仓库内相对路径。
+ * 常规仓库 .git 为目录；子模块/工作树下 .git 是文件，此处路径不通（ENOTDIR）——
+ * 属常规场景外边界，v1 接受（契约只规约 .git/info/exclude 这一布局）。
+ */
 const IGNORE_PATHS: Record<IgnoreTarget, string> = {
   gitignore: '.gitignore',
   exclude: join('.git', 'info', 'exclude'),
@@ -39,13 +43,11 @@ export async function putIgnore(repoPath: string, body: IgnorePutBody): Promise<
 }
 
 /**
- * 追加 '/<path>' 行（path 原样、不转义）：文件不存在则创建；末尾无换行先补换行；
- * 幂等判定 = 文件逐行 trim 后等于 /<path> 则视为已存在、不重复追加。
- * 目标缺省 gitignore；兼容可选 target（路由按契约传 path 即落入缺省分支）。
+ * 追加 '/<path>' 行（path 原样、不转义）到 .gitignore（契约固定 target=.gitignore）：
+ * 文件不存在则创建；末尾无换行先补换行；幂等判定 = 文件逐行 trim 后等于 /<path> 则视为已存在、不重复追加。
  */
 export async function addIgnore(repoPath: string, body: IgnoreAddBody): Promise<IgnoreContents> {
-  const target = (body as IgnoreAddBody & { target?: IgnoreTarget }).target ?? 'gitignore';
-  const file = ignoreFileOf(repoPath, target);
+  const file = ignoreFileOf(repoPath, 'gitignore');
   const line = `/${body.path}`;
   const before = existsSync(file) ? readFileSync(file, 'utf8') : '';
   if (before.split('\n').some((l) => l.trim() === line)) return getIgnore(repoPath);

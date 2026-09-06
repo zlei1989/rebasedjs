@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { applyShelfAction, getShelves } from './shelf';
 import { getConfigDir } from './lib/config-store';
 import { openRepo } from './repo';
+import { getRepoStatus } from './status';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 let configDir: string;
@@ -121,13 +122,15 @@ describe('shelf 功能', () => {
     expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
   });
 
-  it('restore 坏补丁：与 patch apply 相同的 INVALID_QUERY 映射', async () => {
+  it('restore 坏补丁：与 patch apply 相同的 INVALID_QUERY 映射，失败零变更（不落半程、不回拷）', async () => {
     const repo = await repoWithCommit('a.txt', 'v1');
     writeFileSync(join(repo, 'a.txt'), 'v2');
     writeFileSync(join(repo, 'new.txt'), 'new');
     await applyShelfAction(repo, { action: 'save', name: 'wip' });
     execFileSync('git', ['-C', repo, 'checkout', '--', 'a.txt']);
     writeFileSync(join(repo, 'a.txt'), 'v3');
+    rmSync(join(repo, 'new.txt')); // 若失败后仍回拷未跟踪文件，此处会被恢复——锁定"失败不落半程"
+    const before = await getRepoStatus(repo);
 
     let err: unknown;
     try {
@@ -137,6 +140,23 @@ describe('shelf 功能', () => {
     }
     expect(err).toMatchObject({ code: 'INVALID_QUERY' });
     expect((err as Error).message).toMatch(/^补丁无法应用：error: patch failed: a\.txt:\d+$/);
+    // 失败零变更：tracked 文件、status 与未跟踪文件均保持原样
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v3');
+    expect(await getRepoStatus(repo)).toEqual(before);
+    expect(existsSync(join(repo, 'new.txt'))).toBe(false);
+  });
+
+  it('restore 纯未跟踪 shelf：patch.diff 为空 → 跳过 apply、仅回拷未跟踪文件', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'new.txt'), 'new');
+    await applyShelfAction(repo, { action: 'save', name: 'untracked-only' });
+    // 无 tracked 变更 → patch.diff 0 字节（git apply 空输入会 exit 128，须跳过 apply）
+    expect(readFileSync(join(await shelvesDir(repo), 'untracked-only', 'patch.diff'), 'utf8')).toBe('');
+    rmSync(join(repo, 'new.txt'));
+
+    const list = await applyShelfAction(repo, { action: 'restore', name: 'untracked-only' });
+    expect(readFileSync(join(repo, 'new.txt'), 'utf8')).toBe('new');
+    expect(list.shelves).toHaveLength(1);
   });
 
   it('drop：删除 shelf 目录并刷新列表；restore/drop 不存在 → INVALID_REF', async () => {

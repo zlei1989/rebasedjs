@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { applyPatchService, createPatch, deletePatch, getPatches } from './patch';
 import { getConfigDir } from './lib/config-store';
 import { openRepo } from './repo';
+import { getRepoStatus } from './status';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 let configDir: string;
@@ -102,6 +103,25 @@ describe('patch 功能', () => {
     expect(readFileSync(join(dir, 'onlyFrom.patch'), 'utf8')).toContain('+v2'); // diff HEAD~1 HEAD
   });
 
+  it('创建：多文件变更 = 仓库级 diff 全文（两个文件都出现在补丁文本中）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'a.txt'), 'a1');
+    writeFileSync(join(repo, 'b.txt'), 'b1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    await openRepo(repo);
+    writeFileSync(join(repo, 'a.txt'), 'a2');
+    writeFileSync(join(repo, 'b.txt'), 'b2');
+
+    await createPatch(repo, { name: 'multi' });
+    const diff = readFileSync(join(await patchesDir(repo), 'multi.patch'), 'utf8');
+    expect(diff).toContain('diff --git a/a.txt b/a.txt');
+    expect(diff).toContain('diff --git a/b.txt b/b.txt');
+    expect(diff).toContain('+a2');
+    expect(diff).toContain('+b2');
+  });
+
   it('apply 成功：文件回工作区，返回刷新状态', async () => {
     const repo = await repoWithCommit('a.txt', 'v1');
     writeFileSync(join(repo, 'a.txt'), 'v2');
@@ -115,11 +135,12 @@ describe('patch 功能', () => {
     expect(status.entries.find((e) => e.path === 'a.txt')?.code).toBe('.M');
   });
 
-  it('apply 坏补丁：INVALID_QUERY 映射 stderr 首行', async () => {
+  it('apply 坏补丁：INVALID_QUERY 映射 stderr 首行，失败零变更（check 先行不落半程）', async () => {
     const repo = await repoWithCommit('a.txt', 'v1');
     writeFileSync(join(repo, 'a.txt'), 'v2');
     await createPatch(repo, { name: 'p' });
     writeFileSync(join(repo, 'a.txt'), 'v3'); // 上下文不符
+    const before = await getRepoStatus(repo);
 
     let err: unknown;
     try {
@@ -129,6 +150,9 @@ describe('patch 功能', () => {
     }
     expect(err).toMatchObject({ code: 'INVALID_QUERY' });
     expect((err as Error).message).toMatch(/^补丁无法应用：error: patch failed: a\.txt:\d+$/);
+    // 失败零变更：文件内容与 status 均保持原样
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v3');
+    expect(await getRepoStatus(repo)).toEqual(before);
   });
 
   it('删除：文件移除、列表刷新；不存在/路径逃逸 → INVALID_REF', async () => {
