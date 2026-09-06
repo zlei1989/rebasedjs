@@ -15,7 +15,7 @@ import type {
   GitHubStatus,
   GitHubTimeline,
 } from '@rebased/contracts';
-import { GitHubPanel, type GitHubPanelProps } from './composite/github-panel';
+import { GitHubPanel, type GitHubPanelProps } from './github-panel';
 
 const STATUS: GitHubStatus = {
   detected: true,

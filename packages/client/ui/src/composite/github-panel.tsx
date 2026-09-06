@@ -37,7 +37,9 @@ export interface GitHubPanelProps {
   prs: GitHubPrList; number: number | null;
   detail: GitHubPrDetail | null; timeline: GitHubTimeline | null; files: GitHubPrFiles | null;
   loading?: boolean; acting?: boolean;
-  onSelectPr: (number: number) => void; onRefresh: () => void;
+  onSelectPr: (number: number) => void;
+  /** 刷新列表/详情：缺省不渲染刷新按钮 */
+  onRefresh?: () => void;
   onComment: (body: string) => void; onReview: (event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body?: string) => void;
   onMerge: (method: 'merge' | 'squash' | 'rebase') => void; onCheckout: () => void;
 }
@@ -340,7 +342,7 @@ function PrDetailBlock({
             合并
           </Button>
           <Button data-testid="github-checkout" disabled={acting} onClick={onCheckout}>
-            检出分支
+            检出 PR 分支
           </Button>
         </Flex>
       </Flex>
