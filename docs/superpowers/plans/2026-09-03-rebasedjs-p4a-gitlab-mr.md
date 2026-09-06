@@ -1,4 +1,4 @@
-# P4-A：GitLab 面板（MR 全流程）实施计划
+﻿# P4-A：GitLab 面板（MR 全流程）实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -258,3 +258,28 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode;
 - 类型一致性：GitLab{Status,RepoRef,MrSummary,MrDetail,Timeline,TimelineEntry,MrFile,MrFiles,MrMergeResult,MrCheckoutResult,MrCreateBody 经 schema infer} + 6 schema 跨任务签名对齐；错误复用 12 码不新增。
 - 简化裁定：与 P3-E 完全同构（git 面解耦、单击选中、时间线旧→新、diff 文本预览、reviews 尽力合并、files 行数置 0 注明）；GitLab 特有：iid、owner 子组、PRIVATE-TOKEN header、merge 仅 squash、MR 创建含源/目标分支。
 - 风险：GitLab REST 形状随版本演进（mock 断言避开易变字段）；changes 接口已过滤提交顺序（v1 按返回原样）；自托管实例不支持（明确不做）。
+
+
+---
+
+## 关账记录（P4-A）
+
+**流水线**：6 任务全完成（contracts → api → 两端路由 → client → ui GitLabPanel → 装配），终审 Merge-with-fixes → 修复波 `6054559`（I-1 新建入口提升 / I-2 标题 maxLength / I-3 LogPage 缺省用例）→ 限定复审 all addressed → **关账**。实现区间 `df9a50f..6054559`。
+
+**终审结论**：无 Critical；3 Important（终审确认 + 修复闭环）；14 条跨任务一致性核对全过（detected 三层语义、reviewState /reviews 尽力派生、timeline 1e9 偏移↔面板 key、merge message warning 路径、branchName toast、null-key 条件 hook↔iid 选中态、create 面板自关流、token 零泄漏、错误契约全链、两端 10 端点/页面/LogPage 入口对称、明确不做零夹带）；**安全面：GitLab 域无新增 token 泄漏面**（PRIVATE-TOKEN 头、错误消息/响应零 token、客户端只见 account 名、checkout 走既有 withAuth——Bearer 对 GitLab 属已知限制见排期）。
+
+**Rulings（控制器裁定）**：
+- iid 语义（非全局 id）；owner 全路径含子组（`encodeURIComponent`；与 github「子路径→null」差异系有意，注释在案）；PRIVATE-TOKEN header（非 Bearer）；merge 仅 {squash?}（GitLab 策略为项目设置）；review 三映射（approve / reviews{state:rejected} / notes）；files 行数置 0（GitLab 不逐文件给行数，注释在案）。
+- checkout git 面与数据面解耦（origin/首远程，refspec `refs/merge-requests/:iid/head`，`mr-N` 已存在仅 checkout）；checkout 认证失败 → AUTH_FAILED。
+- 时间线 notes+reviews 尽力合并（reviews 4xx/429 忽略）；review id = 1e9 + reviewId；reviewState 经 /reviews 尽力派生（detail=2 请求；REVIEW_REQUIRED v1 不产出——契约并集成员，注释在案）。
+- 创建 Modal 确认即关+复位 = v1 接受（GH 合并 Modal 同构；T6 按「面板自关，容器只 trigger+toast+回写」接线；失败丢表单记 minor，受控通道后置）。终审提升「新建 MR」按钮至列表卡 extra（空库可创建首个 MR）+ 标题 maxLength=255——均已随修复波落地。
+- 5 state 键全维（gitlabMrQuerySchema 枚举；UI 仅 opened/merged 两 Tab 是容器层）；mrs 键恒带 ?state=。
+- merge 后条目留在 opened 缓存（GH 同构，切 Tab 重取兜底）；create 前置插入依赖默认排序（容器刷新兜底）；文档类笔误（T3「10 route.ts」=9 文件 10 端点、提交信息英文=brief 逐字规定）存档。
+
+**triage（deferred → 排期/不修）**：
+- 排期：① checkout 经 withAuth 注入 Bearer——GitLab 官方文档化为 PRIVATE-TOKEN/token-as-password；SSH 远程不受影响，HTTPS 失败以可读 AUTH_FAILED 呈现（非静默）→ 真机验证 + 必要时 core 层改 Basic/PRIVATE-TOKEN 注入；② web-next 空/非法 JSON body → 500 vs koa 400（既存全局行为，P3-E 同构）→ 全局评估清单；③ createOpen 跨仓库保持打开（SPA 同路由切换，容器 repoId effect 配合处理——fix-wave 后新发现）；④ 无令牌提示卡补「去设置」链接（GH 同构后置）。
+- 不修（记录在案）：T1/T3 报告计数类、gitlabAccount() vs findToken（行为等价）、commented→NONE 与时间线 COMMENTED 口径差（注释在案）、merge{merged:false} 防御分支（405/406 走 GIT_ERROR）、jsdom/antd Modal 怪癖（环境）、REVIEW_STATE_COLORS NONE 死条目（GH 同构）、容器无独立单测（github 先例）、质量门 30s 超时（串行复跑全绿）、提交 scope 信息性、M-1..M-8 观察项。
+
+**环境备注**：core 30s 并行超时 flake + web-next EPERM 清理 flake（既有 GitHub 用例，两次失败用例不同）均为既有环境缺陷（串行复跑全绿、与 GitLab 代码面零耦合）。
+
+**冒烟**：checkout 全链路（koa 真实服务 + 本地裸仓库 `refs/merge-requests/7/head` → mr-7 + git CLI 三断言）；两端 build PASS（web-next 路由表含全部 10 gitlab 端点 + 页面；web-koa vite）；真实 MR 数据面需用户 GitLab token 人工验证（测试零真实网络）。
