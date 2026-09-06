@@ -26,6 +26,7 @@ export {
 } from './composite/status-page';
 export { IgnoreDialog, type IgnoreDialogProps } from './composite/ignore-dialog';
 export { ConsolePanel, type ConsolePanelProps } from './composite/console-panel';
+export { GitHubPanel, type GitHubPanelProps } from './composite/github-panel';
 export { BranchPanel, type BranchPanelProps } from './composite/branch-panel';
 export { BlameView, type BlameViewProps } from './composite/blame-view';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
