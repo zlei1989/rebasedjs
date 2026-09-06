@@ -42,3 +42,15 @@ export {
   useMergeGithubPr,
   useCheckoutGithubPr,
 } from './github';
+export {
+  useGitlabStatus,
+  useGitlabMrs,
+  useGitlabMrDetail,
+  useGitlabTimeline,
+  useGitlabMrFiles,
+  useCreateGitlabMr,
+  useAddGitlabComment,
+  useSubmitGitlabReview,
+  useMergeGitlabMr,
+  useCheckoutGitlabMr,
+} from './gitlab';
