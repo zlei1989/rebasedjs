@@ -44,6 +44,12 @@ import {
   githubCommentBodySchema,
   githubReviewBodySchema,
   githubMergeBodySchema,
+  gitlabMrQuerySchema,
+  gitlabMrIidSchema,
+  gitlabMrCreateBodySchema,
+  gitlabCommentBodySchema,
+  gitlabReviewBodySchema,
+  gitlabMergeBodySchema,
 } from './endpoints';
 import type {
   GitHubPrDetail,
@@ -51,6 +57,11 @@ import type {
   GitHubRepoRef,
   GitHubStatus,
   GitHubTimelineEntry,
+  GitLabMrDetail,
+  GitLabMrSummary,
+  GitLabRepoRef,
+  GitLabStatus,
+  GitLabTimelineEntry,
 } from './domain';
 
 describe('P1 端点 schema', () => {
@@ -745,5 +756,129 @@ describe('GitHub 域类型对齐', () => {
   it('GitHubStatus.repo/account 可选', () => {
     expectTypeOf<GitHubStatus['repo']>().toEqualTypeOf<GitHubRepoRef | undefined>();
     expectTypeOf<GitHubStatus['account']>().toEqualTypeOf<string | undefined>();
+  });
+});
+
+describe('gitlabMrQuerySchema（MR 列表查询）', () => {
+  it('state 缺省 opened；接受 opened/closed/merged/locked/all', () => {
+    expect(gitlabMrQuerySchema.parse({})).toEqual({ state: 'opened' });
+    expect(gitlabMrQuerySchema.parse({ state: 'closed' })).toEqual({ state: 'closed' });
+    expect(gitlabMrQuerySchema.parse({ state: 'merged' })).toEqual({ state: 'merged' });
+    expect(gitlabMrQuerySchema.parse({ state: 'locked' })).toEqual({ state: 'locked' });
+    expect(gitlabMrQuerySchema.parse({ state: 'all' })).toEqual({ state: 'all' });
+  });
+  it('拒绝 state 非法值', () => {
+    expect(gitlabMrQuerySchema.safeParse({ state: 'merge' }).success).toBe(false);
+    expect(gitlabMrQuerySchema.safeParse({ state: '' }).success).toBe(false);
+  });
+});
+
+describe('gitlabMrIidSchema（MR iid 路径参数）', () => {
+  it('接受正整数并 coerce 查询串数字', () => {
+    expect(gitlabMrIidSchema.parse({ iid: 12 })).toEqual({ iid: 12 });
+    expect(gitlabMrIidSchema.parse({ iid: '12' })).toEqual({ iid: 12 });
+  });
+  it('拒绝 0、负数、小数与非数字', () => {
+    expect(gitlabMrIidSchema.safeParse({ iid: 0 }).success).toBe(false);
+    expect(gitlabMrIidSchema.safeParse({ iid: -1 }).success).toBe(false);
+    expect(gitlabMrIidSchema.safeParse({ iid: 1.5 }).success).toBe(false);
+    expect(gitlabMrIidSchema.safeParse({ iid: 'abc' }).success).toBe(false);
+    expect(gitlabMrIidSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('gitlabMrCreateBodySchema（创建 MR 请求体）', () => {
+  it('接受最小必填（sourceBranch/targetBranch/title）与全字段（含 description）', () => {
+    const minimal = { sourceBranch: 'feat/x', targetBranch: 'main', title: '实现 X' };
+    expect(gitlabMrCreateBodySchema.parse(minimal)).toEqual(minimal);
+    const full = { ...minimal, description: '说明文字' };
+    expect(gitlabMrCreateBodySchema.parse(full)).toEqual(full);
+  });
+  it('接受 title 恰好 255 字符与 description 恰好 20_000 字符', () => {
+    expect(gitlabMrCreateBodySchema.parse({
+      sourceBranch: 'feat/x', targetBranch: 'main', title: 't'.repeat(255),
+    }).title).toHaveLength(255);
+    expect(gitlabMrCreateBodySchema.parse({
+      sourceBranch: 'feat/x', targetBranch: 'main', title: 't',
+      description: 'd'.repeat(20_000),
+    }).description).toHaveLength(20_000);
+  });
+  it('拒绝缺 sourceBranch/targetBranch/title、空字符串与非字符串 title', () => {
+    expect(gitlabMrCreateBodySchema.safeParse({ targetBranch: 'main', title: 't' }).success).toBe(false);
+    expect(gitlabMrCreateBodySchema.safeParse({ sourceBranch: 'feat/x', title: 't' }).success).toBe(false);
+    expect(gitlabMrCreateBodySchema.safeParse({ sourceBranch: 'feat/x', targetBranch: 'main' }).success).toBe(false);
+    expect(gitlabMrCreateBodySchema.safeParse({ sourceBranch: '', targetBranch: 'main', title: 't' }).success).toBe(false);
+    expect(gitlabMrCreateBodySchema.safeParse({ sourceBranch: 'feat/x', targetBranch: 'main', title: 1 }).success).toBe(false);
+  });
+  it('拒绝 title 超 255 字符与 description 超 20_000 字符', () => {
+    expect(gitlabMrCreateBodySchema.safeParse({
+      sourceBranch: 'feat/x', targetBranch: 'main', title: 't'.repeat(256),
+    }).success).toBe(false);
+    expect(gitlabMrCreateBodySchema.safeParse({
+      sourceBranch: 'feat/x', targetBranch: 'main', title: 't',
+      description: 'd'.repeat(20_001),
+    }).success).toBe(false);
+  });
+});
+
+describe('gitlabCommentBodySchema（MR 评论请求体）', () => {
+  it('接受 1..10_000 字符 body', () => {
+    expect(gitlabCommentBodySchema.parse({ body: '看起来不错' })).toEqual({ body: '看起来不错' });
+    expect(gitlabCommentBodySchema.parse({ body: 'x'.repeat(10_000) }).body).toHaveLength(10_000);
+  });
+  it('拒绝空 body、缺 body 与超 10_000 字符', () => {
+    expect(gitlabCommentBodySchema.safeParse({ body: '' }).success).toBe(false);
+    expect(gitlabCommentBodySchema.safeParse({}).success).toBe(false);
+    expect(gitlabCommentBodySchema.safeParse({ body: 'x'.repeat(10_001) }).success).toBe(false);
+  });
+});
+
+describe('gitlabReviewBodySchema（MR review 请求体）', () => {
+  it('接受三种 event 与可选 body（可空串）', () => {
+    expect(gitlabReviewBodySchema.parse({ event: 'APPROVE' })).toEqual({ event: 'APPROVE' });
+    expect(gitlabReviewBodySchema.parse({ event: 'REQUEST_CHANGES', body: '改一下' }))
+      .toEqual({ event: 'REQUEST_CHANGES', body: '改一下' });
+    expect(gitlabReviewBodySchema.parse({ event: 'COMMENT', body: '' }).event).toBe('COMMENT');
+  });
+  it('接受恰好 10_000 字符 body', () => {
+    expect(gitlabReviewBodySchema.parse({ event: 'COMMENT', body: 'x'.repeat(10_000) }).body)
+      .toHaveLength(10_000);
+  });
+  it('拒绝枚举外 event、缺 event 与超长 body', () => {
+    expect(gitlabReviewBodySchema.safeParse({ event: 'APPROVE2' }).success).toBe(false);
+    expect(gitlabReviewBodySchema.safeParse({ event: 'APPROVED' }).success).toBe(false);
+    expect(gitlabReviewBodySchema.safeParse({ body: 'x' }).success).toBe(false);
+    expect(gitlabReviewBodySchema.safeParse({ event: 'COMMENT', body: 'x'.repeat(10_001) }).success).toBe(false);
+  });
+});
+
+describe('gitlabMergeBodySchema（MR 合并请求体）', () => {
+  it('接受空体与 squash 布尔开关', () => {
+    expect(gitlabMergeBodySchema.parse({})).toEqual({});
+    expect(gitlabMergeBodySchema.parse({ squash: true })).toEqual({ squash: true });
+    expect(gitlabMergeBodySchema.parse({ squash: false })).toEqual({ squash: false });
+  });
+  it('拒绝非布尔 squash', () => {
+    expect(gitlabMergeBodySchema.safeParse({ squash: 'yes' }).success).toBe(false);
+  });
+});
+
+describe('GitLab 域类型对齐', () => {
+  it('GitLabMrDetail 继承 GitLabMrSummary（含全部 summary 字段 + 扩展字段）', () => {
+    expectTypeOf<GitLabMrDetail>().toMatchTypeOf<GitLabMrSummary>();
+    expectTypeOf<GitLabMrSummary>().not.toMatchTypeOf<GitLabMrDetail>();
+    expectTypeOf<keyof GitLabMrDetail>().toEqualTypeOf<
+      keyof GitLabMrSummary
+      | 'body' | 'mergeable' | 'reviewState' | 'commentsCount' | 'additions' | 'deletions'
+    >();
+  });
+  it('GitLabTimelineEntry.reviewState 可选', () => {
+    expectTypeOf<GitLabTimelineEntry['reviewState']>().toEqualTypeOf<
+      'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | undefined
+    >();
+  });
+  it('GitLabStatus.repo/account 可选', () => {
+    expectTypeOf<GitLabStatus['repo']>().toEqualTypeOf<GitLabRepoRef | undefined>();
+    expectTypeOf<GitLabStatus['account']>().toEqualTypeOf<string | undefined>();
   });
 });

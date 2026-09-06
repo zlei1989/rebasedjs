@@ -261,3 +261,22 @@ export type GitHubReviewBody = z.infer<typeof githubReviewBodySchema>;
 /** PR 合并请求体：method 对应 GitHub API merge_method（merge/squash/rebase） */
 export const githubMergeBodySchema = z.object({ method: z.enum(['merge', 'squash', 'rebase']) });
 export type GitHubMergeBody = z.infer<typeof githubMergeBodySchema>;
+
+/** GitLab MR 列表查询：state=all 为全量；缺省 opened（查询参数走字符串，enum 无需 coerce） */
+export const gitlabMrQuerySchema = z.object({ state: z.enum(['opened', 'closed', 'merged', 'locked', 'all']).default('opened') });
+export type GitLabMrQuery = z.infer<typeof gitlabMrQuerySchema>;
+/** MR iid 路径参数：正整数（iid 无 0/负数），字符串数字被 coerce */
+export const gitlabMrIidSchema = z.object({ iid: z.coerce.number().int().positive() });
+export type GitLabMrIid = z.infer<typeof gitlabMrIidSchema>;
+/** 创建 MR 请求体：sourceBranch/targetBranch/title 必填；title ≤255（GitLab 标题上限）；description 可选且 ≤20_000（GitLab 描述上限） */
+export const gitlabMrCreateBodySchema = z.object({ sourceBranch: z.string().min(1), targetBranch: z.string().min(1), title: z.string().min(1).max(255), description: z.string().max(20_000).optional() });
+export type GitLabMrCreateBody = z.infer<typeof gitlabMrCreateBodySchema>;
+/** MR 评论请求体：body 非空且 ≤10_000 字符（GitLab API 上限） */
+export const gitlabCommentBodySchema = z.object({ body: z.string().min(1).max(10_000) });
+export type GitLabCommentBody = z.infer<typeof gitlabCommentBodySchema>;
+/** MR review 请求体：event 三选；body 可选（与 event 无组合约束，放宽校验）且 ≤10_000 */
+export const gitlabReviewBodySchema = z.object({ event: z.enum(['APPROVE', 'REQUEST_CHANGES', 'COMMENT']), body: z.string().max(10_000).optional() });
+export type GitLabReviewBody = z.infer<typeof gitlabReviewBodySchema>;
+/** MR 合并请求体：squash 对应 squash 合并，可选 */
+export const gitlabMergeBodySchema = z.object({ squash: z.boolean().optional() });
+export type GitLabMergeBody = z.infer<typeof gitlabMergeBodySchema>;

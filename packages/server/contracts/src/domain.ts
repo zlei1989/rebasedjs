@@ -310,3 +310,23 @@ export interface GitHubPrFiles { files: GitHubPrFile[]; }
 export interface GitHubPrMergeResult { merged: boolean; message: string; }
 /** PR 检出结果：branchName 为本地分支名（pr-N） */
 export interface GitHubPrCheckoutResult { branchName: string; }
+
+/** GitLab 远程仓库引用：owner 为全路径（可含子组，如 group/sub）；remoteUrl 为 git 配置 push 原始 URL（parseGitlabRemoteUrl 的输入源） */
+export interface GitLabRepoRef { owner: string; name: string; remoteUrl: string; }
+/** GitLab 域可用性：detected=false 仅当仓库无 GitLab 形态远程或解析异常（此时无 repo/account 字段）；有远程但未配置令牌时 detected=true 且无 account 字段，有令牌时附 account */
+export interface GitLabStatus { detected: boolean; repo?: GitLabRepoRef; account?: string; }
+/** MR 摘要：state 为打开/关闭/已合并/已锁定 */
+export interface GitLabMrSummary { iid: number; title: string; author: string; state: 'opened' | 'closed' | 'merged' | 'locked'; sourceBranch: string; targetBranch: string; createdAtIso: string; updatedAtIso: string; }
+export interface GitLabMrList { mrs: GitLabMrSummary[]; }
+/** MR 详情：继承 summary 全部字段；reviewState 为最近一次 review 的分组决定（未审为 NONE） */
+export interface GitLabMrDetail extends GitLabMrSummary { body: string; mergeable: boolean; reviewState: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | 'NONE'; commentsCount: number; additions: number; deletions: number; }
+/** 时间线条目：kind=review 时 reviewState 为 review 决定（comment 无） */
+export interface GitLabTimelineEntry { id: number; author: string; atIso: string; body: string; kind: 'comment' | 'review'; reviewState?: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED'; }
+export interface GitLabTimeline { entries: GitLabTimelineEntry[]; }
+/** MR 文件变更：diff 为文件级 diff 全文（GitLab API diff 字段） */
+export interface GitLabMrFile { path: string; status: 'added' | 'modified' | 'removed' | 'renamed'; additions: number; deletions: number; diff: string; }
+export interface GitLabMrFiles { files: GitLabMrFile[]; }
+/** 合并结果：merged=false 时 message 为拒绝原因（如 merge conflict） */
+export interface GitLabMrMergeResult { merged: boolean; message: string; }
+/** MR 检出结果：branchName 为本地分支名（mr-N） */
+export interface GitLabMrCheckoutResult { branchName: string; }
