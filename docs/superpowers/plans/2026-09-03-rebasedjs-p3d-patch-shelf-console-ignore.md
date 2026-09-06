@@ -1,4 +1,4 @@
-# P3-D：补丁 + 搁置（Shelf）+ Git 控制台 + .gitignore 实施计划
+﻿# P3-D：补丁 + 搁置（Shelf）+ Git 控制台 + .gitignore 实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -290,3 +290,25 @@ export function ShelfPanel(props: ShelfPanelProps): React.ReactNode;
 - 类型一致性：PatchEntry/PatchList/ShelfEntry/ShelfList/ConsoleEntry/IgnoreContents/IgnoreTemplate/四组 schema/组件 Props 跨任务签名已对齐；console 的 token 剥离为安全硬约束（测试锁定）。
 - 简化裁定：shelf 为每仓库独立存档目录（跨仓库恢复后置）；patch 无 3-way apply（错误语义明示）。
 - 风险：shelf 未跟踪文件复制对巨型文件的存储成本（v1 接受，注释说明）；ignore 的 add 追加格式 `/path`（以根为基准——Java 同款语义）。
+
+
+---
+
+## 关账记录（P3-D）
+
+**流水线**：8 任务全完成（contracts → core → api → 两端路由 → client → ui×2 → 装配），终审 Merge-with-fixes → 修复波 `e9314ec`（空补丁 apply 对齐 + 注释修正）→ 限定复审 all addressed → **关账**。实现区间 `7b6fc6c..e9314ec`。
+
+**终审结论**：无 Critical；1 Important（空补丁 apply 与 shelf restore 语义相反）+ 10 Minor + 5 冲突点；跨任务一致性 11 条核对全过（安全 token 剥离全链验证通过；存档目录隔离 + 防逃逸 + name 正则贯穿；两端 11 端点/4 页面/LogPage 四入口/status 忽略接线对称；「明确不做」零夹带）。
+
+**Rulings（控制器裁定）**：
+- C1 onIgnore 用 Modal.confirm（全局确认）而非 Popconfirm——组件行内按钮未动，T8 按裁定实现。
+- C2 「web-next 8 个 route.ts」为 brief 笔误——以端点总览 9 文件 11 端点为准。
+- C3 useIgnoreTemplates 签名带 repoId（端点挂在 repo 路径下，无全局 URL；404 语义需 resolveRepo）。
+- C4+C5 空补丁 apply 对齐 shelf restore：`patch.trim()` 空 → 跳过 check/apply，no-op 成功返回 RepoStatus；console 顺序只修注释（旧→新、最新在底，行为不动）。
+- 前置裁定（任务期已记）：patch create 同名静默覆盖=「覆盖即更新」；GitExitError 消息面无 token 泄漏（原始 args 构造）；streamGit break 不记录；strip 判定 `/extraheader=/i` 整对剥离（大小写不敏感）；addIgnore 契约收敛仅 {path}；模板选中=替换文本域；IgnoreDialog 失败保留编辑；StatusPage 忽略=容器 Modal.confirm+status 键补刷；restore 后容器补刷 status 键；shelf 回拷「存在且不同→跳过不覆盖」。
+
+**triage（deferred → 排期/不修）**：
+- 排期项：① unborn HEAD createPatch **与 shelf save 同路径**（新仓库默认态 → GIT_ERROR；方案：staged → `git diff --cached`、缺省 → 两段拼接，hardening 排期）；② core vitest 并行 30s 超时 flake（独立小任务：`fileParallelism:false` 或提高 testTimeout；串行 142/142 全绿）；③ execLogByCwd Map 无仓库级淘汰（LRU/卸载清键）；④ addIgnore path 字符集（`!` 开头 → 否定模式失效；换行注入）；⑤ UI 侧 `[\w.-]+` 预校验 + 存档名 `.`/`..` 边界统一 INVALID_QUERY；⑥ createdAtIso=mtime 语义改为「最后更新」或 sidecar。
+- 不修（记录在案）：getExecLog 浅拷贝（消费端全只读）；cap 200 无压测；剥离测试与 core.pager 耦合（绑定实际参数形态，buildArgs 变更显式提醒）；streamGit durationMs 口径；shelf 折叠复制忽略文件随档/symlink 降级/子模块 ENOTDIR/写盘无锁；console id 断言构造性恒真；args[0]=--no-pager 绑定；M2-M10 观察项；交互级点检（组件自动化 + 路由静态证据已覆盖，合并后人工走一遍四入口菜单）。
+
+**环境备注**：core 并行超时 flake 与 web-koa EPERM 清理 flake 均为既有环境缺陷（串行复跑全绿、与本批零关联），未追逐。
