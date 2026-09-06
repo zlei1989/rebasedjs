@@ -35,6 +35,8 @@ export {
 } from './composite/committed-changes-panel';
 export { SearchPanel, type SearchPanelProps } from './composite/search-panel';
 export { StashPanel, type StashPanelProps } from './composite/stash-panel';
+export { PatchPanel, type PatchPanelProps } from './composite/patch-panel';
+export { ShelfPanel, type ShelfPanelProps } from './composite/shelf-panel';
 export { ResetDialog, type ResetDialogProps } from './composite/reset-dialog';
 export { MergeDialog, type MergeDialogProps } from './composite/merge-dialog';
 export { RebaseDialog, type RebaseDialogProps } from './composite/rebase-dialog';
