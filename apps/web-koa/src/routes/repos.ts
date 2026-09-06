@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, cherryPick, continueMergeOperation, continueOperation, createCommit, createPatch, deleteAccount, deletePatch, fetchRepo, getBranches, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, openRepo, pullRepo, pushRepo, putIgnore, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
-import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, addGithubPrComment, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, checkoutGithubPr, cherryPick, continueMergeOperation, continueOperation, createCommit, createPatch, deleteAccount, deletePatch, fetchRepo, getBranches, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getGithubPrDetail, getGithubPrFiles, getGithubPrs, getGithubPrTimeline, getGithubStatus, getStashes, getTags, listAccounts, listRecentRepos, mergeBranchIntoCurrent, mergeGithubPr, openRepo, pullRepo, pushRepo, putIgnore, rebaseBranch, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, submitGithubPrReview, undoCommit, updateProject, updateSettings, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, githubCommentBodySchema, githubMergeBodySchema, githubPrNumberSchema, githubPrQuerySchema, githubReviewBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, tagActionSchema, updateBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -671,6 +671,98 @@ router.get('/api/repos/:repoId/ignore/templates', async (ctx) => {
   try {
     resolveRepo(z.string().min(1).parse(ctx.params.repoId));
     ctx.body = getIgnoreTemplates();
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/github/status —— GitHub 域可用性三态（服务层不抛错）→ 200 GitHubStatus；未注册 repo → 404 */
+router.get('/api/repos/:repoId/github/status', async (ctx) => {
+  try {
+    ctx.body = await getGithubStatus(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/github/prs —— zod 校验查询（state 缺省 open）→ getGithubPrs → 200 GitHubPrList；state 非法 → 400 */
+router.get('/api/repos/:repoId/github/prs', async (ctx) => {
+  try {
+    const query = githubPrQuerySchema.parse(ctx.query);
+    ctx.body = await getGithubPrs(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.state);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/github/prs/:number —— githubPrNumberSchema 校验路径参数 → getGithubPrDetail → 200 GitHubPrDetail；number 非法 → 400 */
+router.get('/api/repos/:repoId/github/prs/:number', async (ctx) => {
+  try {
+    const { number } = githubPrNumberSchema.parse({ number: ctx.params.number });
+    ctx.body = await getGithubPrDetail(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), number);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/github/prs/:number/timeline —— 路径参数校验 → getGithubPrTimeline（comments+reviews 合并升序）→ 200 GitHubTimeline */
+router.get('/api/repos/:repoId/github/prs/:number/timeline', async (ctx) => {
+  try {
+    const { number } = githubPrNumberSchema.parse({ number: ctx.params.number });
+    ctx.body = await getGithubPrTimeline(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), number);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/github/prs/:number/comments —— zod 校验请求体 → addGithubPrComment → 200 刷新 GitHubTimeline；body 空/超长 → 400 */
+router.post('/api/repos/:repoId/github/prs/:number/comments', async (ctx) => {
+  try {
+    const { number } = githubPrNumberSchema.parse({ number: ctx.params.number });
+    const body = githubCommentBodySchema.parse(ctx.request.body);
+    ctx.body = await addGithubPrComment(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), number, body.body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/github/prs/:number/files —— 路径参数校验 → getGithubPrFiles → 200 GitHubPrFiles（patch 缺省 → ''） */
+router.get('/api/repos/:repoId/github/prs/:number/files', async (ctx) => {
+  try {
+    const { number } = githubPrNumberSchema.parse({ number: ctx.params.number });
+    ctx.body = await getGithubPrFiles(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), number);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/github/prs/:number/review —— zod 校验请求体 → submitGithubPrReview → 200 刷新 GitHubPrDetail；event 非法 → 400 */
+router.post('/api/repos/:repoId/github/prs/:number/review', async (ctx) => {
+  try {
+    const { number } = githubPrNumberSchema.parse({ number: ctx.params.number });
+    const body = githubReviewBodySchema.parse(ctx.request.body);
+    ctx.body = await submitGithubPrReview(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), number, body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/github/prs/:number/merge —— zod 校验请求体 → mergeGithubPr → 200 GitHubPrMergeResult；method 非法 → 400 */
+router.post('/api/repos/:repoId/github/prs/:number/merge', async (ctx) => {
+  try {
+    const { number } = githubPrNumberSchema.parse({ number: ctx.params.number });
+    const body = githubMergeBodySchema.parse(ctx.request.body);
+    ctx.body = await mergeGithubPr(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), number, body);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/github/prs/:number/checkout —— 路径参数校验（无请求体）→ checkoutGithubPr → 200 {branchName:'pr-N'}；无远程 → 400 */
+router.post('/api/repos/:repoId/github/prs/:number/checkout', async (ctx) => {
+  try {
+    const { number } = githubPrNumberSchema.parse({ number: ctx.params.number });
+    ctx.body = await checkoutGithubPr(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), number);
   } catch (error) {
     handleApiError(error, ctx);
   }
