@@ -290,3 +290,23 @@ export interface ConsoleEntry { id: number; args: string[]; exitCode: number; du
 export interface IgnoreContents { gitignore: string; exclude: string; }
 /** 忽略规则模板：id 标识；name 展示名；content 模板内容 */
 export interface IgnoreTemplate { id: string; name: string; content: string; }
+
+/** GitHub 远程仓库引用：remoteUrl 为 git 配置 push 原始 URL（parseGithubRemoteUrl 的输入源） */
+export interface GitHubRepoRef { owner: string; name: string; remoteUrl: string; }
+/** GitHub 域可用性：detected=false 时无 repo/account 字段（未检测到 GitHub 远程或未配置 token） */
+export interface GitHubStatus { detected: boolean; repo?: GitHubRepoRef; account?: string; }
+/** PR 摘要：state 为打开/关闭（GitHub API 的 open 状态含合并后待关的已合并 PR，merged 单独标识） */
+export interface GitHubPrSummary { number: number; title: string; author: string; state: 'open' | 'closed'; merged: boolean; baseRef: string; headRef: string; createdAtIso: string; updatedAtIso: string; }
+export interface GitHubPrList { prs: GitHubPrSummary[]; }
+/** PR 详情：继承 summary 全部字段；reviewDecision 为最近一次 review 的分组决定 */
+export interface GitHubPrDetail extends GitHubPrSummary { body: string; mergeable: boolean; reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | 'NONE'; commentsCount: number; additions: number; deletions: number; }
+/** 时间线条目：kind=review 时 reviewState 为 review 决定（comment 无） */
+export interface GitHubTimelineEntry { id: number; author: string; atIso: string; body: string; kind: 'comment' | 'review'; reviewState?: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED'; }
+export interface GitHubTimeline { entries: GitHubTimelineEntry[]; }
+/** PR 文件变更：patch 为文件级 diff 全文（GitHub API 可能缺省 → ''） */
+export interface GitHubPrFile { path: string; status: 'added' | 'modified' | 'removed' | 'renamed'; additions: number; deletions: number; patch: string; }
+export interface GitHubPrFiles { files: GitHubPrFile[]; }
+/** 合并结果：merged=false 时 message 为拒绝原因（如 merge conflict） */
+export interface GitHubPrMergeResult { merged: boolean; message: string; }
+/** PR 检出结果：branchName 为本地分支名（pr-N） */
+export interface GitHubPrCheckoutResult { branchName: string; }

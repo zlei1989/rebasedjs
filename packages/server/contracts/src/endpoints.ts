@@ -245,3 +245,19 @@ export const ignorePutBodySchema = z.object({ target: z.enum(['gitignore', 'excl
 export type IgnorePutBody = z.infer<typeof ignorePutBodySchema>;
 export const ignoreAddBodySchema = z.object({ path: z.string().min(1) });
 export type IgnoreAddBody = z.infer<typeof ignoreAddBodySchema>;
+
+/** GitHub PR 列表查询：state=all 为打开+关闭全量；缺省 open（沿用查询参数走字符串的惯例，但 enum 无需 coerce） */
+export const githubPrQuerySchema = z.object({ state: z.enum(['open', 'closed', 'all']).default('open') });
+export type GitHubPrQuery = z.infer<typeof githubPrQuerySchema>;
+/** PR 编号路径参数：正整数（PR 编号无 0/负数），字符串数字被 coerce */
+export const githubPrNumberSchema = z.object({ number: z.coerce.number().int().positive() });
+export type GitHubPrNumber = z.infer<typeof githubPrNumberSchema>;
+/** PR 评论请求体：body 非空且 ≤10_000 字符（GitHub API 上限） */
+export const githubCommentBodySchema = z.object({ body: z.string().min(1).max(10_000) });
+export type GitHubCommentBody = z.infer<typeof githubCommentBodySchema>;
+/** PR review 请求体：event 三选；body 可选（与 event 无组合约束，放宽校验）且 ≤10_000 */
+export const githubReviewBodySchema = z.object({ event: z.enum(['APPROVE', 'REQUEST_CHANGES', 'COMMENT']), body: z.string().max(10_000).optional() });
+export type GitHubReviewBody = z.infer<typeof githubReviewBodySchema>;
+/** PR 合并请求体：method 对应 GitHub API merge_method（merge/squash/rebase） */
+export const githubMergeBodySchema = z.object({ method: z.enum(['merge', 'squash', 'rebase']) });
+export type GitHubMergeBody = z.infer<typeof githubMergeBodySchema>;

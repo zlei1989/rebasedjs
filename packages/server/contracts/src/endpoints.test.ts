@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   blameQuerySchema,
   branchActionSchema,
@@ -39,7 +39,19 @@ import {
   consoleQuerySchema,
   ignorePutBodySchema,
   ignoreAddBodySchema,
+  githubPrQuerySchema,
+  githubPrNumberSchema,
+  githubCommentBodySchema,
+  githubReviewBodySchema,
+  githubMergeBodySchema,
 } from './endpoints';
+import type {
+  GitHubPrDetail,
+  GitHubPrSummary,
+  GitHubRepoRef,
+  GitHubStatus,
+  GitHubTimelineEntry,
+} from './domain';
 
 describe('P1 端点 schema', () => {
   it('logQuery 默认 limit=50，接受 author/path/skip', () => {
@@ -644,5 +656,94 @@ describe('ignoreAddBodySchema（忽略文件追加行）', () => {
   it('拒绝空 path 与缺 path', () => {
     expect(() => ignoreAddBodySchema.parse({ path: '' })).toThrow();
     expect(() => ignoreAddBodySchema.parse({})).toThrow();
+  });
+});
+
+describe('githubPrQuerySchema（PR 列表查询）', () => {
+  it('state 缺省 open；接受 open/closed/all', () => {
+    expect(githubPrQuerySchema.parse({})).toEqual({ state: 'open' });
+    expect(githubPrQuerySchema.parse({ state: 'closed' })).toEqual({ state: 'closed' });
+    expect(githubPrQuerySchema.parse({ state: 'all' })).toEqual({ state: 'all' });
+  });
+  it('拒绝 state 非法值', () => {
+    expect(githubPrQuerySchema.safeParse({ state: 'merge' }).success).toBe(false);
+    expect(githubPrQuerySchema.safeParse({ state: '' }).success).toBe(false);
+  });
+});
+
+describe('githubPrNumberSchema（PR 编号路径参数）', () => {
+  it('接受正整数并 coerce 查询串数字', () => {
+    expect(githubPrNumberSchema.parse({ number: 12 })).toEqual({ number: 12 });
+    expect(githubPrNumberSchema.parse({ number: '12' })).toEqual({ number: 12 });
+  });
+  it('拒绝 0、负数、小数与非数字', () => {
+    expect(githubPrNumberSchema.safeParse({ number: 0 }).success).toBe(false);
+    expect(githubPrNumberSchema.safeParse({ number: -1 }).success).toBe(false);
+    expect(githubPrNumberSchema.safeParse({ number: 1.5 }).success).toBe(false);
+    expect(githubPrNumberSchema.safeParse({ number: 'abc' }).success).toBe(false);
+    expect(githubPrNumberSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('githubCommentBodySchema（PR 评论请求体）', () => {
+  it('接受 1..10_000 字符 body', () => {
+    expect(githubCommentBodySchema.parse({ body: '看起来不错' })).toEqual({ body: '看起来不错' });
+    expect(githubCommentBodySchema.parse({ body: 'x'.repeat(10_000) }).body).toHaveLength(10_000);
+  });
+  it('拒绝空 body、缺 body 与超 10_000 字符', () => {
+    expect(githubCommentBodySchema.safeParse({ body: '' }).success).toBe(false);
+    expect(githubCommentBodySchema.safeParse({}).success).toBe(false);
+    expect(githubCommentBodySchema.safeParse({ body: 'x'.repeat(10_001) }).success).toBe(false);
+  });
+});
+
+describe('githubReviewBodySchema（PR review 请求体）', () => {
+  it('接受三种 event 与可选 body（可空串）', () => {
+    expect(githubReviewBodySchema.parse({ event: 'APPROVE' })).toEqual({ event: 'APPROVE' });
+    expect(githubReviewBodySchema.parse({ event: 'REQUEST_CHANGES', body: '改一下' }))
+      .toEqual({ event: 'REQUEST_CHANGES', body: '改一下' });
+    expect(githubReviewBodySchema.parse({ event: 'COMMENT', body: '' }).event).toBe('COMMENT');
+  });
+  it('接受恰好 10_000 字符 body', () => {
+    expect(githubReviewBodySchema.parse({ event: 'COMMENT', body: 'x'.repeat(10_000) }).body)
+      .toHaveLength(10_000);
+  });
+  it('拒绝枚举外 event、缺 event 与超长 body', () => {
+    expect(githubReviewBodySchema.safeParse({ event: 'APPROVE2' }).success).toBe(false);
+    expect(githubReviewBodySchema.safeParse({ event: 'APPROVED' }).success).toBe(false);
+    expect(githubReviewBodySchema.safeParse({ body: 'x' }).success).toBe(false);
+    expect(githubReviewBodySchema.safeParse({ event: 'COMMENT', body: 'x'.repeat(10_001) }).success).toBe(false);
+  });
+});
+
+describe('githubMergeBodySchema（PR 合并请求体）', () => {
+  it('接受 merge/squash/rebase', () => {
+    expect(githubMergeBodySchema.parse({ method: 'merge' })).toEqual({ method: 'merge' });
+    expect(githubMergeBodySchema.parse({ method: 'squash' })).toEqual({ method: 'squash' });
+    expect(githubMergeBodySchema.parse({ method: 'rebase' })).toEqual({ method: 'rebase' });
+  });
+  it('拒绝枚举外 method 与缺 method', () => {
+    expect(githubMergeBodySchema.safeParse({ method: 'ff' }).success).toBe(false);
+    expect(githubMergeBodySchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('GitHub 域类型对齐', () => {
+  it('GitHubPrDetail 继承 GitHubPrSummary（含全部 summary 字段 + 扩展字段）', () => {
+    expectTypeOf<GitHubPrDetail>().toMatchTypeOf<GitHubPrSummary>();
+    expectTypeOf<GitHubPrSummary>().not.toMatchTypeOf<GitHubPrDetail>();
+    expectTypeOf<keyof GitHubPrDetail>().toEqualTypeOf<
+      keyof GitHubPrSummary
+      | 'body' | 'mergeable' | 'reviewDecision' | 'commentsCount' | 'additions' | 'deletions'
+    >();
+  });
+  it('GitHubTimelineEntry.reviewState 可选', () => {
+    expectTypeOf<GitHubTimelineEntry['reviewState']>().toEqualTypeOf<
+      'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | undefined
+    >();
+  });
+  it('GitHubStatus.repo/account 可选', () => {
+    expectTypeOf<GitHubStatus['repo']>().toEqualTypeOf<GitHubRepoRef | undefined>();
+    expectTypeOf<GitHubStatus['account']>().toEqualTypeOf<string | undefined>();
   });
 });
