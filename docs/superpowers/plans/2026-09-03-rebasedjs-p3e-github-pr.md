@@ -1,4 +1,4 @@
-# P3-E：GitHub 面板（PR 全流程）实施计划
+﻿# P3-E：GitHub 面板（PR 全流程）实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -258,3 +258,29 @@ export function GitHubPanel(props: GitHubPanelProps): React.ReactNode;
 - 类型一致性：GitHub{Status,RepoRef,PrSummary,PrDetail,Timeline,TimelineEntry,PrFile,PrFiles,PrMergeResult,PrCheckoutResult} + 5 schema 跨任务签名对齐；错误码复用既有 12 码不新增（AUTH_FAILED/RATE_LIMITED/INVALID_REF/INVALID_QUERY/GIT_ERROR）。
 - 简化裁定：checkout 与数据面解耦（不解析 URL，取 origin/首个远程——测试可离线）；list→详情用单击选中；diff 视图=patch 文本预览；时间线=issue comments+reviews 合并。
 - 风险：GitHub REST 形状随版本演进（pin `2022-11-28` + 测试不依赖真实网络——mock 断言避开易变字段）；大仓库 files 接口 patch 可能被服务端截断（v1 按返回原样展示，注明）。
+
+
+---
+
+## 关账记录（P3-E）
+
+**流水线**：6 任务全完成（contracts → api(+core fetch refspec 最小扩展) → 两端路由 → client → ui GitHubPanel → 装配），终审 Merge-ready → 修复波 `073539b`（I1 注释修正 + I2 空评论拦截）→ 限定复审 all addressed → **关账**。实现区间 `4b1a04c..073539b`。
+
+**终审结论**：无 Critical；2 Important（I1 domain.ts GitHubStatus 注释与实现相悖；I2 空评论无拦截）+ 16 Minor + 3 说明点（C1 INVALID_REF wire=400 属既有 12 码表、C2 面板显示条件与 LogPage gate 三层一致、C3 冒烟行号引用偏差仅证据级）；跨任务一致性 12 条核对全过；**安全面：GitHub 域无新增 token 泄漏面**（token 仅 Authorization 头 + checkout git extraHeader；exec 日志剥离、GitExitError 原始 args、githubRequest 未导出、错误消息零 token、客户端零接触——测试全量断言）。
+
+**Rulings（控制器裁定）**：
+- git 面与数据面解耦：checkout 取 origin/首个远程（不解析 URL），refspec `+refs/pull/N/head`，分支已存在仅 checkout；checkout 认证失败 → AUTH_FAILED（withAuth 语义，比 GIT_ERROR 更准）。
+- gist.github.com 形态不算 GitHub 仓库（parseGithubRemoteUrl 显式排除）；时间线 review id = 1e9 + reviewId。
+- 单击选中；时间线旧→新；PR diff = patch 文本只读预览；分页未做（YAGNI）；错误复用既有 12 码不新增。
+- StatusPage/… 无涉；LogPage 入口 `onOpenGithub !== undefined && githubAvailable`（detected 才渲染，Java GHPRToolWindowFactory 语义）；页面 open/closed 两 Tab（无 all）。
+- AUTH_FAILED 提示卡仅 prs 查询（其余走服务端中文 toast）；detail 失败 Spin+toast = v1 已知限制（面板无错误态插槽，排期加固）。
+- onRefresh 可选（缺省不渲染刷新按钮，对齐 ConsolePanel）；测试文件归位 composite/（全仓 colocation 惯例优先于计划文字歧义）。
+- T4 提交信息英文 = brief 逐字规定（计划层偏差，已记录）；checkout 跨键裸 mutate 重取（P3-D restore 先例，响应无可写数据）。
+
+**triage（deferred → 排期/不修）**：
+- 排期：① 面板 key 改 `kind+'-'+id` 字符串合成（1e9 偏移理论碰撞免疫）；② githubAccount 与 findToken 查找约定抽共享 helper；③ 页面错误态插槽（detail 失败 Spin 永转 / status 失败空白页）；④ 无远程 toast 与面板卡重复提示消重；⑤ 两端重复参 ?state=a&state=b 一致化；⑥ `response.text()` 移入 try（断连/畸形 200 边缘）；⑦ comment 空输入回车路径（无当前输入途径，若未来新增需输入侧拦截）。
+- 不修（记录在案）：403 分支先于 header-0（GitHub 不触发）；AUTH_FAILED 直通无服务层直接测试（机制被 core 覆盖）；koa prs 断言严格度；路由层无 401/429 直通测试（api 层覆盖）；merge merged:false 不动缓存（有 warning toast+手动刷新）；number??0 占位（UI 不可达）；测试名旧文案；status 查询失败渐进设计。
+
+**环境备注**：core 并行 30s 超时 flake 与 Windows EPERM 清理 flake 均为既有环境缺陷（串行复跑全绿、与 GitHub 代码面零耦合）；本会话另见一次 web-next 过滤跑进程挂起（复跑正常，M-17 记录）。
+
+**冒烟**：checkout 全链路（koa 真实服务 + 本地裸仓库装置 + git CLI 三断言 HEAD=pr-7/refs 一致/工作区干净——自动化用例 `apps/web-koa/src/app.test.ts` L1804-1829 覆盖）；两端 build exit 0（web-next 路由表含 `/repos/[repoId]/github`，web-koa vite 21-26s）；真机 PR 数据面需用户配 GitHub token 后人工验证（测试零真实网络）。
