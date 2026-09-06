@@ -18,6 +18,7 @@ import {
   useAbortOperation,
   useCherryPick,
   useGithubStatus,
+  useGitlabStatus,
   useInteractiveRebase,
   useLogPage,
   useLogStream,
@@ -73,6 +74,8 @@ export default function Page({
   const { data: status, mutate } = useRepoStatus(repoId);
   // GitHub 面板可用性：检测到 GitHub 远程才给 LogPage 注入入口（对齐 Java 行为）；失败静默隐藏（渐进增强）
   const { data: githubStatus } = useGithubStatus(repoId);
+  // GitLab 面板可用性：与 GitHub 并排、各自检测（容器经 useGitlabStatus 判定菜单项显隐）
+  const { data: gitlabStatus } = useGitlabStatus(repoId);
   const { data: operation, mutate: mutateOperation } = useOperation(repoId);
   const { trigger: abortOperation, isMutating: abortingOperation } = useAbortOperation(repoId);
   const { trigger: resetTrigger, isMutating: resetting } = useReset(repoId);
@@ -315,6 +318,8 @@ export default function Page({
         onOpenIgnore={() => router.push(`/repos/${repoId}/ignore`)}
         onOpenGithub={() => router.push(`/repos/${repoId}/github`)}
         githubAvailable={githubStatus?.detected === true}
+        onOpenGitlab={() => router.push(`/repos/${repoId}/gitlab`)}
+        gitlabAvailable={gitlabStatus?.detected === true}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}

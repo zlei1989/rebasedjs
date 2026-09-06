@@ -412,6 +412,39 @@ describe('LogPage', () => {
     expect(screen.queryByText('GitHub 面板')).not.toBeInTheDocument();
   });
 
+  it('传入 onOpenGitlab 且 gitlabAvailable 时「更多」菜单含 GitLab 面板项，点击触发回调', async () => {
+    const onOpenGitlab = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onOpenPull={() => {}}
+        onOpenGitlab={onOpenGitlab}
+        gitlabAvailable
+      />,
+    );
+    await openMoreMenu();
+    fireEvent.click(screen.getByText('GitLab 面板'));
+    expect(onOpenGitlab).toHaveBeenCalledTimes(1);
+  });
+
+  it('gitlabAvailable=false 时即使传入 onOpenGitlab 也不渲染 GitLab 面板项', async () => {
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onOpenPull={() => {}}
+        onOpenGitlab={() => {}}
+        gitlabAvailable={false}
+      />,
+    );
+    await openMoreMenu();
+    expect(screen.getByText('拉取')).toBeInTheDocument();
+    expect(screen.queryByText('GitLab 面板')).not.toBeInTheDocument();
+  });
+
   it('传入 onCherryPick 时透传给详情面板，点击回调携带选中提交 hash', () => {
     const onCherryPick = vi.fn();
     const selected = makeCommit({ hash: 'c9selected0001' });

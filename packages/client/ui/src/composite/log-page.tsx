@@ -3,7 +3,8 @@
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  * 合并中（operation.kind==='merge'）时顶栏在操作条旁追加「去解决冲突」链接（onOpenConflicts 注入才渲染）。
  * 顶栏收敛：五个页面导航按钮保留为主按钮区；P3-C 只读浏览（溯源/历史/已提交/搜索）与远程相关操作
- * （拉取/推送/更新项目/远程管理）及 P3-D 四入口（补丁/搁置/控制台/忽略）收进「更多」Dropdown，
+ * （拉取/推送/更新项目/远程管理）及 P3-D 四入口（补丁/搁置/控制台/忽略）及 GitHub/GitLab 面板
+ * 收进「更多」Dropdown，
  * 仅在容器注入对应回调时出现对应菜单项，
  * 回调全缺省时不渲染「更多」按钮。
  */
@@ -72,6 +73,10 @@ export interface LogPageProps {
   onOpenGithub?: () => void;
   /** GitHub 面板可用性（容器经 useGithubStatus 检测到 GitHub 远程）：false/缺省不渲染 GitHub 面板菜单项 */
   githubAvailable?: boolean;
+  /** GitLab 面板页入口回调；与 gitlabAvailable 同传（均为有效值）时「更多」菜单才含 GitLab 面板项 */
+  onOpenGitlab?: () => void;
+  /** GitLab 面板可用性（容器经 useGitlabStatus 检测到 GitLab 远程）：false/缺省不渲染 GitLab 面板菜单项 */
+  gitlabAvailable?: boolean;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
   onUndoCommit?: () => void;
   /** 撤销请求进行中：撤销按钮 loading 态 */
@@ -115,6 +120,8 @@ export function LogPage({
   onOpenIgnore,
   onOpenGithub,
   githubAvailable,
+  onOpenGitlab,
+  gitlabAvailable,
   onUndoCommit,
   undoCommitting,
   onResetHere,
@@ -140,6 +147,8 @@ export function LogPage({
     ...(onOpenIgnore ? [{ key: 'ignore', label: '忽略' }] : []),
     // GitHub 面板：仅在容器检测到 GitHub 远程（githubAvailable）且注入导航回调时渲染（对齐 Java 检测到远程才显示工具窗口）
     ...(onOpenGithub !== undefined && githubAvailable ? [{ key: 'github', label: 'GitHub 面板' }] : []),
+    // GitLab 面板：与 GitHub 面板项并排、各自检测（容器经 useGitlabStatus 判定 gitlabAvailable）
+    ...(onOpenGitlab !== undefined && gitlabAvailable ? [{ key: 'gitlab', label: 'GitLab 面板' }] : []),
   ];
   /** 「更多」菜单点击分发：按 key 调对应入口回调 */
   const onMoreClick = (key: string): void => {
@@ -158,6 +167,7 @@ export function LogPage({
     else if (key === 'console') onOpenConsole?.();
     else if (key === 'ignore') onOpenIgnore?.();
     else if (key === 'github') onOpenGithub?.();
+    else if (key === 'gitlab') onOpenGitlab?.();
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
