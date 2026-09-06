@@ -140,6 +140,62 @@ P2 阶段 12 个功能域（operation、reset、staging、changelist、commit、
 
 ---
 
+## 〇、进度更新（2026-09-07，P3-E 关账，基线 `073539b`）
+
+> P3-E（GitHub 面板：PR 全流程）已按计划落地并关账（计划+关账记录：`docs/superpowers/plans/2026-09-03-rebasedjs-p3e-github-pr.md`；实现区间 `4b1a04c..073539b`，关账 `e569e46`）。本节的增量口径与 0.1–0.4 / 0.6–0.9 同构；附录 C/D 对应行留待下次全量复核时就地更新。
+
+### 0.11 总览（增量对照 0.6）
+
+| 口径 | 上一基线（`e9314ec`） | 当前（`073539b`） |
+|------|------------------|------------------|
+| 操作页面/面板（30 个） | 14 ✅ + 2 🟡 等效 | **15 ✅ + 2 🟡 等效**（≈57%） |
+| 功能域 | 21 | **22**（P1 5 + P2 12 + P3 5：remote/update、rebase/cherry-pick/tag、blame/history/committed/search、patch/shelf/console/ignore、github） |
+| 端点路径 / HTTP 方法 | 40 / 46 | **49 / 55**（新增 9 方法，两端完全对称） |
+| `@rebased/api` 公共出口 | 50 函数 | **60 函数**（+10：github 服务） |
+| SSE 事件类型在用 | 5 | 5（本批无新事件；GitHub 数据面为拉取式） |
+
+### 0.12 页面进度（对应附录 C.26 GitHubPanel）
+
+| 功能点 | 状态 | 落点与说明 |
+|--------|------|-----------|
+| 账户 / token 认证 | ✅ | 复用 P2-H `findToken('github.com')` + Settings 账户卡片（PAT 手动录入；OAuth/device 专属登录流明确不做） |
+| PR 列表 / 详情 / 时间线 / 评论 | ✅ | `/repos/:id/github` 两端路由；GitHub REST（api.github.com，`2022-11-28`）服务端拉取（mock 可测、零真实网络）；时间线 = issue comments + review summaries 合并（旧→新） |
+| PR 审查（approve / request changes）| ✅ | `POST github/prs/:n/review`（APPROVE/REQUEST_CHANGES/COMMENT，body 可选）+ reviewDecision 徽标 |
+| diff 视图 | 🟡 部分 | 文件列表（status/增删行）+ 每文件 patch 文本只读预览；结构化渲染（Java `GHPRDiffVirtualFile`）明确不做 |
+| 三种合并策略 | ✅ | `POST github/prs/:n/merge`（merge/squash/rebase）+ 结果 warning 路径 |
+| 检出 PR 分支 | ✅ | `POST github/prs/:n/checkout`：`fetch +refs/pull/N/head` + `checkoutNewBranch('pr-N','FETCH_HEAD')`（已存在仅检出）；跨键回写 status/branches |
+| 克隆 GitHub 仓库 / Share Project on GitHub | ❌ 明确不做 | `cloneRepo` 服务层能力后置（边 #101 记录） |
+| Gist 创建 | ❌ 明确不做 | `GithubCreateGistDialog` 后置 |
+| AI 描述 | ❌ 明确不做 | 需外部 AI 服务 |
+| Issues/通知 | ❌ 不覆盖 | Java 侧无用户可见 UI |
+| 显示条件 | ✅ | LogPage「更多」菜单「GitHub 面板」项：检测到 github.com 形态远程才渲染（Java `GHPRToolWindowFactory` 语义）；无远程/无令牌页面内提示卡 |
+
+### 0.13 接口增量（新增 9 方法，全部两端对称）
+
+| 端点 | 用途 | 客户端消费 | 状态 |
+|------|------|-----------|------|
+| `GET /api/repos/:id/github/status` | 检测（远程+令牌三态，不抛错） | LogPage 入口门、页面提示卡 | ✅ |
+| `GET /api/repos/:id/github/prs?state=` | PR 列表（open/closed） | GitHubPanel 列表 | ✅ |
+| `GET /api/repos/:id/github/prs/:n` | PR 详情 | GitHubPanel 详情 | ✅ |
+| `GET .../prs/:n/timeline` | 时间线（comments+reviews 合并） | 时间线 tab | ✅ |
+| `POST .../prs/:n/comments` | 发评论（issue comment） | 评论输入框 | ✅ |
+| `GET .../prs/:n/files` | 文件列表+patch 预览 | 文件 tab | ✅ |
+| `POST .../prs/:n/review` | 审查提交（approve/request changes/comment） | 审查按钮 | ✅ |
+| `POST .../prs/:n/merge` | 合并（三策略） | 合并 Modal | ✅ |
+| `POST .../prs/:n/checkout` | 检出 PR 分支 | 检出按钮 | ✅ |
+
+### 0.14 导航边增量（对应附录 D.6 / D.3.5 #90、#97-#101）
+
+活动跳转边由 22 条增至 **23 条**：LogPage「更多」菜单新增「GitHub 面板」项（`onOpenGithub` + `githubAvailable` 双条件，检测到远程才渲染）→ `/repos/:id/github`；页面「去设置」回边（AUTH_FAILED 提示卡）。边覆盖情况：#90（菜单→面板）✅；#97（列表→详情）→ 单击选中（等效）；#98（详情→diff）→ patch 文本预览（等效降级）；#99（详情→时间线）→ 页内 tab（等效）；#100（登录入口）→ Settings 账户卡片既有流（等效）；#95（401 认证回路）→ P3-A 既有 + AUTH_FAILED 卡；#101（Share Project）❌ 明确不做。
+
+### 0.15 下一步建议（更新 §三）
+
+1. 进入 **P4**：gitlab（MR 域，P3-E github 同构可复用大部分模式：REST+mock、检测、MR 面板——`gitlab-core` 的 mergerequest/snippets 域）+ worktree/submodule/browse + 可选 terminal/local-history。gitlab 计划可直接以 P3-E 为模板（复用 parseRemoteUrl 家族与账户/错误映射）。
+2. 排期项（P3-E 已记录，延续 P3-D）：面板 key 改 `kind+'-'+id` 字符串合成；githubAccount/findToken 查找约定抽共享 helper；页面错误态插槽（detail 失败 Spin 永转/status 失败空白页）；无远程 toast 与面板卡重复提示消重；两端重复参一致化；`response.text()` 移入 try；unborn HEAD 建补丁/搁置；core vitest fileParallelism。
+3. 半使用接口不变（diff/stream 分块渲染、staging/hunks 无 UI 入口）。
+
+---
+
 ## 一、问题 1：操作页面数量与实现对照
 
 ### 1.1 Java 版 Rebased 有多少个操作页面？
