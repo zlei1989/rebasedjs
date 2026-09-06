@@ -275,3 +275,11 @@ export interface SearchResult {
 }
 /** 搜索模式：grep=提交信息全文（--grep）；pickaxe=内容增量（-S） */
 export type SearchMode = 'grep' | 'pickaxe';
+
+export interface PatchEntry { name: string; size: number; createdAtIso: string; }
+export interface PatchList { patches: PatchEntry[]; }
+export interface ShelfEntry { name: string; createdAtIso: string; untrackedCount: number; }
+export interface ShelfList { shelves: ShelfEntry[]; }
+export interface ConsoleEntry { id: number; args: string[]; exitCode: number; durationMs: number; stderrTail: string; atIso: string; }
+export interface IgnoreContents { gitignore: string; exclude: string; }
+export interface IgnoreTemplate { id: string; name: string; content: string; }

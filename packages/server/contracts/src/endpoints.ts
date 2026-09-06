@@ -223,3 +223,18 @@ export const searchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
+
+export const patchCreateBodySchema = z.object({
+  name: z.string().min(1).regex(/^[\w.-]+$/),
+  from: z.string().optional(), to: z.string().optional(), staged: z.boolean().optional(),
+});
+export const patchApplyBodySchema = z.object({ name: z.string().min(1) });
+export const patchDeleteBodySchema = z.object({ name: z.string().min(1) });
+export const shelfActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('save'), name: z.string().min(1).regex(/^[\w.-]+$/) }),
+  z.object({ action: z.literal('restore'), name: z.string().min(1) }),
+  z.object({ action: z.literal('drop'), name: z.string().min(1) }),
+]);
+export const consoleQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
+export const ignorePutBodySchema = z.object({ target: z.enum(['gitignore', 'exclude']), content: z.string().max(200_000) });
+export const ignoreAddBodySchema = z.object({ path: z.string().min(1) });

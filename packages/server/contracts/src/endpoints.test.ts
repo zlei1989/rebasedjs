@@ -32,6 +32,13 @@ import {
   interactiveRebaseBodySchema,
   pickBodySchema,
   tagActionSchema,
+  patchCreateBodySchema,
+  patchApplyBodySchema,
+  patchDeleteBodySchema,
+  shelfActionSchema,
+  consoleQuerySchema,
+  ignorePutBodySchema,
+  ignoreAddBodySchema,
 } from './endpoints';
 
 describe('P1 端点 schema', () => {
@@ -534,5 +541,108 @@ describe('searchQuerySchema（提交搜索查询）', () => {
     expect(() => searchQuerySchema.parse({ q: 'fix', limit: 0 })).toThrow();
     expect(() => searchQuerySchema.parse({ q: 'fix', limit: 101 })).toThrow();
     expect(() => searchQuerySchema.parse({ q: 'fix', limit: 1.5 })).toThrow();
+  });
+});
+
+describe('patchCreateBodySchema（patch 创建请求体）', () => {
+  it('接受合法 name（\w.- 字符集）与可选 from/to/staged', () => {
+    expect(patchCreateBodySchema.parse({ name: 'my.patch-1' }))
+      .toEqual({ name: 'my.patch-1' });
+    expect(patchCreateBodySchema.parse({ name: 'p1', from: 'HEAD~1', to: 'HEAD', staged: true }))
+      .toEqual({ name: 'p1', from: 'HEAD~1', to: 'HEAD', staged: true });
+  });
+  it('拒绝空 name、缺 name 与非法字符 name（a/b、a b）', () => {
+    expect(() => patchCreateBodySchema.parse({ name: '' })).toThrow();
+    expect(() => patchCreateBodySchema.parse({})).toThrow();
+    expect(() => patchCreateBodySchema.parse({ name: 'a/b' })).toThrow();
+    expect(() => patchCreateBodySchema.parse({ name: 'a b' })).toThrow();
+  });
+  it('拒绝非字符串 from/to 与非布尔 staged', () => {
+    expect(() => patchCreateBodySchema.parse({ name: 'p1', from: 1 })).toThrow();
+    expect(() => patchCreateBodySchema.parse({ name: 'p1', to: 1 })).toThrow();
+    expect(() => patchCreateBodySchema.parse({ name: 'p1', staged: 'yes' })).toThrow();
+  });
+});
+
+describe('patchApplyBodySchema / patchDeleteBodySchema（patch 应用/删除）', () => {
+  it('接受非空 name', () => {
+    expect(patchApplyBodySchema.parse({ name: 'p1' })).toEqual({ name: 'p1' });
+    expect(patchDeleteBodySchema.parse({ name: 'my.patch-1' })).toEqual({ name: 'my.patch-1' });
+  });
+  it('拒绝空 name 与缺 name', () => {
+    expect(() => patchApplyBodySchema.parse({ name: '' })).toThrow();
+    expect(() => patchApplyBodySchema.parse({})).toThrow();
+    expect(() => patchDeleteBodySchema.parse({ name: '' })).toThrow();
+    expect(() => patchDeleteBodySchema.parse({})).toThrow();
+  });
+});
+
+describe('shelfActionSchema（shelf 操作判别联合）', () => {
+  it('接受 save 带合法 name（\w.- 字符集）', () => {
+    expect(shelfActionSchema.parse({ action: 'save', name: 'wip-1' }))
+      .toEqual({ action: 'save', name: 'wip-1' });
+  });
+  it('接受 restore 与 drop 带非空 name', () => {
+    expect(shelfActionSchema.parse({ action: 'restore', name: 'wip-1' }))
+      .toEqual({ action: 'restore', name: 'wip-1' });
+    expect(shelfActionSchema.parse({ action: 'drop', name: 'wip-1' }))
+      .toEqual({ action: 'drop', name: 'wip-1' });
+  });
+  it('拒绝枚举外 action', () => {
+    expect(() => shelfActionSchema.parse({ action: 'clear', name: 'x' })).toThrow();
+  });
+  it('拒绝 save 的非法字符 name（a/b、a b、空串）', () => {
+    expect(() => shelfActionSchema.parse({ action: 'save', name: 'a/b' })).toThrow();
+    expect(() => shelfActionSchema.parse({ action: 'save', name: 'a b' })).toThrow();
+    expect(() => shelfActionSchema.parse({ action: 'save', name: '' })).toThrow();
+  });
+  it('拒绝缺 name 或空 name（restore/drop 分支）', () => {
+    expect(() => shelfActionSchema.parse({ action: 'save' })).toThrow();
+    expect(() => shelfActionSchema.parse({ action: 'restore' })).toThrow();
+    expect(() => shelfActionSchema.parse({ action: 'drop' })).toThrow();
+    expect(() => shelfActionSchema.parse({ action: 'restore', name: '' })).toThrow();
+    expect(() => shelfActionSchema.parse({ action: 'drop', name: '' })).toThrow();
+  });
+});
+
+describe('consoleQuerySchema（控制台分页查询）', () => {
+  it('默认 limit=100；查询串数字被 coerce', () => {
+    expect(consoleQuerySchema.parse({})).toEqual({ limit: 100 });
+    expect(consoleQuerySchema.parse({ limit: '25' })).toEqual({ limit: 25 });
+  });
+  it('接受边界 limit=1/500', () => {
+    expect(consoleQuerySchema.parse({ limit: 1 }).limit).toBe(1);
+    expect(consoleQuerySchema.parse({ limit: 500 }).limit).toBe(500);
+  });
+  it('拒绝 limit 越界（0/501）与非整数', () => {
+    expect(() => consoleQuerySchema.parse({ limit: 0 })).toThrow();
+    expect(() => consoleQuerySchema.parse({ limit: 501 })).toThrow();
+    expect(() => consoleQuerySchema.parse({ limit: 1.5 })).toThrow();
+  });
+});
+
+describe('ignorePutBodySchema（忽略文件整篇写入）', () => {
+  it('接受 target 枚举 gitignore/exclude 与内容', () => {
+    expect(ignorePutBodySchema.parse({ target: 'gitignore', content: 'node_modules/\n' }))
+      .toEqual({ target: 'gitignore', content: 'node_modules/\n' });
+    expect(ignorePutBodySchema.parse({ target: 'exclude', content: '*.log' }).target).toBe('exclude');
+  });
+  it('接受恰好 200_000 长度的 content', () => {
+    expect(ignorePutBodySchema.parse({ target: 'gitignore', content: 'x'.repeat(200_000) }).content)
+      .toHaveLength(200_000);
+  });
+  it('拒绝枚举外 target 与超长 content（200_001）', () => {
+    expect(() => ignorePutBodySchema.parse({ target: 'global', content: 'x' })).toThrow();
+    expect(() => ignorePutBodySchema.parse({ target: 'gitignore', content: 'x'.repeat(200_001) })).toThrow();
+  });
+});
+
+describe('ignoreAddBodySchema（忽略文件追加行）', () => {
+  it('接受非空 path', () => {
+    expect(ignoreAddBodySchema.parse({ path: 'dist/' })).toEqual({ path: 'dist/' });
+  });
+  it('拒绝空 path 与缺 path', () => {
+    expect(() => ignoreAddBodySchema.parse({ path: '' })).toThrow();
+    expect(() => ignoreAddBodySchema.parse({})).toThrow();
   });
 });
