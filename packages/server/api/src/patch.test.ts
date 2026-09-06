@@ -183,6 +183,17 @@ describe('patch 功能', () => {
     expect(list.patches[0]).toMatchObject({ name: 'empty', size: 0 });
   });
 
+  it('apply 空补丁：跳过 check/apply 直接 no-op 成功并返回正常状态（与 shelf restore 语义对齐）', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    await createPatch(repo, { name: 'empty' }); // 0 字节 diff（工作区无变更）
+    const before = await getRepoStatus(repo);
+
+    const status = await applyPatchService(repo, { name: 'empty' });
+    expect(status).toEqual(before);
+    expect(status.entries).toEqual([]);
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v1');
+  });
+
   it('同名覆盖：以新 diff 内容更新补丁文件', async () => {
     const repo = await repoWithCommit('a.txt', 'v1');
     writeFileSync(join(repo, 'a.txt'), 'v2');

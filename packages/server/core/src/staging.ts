@@ -1,4 +1,4 @@
-/** 暂存区原语：stage / unstage / discard / clean / applyPatch。
+/** 暂存区原语：stage / unstage / discard / clean / applyPatch / checkApplyPatch。
  *  全部经 runGit 参数数组调用（防注入），路径一律置于 `--` 之后。 */
 import { runGit } from './exec';
 

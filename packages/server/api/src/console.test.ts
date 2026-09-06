@@ -29,7 +29,7 @@ describe('console 功能', () => {
     expect(entries[0]!.atIso).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it('limit 截断最近 N 条且保持原序（最新在前由 UI 反转）', async () => {
+  it('limit 截断最近 N 条且保持原序（旧→新，最新在底）', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
     await runGit(['config', 'user.email'], { cwd: repo });

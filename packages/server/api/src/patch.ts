@@ -105,7 +105,11 @@ export async function applyPatchText(repoPath: string, text: string): Promise<vo
 export async function applyPatchService(repoPath: string, body: PatchApplyBody): Promise<RepoStatus> {
   const file = patchFileOf(patchesDirOf(repoPath), body.name);
   if (!existsSync(file)) throw new ServiceError('INVALID_REF', `补丁不存在：${body.name}`);
-  await applyPatchText(repoPath, readFileSync(file, 'utf8'));
+  const patch = readFileSync(file, 'utf8');
+  // 空/纯空白补丁无可应用变更（git apply 会以 exit 128 失败）——与 shelf restore 同判定，跳过 check/apply 直接成功
+  if (patch.trim().length > 0) {
+    await applyPatchText(repoPath, patch);
+  }
   return getRepoStatus(repoPath);
 }
 

@@ -1,4 +1,4 @@
-/** 控制台功能：core 执行日志的薄映射——按原序（旧→新）透出，id=下标+1（返回窗口内最早 id=1）；最新在前由 UI 层反转。 */
+/** 控制台功能：core 执行日志的薄映射——按原序（旧→新）透出，id=下标+1（返回窗口内最早 id=1）；显示顺序为旧→新（最新在底）。 */
 import { getExecLog } from '@rebased/core';
 import type { ConsoleEntry } from '@rebased/contracts';
 
