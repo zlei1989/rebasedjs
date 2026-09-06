@@ -196,6 +196,60 @@ P2 阶段 12 个功能域（operation、reset、staging、changelist、commit、
 
 ---
 
+## 〇、进度更新（2026-09-07，P4-A 关账（GitLab MR 域），基线 `6054559`）
+
+> P4-A（GitLab 面板：MR 全流程）已按计划落地并关账（计划+关账记录：`docs/superpowers/plans/2026-09-03-rebasedjs-p4a-gitlab-mr.md`；实现区间 `df9a50f..6054559`，关账 `3b80328`）。以 P3-E（github）为模板整体复刻：同构结构、同错误映射、同测试纪律。增量口径与 0.11–0.14 同构。
+
+### 0.16 总览（增量对照 0.11）
+
+| 口径 | 上一基线（`073539b`） | 当前（`6054559`） |
+|------|------------------|------------------|
+| 操作页面/面板（30 个） | 15 ✅ + 2 🟡 等效 | **16 ✅ + 2 🟡 等效**（≈60%） |
+| 功能域 | 22 | **23**（P1 5 + P2 12 + P3 5 + P4-A gitlab） |
+| 端点路径 / HTTP 方法 | 49 / 55 | **59 / 65**（新增 10 方法，两端完全对称） |
+| `@rebased/api` 公共出口 | 60 函数 | **71 函数**（+11：gitlab 服务） |
+| SSE 事件类型在用 | 5 | 5（GitLab 数据面为拉取式） |
+
+### 0.17 页面进度（对应附录 C.27 GitLabPanel）
+
+| 功能点 | 状态 | 落点与说明 |
+|--------|------|-----------|
+| 账户 / token 认证 | ✅ | 复用 P2-H `findToken('gitlab.com')` + Settings 账户卡片（PAT 手动录入；专属登录流明确不做） |
+| MR 创建 / 列表 / 详情 / 评论 | ✅ | `/repos/:id/gitlab` 两端路由；列表（iid/title/author/state 四徽标）+ 详情 + 时间线（notes+reviews 尽力合并）+ 评论（POST notes）；**新建 MR**（源/目标分支 Select + 标题 + 描述，列表卡 extra 入口，空库可用） |
+| MR diff 视图 | 🟡 部分 | `GET .../changes` 文件列表（status 旗标）+ 每文件 diff 文本只读预览（行数置 0——GitLab 不逐文件给，注释在案）；结构化渲染明确不做 |
+| MR 审查（approve / request changes）/ 合并 | ✅ | 三映射（approve 端点 / reviews{state:rejected} / notes）+ reviewState 徽标；`PUT .../merge {squash?}`（GitLab 策略为项目设置，仅 squash 参数） |
+| MR 检出 | ✅ | `fetch refs/merge-requests/:iid/head` + `checkoutNewBranch('mr-N','FETCH_HEAD')`（已存在仅检出）；跨键回写 status/branches |
+| Snippet 创建 | ❌ 明确不做 | 独立对话框域后置 |
+| 自托管 GitLab 实例 | ❌ 明确不做 | 仅 gitlab.com 形态（Enterprise 后置） |
+| 显示条件 | ✅ | LogPage「更多」菜单「GitLab 面板」项：检测到 gitlab.com 形态远程才渲染（与 GitHub 项并排、各自检测）；无远程/无令牌页面内提示卡 |
+
+### 0.18 接口增量（新增 10 方法，全部两端对称）
+
+| 端点 | 用途 | 客户端消费 | 状态 |
+|------|------|-----------|------|
+| `GET /api/repos/:id/gitlab/status` | 检测（远程+令牌三态，不抛错） | LogPage 入口门、页面提示卡 | ✅ |
+| `GET /api/repos/:id/gitlab/mrs?state=` | MR 列表（opened/merged 两 Tab） | GitLabPanel 列表 | ✅ |
+| `POST /api/repos/:id/gitlab/mrs` | 新建 MR | 新建 MR Modal | ✅ |
+| `GET /api/repos/:id/gitlab/mrs/:iid` | MR 详情（+`/reviews` 派生 reviewState） | 详情 | ✅ |
+| `GET .../mrs/:iid/timeline` | 时间线（notes+reviews） | 时间线 tab | ✅ |
+| `POST .../mrs/:iid/comments` | 发评论 | 评论输入框 | ✅ |
+| `GET .../mrs/:iid/files` | 文件列表+diff 预览 | 文件 tab | ✅ |
+| `POST .../mrs/:iid/review` | 审查（approve/request changes/comment） | 审查按钮 | ✅ |
+| `POST .../mrs/:iid/merge` | 合并（squash 参数） | 合并 Modal | ✅ |
+| `POST .../mrs/:iid/checkout` | 检出 MR 分支 | 检出按钮 | ✅ |
+
+### 0.19 导航边增量
+
+活动跳转边由 23 条增至 **24 条**：LogPage「更多」菜单新增「GitLab 面板」项（`onOpenGitlab` + `gitlabAvailable` 双条件）→ `/repos/:id/gitlab`；「去设置」回边（AUTH_FAILED 提示卡）。Git 菜单 Show Merge Requests（边 #90）↔ 更多菜单项（等效）；login 入口（边 #100）↔ Settings 账户卡片（等效）。
+
+### 0.20 下一步建议（更新 §三）
+
+1. 进入 **P4-B**：worktree / submodule / browse（本地仓库功能面）+ 可选 terminal/local-history；P4-A 之后剩余页面：WorktreePanel、SubmodulePanel（GitWorktree 仓库视图、Submodule 管理）。gitlab 与 github 双面板的「REST+mock/检测/面板」模式对 submodule 无适用性——submodule/worktree 是纯 git 域（core+api+路由+面板，无外部 REST）。
+2. 排期项（P4-A 已记录，延续 P3-D/E）：gitlab checkout Bearer 注入 hardening（真机验证 + core 层改 Basic/PRIVATE-TOKEN）；web-next 空/非法 JSON body 500 vs koa 400 全局评估；createOpen 跨仓库保持打开（容器 repoId effect）；无令牌卡补「去设置」链接；+ 此前 P3-D/E 排期清单。
+3. 半使用接口不变。
+
+---
+
 ## 一、问题 1：操作页面数量与实现对照
 
 ### 1.1 Java 版 Rebased 有多少个操作页面？
