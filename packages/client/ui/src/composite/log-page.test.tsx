@@ -445,6 +445,12 @@ describe('LogPage', () => {
     expect(screen.queryByText('GitLab 面板')).not.toBeInTheDocument();
   });
 
+  it('未传 onOpenGitlab/gitlabAvailable 时「更多」菜单不含 GitLab 面板项', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={() => {}} />);
+    await openMoreMenu();
+    expect(screen.queryByText('GitLab 面板')).not.toBeInTheDocument();
+  });
+
   it('传入 onCherryPick 时透传给详情面板，点击回调携带选中提交 hash', () => {
     const onCherryPick = vi.fn();
     const selected = makeCommit({ hash: 'c9selected0001' });

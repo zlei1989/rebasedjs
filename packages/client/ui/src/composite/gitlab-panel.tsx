@@ -1,7 +1,7 @@
 /**
  * GitLab 面板：左列表（iid/title/author/state 徽标/更新时间）+ 右详情（标题/元信息/reviewState 徽标/增删行统计）
- *  + tabs（时间线 | 文件）+ 操作区（评论、Approve、Request changes、合并 Modal（squash Checkbox）、
- *  新建 MR Modal（源/目标分支选择+标题）、检出、刷新）。
+ *  + tabs（时间线 | 文件）+ 操作区（评论、Approve、Request changes、合并 Modal（squash Checkbox）、检出）；
+ *  「新建 MR」入口（按钮 + 源/目标分支选择+标题 Modal）在面板根列表卡片 extra（空库 0 MR 也可见）。
  *  纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入（hooks 在应用层装配）；
  *  细节：单击选中、state 直接按 state 徽标（opened 绿/merged 紫/closed 灰/locked 橙）、
  *  评论输入框与 review body 共用、REQUEST_CHANGES 带 body、diff 空串不渲染展开区、
@@ -37,7 +37,7 @@ import type {
 import { EmptyState } from '../base/empty-state';
 import { formatCommitDate } from '../domain/format';
 
-/** GitLab 面板：MR 列表（iid/title/author/state 徽标）+ 详情（元信息/reviewState 徽标/增删行）+ tabs（时间线|文件）+ 操作（评论、Approve、Request changes、合并 Modal（squash Checkbox）、新建 MR Modal（源/目标分支选择+标题）、检出、刷新） */
+/** GitLab 面板：MR 列表（iid/title/author/state 徽标）+ 详情（元信息/reviewState 徽标/增删行）+ tabs（时间线|文件）+ 操作（评论、Approve、Request changes、合并 Modal（squash Checkbox）、检出、刷新）；「新建 MR」入口在面板根列表卡片 extra */
 export interface GitLabPanelProps {
   status: GitLabStatus;
   mrs: GitLabMrList; iid: number | null;
@@ -239,7 +239,7 @@ function MergeMrModal({
   );
 }
 
-/** 新建 MR Modal：源分支 Select + 目标分支 Select + 标题 Input + 描述 TextArea（可选）；校验源≠目标且标题非空；确认调 onCreateMr；关闭时复位 */
+/** 新建 MR Modal：源分支 Select + 目标分支 Select + 标题 Input（maxLength 255，showCount）+ 描述 TextArea（可选，maxLength 20000）；校验源≠目标且标题非空；确认调 onCreateMr；关闭时复位 */
 function CreateMrModal({
   open,
   branches,
@@ -317,6 +317,8 @@ function CreateMrModal({
           data-testid="gitlab-create-title"
           placeholder="标题"
           value={title}
+          maxLength={255}
+          showCount
           onChange={(e) => setTitle(e.target.value)}
         />
         <Input.TextArea
@@ -337,9 +339,7 @@ function MrDetailBlock({
   detail,
   timeline,
   files,
-  branches,
   acting,
-  onCreateMr,
   onComment,
   onReview,
   onMerge,
@@ -348,9 +348,7 @@ function MrDetailBlock({
   detail: GitLabMrDetail;
   timeline: GitLabTimeline | null;
   files: GitLabMrFiles | null;
-  branches: BranchRef[];
   acting?: boolean;
-  onCreateMr: (body: GitLabMrCreateBody) => void;
   onComment: (body: string) => void;
   onReview: (event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body?: string) => void;
   onMerge: (squash: boolean) => void;
@@ -358,7 +356,6 @@ function MrDetailBlock({
 }): React.ReactNode {
   const [comment, setComment] = useState('');
   const [mergeOpen, setMergeOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
 
   /** 发送评论：以输入框内容调 onComment 并清空输入 */
   const sendComment = (): void => {
@@ -440,9 +437,6 @@ function MrDetailBlock({
           <Button data-testid="gitlab-checkout" disabled={acting} onClick={onCheckout}>
             检出 MR 分支
           </Button>
-          <Button data-testid="gitlab-create-mr" disabled={acting} onClick={() => setCreateOpen(true)}>
-            新建 MR
-          </Button>
         </Flex>
       </Flex>
       <Tabs
@@ -485,18 +479,12 @@ function MrDetailBlock({
         onMerge={onMerge}
         onClose={() => setMergeOpen(false)}
       />
-      <CreateMrModal
-        open={createOpen}
-        branches={branches}
-        acting={acting}
-        onCreateMr={onCreateMr}
-        onClose={() => setCreateOpen(false)}
-      />
     </Flex>
   );
 }
 
 export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
+  const [createOpen, setCreateOpen] = useState(false);
   const {
     status,
     mrs,
@@ -538,11 +526,21 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
         title={`合并请求（${mrs.mrs.length}）`}
         style={{ flex: 1, minWidth: 260 }}
         extra={
-          onRefresh !== undefined ? (
-            <Button size="small" data-testid="gitlab-refresh" disabled={acting} onClick={onRefresh}>
-              刷新
+          <Flex gap={8}>
+            {onRefresh !== undefined ? (
+              <Button size="small" data-testid="gitlab-refresh" disabled={acting} onClick={onRefresh}>
+                刷新
+              </Button>
+            ) : null}
+            <Button
+              size="small"
+              data-testid="gitlab-create-mr"
+              disabled={acting}
+              onClick={() => setCreateOpen(true)}
+            >
+              新建 MR
             </Button>
-          ) : undefined
+          </Flex>
         }
       >
         {loading ? (
@@ -566,9 +564,7 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
               detail={detail}
               timeline={timeline}
               files={files}
-              branches={branches}
               acting={acting}
-              onCreateMr={onCreateMr}
               onComment={onComment}
               onReview={onReview}
               onMerge={onMerge}
@@ -577,6 +573,13 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
           )}
         </Card>
       ) : null}
+      <CreateMrModal
+        open={createOpen}
+        branches={branches}
+        acting={acting}
+        onCreateMr={onCreateMr}
+        onClose={() => setCreateOpen(false)}
+      />
     </Flex>
   );
 }

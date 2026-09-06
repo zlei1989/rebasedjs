@@ -3,8 +3,9 @@
  * state 徽标 opened 绿 merged 紫 closed 灰 locked 橙 / 更新时间 / 单击选中 / 选中高亮）、
  * 详情（标题 / 元信息 / reviewState 徽标四种与 NONE 省略 / 增删行 / 主体）、时间线两种 kind、
  * 文件 diff 展开（空 diff 不渲染展开）、合并 Modal（squash Checkbox 默认不勾选、载荷与复位）、
- * 新建 MR Modal（源/目标分支选择、源≠目标与标题非空校验、载荷、确认即关与复位）、评论 /
- * Approve / Request changes 回调、检出回调、空态与局部 loading、acting 禁用、刷新按钮缺省不渲染。
+ * 新建 MR Modal（入口位于面板根列表卡片 extra、空库 0 MR 可见、源/目标分支选择、源≠目标与
+ * 标题非空校验、标题 maxLength 255、载荷、确认即关与复位）、评论 / Approve / Request changes
+ * 回调、检出回调、空态与局部 loading、acting 禁用、刷新按钮缺省不渲染。
  */
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -378,6 +379,32 @@ describe('GitLabPanel 新建 MR Modal', () => {
     fireEvent.click(screen.getByTestId('gitlab-create-mr'));
     await screen.findByText('新建合并请求');
   }
+
+  it('新建入口位于面板根列表卡片 extra（详情操作区不再包含），点击可打开 Modal', async () => {
+    renderPanel();
+    const listCard = screen.getByText('合并请求（2）').closest<HTMLElement>('.ant-card')!;
+    const detailCard = screen.getByText('MR #12').closest<HTMLElement>('.ant-card')!;
+    expect(within(listCard).getByTestId('gitlab-create-mr')).toBeInTheDocument();
+    expect(within(detailCard).queryByTestId('gitlab-create-mr')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('gitlab-create-mr'));
+    expect(await screen.findByText('新建合并请求')).toBeInTheDocument();
+  });
+
+  it('空库（0 MR 且未选中）时新建入口仍在列表卡片 extra 可见并可打开', async () => {
+    renderPanel({ mrs: { mrs: [] }, iid: null, detail: null, timeline: null, files: null });
+    const listCard = screen.getByText('合并请求（0）').closest<HTMLElement>('.ant-card')!;
+    expect(within(listCard).getByTestId('gitlab-create-mr')).toBeInTheDocument();
+    await openCreateModal();
+    expect(screen.getByText('新建合并请求')).toBeInTheDocument();
+  });
+
+  it('标题输入 maxLength 255 且显示计数（与契约 gitlabMrCreateBodySchema max(255) 对齐）', async () => {
+    renderPanel();
+    await openCreateModal();
+    const title = screen.getByTestId('gitlab-create-title');
+    expect(title).toHaveAttribute('maxlength', '255');
+    expect(screen.getByText(/0\s*\/\s*255/)).toBeInTheDocument();
+  });
 
   it('三态校验：默认确定禁用；分支与标题齐全启用；源=目标重新禁用', async () => {
     renderPanel();
