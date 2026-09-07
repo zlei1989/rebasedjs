@@ -15,7 +15,7 @@
 | 口径 | 结论 |
 |------|------|
 | 操作页面/面板（30 个） | **28 ✅ + 2 🟡 等效 = 30/30** |
-| 功能域（36 + 2 可选） | **35/36 落地**（browse 未立项）；可选 2 项（terminal、local-history）明确不做 |
+| 功能域（36 + 2 可选） | **35/36 落地**（browse 经 2026-09-08 裁定立项轻量复刻，见任务清单 §2.9）；可选 2 项（terminal、local-history）明确不做 |
 | 端点路径 / HTTP 方法 | **77 / 89**（web-next 77 个 route.ts ↔ web-koa repos.ts 89 注册，12 路径双方法，两端完全对称） |
 | 半使用接口 | 2：diff/stream 分块渲染、staging/hunks 无 UI 入口 |
 | `@rebased/api` 公共出口 | 96 函数；未挂端点 2（`initRepo`、`cloneRepo`） |
@@ -35,12 +35,10 @@
 | terminal（内置终端） | 不做：web 端服务端 shell 安全面大且与 Git 客户端核心价值正交 |
 | local-history（本地历史） | 不做：无编辑器宿主；与 LogPage 提交历史重叠 |
 | QuickActionsMenu 独立聚合组件 | 不做：🟡 等效——顶栏 +「更多」菜单 + 操作条已全覆盖 |
-| browse（历史快照浏览） | 未立项（功能域 36 个中唯一未落地项） |
 | 克隆/分享项目到 GitHub | 不做：`cloneRepo` 服务层能力后置 |
 | GitHub Gist / GitLab Snippet | 不做 |
 | 自托管 GitLab 实例 | 不做：仅 gitlab.com 形态 |
 | 托管平台 OAuth/device 专属登录流 | 不做：PAT 经 Settings 账户卡片手动录入 |
-| PR/MR 结构化 diff 渲染 | 不做：文件列表 + patch 文本只读预览 |
 | PR AI 描述 | 不做：需外部 AI 服务 |
 | 打开 worktree 项目、Update 流程内子模块更新、分支弹窗 New Working Tree | 不做：无多项目会话模型 / 独立面板已承载 / 入口在更多菜单 |
 
@@ -55,7 +53,7 @@
 | P1 | 5 | repo、status、log、diff、settings | ✅ 全量 |
 | P2 | 12 | operation、reset、staging、changelist、commit、branch、checkout、merge、stash、conflict、config、auth | ✅ 全量 |
 | P3 | 15 | rebase（含交互式）、cherry-pick、revert、tag、remote、update、blame、history、committed、search、patch、shelf、console、ignore、github | ✅ 全量（github 域 Gist 不做） |
-| P4 | 4 | gitlab、worktree、submodule、browse | 🟡 3/4（gitlab/worktree/submodule ✅；gitlab Snippet 不做；browse 未立项） |
+| P4 | 4 | gitlab、worktree、submodule、browse | 🟡 3/4（gitlab/worktree/submodule ✅；gitlab Snippet 不做；browse 已立项轻量复刻，见任务清单 §2.9） |
 | 可选后置 | 2 | terminal、local-history | ❌ 明确不做 |
 
 ### 2.2 页面总览（维度 B：30 页面）
@@ -216,7 +214,7 @@
 | 分页（limit ≤500 / skip 游标） | 🟡 | 服务端支持；UI 无"加载更多"入口 |
 | 过滤（author / path） | 🟡 | 服务端支持；UI 无过滤入口 |
 | 行右键菜单形态 | 🟡 | 动作以面板按钮/顶栏承载（Reset/Undo/Cherry-pick/Revert 已落地）；右键菜单未做 |
-| 分支折叠 / PermanentGraph 高级视图 | ❌ | 组装 spec 明确不做 |
+| 分支折叠 / PermanentGraph 高级视图 | ❌ | 2026-09-08 重新裁定：由「明确不做」改为**可选任务**（依赖过滤 UI 与 PermanentGraph 类缓存结构先行，见任务清单 §2.8） |
 | 新标签页打开 log、为命令过滤的 log | ❌ | internal 动作未做 |
 
 ### 4.3 DiffPage ✅
@@ -528,7 +526,7 @@ GitHub 集成——认证、PR 全流程；对应 `github-core`（accounts/pullr
 | 账户/token 认证 | ✅ | `findToken('github.com')` + Settings 账户卡片（PAT 录入） |
 | PR 列表/详情/时间线/评论 | ✅ | 时间线 = issue comments + review summaries 合并（旧→新）；空评论拦截 |
 | PR 审查（approve/request changes） | ✅ | reviewDecision 徽标 |
-| diff 视图 | 🟡 | 文件列表（status/增删行）+ patch 文本只读预览；结构化渲染不做 |
+| diff 视图 | 🟡 | 现为文件列表（status/增删行）+ patch 文本只读预览；行级视图（Monaco DiffEditor + unified diff 行映射 + 行级评论锚点）经 2026-09-08 裁定可行，已排期 |
 | 三种合并策略 | ✅ | merge/squash/rebase + warning 路径 |
 | 检出 PR 分支 | ✅ | fetch `+refs/pull/N/head` + `checkoutNewBranch('pr-N','FETCH_HEAD')`；跨键回写 status/branches |
 | 克隆/分享、Gist、AI 描述 | ❌ 明确不做 | — |
@@ -543,7 +541,7 @@ GitLab 集成——认证、MR 全流程；对应 `gitlab-core`（mergerequest�
 |--------|------|------|
 | 账户认证 | ✅ | `findToken('gitlab.com')` + Settings 账户卡片 |
 | MR 创建/列表/详情/评论 | ✅ | 列表四徽标；新建 MR（源/目标分支 + 标题 + 描述）；时间线 notes+reviews 尽力合并 |
-| MR diff 视图 | 🟡 | 文件列表 + diff 文本只读预览（行数置 0，GitLab 不逐文件给） |
+| MR diff 视图 | 🟡 | 现为文件列表 + diff 文本只读预览；行级视图经 2026-09-08 裁定可行已排期（行号从 hunk 头解析——API 汇总字段不逐文件给行数不构成阻塞） |
 | MR 审查（approve/request changes）/合并 | ✅ | 三映射（approve 端点 / reviews{state:rejected} / notes）+ reviewState 徽标；`merge {squash?}` |
 | MR 检出 | ✅ | fetch `refs/merge-requests/:iid/head` + `checkoutNewBranch('mr-N','FETCH_HEAD')` |
 | Snippet、自托管实例 | ❌ 明确不做 | — |
@@ -645,7 +643,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 19 | LogPage → New Tag | 右键 New Tag… | `GitCreateTagAction.java:39`（backend.xml:364） | ❌（TagPanel 创建 ref 默认 HEAD，右键入口未做） |
 | 20 | LogPage → 分支/标签操作子菜单 | 右键分支操作组 | `GitLogBranchOperationsActionGroup.java:188-205`（backend.xml:360） | ❌（Merge/Rebase 经 #79/#80，其余未做） |
 | 21 | LogPage → Revert/Reword/Fixup/Squash/Drop | 右键（后四者入 rebase 引擎） | backend.xml:346-353 | 🟡 Revert=面板按钮直通；Reword/Fixup/Squash/Drop 经交互式变基编辑器可达 |
-| 22 | LogPage → Checkout / 浏览历史快照 | 右键 Checkout 组 / Browse at Revision | backend.xml:337-342 | ❌（checkout 经 BranchPanel；browse 未立项） |
+| 22 | LogPage → Checkout / 浏览历史快照 | 右键 Checkout 组 / Browse at Revision | backend.xml:337-342 | ❌（checkout 经 BranchPanel；browse 轻量复刻已立项排期，见任务清单 §2.9） |
 | 23 | LogPage → PatchPanel | 右键 Create Patch from commit | vcs-log.xml:273 | ✅ 「更多」→ 创建 Modal 提交区间三态 |
 | 24 | LogPage → GitConsole | tab 下拉 Console | vcs-log.xml:321-322 | ✅ 「更多」→ `/console` |
 | 25 | LogPage → HistoryPanel | tab 下拉 Show History | vcs-log.xml:321 | ✅ 「更多」→ `/history`（页内输入路径） |
@@ -736,7 +734,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 95 | 远程操作 → 认证对话框 | 401 自动弹出；内嵌托管登录 | `GitHttpGuiAuthenticator.java:399-440` | ✅ AuthDialog 认证重试回路（PAT 录入，OAuth 不做） |
 | 96 | Worktrees tab → 打开 worktree | 双击 worktree | backend.xml:577-579 | ❌ 明确不做 |
 | 97 | GitHubPanel 列表 → 详情+时间线 | 双击 PR | `GHPROpenPullRequestAction.kt:24-25` | ✅ 单击选中 → 详情 + 页内时间线 tab |
-| 98 | GitHubPanel 详情 → PR diff | Changes 树打开 diff | `GHPRFilesManagerImpl.kt:37-46` | 🟡 文件列表 + patch 文本预览（结构化渲染不做） |
+| 98 | GitHubPanel 详情 → PR diff | Changes 树打开 diff | `GHPRFilesManagerImpl.kt:37-46` | 🟡 现为 patch 文本预览；行级视图（Monaco DiffEditor）经 2026-09-08 裁定可行已排期 |
 | 99 | GitHubPanel 详情 → 时间线 | Show Timeline 回跳 | `GHPRDetailsComponentFactory.kt:107` | ✅ 页内 tab |
 | 100 | → GitHubPanel 登录（4 入口） | 克隆 GitHub tab / 账户选择器 / Settings | `GithubSettingsConfigurable.kt:44-53` 等 | ✅ Settings 账户卡片既有流 |
 | 101 | 任意处 → Share Project on GitHub | Vcs.Import / Share 按钮 | `GithubShareAction` | ❌ 明确不做 |
@@ -754,7 +752,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | ✅ 已复刻（含等价边） | **50 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 3、BranchPanel 链 3、远程/集成链 7、本地工具链 6 |
 | 🟡 半通/降级 | **10 条**：#2/#87 克隆、#13 LogPage→DiffPage、#21 右键动作集、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效、#98 diff 预览降级 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **37 条**（含明确不做：克隆/分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree；browse 未立项） |
+| ❌ 未复刻 | **37 条**（含明确不做：克隆/分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree；browse 已立项排期） |
 
 ### 5.5 关键联动流程
 
@@ -768,16 +766,16 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 
 ## 六、结论与下一步
 
-1. **页面**：30/30 全覆盖（28 ✅ + 2 🟡 等效）；功能域 35/36（browse 未立项），可选 2 项明确不做（1.3 决策清单）。
+1. **页面**：30/30 全覆盖（28 ✅ + 2 🟡 等效）；功能域 35/36（browse 已立项轻量复刻），可选 2 项明确不做（1.3 决策清单）。
 2. **接口**：77 路径 / 89 方法两端对称、全部有消费方；半使用 2 个（diff/stream 分块渲染、staging/hunks 无 UI 入口）；服务层未挂端点 2 个（`initRepo`/`cloneRepo`）。
 3. **导航**：104 条边中 50 ✅（含等价边）+ 10 🟡 + 7 ➖ + 37 ❌；形态等价判定规则见 1.2，明确不做项均记录在案。
 
 **下一步**：
 
 1. **P4-C**：Playwright 真实操作 e2e（计划 `docs/superpowers/plans/2026-09-03-rebasedjs-p4c-playwright-e2e.md`；`apps/e2e/` 基建与打开仓库冒烟已落地）。
-2. **排期项清单**：gitlab checkout Bearer 注入 hardening；web-next 空/非法 JSON body 500 与 koa 400 全局评估；createOpen 跨仓库保持打开；worktree 回滚失败包 gitFailure；resolveSubmodulePath 白名单；core vitest fileParallelism；unborn HEAD 建补丁/搁置；execLogByCwd 仓库级淘汰；面板 key `kind+id`；addIgnore path 字符集；存档名 `.`/`..` 边界。
+2. **排期项清单**：PR/MR 行级 diff 视图（Monaco DiffEditor + unified diff 行映射 + 行级评论锚点，GitHub/GitLab 共用解析器，2026-09-08 裁定）；gitlab checkout Bearer 注入 hardening；web-next 空/非法 JSON body 500 与 koa 400 全局评估；createOpen 跨仓库保持打开；worktree 回滚失败包 gitFailure；resolveSubmodulePath 白名单；core vitest fileParallelism；unborn HEAD 建补丁/搁置；execLogByCwd 仓库级淘汰；面板 key `kind+id`；addIgnore path 字符集；存档名 `.`/`..` 边界。
 3. **半使用接口**：diff/stream 分块渲染接入 Monaco；hunk 级暂存 UI（hook + 索引已就绪）。
-4. **终稿盘点**：以架构 spec §4.2 域表逐行核对并记录 browse 立项决策；`initRepo`/`cloneRepo` 补端点与 RepoPage 入口。
+4. **终稿盘点**：以架构 spec §4.2 域表逐行核对（browse 轻量复刻已立项，见任务清单 §2.9）；`initRepo`/`cloneRepo` 补端点与 RepoPage 入口。
 
 ---
 
