@@ -1,4 +1,4 @@
-# P4-C：Playwright e2e（真实操作模拟测试）实施计划
+﻿# P4-C：Playwright e2e（真实操作模拟测试）实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -106,3 +106,12 @@
 - 目标覆盖：goal「playwright 模拟人工测试」= 套件化真实操作（核心流 6 + 工具域 8 + 集成检测 2 大类）；人工验证域（github/gitlab 数据面）显示注明。
 - 与既有测试关系：vitest 已覆盖服务层/组件层全部；e2e 只测「UI 串联 + 真实 git 端到端」——覆盖差异面，不重复。
 - 风险：chromium 安装需网络（T1 记录通道降级）；Windows 下 dev server 启动慢（webServer timeout 120s——next dev 冷启动）；EPERM 清理（retry 包装）；CI 环境未定（套件本地权威）。
+
+
+---
+
+## 终止记录（2026-09-08，用户方向更正）
+
+**本计划撤档。** 用户指示：删除全部 e2e 相关代码与逻辑（`apps/e2e/` 移除，revert `cd7bcf3`（基建）/`fbe29dc`（修复轮），工作树已无任何 Playwright 配置与产物）；模拟人工测试改用 **AI Agent 方式**（见 `AGENT.md` §测试）：agent 驱动的子代理评审链（实现者→独立复审者→全分支终审→修复波→限定复审→关账）+ 真实服务/真实仓库/CLI 复核冒烟。
+
+计划期间有效产出（已随撤档废弃，仅记录）：T1 基建印证了内网 registry 不可达（离线安装）、chromium 本地缓存与 antd 双汉字空格等环境事实——这些事实对「AI Agent 冒烟」仍有参考价值；T2 核心流用例未完成即被停止（未提交）。

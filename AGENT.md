@@ -71,19 +71,14 @@ rebasedjs/
 
 **必须打日志的点位**：请求入口（INFO + 标识）、外部调用（DEBUG 参数 + INFO 耗时）、异常捕获（ERROR + 堆栈 + 上下文）、关键分支（DEBUG + 依据）
 
+## 测试
+
+- **单元/组件/服务测试**：vitest + node，用真实 git CLI + 临时仓库夹具。
+- **模拟人工测试（冒烟，唯一浏览器验证方式）**：不引入独立 e2e 框架（Playwright 已撤档：内网 registry 不可达、冷启动/浏览器占用维护成本高）。agent 在会话内启动真实服务（web-next :3030 / web-koa :3031），在浏览器中按真实用户路径逐项操作（表单输入、按钮、弹窗、导航），并用 CLI 复核实际 git 状态，页面展示与仓库事实互证。
+- **冒烟记录**：每次冒烟后在对应计划/关账记录的「冒烟」小节写入：① 范围清单（逐项 ✅/❌/跳过+理由）；② 操作路径（点击/输入序列）；③ 证据（浏览器状态 + CLI 输出互证）；④ 未覆盖项与后续计划（如有）。
+
 ## 技术栈
 
 - **路由** — web-next：App Router（Server Components + Server Actions + API Routes）；web-koa：koa-router
 - **测试** — vitest + node
 - **路径别名** — 各包自含、无跨包 `@/` 别名：web-next 内 `@/*` 指向 `apps/web-next/*`，web-koa 内 `@/*` 指向 `apps/web-koa/*`（当前两包均未实际配置别名，包内引用走相对路径、跨包引用走 `@rebased/*` 包名）
-
-## UX 默认值（对齐 Java 版，spec §6.6）
-
-| 项 | 默认值 | 落点 |
-|----|--------|------|
-| logInEditor | `true` | `packages/server/api/src/lib/config-store.ts` DEFAULTS |
-| word diff | BY_WORD（行内词级高亮，Monaco diff 默认行为） | `packages/client/ui/src/base/monaco-lazy.tsx` |
-| 行号 / sync scroll | 开（Monaco diff 编辑器默认） | 同上 |
-| DiffPage 布局 | 默认并排（side-by-side），忽略空白默认关 | `packages/client/ui/src/domain/diff-viewer.tsx` |
-| CommitGraph tag chips | 默认关（`showTags=false`），分支 chips 默认开 | `packages/client/ui/src/domain/commit-graph.tsx` |
-| 状态条徽标 | 蓝(incoming)/绿(outgoing) 圆点 + tooltip，0 不显示，无 ↑↓ 文本 | `packages/client/ui/src/domain/repo-status-bar.tsx` |

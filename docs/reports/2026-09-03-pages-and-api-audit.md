@@ -15,7 +15,7 @@
 | 口径 | 结论 |
 |------|------|
 | 操作页面/面板（30 个） | **28 ✅ + 2 🟡 等效 = 30/30** |
-| 功能域（36 + 2 可选） | **35/36 落地**（browse 经 2026-09-08 裁定立项轻量复刻，见任务清单 §2.9）；可选 2 项（terminal、local-history）明确不做 |
+| 功能域（36 + 2 可选） | **35/36 落地**（browse 经 2026-09-08 裁定立项轻量复刻，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
 | 端点路径 / HTTP 方法 | **77 / 89**（web-next 77 个 route.ts ↔ web-koa repos.ts 89 注册，12 路径双方法，两端完全对称） |
 | 半使用接口 | 2：diff/stream 分块渲染、staging/hunks 无 UI 入口 |
 | `@rebased/api` 公共出口 | 96 函数；未挂端点 2（`initRepo`、`cloneRepo`） |
@@ -53,7 +53,7 @@
 | P1 | 5 | repo、status、log、diff、settings | ✅ 全量 |
 | P2 | 12 | operation、reset、staging、changelist、commit、branch、checkout、merge、stash、conflict、config、auth | ✅ 全量 |
 | P3 | 15 | rebase（含交互式）、cherry-pick、revert、tag、remote、update、blame、history、committed、search、patch、shelf、console、ignore、github | ✅ 全量（github 域 Gist 不做） |
-| P4 | 4 | gitlab、worktree、submodule、browse | 🟡 3/4（gitlab/worktree/submodule ✅；gitlab Snippet 不做；browse 已立项轻量复刻，见任务清单 §2.9） |
+| P4 | 4 | gitlab、worktree、submodule、browse | 🟡 3/4（gitlab/worktree/submodule ✅；gitlab Snippet 不做；browse 已立项轻量复刻，见任务清单 §2.8） |
 | 可选后置 | 2 | terminal、local-history | ❌ 明确不做 |
 
 ### 2.2 页面总览（维度 B：30 页面）
@@ -643,7 +643,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 19 | LogPage → New Tag | 右键 New Tag… | `GitCreateTagAction.java:39`（backend.xml:364） | ❌（TagPanel 创建 ref 默认 HEAD，右键入口未做） |
 | 20 | LogPage → 分支/标签操作子菜单 | 右键分支操作组 | `GitLogBranchOperationsActionGroup.java:188-205`（backend.xml:360） | ❌（Merge/Rebase 经 #79/#80，其余未做） |
 | 21 | LogPage → Revert/Reword/Fixup/Squash/Drop | 右键（后四者入 rebase 引擎） | backend.xml:346-353 | 🟡 Revert=面板按钮直通；Reword/Fixup/Squash/Drop 经交互式变基编辑器可达 |
-| 22 | LogPage → Checkout / 浏览历史快照 | 右键 Checkout 组 / Browse at Revision | backend.xml:337-342 | ❌（checkout 经 BranchPanel；browse 轻量复刻已立项排期，见任务清单 §2.9） |
+| 22 | LogPage → Checkout / 浏览历史快照 | 右键 Checkout 组 / Browse at Revision | backend.xml:337-342 | ❌（checkout 经 BranchPanel；browse 轻量复刻已立项排期，见任务清单 §2.8） |
 | 23 | LogPage → PatchPanel | 右键 Create Patch from commit | vcs-log.xml:273 | ✅ 「更多」→ 创建 Modal 提交区间三态 |
 | 24 | LogPage → GitConsole | tab 下拉 Console | vcs-log.xml:321-322 | ✅ 「更多」→ `/console` |
 | 25 | LogPage → HistoryPanel | tab 下拉 Show History | vcs-log.xml:321 | ✅ 「更多」→ `/history`（页内输入路径） |
@@ -770,12 +770,17 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 2. **接口**：77 路径 / 89 方法两端对称、全部有消费方；半使用 2 个（diff/stream 分块渲染、staging/hunks 无 UI 入口）；服务层未挂端点 2 个（`initRepo`/`cloneRepo`）。
 3. **导航**：104 条边中 50 ✅（含等价边）+ 10 🟡 + 7 ➖ + 37 ❌；形态等价判定规则见 1.2，明确不做项均记录在案。
 
-**下一步**：
+**下一步**（按任务清单 `docs/reports/2026-09-08-replication-gap-backlog.md` 执行）：
 
-1. **P4-C**：Playwright 真实操作 e2e（计划 `docs/superpowers/plans/2026-09-03-rebasedjs-p4c-playwright-e2e.md`；`apps/e2e/` 基建与打开仓库冒烟已落地）。
-2. **排期项清单**：PR/MR 行级 diff 视图（Monaco DiffEditor + unified diff 行映射 + 行级评论锚点，GitHub/GitLab 共用解析器，2026-09-08 裁定）；gitlab checkout Bearer 注入 hardening；web-next 空/非法 JSON body 500 与 koa 400 全局评估；createOpen 跨仓库保持打开；worktree 回滚失败包 gitFailure；resolveSubmodulePath 白名单；core vitest fileParallelism；unborn HEAD 建补丁/搁置；execLogByCwd 仓库级淘汰；面板 key `kind+id`；addIgnore path 字符集；存档名 `.`/`..` 边界。
-3. **半使用接口**：diff/stream 分块渲染接入 Monaco；hunk 级暂存 UI（hook + 索引已就绪）。
-4. **终稿盘点**：以架构 spec §4.2 域表逐行核对（browse 轻量复刻已立项，见任务清单 §2.9）；`initRepo`/`cloneRepo` 补端点与 RepoPage 入口。
+1. **P0 半使用接口消化**（清单 §2.1，2 项）：diff/stream 分块渲染接入 Monaco；hunk 级暂存 UI（hook + 索引已就绪）。
+2. **P1 repo 域收尾**（§2.2，7 项）：`initRepo`/`cloneRepo` 端点与 RepoPage 入口 + 显示名回退口径、`~/` 相对化接线、上限对齐、移除端点、装饰 5 项遗留。
+3. **P2 各域功能点补齐**（§2.3，50 项按域）：LogPage 过滤/分页/右键形态、DiffPage hunk 应用与三版本、BranchPanel 清理/保护分支、Push rejected 联动、Settings GPG/SSH 等逐项落地。
+4. **专项裁定任务**：PR/MR 行级 diff 视图（§2.7，2026-09-08 裁定）；browse 轻量复刻（§2.8，首次裁定）——完成后功能域 36/36，边 #22/#98 转 ✅。
+5. **P3 导航边缺口**（§2.4，33 条 ❌ + 2 条 🟡 直达）：按目标页分组落地（LogPage 右键动作集、StatusPage 六入口、Stash/Patch/Shelf 回边等）。
+6. **工程排期项**（§2.5，11 项）：gitlab checkout Bearer hardening、core vitest fileParallelism、unborn HEAD 补丁/搁置等随批消化。
+7. **契约与功能域收尾**（§2.6）：`operation.progress` SSE、预留错误码 4 个随功能消费、终稿盘点以架构 spec §4.2 域表逐行核。
+8. **可选任务**（§2.9）：分支折叠——待过滤 UI 落地后按触发条件评估。
+9. **明确不做**：维持 §1.3 决策清单（清单 §三），新需求出现时可重新决议。
 
 ---
 
@@ -790,7 +795,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（30 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（21 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（21 文件，两端同构） |
-| e2e | `apps/e2e/`（Playwright 基建，P4-C） |
+| 模拟人工测试 | 浏览器全量冒烟（AGENT.md §测试；无独立 e2e 框架） |
 
 ## 附录 B：Java 侧抽查证据
 

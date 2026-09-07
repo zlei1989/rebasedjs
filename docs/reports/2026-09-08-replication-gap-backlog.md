@@ -1,7 +1,7 @@
 # Rebased 复刻缺口与开发任务清单
 
 - **日期**：2026-09-08
-- **基线**：rebasedjs HEAD `7d9b850`（P2/P3/P4-A/B 全部收官，P4-C e2e 进行中）
+- **基线**：rebasedjs HEAD `7d9b850`（P2/P3/P4-A/B 全部收官）
 - **来源**：`docs/reports/2026-09-03-pages-and-api-audit.md`（盘点报告，其 §四/§五 为逐页/逐边最终状态）
 - **口径**：只列**未完全复刻**与**缺失**项；✅ 与 🟡 **等效**功能（CommitDialog 内嵌提交框、QuickActionsMenu 顶栏+更多菜单聚合、各等价导航边等）一律不列；**明确不做**项（已有决策记录）不排任务，单列于 §三 供参考、避免重复讨论。
 - **优先级**：P0 半使用接口消化 → P1 repo 域收尾 → P2 各域功能点补齐 → P3 导航边与装饰性 → 工程排期项随批消化。
@@ -10,18 +10,17 @@
 
 ## 一、缺口总览
 
-| 类别 | 缺口 | 对应位置 |
+| 类别 | 缺口 | 任务位置 |
 |------|------|----------|
-| 半使用接口 | 2（diff/stream 分块渲染、staging/hunks 无 UI） | 盘点报告 §3.3 |
-| 未挂端点能力 | 2（`initRepo`、`cloneRepo`） | §3.3 |
-| SSE 事件 | 1（`operation.progress` 未实现） | §3.2 |
-| 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §3.2 |
-| 功能域 | 1（browse 历史快照浏览——2026-09-08 裁定立项轻量复刻，见 §2.9） | §2.1 |
-| 页面功能点缺口 | 57 项（分布于 24 个页面） | §四各页 |
-| 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.8 |
-| 导航边缺口 | 33 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §五 |
-| 工程排期项 | 11 项（技术债/硬化） | §六 |
-| 进行中 | P4-C Playwright e2e | §四 |
+| 半使用接口 | 2（diff/stream 分块渲染、staging/hunks 无 UI） | §2.1 |
+| 未挂端点能力 | 2（`initRepo`、`cloneRepo`） | §2.2 #3 |
+| SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
+| 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
+| 功能域 | 1（browse 历史快照浏览——2026-09-08 裁定立项轻量复刻） | §2.8 |
+| 页面功能点缺口 | 57 项（分布于 24 个页面） | §2.2 / §2.3 |
+| 导航边缺口 | 33 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
+| 工程排期项 | 11 项（技术债/硬化） | §2.5 |
+| 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
 
 ---
 
@@ -47,7 +46,7 @@
 
 ### 2.3 P2：各域功能点补齐（按域 50 项）
 
-**LogPage（5）**：分页「加载更多」UI；过滤 UI（author/path，对齐 Java「文本即滤 + 分支过滤弹窗」）；行右键菜单形态（checkout、New Branch/Tag from Commit、Push up to Commit、Open in Browser、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.8 可选任务）。
+**LogPage（5）**：分页「加载更多」UI；过滤 UI（author/path，对齐 Java「文本即滤 + 分支过滤弹窗」）；行右键菜单形态（checkout、New Branch/Tag from Commit、Push up to Commit、Open in Browser、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
 
 **DiffPage（5）**：word diff/同步滚动/折叠/上下文行数 UI 开关；hunk 级应用/回退；三版本对比（本地/暂存/HEAD）；与分支比较（`GitCompareWithBranchAction`）；（分块渲染见 2.1）。
 
@@ -126,7 +125,7 @@ gitlab checkout Bearer 注入 hardening（真机验证 + core 层改 Basic/PRIVA
 
 ### 2.6 功能域与契约（4 项）
 
-browse（历史快照浏览）：2026-09-08 裁定**立项轻量复刻**（§2.9）；终稿盘点仍以架构 spec §4.2 域表逐行核；`operation.progress` SSE（有进度型长任务 UI 面时实现）；预留错误码 4 个（`CONFLICT`/`HOOK_FAILED`/`STALE_LOCK`/`CANCELLED`）随对应功能落地消费；`initRepo`/`cloneRepo` 端点（同 2.2 #3）。
+browse（历史快照浏览）：2026-09-08 裁定**立项轻量复刻**（§2.8）；终稿盘点仍以架构 spec §4.2 域表逐行核；`operation.progress` SSE（有进度型长任务 UI 面时实现）；预留错误码 4 个（`CONFLICT`/`HOOK_FAILED`/`STALE_LOCK`/`CANCELLED`）随对应功能落地消费；`initRepo`/`cloneRepo` 端点（同 2.2 #3）。
 
 ### 2.7 PR/MR 行级 diff 视图（2026-09-08 新裁定：由「明确不做」改为可排期）
 
@@ -139,19 +138,9 @@ browse（历史快照浏览）：2026-09-08 裁定**立项轻量复刻**（§2.9
 | 3 | 行级评论锚点 | 新侧行 → 评论锚定（GitHub inline review comments：`path + line + side`，需新增 `/pulls/:n/review-comments` GET/POST 端点——现有 `comments` 为 issue comment；GitLab discussions：`position[new_line]`，新增 discussions 端点）；glyph margin 图标 + 行点击开评论 + 提交后回写时间线 |
 | 4 | 降级路径 | patch 缺失/截断/二进制 → 统计行 + 说明（与 Java 大 diff 受限一致）；rename 无内容变更 → 仅 rename 提示 |
 
-> 完成后盘点报告 C.26/C.27 的 diff 视图行与边 #98 由 🟡 转 ✅（保留 AI 描述、克隆/分享等其余裁定）。
+> 完成后盘点报告 4.26/4.27 的 diff 视图行与边 #98 由 🟡 转 ✅（保留 AI 描述、克隆/分享等其余裁定）。
 
-### 2.8 可选任务（低价值后置，1 项）
-
-**分支折叠（LogPage）**——2026-09-08 重新裁定：由「明确不做」改为可选任务。
-
-- **原裁定依据**（组装 spec §3.1:88、A.2:283-284、§1.3:32）：① graph-layout 移植为最小必需集，`PermanentGraph`（提交图缓存）属「缓存与高级视图」层不在首跑范围；② 频率证据——折叠家族高频入口仅「文本即滤 + 分支过滤弹窗」（列为 P2 次优先），分支折叠无高频使用证据；③ 折叠/虚线过滤边依赖 PermanentGraph 类缓存结构。
-- **重新裁定理由**：折叠是独立可评估的可视化能力，不应与 PermanentGraph 缓存机制永久绑定定性；待过滤 UI 落地、大仓库图密度成为实际问题后值得重新评估。
-- **前置依赖**：① LogPage 过滤 UI（§2.3 LogPage 项，P2 次优先）；② PermanentGraph 类缓存结构或自研等价物（折叠状态存储）。
-- **工作量**：中-大（缓存结构移植 + 折叠交互 + 虚线过滤边渲染），单独立项时再估。
-- **触发条件**：过滤 UI 落地后、出现大仓库折叠诉求时启动评估。
-
-### 2.9 browse 历史快照浏览（2026-09-08 首次裁定：立项轻量复刻）
+### 2.8 browse 历史快照浏览（2026-09-08 首次裁定：立项轻量复刻）
 
 **裁定依据**：Java `GitBrowseRepoAtRevisionAction` = 日志右键在指定提交上打开平台 `RepositoryBrowser`——以该提交为根的**只读文件树浏览**（展开目录、打开文件在该版本的内容；虚拟文件 + commit 上下文，不触碰工作区）。Web 复刻成本低-中：核心原语基本齐备（`readFileAtRev` 已被 DiffPage 使用），文件树组件可与 CommittedChangesPanel 目录树任务共享；补全后功能域 36/36。
 
@@ -164,7 +153,17 @@ browse（历史快照浏览）：2026-09-08 裁定**立项轻量复刻**（§2.9
 | 5 | 入口与导航边 | LogPage 详情面板「浏览快照」按钮（或「更多」菜单）→ 边 #22 由 ❌ 转 ✅（checkout 部分仍经 BranchPanel） |
 | 6 | 降级边界 | 二进制文件提示；子模块/符号链接展示为条目不深入 |
 
-> 完成后：功能域 36/36；盘点报告 §2.1 P4 行、边 #22、六.1 同步更新。
+> 完成后：功能域 36/36；盘点报告 §2.1 P4 行、边 #22、§六.1 同步更新。
+
+### 2.9 可选任务（低价值后置，1 项）
+
+**分支折叠（LogPage）**——2026-09-08 重新裁定：由「明确不做」改为可选任务。
+
+- **原裁定依据**（组装 spec §3.1:88、A.2:283-284、§1.3:32）：① graph-layout 移植为最小必需集，`PermanentGraph`（提交图缓存）属「缓存与高级视图」层不在首跑范围；② 频率证据——折叠家族高频入口仅「文本即滤 + 分支过滤弹窗」（列为 P2 次优先），分支折叠无高频使用证据；③ 折叠/虚线过滤边依赖 PermanentGraph 类缓存结构。
+- **重新裁定理由**：折叠是独立可评估的可视化能力，不应与 PermanentGraph 缓存机制永久绑定定性；待过滤 UI 落地、大仓库图密度成为实际问题后值得重新评估。
+- **前置依赖**：① LogPage 过滤 UI（§2.3 LogPage 项，P2 次优先）；② PermanentGraph 类缓存结构或自研等价物（折叠状态存储）。
+- **工作量**：中-大（缓存结构移植 + 折叠交互 + 虚线过滤边渲染），单独立项时再估。
+- **触发条件**：过滤 UI 落地后、出现大仓库折叠诉求时启动评估。
 
 ---
 
@@ -186,9 +185,3 @@ browse（历史快照浏览）：2026-09-08 裁定**立项轻量复刻**（§2.9
 | Update 流程内子模块更新 | 独立 SubmodulePanel 承载 |
 | 分支弹窗 New Working Tree | 入口在「更多」菜单 → 工作树页 |
 | 全局 Search Everywhere / 编辑器内嵌 Blame | Web 无宿主，以页面承载 |
-
----
-
-## 四、进行中
-
-- **P4-C Playwright e2e**：计划 `docs/superpowers/plans/2026-09-03-rebasedjs-p4c-playwright-e2e.md`；`apps/e2e/` 基建与打开仓库冒烟已落地，套件扩展覆盖核心流与工具域全链（github/gitlab 数据面不依赖网络）。
