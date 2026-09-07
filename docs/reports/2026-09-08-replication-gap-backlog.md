@@ -13,11 +13,11 @@
 | 类别 | 缺口 | 任务位置 |
 |------|------|----------|
 | 半使用接口 | 2（diff/stream 分块渲染、staging/hunks 无 UI） | §2.1 |
-| 未挂端点能力 | 2（`initRepo`、`cloneRepo`） | §2.2 #3 |
+| 未挂端点能力 | 0（`initRepo`/`cloneRepo` 已挂端点，见 §2.2 完成记录） | §2.2 |
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 57 项（分布于 24 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 52 项（分布于 24 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -33,16 +33,18 @@
 | 1 | diff/stream 分块渲染接入 Monaco | 页面已订阅（保活/预热），`diff.chunk` 文本未接入渲染 | DiffPage 容器 + `useDiffStream` |
 | 2 | hunk 级暂存 UI | `POST /staging/hunks` + `useHunkStaging` 就绪并有测试，无入口 | StatusPage 补丁预览 → 行内 hunk 选择 |
 
-### 2.2 P1：repo 域收尾（init/clone + RepoPage 遗留，7 项）
+### 2.2 P1：repo 域收尾（init/clone + RepoPage 遗留）——✅ 已完成
 
-| # | 任务 | 现状 |
+**完成记录**（随批落地，含单测 / UI 测试 / 端点测试）：
+
+| # | 任务 | 落点 |
 |---|------|------|
-| 3 | `POST /api/repos/init` + `POST /api/repos/clone` 端点与 RepoPage 入口 | `initRepo`/`cloneRepo` 服务层实现 + 集成测试就绪，无路由无 UI（克隆表单最小字段 URL+Directory，对齐 `VcsCloneDialog`） |
-| 4 | RepoPage 显示名三级回退 | 实测仅目录名一级（`.idea/.name` 级经 spec §2.2 判定无对应概念——维持单级亦需修正组件注释与文档口径） |
-| 5 | 路径 `~/` 相对化接线 | `relativeToHome` 有单测；两端容器未注入 `homeDir`，运行时显示绝对路径 |
-| 6 | 最近列表上限对齐 | 组件 `MAX_RECENT=50` vs 服务端 `slice(0, 20)`——统一口径 |
-| 7 | 最近列表移除动作 | Popconfirm 组件就绪；无删除端点、容器不注入 `onRemove`（需补 `DELETE /api/repos/:id` 或等价端点） |
-| 8 | 列表项分支后缀/图标/失效标记 | 装饰性后置 |
+| 3 | `POST /api/repos/init` + `POST /api/repos/clone` 端点与 RepoPage 入口 | 契约 `initRepoBodySchema`/`cloneRepoBodySchema`；api 复用既有 `initRepo`/`cloneRepo`（无需新函数）；web-next/web-koa 双端点；RepoPage 克隆 Modal（URL+Directory 双必填，对齐 `VcsCloneDialog` 最小字段集）+ 初始化 Modal（路径必填）；两端容器经 `repoMutationFlow`（open-repo-flow 通用化）入库 → 刷新列表 → 跳日志页 |
+| 4 | RepoPage 显示名口径 | 维持单级（目录名）为定案，修正组件注释与盘点报告 §4.1 表述（`.idea/.name` 依 spec §2.2 无对应概念） |
+| 5 | 路径 `~/` 相对化接线 | 新增 `GET /api/app/home-dir`（`getAppHomeDir`）+ `useAppHomeDir`；两端容器注入 `homeDir` |
+| 6 | 最近列表上限对齐 | 服务端 `RECENT_LIMIT = 50`（原 `slice(0, 20)`），与组件 `MAX_RECENT=50` 同口径；单测锁定 60 条配置 → 返回 50 |
+| 7 | 最近列表移除动作 | `removeRepo`（幂等；同清 `recentRepoIds` 与该仓库 changelists 簿记）+ `DELETE /api/repos/:id` + `useRemoveRepo`（SWR mutation key 占位、URL 经 arg 拼装）；容器注 `onRemove` → Popconfirm → mutate 刷新 |
+| 8 | 列表项分支后缀/图标/失效标记 | ❌ 装饰性后置（保留） |
 
 ### 2.3 P2：各域功能点补齐（按域 50 项）
 
@@ -125,7 +127,7 @@ gitlab checkout Bearer 注入 hardening（真机验证 + core 层改 Basic/PRIVA
 
 ### 2.6 功能域与契约（3 项）
 
-browse（历史快照浏览）：✅ 已完成（§2.8 完成记录）；终稿盘点仍以架构 spec §4.2 域表逐行核；`operation.progress` SSE（有进度型长任务 UI 面时实现）；预留错误码 4 个（`CONFLICT`/`HOOK_FAILED`/`STALE_LOCK`/`CANCELLED`）随对应功能落地消费；`initRepo`/`cloneRepo` 端点（同 2.2 #3）。
+browse（历史快照浏览）：✅ 已完成（§2.8 完成记录）；`initRepo`/`cloneRepo` 端点：✅ 已完成（§2.2 完成记录）；终稿盘点仍以架构 spec §4.2 域表逐行核；`operation.progress` SSE（有进度型长任务 UI 面时实现）；预留错误码 4 个（`CONFLICT`/`HOOK_FAILED`/`STALE_LOCK`/`CANCELLED`）随对应功能落地消费。
 
 ### 2.7 PR/MR 行级 diff 视图（2026-09-08 新裁定：由「明确不做」改为可排期）
 
@@ -178,7 +180,7 @@ browse（历史快照浏览）：✅ 已完成（§2.8 完成记录）；终稿�
 | terminal（内置终端） | web 端服务端 shell 安全面大，与 Git 客户端核心价值正交 |
 | local-history（本地历史） | 无编辑器宿主；与 LogPage 提交历史重叠 |
 | QuickActionsMenu 独立聚合组件 | 顶栏+更多菜单+操作条已等效全覆盖 |
-| 克隆/分享项目到 GitHub | `cloneRepo` 能力后置（克隆对话框见 2.2 #3，分享不做） |
+| 克隆/分享项目到 GitHub | 克隆对话框已落地（见 §2.2 完成记录）；分享不做 |
 | GitHub Gist / GitLab Snippet | 独立对话框域后置 |
 | 自托管 GitLab 实例 | 仅 gitlab.com 形态 |
 | 托管平台 OAuth/device 专属登录流 | PAT 经 Settings 账户卡片手动录入 |

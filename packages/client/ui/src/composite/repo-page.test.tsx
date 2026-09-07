@@ -75,7 +75,7 @@ describe('RepoPage', () => {
     expect(screen.getAllByTestId('repo-item')).toHaveLength(50);
   });
 
-  it('未传 onRemove 时不渲染移除按钮（移除端点属后续，避免死控件）', () => {
+  it('未传 onRemove 时不渲染移除按钮（回调缺省语义：容器未接线则无死控件）', () => {
     render(<RepoPage repos={[makeRepo({ id: 'a', name: 'alpha' })]} onOpen={vi.fn()} homeDir={HOME} />);
     expect(screen.queryByTestId('repo-remove')).not.toBeInTheDocument();
   });
@@ -108,5 +108,37 @@ describe('RepoPage', () => {
   it('空列表渲染空态', () => {
     render(<RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} />);
     expect(screen.getByText('暂无最近仓库')).toBeInTheDocument();
+  });
+});
+
+describe('RepoPage 克隆/初始化入口', () => {
+  it('未传 onClone/onInit 时不渲染对应按钮', () => {
+    render(<RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} />);
+    expect(screen.queryByRole('button', { name: /克\s*隆/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /初\s*始\s*化/ })).not.toBeInTheDocument();
+  });
+
+  it('克隆 Modal：URL + 目录双必填，确定回调 onClone(url, dir)', async () => {
+    const onClone = vi.fn();
+    render(<RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} onClone={onClone} />);
+    fireEvent.click(screen.getByRole('button', { name: /克\s*隆/ }));
+    // 双必填：空表单确定按钮禁用
+    const ok = await screen.findByRole('button', { name: /确\s*定/ });
+    expect(ok).toBeDisabled();
+    fireEvent.change(screen.getByTestId('clone-url'), { target: { value: 'https://example.com/a/b.git' } });
+    fireEvent.change(screen.getByTestId('clone-dir'), { target: { value: 'D:\\work\\b' } });
+    fireEvent.click(ok);
+    expect(onClone).toHaveBeenCalledWith('https://example.com/a/b.git', 'D:\\work\\b');
+  });
+
+  it('初始化 Modal：路径必填，确定回调 onInit(path)', async () => {
+    const onInit = vi.fn();
+    render(<RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} onInit={onInit} />);
+    fireEvent.click(screen.getByRole('button', { name: /初\s*始\s*化/ }));
+    const ok = await screen.findByRole('button', { name: /确\s*定/ });
+    expect(ok).toBeDisabled();
+    fireEvent.change(screen.getByTestId('init-path'), { target: { value: '/tmp/new-repo' } });
+    fireEvent.click(ok);
+    expect(onInit).toHaveBeenCalledWith('/tmp/new-repo');
   });
 });

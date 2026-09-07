@@ -8,6 +8,14 @@ import { CONFIG_KEYS } from './domain';
 export const openRepoBodySchema = z.object({ path: z.string().min(1) });
 export type OpenRepoBody = z.infer<typeof openRepoBodySchema>;
 
+/** 初始化仓库：path 为索引目录（git init 的目录参数，不存在时创建） */
+export const initRepoBodySchema = z.object({ path: z.string().min(1) });
+export type InitRepoBody = z.infer<typeof initRepoBodySchema>;
+
+/** 克隆仓库：url 为远端地址（https/ssh/本地路径）；targetDir 为落盘目录（父目录须存在，git clone 语义） */
+export const cloneRepoBodySchema = z.object({ url: z.string().min(1), targetDir: z.string().min(1) });
+export type CloneRepoBody = z.infer<typeof cloneRepoBodySchema>;
+
 export const logQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(50),
   skip: z.coerce.number().int().min(0).default(0),

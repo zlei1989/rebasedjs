@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cloneRepo, getRepoById, initRepo, listRecentRepos, openRepo } from './repo';
+import { cloneRepo, getAppHomeDir, getRepoById, initRepo, listRecentRepos, openRepo, RECENT_LIMIT, removeRepo } from './repo';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 let configDir: string;
@@ -52,5 +52,41 @@ describe('repo 功能', () => {
     const a = await openRepo(repo);
     const b = await openRepo(repo);
     expect(b.id).toBe(a.id);
+  });
+
+  it('removeRepo 从最近列表移除并清 recentRepoIds，重复移除幂等', async () => {
+    const repoA = createTmpRepo();
+    const repoB = createTmpRepo();
+    dirs.push(repoA, repoB);
+    const a = await openRepo(repoA);
+    const b = await openRepo(repoB);
+
+    removeRepo(a.id);
+
+    const ids = listRecentRepos().map((r) => r.id);
+    expect(ids).not.toContain(a.id);
+    expect(ids).toContain(b.id);
+    expect(getRepoById(b.id).path).toBe(repoB); // 其余仓库不受影响
+    // 幂等：重复移除不抛错
+    removeRepo(a.id);
+  });
+
+  it('最近列表上限对齐 RECENT_LIMIT（配置直写 60 条 → 返回 50 条）', () => {
+    const repos = Array.from({ length: 60 }, (_, i) => ({
+      id: `bulk-${i}`,
+      path: `D:\\fake\\repo-${i}`,
+      name: `repo-${i}`,
+      openedAt: `2026-09-01T00:00:${String(i).padStart(2, '0')}.000Z`,
+    }));
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({ repos, settings: { logInEditor: true, recentRepoIds: repos.map((r) => r.id) } }),
+    );
+    expect(RECENT_LIMIT).toBe(50);
+    expect(listRecentRepos()).toHaveLength(50);
+  });
+
+  it('getAppHomeDir 返回宿主用户主目录', () => {
+    expect(getAppHomeDir()).toBe(homedir());
   });
 });

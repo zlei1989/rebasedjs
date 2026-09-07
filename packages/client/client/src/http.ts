@@ -41,3 +41,10 @@ export async function putJson<T>(url: string, body: unknown): Promise<T> {
   if (!res.ok) throw await toServiceError(res);
   return res.json() as Promise<T>;
 }
+
+/** DELETE：无请求体；非 2xx 错误映射同 getJson（响应体契约化——如 {ok:true}） */
+export async function delJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok) throw await toServiceError(res);
+  return res.json() as Promise<T>;
+}

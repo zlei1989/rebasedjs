@@ -16,11 +16,11 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **79 / 91**（web-next 79 个 route.ts ↔ web-koa repos.ts 91 注册，12 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **83 / 95**（web-next 83 个 route.ts ↔ web-koa repos.ts 95 注册，12 路径双方法，两端完全对称） |
 | 半使用接口 | 2：diff/stream 分块渲染、staging/hunks 无 UI 入口 |
-| `@rebased/api` 公共出口 | 98 函数；未挂端点 2（`initRepo`、`cloneRepo`） |
-| 契约层 | zod schema 55、领域类型/别名 82、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（104 条） | 51 ✅（含等价边）+ 10 🟡 + 7 ➖ + 36 ❌ |
+| `@rebased/api` 公共出口 | 100 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 57、领域类型/别名 82、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| 导航边（104 条） | 52 ✅（含等价边）+ 9 🟡 + 7 ➖ + 36 ❌ |
 
 ### 1.2 口径与图例
 
@@ -102,7 +102,7 @@
 
 ## 三、接口盘点
 
-### 3.1 端点总表（79 路径 / 91 方法，两端完全对称）
+### 3.1 端点总表（83 路径 / 95 方法，两端完全对称）
 
 > 路径前缀 `/api`；`id` 即 `repoId`。SSE 3 个：`log/stream`、`diff/stream`、`events`。每个路由只做三件事：zod 校验 → 调 `@rebased/api` → 错误映射。
 
@@ -110,6 +110,9 @@
 |----|------------------------|------|------|-----------|------|
 | repo | `repos` | GET | 最近仓库列表 | RepoPage、LogPage 显示名 | ✅ |
 | repo | `repos/open` | POST | 打开仓库（校验 git 仓库 → 注册） | RepoPage 打开表单 | ✅ |
+| repo | `repos/init`、`repos/clone` | POST ×2 | 初始化仓库 / 克隆仓库（成功后注册入最近列表） | RepoPage 初始化/克隆 Modal | ✅ |
+| repo | `repos/:id` | DELETE | 从最近列表移除（幂等；同时清该仓库变更列表簿记） | RepoPage 移除 Popconfirm | ✅ |
+| app | `app/home-dir` | GET | 宿主用户主目录（路径副文本 `~/` 相对化） | RepoPage（容器注入 homeDir） | ✅ |
 | status | `repos/:id/status` | GET | 工作区状态（分支/上游/变更条目） | LogPage 状态条、StatusPage | ✅ |
 | log | `repos/:id/log`、`repos/:id/log/stream` | GET | 提交历史分页快照 / SSE 增量流 | LogPage（快照+流 merge 去重） | ✅ |
 | diff | `repos/:id/diff` | GET | 单文件两侧全文（staged/from/to） | DiffPage、CommittedChangesPanel | ✅ |
@@ -148,19 +151,19 @@
 | worktree | `repos/:id/worktrees`、`worktrees/remove`、`worktrees/prune` | GET/POST + 2×POST | 工作树列表 / 创建 / 移除 / 清理 | WorktreePanel | ✅ |
 | submodule | `repos/:id/submodules`、`submodules/update` | GET/POST | 子模块列表（四态）/ 更新（init/recursive） | SubmodulePanel | ✅ |
 
-**小结**：79 路径全部有客户端消费方，无死接口；半使用 2 个（diff/stream 分块文本未接入 Monaco；staging/hunks hook 就绪但 UI 无 hunk 级入口），均为已知预留。
+**小结**：83 路径全部有客户端消费方，无死接口；半使用 2 个（diff/stream 分块文本未接入 Monaco；staging/hunks hook 就绪但 UI 无 hunk 级入口），均为已知预留。
 
 ### 3.2 契约层（`@rebased/contracts`）
 
-- **zod schema（55 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo/log/diff/settings/config、staging/commit、branch/checkout、reset、merge/conflict、stash/changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore、github/gitlab、worktree/submodule——全部被两端路由使用，无闲置。
+- **zod schema（57 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff/settings/config、staging/commit、branch/checkout、reset、merge/conflict、stash/changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore、github/gitlab、worktree/submodule——全部被两端路由使用，无闲置。
 - **SSE 事件（6 种在用）**：`log.line`、`diff.chunk`、`repo.state-changed`、`operation.state-changed`（events 首帧双事件）、`refs.changed`（fetch/pull/push 后引用移动，首帧全量基线）、`stream.error`（流内错误帧）。`operation.progress` 未实现（无进度型长任务 UI 面）。
 - **错误码（12 个）**：实际产生 8 个——`REPO_NOT_FOUND`、`NOT_A_GIT_REPO`、`INVALID_QUERY`、`GIT_ERROR`、`INVALID_REF`、`OPERATION_IN_PROGRESS`、`AUTH_FAILED`（远程 401 → 认证重试回路）、`RATE_LIMITED`（GitHub 限流）；预留 4 个——`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`。映射表 `httpStatusFor` 两端共用。
 - **领域类型（82 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
 
 ### 3.3 服务层与使用状态
 
-- `@rebased/api` 公共出口 98 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
-- **未挂端点 2 个**：`initRepo`、`cloneRepo`（服务层实现 + 集成测试就绪，无路由与 UI 入口）。
+- `@rebased/api` 公共出口 100 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
+- **未挂端点 0**：`initRepo`/`cloneRepo` 已随 repo 域收尾挂 `/repos/init`、`/repos/clone`（见任务清单 §2.2 完成记录）。
 - **半使用接口 2 个**：`streamDiffEvents`（diff/stream 已订阅未渲染）、`applyHunkStaging`（无 UI 入口）。
 
 ---
@@ -173,19 +176,19 @@
 
 应用入口页——打开本地 Git 仓库 + 最近仓库列表管理；取代 Java 欢迎屏 `FlatWelcomeFrame` + RecentProjects（组装 spec 明确不做欢迎屏整体）。
 
-- **落点**：路由 `/`；组件 `composite/repo-page.tsx`；服务 `api/repo.ts`；端点 `GET /api/repos`、`POST /api/repos/open`；两端容器同构（`open-repo-flow.ts`）。
+- **落点**：路由 `/`；组件 `composite/repo-page.tsx`；服务 `api/repo.ts`；端点 `GET /api/repos`、`POST /api/repos/open`、`POST /api/repos/init`、`POST /api/repos/clone`、`DELETE /api/repos/:id`、`GET /api/app/home-dir`；两端容器同构（`open-repo-flow.ts` 通用入库流程）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | 打开路径表单（校验 → 验证 git 仓库 → 注册 → 跳日志页） | ✅ | 失败 message.error，`NOT_A_GIT_REPO` 映射两端一致 |
 | 最近列表：打开即注册、同路径复用 id、最近优先 | ✅ | `openedAt` 降序 + 同路径去重 |
-| 显示名三级回退（`.idea/.name` → 目录名 → 路径） | 🟡 | 实测仅目录名一级（`.idea/.name` 依 spec §2.2 无对应概念） |
-| 路径副文本 `~/` 相对化 | 🟡 | `relativeToHome` 有单测，两端容器未注入 `homeDir` |
-| 列表上限 50 | 🟡 | 组件 `MAX_RECENT=50`，服务端 `slice(0, 20)` → 有效上限 20 |
-| 移除动作 + Popconfirm | 🟡 | 组件就绪；无删除端点、容器不注入 `onRemove` → 按钮不渲染 |
-| 克隆对话框（URL + Directory） | ❌ | `cloneRepo` 服务层就绪，无端点无 UI |
-| 初始化仓库入口 | ❌ | `initRepo` 就绪，无端点无 UI |
-| 列表项分支后缀/图标/失效标记 | ❌ | 装饰性后置 |
+| 显示名 | ✅（定案单级） | 注册时以目录名命名；`.idea/.name` 依 spec §2.2 无对应概念，单级为定案口径（不再保留三级回退表述） |
+| 路径副文本 `~/` 相对化 | ✅ | `relativeToHome` + 容器经 `GET /api/app/home-dir` 注入 `homeDir` |
+| 列表上限 50 | ✅ | 服务端 `RECENT_LIMIT=50` 与组件 `MAX_RECENT=50` 同口径（原有效上限 20 为不一致） |
+| 移除动作 + Popconfirm | ✅ | `DELETE /api/repos/:id`（幂等）；同清 `recentRepoIds` 与该仓库变更列表簿记 |
+| 克隆对话框（URL + Directory） | ✅ | `POST /api/repos/clone` + RepoPage 克隆 Modal（对齐 `VcsCloneDialog` 最小字段集） |
+| 初始化仓库入口 | ✅ | `POST /api/repos/init` + RepoPage 初始化 Modal |
+| 列表项分支后缀/图标/失效标记 | ❌ | 装饰性后置（见任务清单 §2.2 完成记录） |
 
 ### 4.2 LogPage ✅
 
@@ -632,7 +635,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | # | 源 → 目标 | 手势/入口 | Java 证据 | rebasedjs |
 |---|-----------|-----------|-----------|-----------|
 | 1 | RepoPage → 主窗口 | 双击最近项目 / Open | `OpenSelectedProjectsAction`（PlatformActions.xml:1251） | ✅ 打开成功 `navigate(/repos/:id)` |
-| 2 | RepoPage → 克隆对话框 → 主窗口 | Get from VCS | `GetFromVersionControlAction` → `VcsCloneDialog`；`ProjectCheckoutListener.java:21` | 🟡 `cloneRepo` 服务层就绪，无端点无 UI |
+| 2 | RepoPage → 克隆对话框 → 主窗口 | Get from VCS | `GetFromVersionControlAction` → `VcsCloneDialog`；`ProjectCheckoutListener.java:21` | ✅ 克隆 Modal（URL + Directory）→ `POST /repos/clone` → 日志页 |
 | 3 | RepoPage → SettingsPage | 欢迎屏 Configure | PlatformActions.xml:1208-1209 | ❌ |
 | 4 | 主窗口 → RepoPage | File → Close Project | `CloseProjectsActionBase.kt:42-46` | ❌（LogPage 无回 `/` 入口） |
 | 5 | 任意处 → SettingsPage | File → Settings | PlatformActions.xml:509-510 | ➖（改由 LogPage 顶栏进入） |
@@ -732,7 +735,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 84 | StashPanel → DiffPage | 右键 Show Diff | backend.xml:511-517 | ❌ |
 | 85 | Git 菜单 → TagPanel | Tag… | backend.xml:175 | ✅ 「更多」→ `/tags` |
 | 86 | Git 菜单 → RemotePanel | Manage Remotes… | backend.xml:186 | ✅ 「更多」→ `/remotes` |
-| 87 | Git 菜单 → 克隆对话框 | Clone… | backend.xml:187 | 🟡 同 #2 |
+| 87 | Git 菜单 → 克隆对话框 | Clone… | backend.xml:187 | ✅ 同 #2（RepoPage 克隆入口承载） |
 | 88 | Git 菜单 → WorktreePanel | New Worktree / Show Worktrees | backend.xml:178-179 | ✅ 「更多」→ `/worktrees`（创建 Modal） |
 | 89 | Git 菜单 → Shelf/Patch/Log/QuickList | Local Changes/Patch 子菜单等 | backend.xml:144、:182、:181、:189 | ✅ 等价：「更多」菜单承载 |
 | 90 | Git 菜单 → GitHub/GitLabPanel | View Pull Requests / Show Merge Requests | `GithubViewPullRequestsAction.kt:24` | ✅ 「更多」双面板项（各自检测远程） |
@@ -763,10 +766,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **50 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 3、BranchPanel 链 3、远程/集成链 7、本地工具链 6 |
-| 🟡 半通/降级 | **11 条**：#2/#87 克隆、#13 LogPage→DiffPage、#21 右键动作集、#22 浏览快照已通（checkout 部分仍经 BranchPanel）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效、#98 diff 预览降级 |
+| ✅ 已复刻（含等价边） | **52 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 3、BranchPanel 链 3、远程/集成链 7、本地工具链 6、repo 入库链 2（#2/#87 克隆） |
+| 🟡 半通/降级 | **9 条**：#13 LogPage→DiffPage、#21 右键动作集、#22 浏览快照已通（checkout 部分仍经 BranchPanel）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效、#98 diff 预览降级 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **36 条**（含明确不做：克隆/分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree、Checkout 组） |
+| ❌ 未复刻 | **36 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree、Checkout 组） |
 
 ### 5.5 关键联动流程
 
@@ -781,20 +784,19 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 ## 六、结论与下一步
 
 1. **页面**：31/31 全覆盖（29 ✅ + 2 🟡 等效）；功能域 36/36（browse 已落地，见任务清单 §2.8），可选 2 项明确不做（1.3 决策清单）。
-2. **接口**：79 路径 / 91 方法两端对称、全部有消费方；半使用 2 个（diff/stream 分块渲染、staging/hunks 无 UI 入口）；服务层未挂端点 2 个（`initRepo`/`cloneRepo`）。
-3. **导航**：104 条边中 50 ✅（含等价边）+ 11 🟡 + 7 ➖ + 36 ❌；形态等价判定规则见 1.2，明确不做项均记录在案。
+2. **接口**：83 路径 / 95 方法两端对称、全部有消费方（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`）；半使用 2 个（diff/stream 分块渲染、staging/hunks 无 UI 入口）。
+3. **导航**：104 条边中 52 ✅（含等价边）+ 9 🟡 + 7 ➖ + 36 ❌；形态等价判定规则见 1.2，明确不做项均记录在案。
 
 **下一步**（按任务清单 `docs/reports/2026-09-08-replication-gap-backlog.md` 执行）：
 
 1. **P0 半使用接口消化**（清单 §2.1，2 项）：diff/stream 分块渲染接入 Monaco；hunk 级暂存 UI（hook + 索引已就绪）。
-2. **P1 repo 域收尾**（§2.2，7 项）：`initRepo`/`cloneRepo` 端点与 RepoPage 入口 + 显示名回退口径、`~/` 相对化接线、上限对齐、移除端点、装饰 5 项遗留。
-3. **P2 各域功能点补齐**（§2.3，50 项按域）：LogPage 过滤/分页/右键形态、DiffPage hunk 应用与三版本、BranchPanel 清理/保护分支、Push rejected 联动、Settings GPG/SSH 等逐项落地。
-4. **专项裁定任务**：PR/MR 行级 diff 视图（§2.7，2026-09-08 裁定）——完成后边 #98 转 ✅。
-5. **P3 导航边缺口**（§2.4，32 条 ❌ + 2 条 🟡 直达）：按目标页分组落地（LogPage 右键动作集、StatusPage 六入口、Stash/Patch/Shelf 回边等）。
-6. **工程排期项**（§2.5，11 项）：gitlab checkout Bearer hardening、core vitest fileParallelism、unborn HEAD 补丁/搁置等随批消化。
-7. **契约与功能域收尾**（§2.6）：`operation.progress` SSE、预留错误码 4 个随功能消费、终稿盘点以架构 spec §4.2 域表逐行核。
-8. **可选任务**（§2.9）：分支折叠——待过滤 UI 落地后按触发条件评估。
-9. **明确不做**：维持 §1.3 决策清单（清单 §三），新需求出现时可重新决议。
+2. **P2 各域功能点补齐**（§2.3，50 项按域）：LogPage 过滤/分页/右键形态、DiffPage hunk 应用与三版本、BranchPanel 清理/保护分支、Push rejected 联动、Settings GPG/SSH 等逐项落地。
+3. **专项裁定任务**：PR/MR 行级 diff 视图（§2.7，2026-09-08 裁定）——完成后边 #98 转 ✅。
+4. **P3 导航边缺口**（§2.4，32 条 ❌ + 2 条 🟡 直达）：按目标页分组落地（LogPage 右键动作集、StatusPage 六入口、Stash/Patch/Shelf 回边等）。
+5. **工程排期项**（§2.5，11 项）：gitlab checkout Bearer hardening、core vitest fileParallelism、unborn HEAD 补丁/搁置等随批消化。
+6. **契约与功能域收尾**（§2.6）：`operation.progress` SSE、预留错误码 4 个随功能消费、终稿盘点以架构 spec §4.2 域表逐行核。
+7. **可选任务**（§2.9）：分支折叠——待过滤 UI 落地后按触发条件评估。
+8. **明确不做**：维持 §1.3 决策清单（清单 §三），新需求出现时可重新决议。
 
 ---
 
@@ -803,9 +805,9 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 层 | 位置 |
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
-| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 98 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（77 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（91 注册）+ `src/middleware/error.ts` |
+| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 100 出口） |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（83 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（95 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |

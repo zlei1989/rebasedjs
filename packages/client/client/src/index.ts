@@ -1,8 +1,16 @@
 /** client 公共出口：HTTP 助手 + SSE 订阅 + 端点 hooks（类型来自 contracts，不持业务逻辑） */
-export { getJson, postJson, putJson } from './http';
+export { getJson, postJson, putJson, delJson } from './http';
 export { subscribeSse, useRepoEvents } from './events';
 export type { RepoEventHandlers } from './events';
-export { useRecentRepos, useOpenRepo, useRepoStatus } from './repos';
+export {
+  useAppHomeDir,
+  useCloneRepo,
+  useInitRepo,
+  useOpenRepo,
+  useRecentRepos,
+  useRemoveRepo,
+  useRepoStatus,
+} from './repos';
 export { useLogPage, useLogStream } from './log';
 export { useFileDiff, useDiffStream, useDiffPatch } from './diff';
 export { useBlame } from './blame';

@@ -163,6 +163,73 @@ describe('web-koa REST 端点', () => {
     expect(await res.json()).toEqual([]);
   });
 
+  it('init 端点：空目录 git init 后注册，返回 {repoId} 且列表可见', async () => {
+    const dir = tmpDir('rebased-web-koa-init-');
+    const res = await fetch(`${base}/api/repos/init`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: dir }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { repoId: string };
+    expect(body.repoId).toMatch(/^[0-9a-f-]{36}$/);
+    const list = (await (await fetch(`${base}/api/repos`)).json()) as Array<{ id: string }>;
+    expect(list.map((r) => r.id)).toContain(body.repoId);
+  });
+
+  it('init 端点：path 为空返回 400 INVALID_QUERY', async () => {
+    const res = await fetch(`${base}/api/repos/init`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: '' }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('clone 端点：本地仓库克隆落盘并注册；不存在的源 → GIT_ERROR', { timeout: 60000 }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    const target = join(tmpdir(), `rebased-web-koa-clone-${Date.now()}`);
+    const res = await fetch(`${base}/api/repos/clone`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: repoPath, targetDir: target }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { repoId: string };
+    expect(body.repoId).not.toBe(repoId); // 新仓库独立注册
+    expect(await fetch(`${base}/api/repos/${body.repoId}/status`)).toHaveProperty('status', 200);
+
+    const bad = await fetch(`${base}/api/repos/clone`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: join(tmpdir(), 'no-such-source'), targetDir: join(tmpdir(), `rebased-web-koa-bad-${Date.now()}`) }),
+    });
+    expect(bad.status).toBe(500);
+    expect(await bad.json()).toMatchObject({ error: { code: 'GIT_ERROR' } });
+  });
+
+  it('delete 端点：移除后列表复原；未注册 id 幂等返回 {ok:true}', async () => {
+    const { repoId } = registerRepo();
+    expect((await (await fetch(`${base}/api/repos`)).json()) as unknown[]).toHaveLength(1);
+    const res = await fetch(`${base}/api/repos/${repoId}`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(await (await fetch(`${base}/api/repos`)).json()).toEqual([]);
+    // 幂等：重复删除同 id 不再报错
+    const again = await fetch(`${base}/api/repos/${repoId}`, { method: 'DELETE' });
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ ok: true });
+  });
+
+  it('home-dir 端点：返回 200 与非空 {homeDir}', async () => {
+    const res = await fetch(`${base}/api/app/home-dir`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { homeDir: string };
+    expect(typeof body.homeDir).toBe('string');
+    expect(body.homeDir.length).toBeGreaterThan(0);
+  });
+
   it('log 端点：已注册仓库返回 200 与 LogPage 形状', async () => {
     const { repoId } = registerRepo();
     const res = await fetch(`${base}/api/repos/${repoId}/log`);
