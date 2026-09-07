@@ -530,7 +530,7 @@ GitHub 集成——认证、PR 全流程；对应 `github-core`（accounts/pullr
 | 账户/token 认证 | ✅ | `findToken('github.com')` + Settings 账户卡片（PAT 录入） |
 | PR 列表/详情/时间线/评论 | ✅ | 时间线 = issue comments + review summaries 合并（旧→新）；空评论拦截 |
 | PR 审查（approve/request changes） | ✅ | reviewDecision 徽标 |
-| diff 视图 | 🟡 | 现为文件列表（status/增删行）+ patch 文本只读预览；行级视图（Monaco DiffEditor + unified diff 行映射 + 行级评论锚点）经 2026-09-08 裁定可行，已排期 |
+| diff 视图 | ✅ | 行级视图落地：逐 hunk 两侧 MonacoDiffView（`parseUnifiedDiff` 行映射；`@@` 绝对行号头行 + 上下文标题）；降级：renamed 无内容 → 仅提示、空 patch → 二进制/截断提示、截断按部分渲染；行级评论锚点与提交见任务清单 §2.7 #3 待办 |
 | 三种合并策略 | ✅ | merge/squash/rebase + warning 路径 |
 | 检出 PR 分支 | ✅ | fetch `+refs/pull/N/head` + `checkoutNewBranch('pr-N','FETCH_HEAD')`；跨键回写 status/branches |
 | 克隆/分享、Gist、AI 描述 | ❌ 明确不做 | — |
@@ -545,7 +545,7 @@ GitLab 集成——认证、MR 全流程；对应 `gitlab-core`（mergerequest�
 |--------|------|------|
 | 账户认证 | ✅ | `findToken('gitlab.com')` + Settings 账户卡片 |
 | MR 创建/列表/详情/评论 | ✅ | 列表四徽标；新建 MR（源/目标分支 + 标题 + 描述）；时间线 notes+reviews 尽力合并 |
-| MR diff 视图 | 🟡 | 现为文件列表 + diff 文本只读预览；行级视图经 2026-09-08 裁定可行已排期（行号从 hunk 头解析——API 汇总字段不逐文件给行数不构成阻塞） |
+| MR diff 视图 | ✅ | 行级视图落地：逐 hunk 两侧 MonacoDiffView（与 GitHub 共用 `parseUnifiedDiff`/HunkDiffView）；降级同 GitHub；行级评论锚点与提交见任务清单 §2.7 #3 待办 |
 | MR 审查（approve/request changes）/合并 | ✅ | 三映射（approve 端点 / reviews{state:rejected} / notes）+ reviewState 徽标；`merge {squash?}` |
 | MR 检出 | ✅ | fetch `refs/merge-requests/:iid/head` + `checkoutNewBranch('mr-N','FETCH_HEAD')` |
 | Snippet、自托管实例 | ❌ 明确不做 | — |
@@ -751,7 +751,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 95 | 远程操作 → 认证对话框 | 401 自动弹出；内嵌托管登录 | `GitHttpGuiAuthenticator.java:399-440` | ✅ AuthDialog 认证重试回路（PAT 录入，OAuth 不做） |
 | 96 | Worktrees tab → 打开 worktree | 双击 worktree | backend.xml:577-579 | ❌ 明确不做 |
 | 97 | GitHubPanel 列表 → 详情+时间线 | 双击 PR | `GHPROpenPullRequestAction.kt:24-25` | ✅ 单击选中 → 详情 + 页内时间线 tab |
-| 98 | GitHubPanel 详情 → PR diff | Changes 树打开 diff | `GHPRFilesManagerImpl.kt:37-46` | 🟡 现为 patch 文本预览；行级视图（Monaco DiffEditor）经 2026-09-08 裁定可行已排期 |
+| 98 | GitHubPanel 详情 → PR diff | Changes 树打开 diff | `GHPRFilesManagerImpl.kt:37-46` | ✅ 行级视图（逐 hunk 两侧 MonacoDiffView，`parseUnifiedDiff` 行映射）；行级评论锚点见任务清单 §2.7 #3 |
 | 99 | GitHubPanel 详情 → 时间线 | Show Timeline 回跳 | `GHPRDetailsComponentFactory.kt:107` | ✅ 页内 tab |
 | 100 | → GitHubPanel 登录（4 入口） | 克隆 GitHub tab / 账户选择器 / Settings | `GithubSettingsConfigurable.kt:44-53` 等 | ✅ Settings 账户卡片既有流 |
 | 101 | 任意处 → Share Project on GitHub | Vcs.Import / Share 按钮 | `GithubShareAction` | ❌ 明确不做 |
@@ -766,8 +766,8 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **52 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 3、BranchPanel 链 3、远程/集成链 7、本地工具链 6、repo 入库链 2（#2/#87 克隆） |
-| 🟡 半通/降级 | **9 条**：#13 LogPage→DiffPage、#21 右键动作集、#22 浏览快照已通（checkout 部分仍经 BranchPanel）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效、#98 diff 预览降级 |
+| ✅ 已复刻（含等价边） | **53 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 3、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 6、repo 入库链 2（#2/#87 克隆） |
+| 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#21 右键动作集、#22 浏览快照已通（checkout 部分仍经 BranchPanel）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
 | ❌ 未复刻 | **36 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree、Checkout 组） |
 

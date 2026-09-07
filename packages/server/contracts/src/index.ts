@@ -1,7 +1,8 @@
-/** contracts 公共出口：领域类型 + 端点 schema + 错误模型 + SSE 序列化 + host 规范化 + patch 切片。 */
+/** contracts 公共出口：领域类型 + 端点 schema + 错误模型 + SSE 序列化 + host 规范化 + patch 切片 + unified diff 解析。 */
 export * from './domain';
 export * from './endpoints';
 export * from './errors';
 export * from './host';
 export * from './patch';
 export * from './sse';
+export * from './unified-diff';

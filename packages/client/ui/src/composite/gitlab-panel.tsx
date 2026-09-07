@@ -36,6 +36,8 @@ import type {
 } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { formatCommitDate } from '../domain/format';
+import { HunkDiffView } from '../domain/hunk-diff-view';
+import type { MonacoDiffLoader } from '../base/monaco-diff-view';
 
 /** GitLab 面板：MR 列表（iid/title/author/state 徽标）+ 详情（元信息/reviewState 徽标/增删行）+ tabs（时间线|文件）+ 操作（评论、Approve、Request changes、合并 Modal（squash Checkbox）、检出、刷新）；「新建 MR」入口在面板根列表卡片 extra */
 export interface GitLabPanelProps {
@@ -44,6 +46,8 @@ export interface GitLabPanelProps {
   detail: GitLabMrDetail | null; timeline: GitLabTimeline | null; files: GitLabMrFiles | null;
   branches: BranchRef[];
   loading?: boolean; acting?: boolean;
+  /** 测试注入点：行级差异视图的 Monaco 加载器（缺省懒加载真实 monaco） */
+  loader?: MonacoDiffLoader;
   onSelectMr: (iid: number) => void;
   /** 刷新列表/详情：缺省不渲染刷新按钮 */
   onRefresh?: () => void;
@@ -151,8 +155,9 @@ function TimelineRow({ entry }: { entry: GitLabTimelineEntry }): React.ReactNode
   );
 }
 
-/** 文件行：path/status 徽标/增删行 + 「查看差异」展开区（diff 空串不渲染展开） */
-function FileRow({ file, index }: { file: GitLabMrFile; index: number }): React.ReactNode {
+/** 文件行：path/status 徽标/增删行 + 「查看差异」展开区（行级视图：逐 hunk 两侧 MonacoDiffView，2026-09-08 裁定 §2.7）；
+ *  diff 空串时仅 renamed（无内容变更）与 removed（二进制/截断）渲染展开——由 HunkDiffView 降级提示 */
+function FileRow({ file, index, loader }: { file: GitLabMrFile; index: number; loader?: MonacoDiffLoader }): React.ReactNode {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -167,7 +172,7 @@ function FileRow({ file, index }: { file: GitLabMrFile; index: number }): React.
         <Typography.Text type="success" style={{ fontSize: 12, flexShrink: 0 }}>{`+${file.additions}`}</Typography.Text>
         <Typography.Text type="danger" style={{ fontSize: 12, flexShrink: 0 }}>{`-${file.deletions}`}</Typography.Text>
       </Flex>
-      {file.diff !== '' ? (
+      {file.diff !== '' || file.status === 'renamed' ? (
         <Flex vertical gap={4}>
           <Button
             type="link"
@@ -178,14 +183,7 @@ function FileRow({ file, index }: { file: GitLabMrFile; index: number }): React.
           >
             {expanded ? '收起差异' : '查看差异'}
           </Button>
-          {expanded ? (
-            <pre
-              data-testid={`gitlab-diff-${index}`}
-              style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12 }}
-            >
-              {file.diff}
-            </pre>
-          ) : null}
+          {expanded ? <HunkDiffView patch={file.diff} status={file.status} loader={loader} /> : null}
         </Flex>
       ) : null}
     </Flex>
@@ -340,6 +338,7 @@ function MrDetailBlock({
   timeline,
   files,
   acting,
+  loader,
   onComment,
   onReview,
   onMerge,
@@ -349,6 +348,8 @@ function MrDetailBlock({
   timeline: GitLabTimeline | null;
   files: GitLabMrFiles | null;
   acting?: boolean;
+  /** 测试注入点：行级差异视图的 Monaco 加载器（缺省懒加载真实 monaco） */
+  loader?: MonacoDiffLoader;
   onComment: (body: string) => void;
   onReview: (event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body?: string) => void;
   onMerge: (squash: boolean) => void;
@@ -465,7 +466,7 @@ function MrDetailBlock({
               ) : (
                 <Flex vertical>
                   {files.files.map((file, index) => (
-                    <FileRow key={file.path} file={file} index={index} />
+                    <FileRow key={file.path} file={file} index={index} loader={loader} />
                   ))}
                 </Flex>
               ),
@@ -495,6 +496,7 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
     branches,
     loading,
     acting,
+    loader,
     onSelectMr,
     onRefresh,
     onCreateMr,
@@ -565,6 +567,7 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
               timeline={timeline}
               files={files}
               acting={acting}
+              loader={loader}
               onComment={onComment}
               onReview={onReview}
               onMerge={onMerge}

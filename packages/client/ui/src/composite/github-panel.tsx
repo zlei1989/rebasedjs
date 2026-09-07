@@ -30,6 +30,8 @@ import type {
 } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { formatCommitDate } from '../domain/format';
+import { HunkDiffView } from '../domain/hunk-diff-view';
+import type { MonacoDiffLoader } from '../base/monaco-diff-view';
 
 /** GitHub 面板：左列表（number/title/author/state 徽标/更新时间）+ 右详情（标题/主体/元信息/reviewDecision 徽标/增删行统计）+ tabs（时间线 | 文件）+ 操作区（评论、Approve、Request changes、合并 Modal、检出、刷新） */
 export interface GitHubPanelProps {
@@ -37,6 +39,8 @@ export interface GitHubPanelProps {
   prs: GitHubPrList; number: number | null;
   detail: GitHubPrDetail | null; timeline: GitHubTimeline | null; files: GitHubPrFiles | null;
   loading?: boolean; acting?: boolean;
+  /** 测试注入点：行级差异视图的 Monaco 加载器（缺省懒加载真实 monaco） */
+  loader?: MonacoDiffLoader;
   onSelectPr: (number: number) => void;
   /** 刷新列表/详情：缺省不渲染刷新按钮 */
   onRefresh?: () => void;
@@ -147,8 +151,9 @@ function TimelineRow({ entry }: { entry: GitHubTimelineEntry }): React.ReactNode
   );
 }
 
-/** 文件行：path/status 徽标/增删行 + 「查看补丁」展开区（patch 空串不渲染展开） */
-function FileRow({ file, index }: { file: GitHubPrFile; index: number }): React.ReactNode {
+/** 文件行：path/status 徽标/增删行 + 「查看差异」展开区（行级视图：逐 hunk 两侧 MonacoDiffView，2026-09-08 裁定 §2.7）；
+ *  patch 空串时仅 renamed（无内容变更）与 removed（二进制/截断）渲染展开——由 HunkDiffView 降级提示 */
+function FileRow({ file, index, loader }: { file: GitHubPrFile; index: number; loader?: MonacoDiffLoader }): React.ReactNode {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -163,25 +168,18 @@ function FileRow({ file, index }: { file: GitHubPrFile; index: number }): React.
         <Typography.Text type="success" style={{ fontSize: 12, flexShrink: 0 }}>{`+${file.additions}`}</Typography.Text>
         <Typography.Text type="danger" style={{ fontSize: 12, flexShrink: 0 }}>{`-${file.deletions}`}</Typography.Text>
       </Flex>
-      {file.patch !== '' ? (
+      {file.patch !== '' || file.status === 'renamed' ? (
         <Flex vertical gap={4}>
           <Button
             type="link"
             size="small"
-            data-testid={`github-patch-toggle-${index}`}
+            data-testid={`github-diff-toggle-${index}`}
             style={{ alignSelf: 'flex-start', padding: 0 }}
             onClick={() => setExpanded((v) => !v)}
           >
-            {expanded ? '收起补丁' : '查看补丁'}
+            {expanded ? '收起差异' : '查看差异'}
           </Button>
-          {expanded ? (
-            <pre
-              data-testid={`github-patch-${index}`}
-              style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12 }}
-            >
-              {file.patch}
-            </pre>
-          ) : null}
+          {expanded ? <HunkDiffView patch={file.patch} status={file.status} loader={loader} /> : null}
         </Flex>
       ) : null}
     </Flex>
@@ -252,6 +250,7 @@ function PrDetailBlock({
   timeline,
   files,
   acting,
+  loader,
   onComment,
   onReview,
   onMerge,
@@ -261,6 +260,8 @@ function PrDetailBlock({
   timeline: GitHubTimeline | null;
   files: GitHubPrFiles | null;
   acting?: boolean;
+  /** 测试注入点：行级差异视图的 Monaco 加载器（缺省懒加载真实 monaco） */
+  loader?: MonacoDiffLoader;
   onComment: (body: string) => void;
   onReview: (event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body?: string) => void;
   onMerge: (method: 'merge' | 'squash' | 'rebase') => void;
@@ -377,7 +378,7 @@ function PrDetailBlock({
               ) : (
                 <Flex vertical>
                   {files.files.map((file, index) => (
-                    <FileRow key={file.path} file={file} index={index} />
+                    <FileRow key={file.path} file={file} index={index} loader={loader} />
                   ))}
                 </Flex>
               ),
@@ -405,6 +406,7 @@ export function GitHubPanel(props: GitHubPanelProps): React.ReactNode {
     files,
     loading,
     acting,
+    loader,
     onSelectPr,
     onRefresh,
     onComment,
@@ -464,6 +466,7 @@ export function GitHubPanel(props: GitHubPanelProps): React.ReactNode {
               timeline={timeline}
               files={files}
               acting={acting}
+              loader={loader}
               onComment={onComment}
               onReview={onReview}
               onMerge={onMerge}

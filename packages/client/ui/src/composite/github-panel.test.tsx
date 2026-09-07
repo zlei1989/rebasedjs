@@ -77,11 +77,19 @@ const FILES: GitHubPrFiles = {
       status: 'added',
       additions: 40,
       deletions: 0,
-      patch: 'diff --git a/src/panel.tsx b/src/panel.tsx\n+export function panel() {}',
+      patch: 'diff --git a/src/panel.tsx b/src/panel.tsx\n@@ -0,0 +1,2 @@\n+export function panel() {}\n',
     },
     { path: 'src/old.ts', status: 'removed', additions: 0, deletions: 10, patch: '' },
   ],
 };
+
+/** 行级差异视图的 stub Monaco 加载器：避免 jsdom 加载真实 monaco（测试注入点） */
+const STUB_LOADER: GitHubPanelProps['loader'] = async () => ({
+  default: (props) => {
+    const inner = props as { original: string; modified: string };
+    return <div data-testid="stub-diff">{inner.original}||{inner.modified}</div>;
+  },
+});
 
 /** 全量 props 渲染：缺省值可被 overrides 覆盖；返回回调替身便于断言 */
 function renderPanel(overrides: Partial<GitHubPanelProps> = {}) {
@@ -202,30 +210,32 @@ describe('GitHubPanel 时间线', () => {
 });
 
 describe('GitHubPanel 文件', () => {
-  it('文件行：path/status 徽标/增删行；「查看补丁」展开 patch 文本，再点收起', () => {
-    renderPanel();
+  it('文件行：path/status 徽标/增删行；「查看差异」展开行级 Monaco 视图（逐 hunk），再点收起', async () => {
+    renderPanel({ loader: STUB_LOADER });
     fireEvent.click(screen.getByRole('tab', { name: '文件' }));
     const row = screen.getByTestId('github-file-0');
     expect(row).toHaveTextContent('src/panel.tsx');
     expect(within(row).getByText('added')).toHaveClass('ant-tag-green');
     expect(within(row).getByText('+40')).toBeInTheDocument();
     expect(within(row).getByText('-0')).toBeInTheDocument();
-    expect(screen.queryByTestId('github-patch-0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('hunk-diff-block-0')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('github-patch-toggle-0'));
-    expect(screen.getByTestId('github-patch-0')).toHaveTextContent('diff --git a/src/panel.tsx');
+    fireEvent.click(screen.getByTestId('github-diff-toggle-0'));
+    // 单 hunk：stub 编辑器收到剥离前缀的两侧内容（added 文件原侧为空、新侧为新行）
+    expect(await screen.findByTestId('hunk-diff-block-0')).toBeInTheDocument();
+    expect(await screen.findByTestId('stub-diff')).toHaveTextContent('export function panel() {}');
 
-    fireEvent.click(screen.getByTestId('github-patch-toggle-0'));
-    expect(screen.queryByTestId('github-patch-0')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('github-diff-toggle-0'));
+    expect(screen.queryByTestId('hunk-diff-block-0')).not.toBeInTheDocument();
   });
 
-  it('patch 为空串时不渲染展开区', () => {
+  it('patch 为空串（非 renamed）时不渲染展开区', () => {
     renderPanel();
     fireEvent.click(screen.getByRole('tab', { name: '文件' }));
     const row = screen.getByTestId('github-file-1');
     expect(row).toHaveTextContent('src/old.ts');
     expect(within(row).getByText('removed')).toHaveClass('ant-tag-red');
-    expect(screen.queryByTestId('github-patch-toggle-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('github-diff-toggle-1')).not.toBeInTheDocument();
   });
 
   it('文件列表为空渲染「暂无文件变更」', () => {
