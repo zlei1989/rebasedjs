@@ -27,7 +27,7 @@ export { useTags, useTagAction } from './tag';
 export { useStaging, useHunkStaging } from './staging';
 export { useCommit } from './commit';
 export { useBranches, useBranchAction } from './branches';
-export { useStashes, useStashAction } from './stash';
+export { useStashes, useStashAction, useStashDiff, useStashUnstashAs } from './stash';
 export { useChangelists, useChangelistAction } from './changelist';
 export { usePatches, useCreatePatch, useApplyPatch, useDeletePatch } from './patch';
 export { useShelves, useShelfAction } from './shelf';

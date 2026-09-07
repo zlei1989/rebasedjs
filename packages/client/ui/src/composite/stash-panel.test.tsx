@@ -99,3 +99,63 @@ describe('StashPanel 行操作', () => {
     expect(onAction).toHaveBeenCalledWith({ action: 'branch', index: 0, name: 'from-stash' });
   });
 });
+
+describe('StashPanel Unstash As / 查看差异', () => {
+  const LOCAL_BRANCHES = [
+    { name: 'main', remote: false, current: true, upstream: null, ahead: 0, behind: 0, hash: 'a', mergedIntoHead: true, lastCommitIso: '2026-01-01T00:00:00Z' },
+    { name: 'target-branch', remote: false, current: false, upstream: null, ahead: 0, behind: 0, hash: 'b', mergedIntoHead: true, lastCommitIso: '2026-01-01T00:00:00Z' },
+    { name: 'origin/main', remote: true, current: false, upstream: null, ahead: 0, behind: 0, hash: 'c', mergedIntoHead: false, lastCommitIso: '2026-01-01T00:00:00Z' },
+  ] as never[];
+
+  it('Unstash As：选择本地分支（远程不出现）后回调 (index, branch)', async () => {
+    const onUnstashAs = vi.fn();
+    render(
+      <StashPanel
+        stashes={makeList([makeStash({ index: 0 })])}
+        onAction={vi.fn()}
+        onUnstashAs={onUnstashAs}
+        branches={LOCAL_BRANCHES as never}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('unstash-as-0'));
+    // Select 打开选 target-branch（选项渲染于下拉容器，可能同时命中展示区）
+    fireEvent.mouseDown(screen.getByTestId('unstash-as-branch'));
+    const options = await screen.findAllByText('target-branch');
+    fireEvent.click(options[options.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onUnstashAs).toHaveBeenCalledWith(0, 'target-branch');
+  });
+
+  it('未传 onUnstashAs 时不渲染按钮', () => {
+    render(<StashPanel stashes={makeList([makeStash({ index: 0 })])} onAction={vi.fn()} />);
+    expect(screen.queryByTestId('unstash-as-0')).not.toBeInTheDocument();
+  });
+
+  it('查看差异：点击行打开 Modal 渲染 patch 文本；loading/error 态', async () => {
+    const { rerender } = render(
+      <StashPanel
+        stashes={makeList([makeStash({ index: 0 })])}
+        onAction={vi.fn()}
+        stashDiff={null}
+        diffLoading
+      />,
+    );
+    fireEvent.click(screen.getByTestId('stash-diff-0'));
+    expect(await screen.findByTestId('stash-diff-loading')).toBeInTheDocument();
+
+    rerender(
+      <StashPanel
+        stashes={makeList([makeStash({ index: 0 })])}
+        onAction={vi.fn()}
+        stashDiff={{ index: 0, patch: 'diff --git a/a.txt b/a.txt\n@@ -1 +1 @@\n-v1\n+v2\n' }}
+        diffLoading={false}
+      />,
+    );
+    expect(screen.getByTestId('stash-diff-text')).toHaveTextContent('+v2');
+
+    rerender(
+      <StashPanel stashes={makeList([makeStash({ index: 0 })])} onAction={vi.fn()} stashDiff={null} diffLoading={false} diffError="贮藏不存在" />,
+    );
+    expect(screen.getByTestId('stash-diff-error')).toHaveTextContent('贮藏不存在');
+  });
+});

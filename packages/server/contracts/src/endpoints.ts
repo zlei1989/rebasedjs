@@ -128,6 +128,14 @@ export const stashActionSchema = z.discriminatedUnion('action', [
 ]);
 export type StashAction = z.infer<typeof stashActionSchema>;
 
+/** Unstash As：把贮藏应用（apply，不 drop）到已有分支——先检出目标分支再应用（GitUnstashAsDialog 语义） */
+export const stashUnstashAsBodySchema = z.object({ index: z.number().int().min(0), branch: z.string().min(1) });
+export type StashUnstashAsBody = z.infer<typeof stashUnstashAsBodySchema>;
+
+/** 贮藏索引路径参数：非负整数（stash@{n} 序号） */
+export const stashIndexSchema = z.object({ index: z.coerce.number().int().min(0) });
+export type StashIndex = z.infer<typeof stashIndexSchema>;
+
 /** 变更列表操作（判别联合）：move 把 paths 移入 targetId；delete 的文件归入默认列表；默认列表不可删除（api 层拒绝） */
 export const changelistActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create'), name: z.string().min(1) }),

@@ -16,10 +16,10 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **86 / 100**（web-next 86 个 route.ts ↔ web-koa repos.ts 100 注册，14 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **88 / 102**（web-next 88 个 route.ts ↔ web-koa repos.ts 102 注册，14 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 105 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 60、领域类型/别名 87、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| `@rebased/api` 公共出口 | 107 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 62、领域类型/别名 88、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
 | 导航边（104 条） | 52 ✅（含等价边）+ 9 🟡 + 7 ➖ + 36 ❌ |
 
 ### 1.2 口径与图例
@@ -102,7 +102,7 @@
 
 ## 三、接口盘点
 
-### 3.1 端点总表（86 路径 / 100 方法，两端完全对称）
+### 3.1 端点总表（88 路径 / 102 方法，两端完全对称）
 
 > 路径前缀 `/api`；`id` 即 `repoId`。SSE 3 个：`log/stream`、`diff/stream`、`events`。每个路由只做三件事：zod 校验 → 调 `@rebased/api` → 错误映射。
 
@@ -132,6 +132,7 @@
 | merge | `repos/:id/merge`、`merge/continue` | POST | 合并（四选项）/ 完成合并 | MergeDialog / ConflictsPanel | ✅ |
 | conflicts | `repos/:id/conflicts`、`conflicts/contents`、`conflicts/resolve` | GET/GET/POST | 冲突列表 / 三阶段内容 / 四策略解决 | ConflictsPanel、MergeView | ✅ |
 | stash | `repos/:id/stashes` | GET/POST | 贮藏列表 / save/apply/pop/drop/branch | StashPanel | ✅ |
+| stash | `repos/:id/stashes/:index/diff`、`stashes/unstash-as` | GET + POST | 贮藏差异（`git stash show -p`）/ Unstash As（检出目标分支+apply） | StashPanel | ✅ |
 | changelist | `repos/:id/changelists` | GET/POST | 变更列表查询 / create/rename/delete/setDefault/move | StatusPage 分组与管理 | ✅ |
 | remote | `repos/:id/remotes`、`fetch`、`pull`、`push`、`update` | GET/POST + 4×POST | 远程 CRUD（含 fetch spec/unshallow）/ 拉取 / 推送（forceWithLease/setUpstream）/ 策略化更新 | RemotePanel、Pull/Push/Update 对话框 | ✅ |
 | rebase | `repos/:id/rebase`、`rebase/todo`、`rebase/interactive` | POST/GET/POST | 变基 onto / todo 读取 / 交互式执行 | RebaseDialog（内嵌 LogPage） | ✅ |
@@ -151,18 +152,18 @@
 | worktree | `repos/:id/worktrees`、`worktrees/remove`、`worktrees/prune` | GET/POST + 2×POST | 工作树列表 / 创建 / 移除 / 清理 | WorktreePanel | ✅ |
 | submodule | `repos/:id/submodules`、`submodules/update` | GET/POST | 子模块列表（四态）/ 更新（init/recursive） | SubmodulePanel | ✅ |
 
-**小结**：86 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
+**小结**：88 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
 
 ### 3.2 契约层（`@rebased/contracts`）
 
-- **zod schema（60 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff（含 three-way）/settings/config、staging/commit、branch/checkout、reset、merge/conflict、stash/changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore、github（注释/审查/合并/**行级评论**）、gitlab（评论/讨论/审查/合并/创建）、worktree/submodule——全部被两端路由使用，无闲置。
+- **zod schema（62 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff（含 three-way）/settings/config、staging/commit、branch/checkout、reset、merge/conflict、stash（含 unstash-as/index）、changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore、github（注释/审查/合并/**行级评论**）、gitlab（评论/讨论/审查/合并/创建）、worktree/submodule——全部被两端路由使用，无闲置。
 - **SSE 事件（6 种在用）**：`log.line`、`diff.chunk`、`repo.state-changed`、`operation.state-changed`（events 首帧双事件）、`refs.changed`（fetch/pull/push 后引用移动，首帧全量基线）、`stream.error`（流内错误帧）。`operation.progress` 未实现（无进度型长任务 UI 面）。
 - **错误码（12 个）**：实际产生 8 个——`REPO_NOT_FOUND`、`NOT_A_GIT_REPO`、`INVALID_QUERY`、`GIT_ERROR`、`INVALID_REF`、`OPERATION_IN_PROGRESS`、`AUTH_FAILED`（远程 401 → 认证重试回路）、`RATE_LIMITED`（GitHub 限流）；预留 4 个——`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`。映射表 `httpStatusFor` 两端共用。
-- **领域类型（87 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
+- **领域类型（88 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
 
 ### 3.3 服务层与使用状态
 
-- `@rebased/api` 公共出口 105 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
+- `@rebased/api` 公共出口 107 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
 - **未挂端点 0**：`initRepo`/`cloneRepo` 已随 repo 域收尾挂 `/repos/init`、`/repos/clone`（见任务清单 §2.2 完成记录）。
 - **半使用接口 2 个**：`streamDiffEvents`（diff/stream 已订阅未渲染）、`applyHunkStaging`（无 UI 入口）。
 
@@ -337,7 +338,8 @@ rebase 对话框 + 交互式 rebase 编辑器；对照 `GitRebaseCommitsTableVie
 | stash save | ✅ | message 可空 + includeUntracked（`-u`）；keep index 未做 |
 | pop / apply / drop | ✅ | 按 `stash@{index}`；弹出/删除 Popconfirm；不存在 → `INVALID_REF` |
 | stash as branch | ✅ | 转分支 Modal（`git stash branch`） |
-| Unstash As 对话框 | ❌ | 未做 |
+| Unstash As 对话框 | ✅ | 行「Unstash As…」Modal：目标本地分支 Select（检出目标分支 + apply，不 drop——GitUnstashAsDialog 语义） |
+| 查看差异 | ✅ | 行「查看差异」Modal：`git stash show -p` unified 补丁（`GET /stashes/:index/diff`；边 #84 等效承载） |
 
 ### 4.11 TagPanel ✅
 
@@ -732,8 +734,8 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 80 | Git 菜单 → RebaseDialog | Rebase… | backend.xml:162 | ✅ 「更多」→ 内嵌 RebaseDialog |
 | 81 | Git 菜单 → ResetDialog（旧版） | Reset HEAD… | backend.xml:176 | ✅ 落地为内嵌新版（#14），菜单入口不做 |
 | 82 | Git 菜单 → StashPanel | Stash/Unstash/Show Stashes | backend.xml | ✅ 顶栏「贮藏」→ `/stashes` |
-| 83 | StashPanel → Unstash As 对话框 | 右键 Unstash As… | backend.xml:490、502-507 | ❌ |
-| 84 | StashPanel → DiffPage | 右键 Show Diff | backend.xml:511-517 | ❌ |
+| 83 | StashPanel → Unstash As 对话框 | 右键 Unstash As… | backend.xml:490、502-507 | ✅ 行「Unstash As…」Modal（目标本地分支 Select → 检出+apply 不 drop） |
+| 84 | StashPanel → DiffPage | 右键 Show Diff | backend.xml:511-517 | ✅ 行「查看差异」Modal（`git stash show -p` 补丁；等效承载，非 DiffPage 路由） |
 | 85 | Git 菜单 → TagPanel | Tag… | backend.xml:175 | ✅ 「更多」→ `/tags` |
 | 86 | Git 菜单 → RemotePanel | Manage Remotes… | backend.xml:186 | ✅ 「更多」→ `/remotes` |
 | 87 | Git 菜单 → 克隆对话框 | Clone… | backend.xml:187 | ✅ 同 #2（RepoPage 克隆入口承载） |
@@ -767,10 +769,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **58 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 4（#48 三版本）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 6、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26） |
+| ✅ 已复刻（含等价边） | **60 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 4（#48 三版本）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **31 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree） |
+| ❌ 未复刻 | **29 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree） |
 
 ### 5.5 关键联动流程
 
@@ -806,9 +808,9 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 层 | 位置 |
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
-| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 105 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（86 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（100 注册）+ `src/middleware/error.ts` |
+| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 107 出口） |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（88 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（102 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |

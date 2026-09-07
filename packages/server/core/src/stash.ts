@@ -47,3 +47,9 @@ export async function dropStash(cwd: string, index: number): Promise<void> {
 export async function stashToBranch(cwd: string, index: number, name: string): Promise<void> {
   await runGit(['stash', 'branch', name, `stash@{${index}}`], { cwd });
 }
+
+/** 贮藏统一补丁全文：git stash show -p stash@{n}（空贮藏/无差异 → git 输出空串 → ''） */
+export async function stashPatch(cwd: string, index: number): Promise<string> {
+  const { stdout } = await runGit(['stash', 'show', '-p', `stash@{${index}}`], { cwd });
+  return stdout;
+}

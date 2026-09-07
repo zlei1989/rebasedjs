@@ -156,6 +156,11 @@ export interface StashEntry {
 export interface StashList {
   stashes: StashEntry[];
 }
+/** 贮藏差异：patch 为 git stash show -p 的 unified 补丁全文（空差异为 ''） */
+export interface StashDiff {
+  index: number;
+  patch: string;
+}
 
 /** 变更列表（应用层簿记，git 无原生概念）：id 为生成的主键；isDefault 接收未分配路径 */
 export interface Changelist {

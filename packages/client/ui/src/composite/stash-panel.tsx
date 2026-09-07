@@ -2,17 +2,31 @@
  * 贮藏面板（对照 Java GitStashDialog/GitUnstashAsDialog 的原子动作面）：
  *  顶部保存表单 Card（message Input + includeUntracked Checkbox + 保存按钮）；
  *  下方贮藏列表 Card（空态 EmptyState）：行 = stash@{index} 徽标 + message + 日期 + 操作
- *  （应用/弹出/转分支/删除——弹出与删除走 Popconfirm，转分支开 Modal 输入分支名）。
+ *  （应用/弹出/转分支/Unstash As…/查看差异/删除——弹出与删除走 Popconfirm，转分支与 Unstash As 开 Modal）。
+ *  Unstash As：目标分支 Select（本地分支，GitUnstashAsDialog 语义——检出目标分支 + apply 不 drop）；
+ *  查看差异：Modal 展示 git stash show -p 的 unified 补丁（数据由容器条件拉取）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
  */
 import { useState } from 'react';
-import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Tag, Typography } from 'antd';
-import type { StashAction, StashEntry, StashList } from '@rebased/contracts';
+import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Select, Spin, Tag, Typography } from 'antd';
+import type { BranchRef, StashAction, StashDiff, StashEntry, StashList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 
 export interface StashPanelProps {
   stashes: StashList;
   onAction: (action: StashAction) => void;
+  /** Unstash As 回调（index + 目标本地分支）；提供时行内渲染「Unstash As…」 */
+  onUnstashAs?: (index: number, branch: string) => void;
+  /** Unstash As 进行中 */
+  unstashingAs?: boolean;
+  /** 本地分支（Unstash As 目标选项；缺省渲染提示等待数据） */
+  branches?: BranchRef[];
+  /** 查看差异数据：点击行「查看差异」后由容器条件拉取（diffIndex 键控）；null 未拉取 */
+  stashDiff?: StashDiff | null;
+  diffLoading?: boolean;
+  diffError?: string | null;
+  /** 查看差异进行中 */
+  diffActing?: boolean;
   acting?: boolean;
 }
 
@@ -68,15 +82,19 @@ function SaveForm({ acting, onAction }: { acting?: boolean; onAction: (action: S
   );
 }
 
-/** 贮藏行：stash@{index} 徽标 + message + 日期 + 操作（应用/弹出/转分支/删除） */
+/** 贮藏行：stash@{index} 徽标 + message + 日期 + 操作（应用/弹出/转分支/Unstash As/查看差异/删除） */
 function StashRow({
   stash,
   onAction,
   onBranch,
+  onUnstashAs,
+  onOpenDiff,
 }: {
   stash: StashEntry;
   onAction: (action: StashAction) => void;
   onBranch: (stash: StashEntry) => void;
+  onUnstashAs?: (stash: StashEntry) => void;
+  onOpenDiff?: (stash: StashEntry) => void;
 }): React.ReactNode {
   return (
     <Flex data-testid={`row-stash-${stash.index}`} align="center" gap={8} style={{ padding: '4px 0' }}>
@@ -103,6 +121,16 @@ function StashRow({
       <Button size="small" data-testid={`branch-stash-${stash.index}`} onClick={() => onBranch(stash)}>
         转分支
       </Button>
+      {onUnstashAs !== undefined ? (
+        <Button size="small" data-testid={`unstash-as-${stash.index}`} onClick={() => onUnstashAs(stash)}>
+          Unstash As…
+        </Button>
+      ) : null}
+      {onOpenDiff !== undefined ? (
+        <Button size="small" data-testid={`stash-diff-${stash.index}`} onClick={() => onOpenDiff(stash)}>
+          查看差异
+        </Button>
+      ) : null}
       <Popconfirm
         title={`确定删除 stash@{${stash.index}}？`}
         okText="确定"
@@ -162,8 +190,22 @@ function BranchModal({
   );
 }
 
-export function StashPanel({ stashes, onAction, acting }: StashPanelProps): React.ReactNode {
+export function StashPanel({
+  stashes,
+  onAction,
+  onUnstashAs,
+  unstashingAs,
+  branches,
+  stashDiff,
+  diffLoading,
+  diffError,
+  acting,
+}: StashPanelProps): React.ReactNode {
   const [branchTarget, setBranchTarget] = useState<StashEntry | null>(null);
+  const [unstashTarget, setUnstashTarget] = useState<StashEntry | null>(null);
+  const [unstashBranch, setUnstashBranch] = useState<string | undefined>(undefined);
+  const [diffIndex, setDiffIndex] = useState<number | null>(null);
+  const localBranches = (branches ?? []).filter((b) => !b.remote);
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
@@ -179,6 +221,8 @@ export function StashPanel({ stashes, onAction, acting }: StashPanelProps): Reac
                 stash={stash}
                 onAction={onAction}
                 onBranch={setBranchTarget}
+                onUnstashAs={onUnstashAs === undefined ? undefined : setUnstashTarget}
+                onOpenDiff={(stash) => setDiffIndex(stash.index)}
               />
             ))}
           </Flex>
@@ -190,6 +234,66 @@ export function StashPanel({ stashes, onAction, acting }: StashPanelProps): Reac
         onAction={onAction}
         onClose={() => setBranchTarget(null)}
       />
+      {/* Unstash As Modal：目标分支 Select（本地分支）；确认后复位（分支选择保留——同类连续操作场景） */}
+      <Modal
+        title={`Unstash As：stash@{${unstashTarget === null ? '' : unstashTarget.index}}`}
+        open={unstashTarget !== null}
+        okText="确定"
+        cancelText="取消"
+        okButtonProps={{ disabled: unstashBranch === undefined || unstashBranch === '' }}
+        confirmLoading={unstashingAs}
+        onOk={() => {
+          if (unstashTarget !== null && unstashBranch !== undefined && unstashBranch !== '') {
+            onUnstashAs?.(unstashTarget.index, unstashBranch);
+          }
+          setUnstashTarget(null);
+        }}
+        onCancel={() => setUnstashTarget(null)}
+      >
+        <Flex vertical gap={8}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            将检出目标分支并应用该贮藏（贮藏保留，不弹出）
+          </Typography.Text>
+          <Select
+            data-testid="unstash-as-branch"
+            placeholder="选择本地分支"
+            style={{ width: '100%' }}
+            value={unstashBranch}
+            options={localBranches.map((b) => ({ value: b.name, label: b.name }))}
+            onChange={setUnstashBranch}
+          />
+        </Flex>
+      </Modal>
+      {/* 查看差异 Modal：git stash show -p 的 unified 补丁（数据由容器按 diffIndex 条件拉取） */}
+      <Modal
+        title={`贮藏差异：stash@{${diffIndex === null ? '' : diffIndex}}`}
+        open={diffIndex !== null}
+        footer={null}
+        width={720}
+        onCancel={() => setDiffIndex(null)}
+      >
+        {diffLoading ? (
+          <Spin data-testid="stash-diff-loading" />
+        ) : diffError !== undefined && diffError !== null ? (
+          <Typography.Text type="danger" data-testid="stash-diff-error">
+            {diffError}
+          </Typography.Text>
+        ) : stashDiff === null || stashDiff === undefined ? null : (
+          <pre
+            data-testid="stash-diff-text"
+            style={{
+              margin: 0,
+              maxHeight: 480,
+              overflow: 'auto',
+              fontFamily: 'monospace',
+              fontSize: 12,
+              whiteSpace: 'pre',
+            }}
+          >
+            {stashDiff.patch}
+          </pre>
+        )}
+      </Modal>
     </Flex>
   );
 }

@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, addGithubPrComment, addGithubPrReviewComment, addGitlabMrComment, addGitlabMrDiscussion, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, checkoutGithubPr, checkoutGitlabMr, cherryPick, cloneRepo, continueMergeOperation, continueOperation, createCommit, createGitlabMr, createPatch, createWorktree, deleteAccount, deletePatch, fetchRepo, getAppHomeDir, getBranches, getBrowseContent, getBrowseTree, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getFileThreeVersions, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getGithubPrDetail, getGithubPrFiles, getGithubPrReviewComments, getGithubPrs, getGithubPrTimeline, getGithubStatus, getGitlabMrDetail, getGitlabMrDiscussions, getGitlabMrFiles, getGitlabMrs, getGitlabMrTimeline, getGitlabStatus, getStashes, getSubmodules, getTags, getWorktrees, initRepo, listAccounts, listRecentRepos, mergeBranchIntoCurrent, mergeGithubPr, mergeGitlabMr, openRepo, pruneWorktrees, pullRepo, pushRepo, putIgnore, rebaseBranch, removeRepo, removeWorktree, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, submitGithubPrReview, submitGitlabMrReview, undoCommit, updateProject, updateSettings, updateSubmodules, upsertAccount, watchRepoStatus } from '@rebased/api';
-import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, browseContentQuerySchema, browseQuerySchema, changelistActionSchema, checkoutActionSchema, cloneRepoBodySchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, githubCommentBodySchema, githubMergeBodySchema, githubPrNumberSchema, githubPrQuerySchema, githubReviewBodySchema, githubReviewCommentBodySchema, gitlabCommentBodySchema, gitlabDiscussionBodySchema, gitlabMergeBodySchema, gitlabMrCreateBodySchema, gitlabMrIidSchema, gitlabMrQuerySchema, gitlabReviewBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, initRepoBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, submoduleUpdateBodySchema, tagActionSchema, threeWayQuerySchema, updateBodySchema, worktreeCreateBodySchema, worktreeRemoveBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, addGithubPrComment, addGithubPrReviewComment, addGitlabMrComment, addGitlabMrDiscussion, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, checkoutGithubPr, checkoutGitlabMr, cherryPick, cloneRepo, continueMergeOperation, continueOperation, createCommit, createGitlabMr, createPatch, createWorktree, deleteAccount, deletePatch, fetchRepo, getAppHomeDir, getBranches, getBrowseContent, getBrowseTree, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getFileThreeVersions, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getGithubPrDetail, getGithubPrFiles, getGithubPrReviewComments, getGithubPrs, getGithubPrTimeline, getGithubStatus, getGitlabMrDetail, getGitlabMrDiscussions, getGitlabMrFiles, getGitlabMrs, getGitlabMrTimeline, getGitlabStatus, getStashDiff, getStashes, getSubmodules, getTags, getWorktrees, initRepo, listAccounts, listRecentRepos, mergeBranchIntoCurrent, mergeGithubPr, mergeGitlabMr, openRepo, pruneWorktrees, pullRepo, pushRepo, putIgnore, rebaseBranch, removeRepo, removeWorktree, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, submitGithubPrReview, submitGitlabMrReview, undoCommit, unstashAs, updateProject, updateSettings, updateSubmodules, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, browseContentQuerySchema, browseQuerySchema, changelistActionSchema, checkoutActionSchema, cloneRepoBodySchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, githubCommentBodySchema, githubMergeBodySchema, githubPrNumberSchema, githubPrQuerySchema, githubReviewBodySchema, githubReviewCommentBodySchema, gitlabCommentBodySchema, gitlabDiscussionBodySchema, gitlabMergeBodySchema, gitlabMrCreateBodySchema, gitlabMrIidSchema, gitlabMrQuerySchema, gitlabReviewBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, initRepoBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, stashIndexSchema, stashUnstashAsBodySchema, submoduleUpdateBodySchema, tagActionSchema, threeWayQuerySchema, updateBodySchema, worktreeCreateBodySchema, worktreeRemoveBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -477,6 +477,26 @@ router.post('/api/repos/:repoId/conflicts/resolve', async (ctx) => {
 router.get('/api/repos/:repoId/stashes', async (ctx) => {
   try {
     ctx.body = await getStashes(resolveRepo(z.string().min(1).parse(ctx.params.repoId)));
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/stashes/:index/diff —— 贮藏差异（git stash show -p）→ 200 StashDiff；索引越界 → 400 INVALID_REF */
+router.get('/api/repos/:repoId/stashes/:index/diff', async (ctx) => {
+  try {
+    const { index } = stashIndexSchema.parse({ index: ctx.params.index });
+    ctx.body = await getStashDiff(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), index);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** POST /api/repos/:repoId/stashes/unstash-as —— Unstash As（检出目标分支 + apply，不 drop）→ 200 StashList */
+router.post('/api/repos/:repoId/stashes/unstash-as', async (ctx) => {
+  try {
+    const body = stashUnstashAsBodySchema.parse(ctx.request.body);
+    ctx.body = await unstashAs(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), body);
   } catch (error) {
     handleApiError(error, ctx);
   }

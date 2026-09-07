@@ -1,13 +1,15 @@
 /** 贮藏功能：core 贮藏原语 → contracts 形状；写操作前预检（save 取 status、其余校验 index），操作后返回刷新列表。 */
 import {
   applyStash,
+  checkoutBranch,
   dropStash,
   listStashes,
   popStash,
   saveStash,
+  stashPatch,
   stashToBranch,
 } from '@rebased/core';
-import { ServiceError, type StashAction, type StashList } from '@rebased/contracts';
+import { ServiceError, type StashAction, type StashDiff, type StashList, type StashUnstashAsBody } from '@rebased/contracts';
 import { getRepoStatus } from './status';
 
 /** 贮藏列表：core → 契约薄映射（CoreStash 与 StashEntry 形状一致，直传） */
@@ -61,4 +63,18 @@ export async function applyStashAction(repoPath: string, action: StashAction): P
       break;
   }
   return getStashes(repoPath);
+}
+
+/** Unstash As：应用（不 drop）到已有分支——先检出目标分支再 apply（GitUnstashAsDialog 语义）；返回刷新后的贮藏列表 */
+export async function unstashAs(repoPath: string, body: StashUnstashAsBody): Promise<StashList> {
+  await requireStashIndex(repoPath, body.index);
+  await checkoutBranch(repoPath, body.branch);
+  await applyStash(repoPath, body.index);
+  return getStashes(repoPath);
+}
+
+/** 贮藏差异：index 校验后取 unified 补丁全文（git stash show -p） */
+export async function getStashDiff(repoPath: string, index: number): Promise<StashDiff> {
+  await requireStashIndex(repoPath, index);
+  return { index, patch: await stashPatch(repoPath, index) };
 }

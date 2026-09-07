@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { applyStashAction, getStashes } from './stash';
+import { applyStashAction, getStashDiff, getStashes, unstashAs } from './stash';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -112,5 +112,36 @@ describe('stash 功能', () => {
     // 贮藏改动已应用到新分支工作区
     expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
     expect(base).not.toBe('from-stash');
+  });
+
+  it('unstashAs：检出目标分支 + apply（不 drop），工作区得到改动且贮藏保留', async () => {
+    const repo = repoWithCommit();
+    // 建第二个分支（目标分支）再回主分支
+    execFileSync('git', ['-C', repo, 'branch', 'target-branch']);
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    await applyStashAction(repo, { action: 'save', message: 'unstash-as' });
+    const list = await unstashAs(repo, { index: 0, branch: 'target-branch' });
+
+    expect(list.stashes).toHaveLength(1); // apply 不 drop
+    expect(currentBranch(repo)).toBe('target-branch');
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
+  });
+
+  it('unstashAs 目标分支不存在 → git 报错上抛；索引越界 → INVALID_REF', async () => {
+    const repo = repoWithCommit();
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    await applyStashAction(repo, { action: 'save', message: 's' });
+    await expect(unstashAs(repo, { index: 0, branch: 'no-such-branch' })).rejects.toBeInstanceOf(Error);
+    await expect(unstashAs(repo, { index: 5, branch: currentBranch(repo) })).rejects.toMatchObject({ code: 'INVALID_REF' });
+  });
+
+  it('getStashDiff：返回 unified 补丁全文（含改动行）与 index；索引越界 → INVALID_REF', async () => {
+    const repo = repoWithCommit();
+    writeFileSync(join(repo, 'a.txt'), 'v2\nv3\n');
+    await applyStashAction(repo, { action: 'save', message: 'patch' });
+    const diff = await getStashDiff(repo, 0);
+    expect(diff.index).toBe(0);
+    expect(diff.patch).toContain('+v3');
+    await expect(getStashDiff(repo, 9)).rejects.toMatchObject({ code: 'INVALID_REF' });
   });
 });

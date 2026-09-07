@@ -40,7 +40,7 @@ export { canContinueMerge, continueMerge, mergeBranch } from './merge';
 export type { CoreMergeResult } from './merge';
 export { checkoutConflictSide, deleteConflictFile, listConflictedPaths, markResolved, readStageContent } from './conflict';
 export type { CoreConflict } from './conflict';
-export { applyStash, dropStash, listStashes, popStash, saveStash, stashToBranch } from './stash';
+export { applyStash, dropStash, listStashes, popStash, saveStash, stashPatch, stashToBranch } from './stash';
 export type { CoreStash } from './stash';
 export { addRemote, fetchRemote, isShallowRepo, listRemotes, pullRemote, pushBranch, removeRemote, setRemoteUrl } from './remote';
 export type { CoreRemote } from './remote';

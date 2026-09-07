@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 41 项（分布于 21 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 40 项（分布于 21 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -75,7 +75,7 @@
 
 **RebaseDialog（2）**：auto-squash/fixup、squash by subject（`GitAutoSquashCommitAction` 等）；skip（continue/abort 已通，skip 未做）。
 
-**StashPanel（2）**：keep index 选项；Unstash As 对话框（改分支/改名单应用，`GitUnstashAsDialog`）。
+**StashPanel（1）**：keep index 选项（save 未提供 `--keep-index` 旗标——Unstash As 与贮藏 Show Diff 已落地：行「Unstash As…」Modal（目标本地分支 Select → 检出+apply 不 drop）+「查看差异」Modal（`git stash show -p` 补丁））。
 
 **TagPanel（2）**：删除远程标签；推送全部标签。
 
@@ -129,7 +129,7 @@
 | CommitDialog 等效面 | #50 | commit & push 组合执行器 |
 | PatchPanel | #52 | Import Patches into Shelf |
 | ShelfPanel | #54 | Unshelve 后跳转/回写联动 |
-| StashPanel | #83/#84 | Unstash As；贮藏 Show Diff |
+| StashPanel | #83/#84 | ✅ 已落地（Unstash As Modal + 查看差异 Modal，见 §2.3 完成记录） |
 | PushDialog | #91 | rejected → Update 联动闭环 |
 | UpdateProjectDialog | #93 | Reset to tracked |
 | 面板 → Settings | #8 | GitHub/GitLab 面板内 Settings 菜单入口（现仅无令牌提示卡回边） |
