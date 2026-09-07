@@ -83,7 +83,7 @@ export function makeBareFrom(repoPath: string): string {
 }
 
 /**
- * 防抖清理：重试 3 次、间隔 200ms（EPERM/EBUSY 视为 Windows 句柄未释放的可瞬态错误，
+ * 防抖清理：重试 6 次、间隔 300ms（≈1.5s 窗口；EPERM/EBUSY 视为 Windows 句柄未释放的可瞬态错误，
  * 其余错误不再重试直接抛出）；force 已保证「目录不存在」不报错。
  */
 export function cleanupTmp(target: string): void {
