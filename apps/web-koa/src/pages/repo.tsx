@@ -314,6 +314,8 @@ export function RepoPage(): React.ReactNode {
         githubAvailable={githubStatus?.detected === true}
         onOpenGitlab={() => navigate(`/repos/${repoId}/gitlab`)}
         gitlabAvailable={gitlabStatus?.detected === true}
+        onOpenWorktrees={() => navigate(`/repos/${repoId}/worktrees`)}
+        onOpenSubmodules={() => navigate(`/repos/${repoId}/submodules`)}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}

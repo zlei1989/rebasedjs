@@ -27,7 +27,9 @@ import { RepoSettingsPage } from './pages/settings';
 import { RepoShelvesPage } from './pages/shelves';
 import { RepoStashesPage } from './pages/stashes';
 import { RepoStatusPage } from './pages/status';
+import { RepoSubmodulesPage } from './pages/submodules';
 import { RepoTagsPage } from './pages/tags';
+import { RepoWorktreesPage } from './pages/worktrees';
 
 createRoot(document.getElementById('root')!).render(
   <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
@@ -55,6 +57,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/repos/:repoId/ignore" element={<RepoIgnorePage />} />
           <Route path="/repos/:repoId/github" element={<RepoGithubPage />} />
           <Route path="/repos/:repoId/gitlab" element={<RepoGitlabPage />} />
+          <Route path="/repos/:repoId/worktrees" element={<RepoWorktreesPage />} />
+          <Route path="/repos/:repoId/submodules" element={<RepoSubmodulesPage />} />
         </Routes>
       </BrowserRouter>
     </AntApp>

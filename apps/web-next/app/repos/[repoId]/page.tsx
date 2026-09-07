@@ -320,6 +320,8 @@ export default function Page({
         githubAvailable={githubStatus?.detected === true}
         onOpenGitlab={() => router.push(`/repos/${repoId}/gitlab`)}
         gitlabAvailable={gitlabStatus?.detected === true}
+        onOpenWorktrees={() => router.push(`/repos/${repoId}/worktrees`)}
+        onOpenSubmodules={() => router.push(`/repos/${repoId}/submodules`)}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onOpenPull={() => setOpenDialog('pull')}

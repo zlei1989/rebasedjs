@@ -451,6 +451,63 @@ describe('LogPage', () => {
     expect(screen.queryByText('GitLab 面板')).not.toBeInTheDocument();
   });
 
+  it('传入 onOpenWorktrees 时「更多」菜单含工作树项（无可用性门），点击触发回调', async () => {
+    const onOpenWorktrees = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onOpenPull={() => {}}
+        onOpenWorktrees={onOpenWorktrees}
+      />,
+    );
+    await openMoreMenu();
+    expect(screen.getByText('工作树')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('工作树'));
+    expect(onOpenWorktrees).toHaveBeenCalledTimes(1);
+  });
+
+  it('传入 onOpenSubmodules 时「更多」菜单含子模块项（无可用性门），点击触发回调', async () => {
+    const onOpenSubmodules = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onOpenPull={() => {}}
+        onOpenSubmodules={onOpenSubmodules}
+      />,
+    );
+    await openMoreMenu();
+    expect(screen.getByText('子模块')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('子模块'));
+    expect(onOpenSubmodules).toHaveBeenCalledTimes(1);
+  });
+
+  it('同时传入 onOpenWorktrees/onOpenSubmodules 时「更多」菜单同时含工作树与子模块项', async () => {
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onOpenPull={() => {}}
+        onOpenWorktrees={() => {}}
+        onOpenSubmodules={() => {}}
+      />,
+    );
+    await openMoreMenu();
+    expect(screen.getByText('工作树')).toBeInTheDocument();
+    expect(screen.getByText('子模块')).toBeInTheDocument();
+  });
+
+  it('未传 onOpenWorktrees/onOpenSubmodules 时「更多」菜单不含工作树/子模块项', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={() => {}} />);
+    await openMoreMenu();
+    expect(screen.queryByText('工作树')).not.toBeInTheDocument();
+    expect(screen.queryByText('子模块')).not.toBeInTheDocument();
+  });
+
   it('传入 onCherryPick 时透传给详情面板，点击回调携带选中提交 hash', () => {
     const onCherryPick = vi.fn();
     const selected = makeCommit({ hash: 'c9selected0001' });

@@ -77,6 +77,10 @@ export interface LogPageProps {
   onOpenGitlab?: () => void;
   /** GitLab 面板可用性（容器经 useGitlabStatus 检测到 GitLab 远程）：false/缺省不渲染 GitLab 面板菜单项 */
   gitlabAvailable?: boolean;
+  /** 工作树页入口回调；恒渲染（无可用性门——工作树是任何仓库都可达的操作面），缺省时「更多」菜单不含工作树项 */
+  onOpenWorktrees?: () => void;
+  /** 子模块页入口回调；恒渲染（无可用性门——子模块空态在页面内承载），缺省时「更多」菜单不含子模块项 */
+  onOpenSubmodules?: () => void;
   /** 撤销最近提交回调（Popconfirm 确认后触发）；缺省不渲染撤销按钮 */
   onUndoCommit?: () => void;
   /** 撤销请求进行中：撤销按钮 loading 态 */
@@ -122,6 +126,8 @@ export function LogPage({
   githubAvailable,
   onOpenGitlab,
   gitlabAvailable,
+  onOpenWorktrees,
+  onOpenSubmodules,
   onUndoCommit,
   undoCommitting,
   onResetHere,
@@ -149,6 +155,9 @@ export function LogPage({
     ...(onOpenGithub !== undefined && githubAvailable ? [{ key: 'github', label: 'GitHub 面板' }] : []),
     // GitLab 面板：与 GitHub 面板项并排、各自检测（容器经 useGitlabStatus 判定 gitlabAvailable）
     ...(onOpenGitlab !== undefined && gitlabAvailable ? [{ key: 'gitlab', label: 'GitLab 面板' }] : []),
+    // 工作树/子模块：恒渲染（无可用性门——本域无外部依赖，任何仓库可达；子模块空态在页面内承载）
+    ...(onOpenWorktrees ? [{ key: 'worktrees', label: '工作树' }] : []),
+    ...(onOpenSubmodules ? [{ key: 'submodules', label: '子模块' }] : []),
   ];
   /** 「更多」菜单点击分发：按 key 调对应入口回调 */
   const onMoreClick = (key: string): void => {
@@ -168,6 +177,8 @@ export function LogPage({
     else if (key === 'ignore') onOpenIgnore?.();
     else if (key === 'github') onOpenGithub?.();
     else if (key === 'gitlab') onOpenGitlab?.();
+    else if (key === 'worktrees') onOpenWorktrees?.();
+    else if (key === 'submodules') onOpenSubmodules?.();
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
