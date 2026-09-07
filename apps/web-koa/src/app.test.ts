@@ -2357,8 +2357,8 @@ describe('web-koa GitLab MR 域端点', () => {
 });
 
 describe('web-koa worktree/submodule 域端点', () => {
-  /** 子模块装置用例 git 进程密集（content 仓库 + bare + submodule add + 多次 status），统一放宽用例超时 */
-  const RIG_TIMEOUT = 120000;
+  /** 子模块装置用例 git 进程密集（content 仓库 + bare + submodule add + 多次 status），统一放宽用例超时（终审：120→180s） */
+  const RIG_TIMEOUT = 180000;
   const postJson = (path: string, body: unknown) =>
     fetch(`${base}${path}`, {
       method: 'POST',
@@ -2379,7 +2379,8 @@ describe('web-koa worktree/submodule 域端点', () => {
     const body = await res.json();
     expect(body.worktrees).toHaveLength(1);
     const main = body.worktrees[0];
-    expect(samePath(main.path, repoPath)).toBe(true);
+    // 终审 I1：主工作树 path 字符串全等于注册仓库路径（保真 repoPath，含 8.3 短形式）
+    expect(main.path).toBe(repoPath);
     expect(main.branch).toBe(git(repoPath, ['symbolic-ref', '--short', 'HEAD']));
     expect(main.detached).toBe(false);
     expect(main.head).toBe(git(repoPath, ['rev-parse', 'HEAD']));

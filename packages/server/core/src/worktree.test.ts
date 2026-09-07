@@ -88,6 +88,24 @@ describe('worktree 原语', () => {
     expect(wt?.detached).toBe(false);
   });
 
+  it('addWorktree/removeWorktree：相对 path 以 `-` 开头经 `--` 保护不被当作选项（终审加固）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    makeBaseCommit(repo);
+
+    // 无 `--` 时 git 报 unknown switch `w'（exit 129）；`--` 紧随选项后、path 前 → 正常创建（相对路径解析于 cwd）
+    await addWorktree(repo, '-wt-dash', { newBranch: 'dash-b' });
+
+    const list = await listWorktrees(repo);
+    expect(list).toHaveLength(2);
+    const wt = list.find((w) => samePath(w.path, join(repo, '-wt-dash')));
+    expect(wt?.branch).toBe('dash-b');
+
+    await removeWorktree(repo, '-wt-dash');
+
+    expect(await listWorktrees(repo)).toHaveLength(1);
+  });
+
   it('addWorktree 无 branch/newBranch 直接抛错（服务层兜底的双保险）', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);

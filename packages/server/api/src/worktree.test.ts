@@ -42,10 +42,23 @@ describe('worktree 服务', () => {
     const list = await getWorktrees(repo);
     expect(list.worktrees).toHaveLength(1);
     const main = list.worktrees[0];
-    expect(samePath(main.path, repo)).toBe(true);
+    // P4-B 终审 I1：主工作树条目 path 改写为 repoPath 原字符串（8.3 短形式+反斜杠保真），字符串全等
+    expect(main.path).toBe(repo);
     expect(main.branch).toBe(base);
     expect(main.detached).toBe(false);
     expect(main.head).toBe(headSha);
+  });
+
+  it('getWorktrees：repoPath 为 realpath 长形式时主工作树 path 字符串等于入参', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    makeBaseCommit(repo);
+    const repoReal = realpathSync.native(repo); // 长形式（%TEMP% 为 8.3 短形式，git 输出长形式+正斜杠）
+
+    const list = await getWorktrees(repoReal);
+
+    expect(list.worktrees).toHaveLength(1);
+    expect(list.worktrees[0].path).toBe(repoReal);
   });
 
   it('createWorktree newBranch：返回刷新列表含主+副（branch 名与 head）', async () => {
@@ -124,6 +137,43 @@ describe('worktree 服务', () => {
         message: `路径无效：${p}`,
       });
     }
+  });
+
+  it('createWorktree 路径无效（realpath 归一判定）：恰等 repoPath / 大小写变体 / 8.3 变体 inside / 副工作树目录内 → INVALID_QUERY 且不残留条目', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const base = makeBaseCommit(repo);
+    const repoReal = realpathSync.native(repo);
+    // 8.3 短名（FSO ShortPath；未启用 8.3 时回落长名）——长父目录 + 短名仓库目录混合构造
+    const shortBase = execFileSync(
+      'powershell',
+      ['-NoProfile', '-Command', `(New-Object -ComObject Scripting.FileSystemObject).GetFolder('${repoReal.replace(/'/g, '\'\'')}').ShortPath`],
+      { encoding: 'utf8' },
+    )
+      .trim()
+      .split(/[\\/]/)
+      .pop() ?? basename(repoReal);
+    const caseVariantInside = join(repoReal.toUpperCase(), 'inside-case');
+    const shortVariantInside = join(dirname(repoReal), shortBase, 'inside-short');
+    // 恰等（T3 M1）与两种归一变体都在 add 前预拒（父目录已存在 → realpath 归一），无残留
+    for (const p of [repo, caseVariantInside, shortVariantInside]) {
+      await expect(createWorktree(repo, { path: p, branch: base })).rejects.toMatchObject({
+        code: 'INVALID_QUERY',
+        message: `路径无效：${p}`,
+      });
+      expect((await getWorktrees(repo)).worktrees).toHaveLength(1);
+    }
+    // add 成功路径的 post-add 校验：副工作树目录内嵌套（git 不拒但语义非法）→ 回滚 → 无残留
+    const wtPath = siblingPath(repo, '-wt nest');
+    dirs.push(wtPath);
+    const createdSibling = await createWorktree(repo, { path: wtPath, newBranch: 'nest-b' });
+    expect(createdSibling.worktrees).toHaveLength(2);
+    const nested = join(realpathSync.native(wtPath), 'nested');
+    await expect(createWorktree(repo, { path: nested, newBranch: 'nest-inner' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: `路径无效：${nested}`,
+    });
+    expect((await getWorktrees(repo)).worktrees).toHaveLength(2); // 回滚：仅主+副
   });
 
   it('removeWorktree path 等于主仓库 → INVALID_QUERY', async () => {

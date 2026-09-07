@@ -160,6 +160,19 @@ describe('submodule 原语', () => {
     await expect(listSubmodules(superRepo)).rejects.toThrow(/子模块配置解析失败/);
   });
 
+  it('空 .gitmodules → config 失败且 stderr 为空 → 消息回落 GitExitError.message（非空上下文，终审 M-new2）', { timeout: 180_000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'g.txt'), 'g');
+    git(repo, ['add', 'g.txt']);
+    git(repo, ['commit', '-q', '-m', 'g']);
+    writeFileSync(join(repo, '.gitmodules'), '');
+    git(repo, ['add', '.gitmodules']);
+    git(repo, ['commit', '-q', '-m', 'modules']);
+
+    await expect(listSubmodules(repo)).rejects.toThrow(/子模块配置解析失败：git config .* 退出码 1/);
+  });
+
   it('parseSubmodulesConfig：名称含点/大小写保留/branch 可选/顺序保持', () => {
     const raw = [
       'submodule.a.b.path x/y',

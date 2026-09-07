@@ -109,6 +109,8 @@ export async function addWorktree(
   }
   const args = ['worktree', 'add'];
   if (opts.newBranch !== undefined) args.push('-b', opts.newBranch);
+  // `--` 紧随选项后、path 前：path 以 `-` 开头时不被当作选项（语法 [options] <path> [<commit-ish>]）
+  args.push('--');
   args.push(path);
   if (opts.branch !== undefined) args.push(opts.branch);
   await runGit(args, { cwd });
@@ -117,6 +119,8 @@ export async function addWorktree(
 export async function removeWorktree(cwd: string, path: string, opts: { force?: boolean } = {}): Promise<void> {
   const args = ['worktree', 'remove'];
   if (opts.force === true) args.push('--force');
+  // `--` 紧随选项后、path 前：path 以 `-` 开头时不被当作选项（语法 [options] <worktree>）
+  args.push('--');
   args.push(path);
   await runGit(args, { cwd });
 }

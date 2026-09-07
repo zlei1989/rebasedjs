@@ -88,10 +88,10 @@ export async function listSubmodules(cwd: string): Promise<SubmoduleEntry[]> {
     configOut = config.stdout;
   } catch (e) {
     // 控制器裁定：config 解析失败（如 .gitmodules 损坏，exit 128）→ 诚实报错而非静默空列表；
-    // 取 stderr 首行（GitExitError）或错误消息作为上下文
+    // 取 stderr 首个非空行（GitExitError；空 stderr 如空 .gitmodules exit 1 → 回落 e.message，P4-B 终审 M-new2）
     const firstLine =
       e instanceof GitExitError
-        ? (e.stderr.trim().split('\n')[0] ?? e.message)
+        ? (e.stderr.trim().split('\n').find((l) => l !== '') ?? e.message)
         : e instanceof Error
           ? e.message
           : String(e);
