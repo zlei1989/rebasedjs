@@ -1,14 +1,24 @@
 'use client';
 
 /**
- * 状态页容器：useRepoStatus + useStaging（文件级）+ useCommit + useDiffPatch（选中文件补丁预览）
+ * 状态页容器：useRepoStatus + useStaging（文件级）+ useHunkStaging（hunk 级）+ useCommit + useDiffPatch（选中文件补丁预览）
  * + useChangelists/useChangelistAction（变更列表分组与管理）。
  * 注入 ui StatusPage（与 web-koa 容器同构）。操作失败统一 message.error；
  * commit 成功后经 key remount 清空提交框并 mutate status。
  * useRepoEvents 在本页自订阅（导航到 /status 后 LogPage 容器已卸载，外部 CLI 变更只能靠本订阅回写 status 缓存）。
  */
-import { useAddIgnore, useChangelistAction, useChangelists, useCommit, useDiffPatch, useRepoEvents, useRepoStatus, useStaging } from '@rebased/client';
-import type { StagingBody } from '@rebased/contracts';
+import {
+  useAddIgnore,
+  useChangelistAction,
+  useChangelists,
+  useCommit,
+  useDiffPatch,
+  useHunkStaging,
+  useRepoEvents,
+  useRepoStatus,
+  useStaging,
+} from '@rebased/client';
+import type { HunkStagingBody, StagingBody } from '@rebased/contracts';
 import { StatusPage } from '@rebased/ui';
 import { Button, Flex, Modal, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -19,6 +29,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const router = useRouter();
   const { data: status, mutate } = useRepoStatus(repoId);
   const { trigger: applyStaging } = useStaging(repoId);
+  const { trigger: applyHunkStaging, isMutating: hunkActing } = useHunkStaging(repoId);
   const { trigger: commit, isMutating: committing } = useCommit(repoId);
   // 变更列表：查询驱动 StatusPage 分组展示；action 响应由 hook 显式回写 changelists 缓存（约定同 staging）
   const { data: changelists, mutate: mutateChangelists } = useChangelists(repoId);
@@ -56,6 +67,16 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const onStaging = (body: StagingBody): void => {
     applyStaging(body).then(invalidatePatch).catch(onError);
   };
+  // hunk 级操作：与文件级同口径——hook 已回写 status 缓存，本容器失效重取补丁（hunk 选择态由 ui 内部维护）；
+  // 失败同样重取：部分暂存后服务端按当前 diff 重算 hunk 编号，旧索引可能越界（400），刷新后可续选
+  const onHunkStaging = (body: HunkStagingBody): void => {
+    applyHunkStaging(body)
+      .then(invalidatePatch)
+      .catch((err: unknown) => {
+        invalidatePatch();
+        onError(err);
+      });
+  };
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!status) return null;
   return (
@@ -88,6 +109,9 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         }}
         patch={patch}
         patchLoading={patchLoading}
+        previewStaged={patchSel?.staged ?? false}
+        onHunkStaging={onHunkStaging}
+        hunkActing={hunkActing}
         onSelectPatch={(path, staged) => setPatchSel({ path, staged })}
         // 跳既有 diff 页（仅带 file 参数；staged 切换在 diff 页内完成）
         onOpenDiff={(path) => router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}`)}

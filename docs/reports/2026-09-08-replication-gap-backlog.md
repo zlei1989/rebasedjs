@@ -12,12 +12,12 @@
 
 | 类别 | 缺口 | 任务位置 |
 |------|------|----------|
-| 半使用接口 | 2（diff/stream 分块渲染、staging/hunks 无 UI） | §2.1 |
+| 半使用接口 | 1（diff/stream 分块渲染；staging/hunks 已落地，见 §2.1 完成记录） | §2.1 |
 | 未挂端点能力 | 0（`initRepo`/`cloneRepo` 已挂端点，见 §2.2 完成记录） | §2.2 |
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 52 项（分布于 24 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 51 项（分布于 24 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -26,12 +26,18 @@
 
 ## 二、任务清单
 
-### 2.1 P0：半使用接口消化（2 项）
+### 2.1 P0：半使用接口消化（剩 1 项）
 
-| # | 任务 | 现状 | 落点 |
-|---|------|------|------|
-| 1 | diff/stream 分块渲染接入 Monaco | 页面已订阅（保活/预热），`diff.chunk` 文本未接入渲染 | DiffPage 容器 + `useDiffStream` |
-| 2 | hunk 级暂存 UI | `POST /staging/hunks` + `useHunkStaging` 就绪并有测试，无入口 | StatusPage 补丁预览 → 行内 hunk 选择 |
+#### #2 hunk 级暂存 UI —— ✅ 已完成
+
+**完成记录**：
+
+| 任务 | 落点 |
+|------|------|
+| 行内 hunk 选择 | contracts 新增共享切片 `splitPatchHunks`/`patchHunkHeading`（api 服务端 hunk 索引重组与 ui 行内选择**同源切片**，索引编号天然对齐；原 api 局部 splitHunks 删除）；StatusPage 补丁预览按 hunk 渲染：Collapse 每 hunk（勾选 + 序号 + `@@` 上下文标题 + 折叠正文），顶栏动作按预览取数模式分流（工作区视图→暂存选中/放弃选中 Popconfirm；已暂存视图→取消暂存选中）；`previewStaged`/`onHunkStaging`/`hunkActing` props 驱动；两端容器接 `useHunkStaging`（hook 回写 status 缓存 + 失效重取 patch）；契约 5 单测 + ui 6 单测 + api 既有 3 用例回归 |
+
+#### #1 diff/stream 分块渲染接入 Monaco —— 待办
+页面已订阅（保活/预热），`diff.chunk` 文本未接入渲染 | DiffPage 容器 + `useDiffStream`
 
 ### 2.2 P1：repo 域收尾（init/clone + RepoPage 遗留）——✅ 已完成
 
@@ -52,7 +58,7 @@
 
 **DiffPage（5）**：word diff/同步滚动/折叠/上下文行数 UI 开关；hunk 级应用/回退；三版本对比（本地/暂存/HEAD）；与分支比较（`GitCompareWithBranchAction`）；（分块渲染见 2.1）。
 
-**StatusPage（2）**：三版本对比；（hunk 级见 2.1）。
+**StatusPage（1）**：三版本对比；（hunk 级已落地，见 §2.1 完成记录）。
 
 **CommitDialog 等效面（4）**：amend 历史提交/reword 直通按钮；GPG 签名/commit template 提交链路消费（白名单键已可读写）；CRLF 提示（`GitCrlfDialog`）；commit & push / push up to commit 组合执行器。
 

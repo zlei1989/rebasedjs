@@ -3,13 +3,16 @@
  *  变更按 porcelain XY 码分三组——已暂存（X ∈ MADRC）、工作区（Y ∈ MDT）、未跟踪（??；!! 已忽略条目不展示）。
  *  可选 changelists：提供时三组内再按变更列表子分组（默认列表平铺，非默认列表以列表名子标题分组），
  *  并开启行级「移动到列表」与页头「管理列表」（新建/重命名/设默认/删除）入口。
+ *  补丁预览：选中文件显示 unified diff；onHunkStaging 提供时开启行内 hunk 选择（勾选 hunk →
+ *  暂存/取消暂存/放弃选中，与文件级操作并行），切片经 contracts 共享函数（服务端索引同源）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入 hooks。
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
   Checkbox,
+  Collapse,
   Dropdown,
   Flex,
   Input,
@@ -20,6 +23,7 @@ import {
   Typography,
 } from 'antd';
 import type { MenuProps } from 'antd';
+import { patchHunkHeading, splitPatchHunks } from '@rebased/contracts';
 import type {
   Changelist,
   ChangelistAction,
@@ -27,6 +31,7 @@ import type {
   ChangeEntry,
   CommitBody,
   DiffFile,
+  HunkStagingBody,
   RepoStatus,
 } from '@rebased/contracts';
 
@@ -40,6 +45,12 @@ export interface StatusPageProps {
   /** 行内补丁预览：返回该文件的 unified 全文数据与加载态（容器接 useDiffPatch 按选中文件取数） */
   patch?: DiffFile;
   patchLoading?: boolean;
+  /** 补丁预览的取数模式（true=暂存区 diff，false=工作区 diff）：决定 hunk 操作按钮组（unstage vs stage/discard） */
+  previewStaged?: boolean;
+  /** 行内 hunk 操作回调（body 为 hunk 级暂存请求）；提供时补丁预览按 hunk 切片渲染可选行 */
+  onHunkStaging?: (body: HunkStagingBody) => void;
+  /** hunk 操作进行中：操作按钮 loading 与禁用 */
+  hunkActing?: boolean;
   onSelectPatch?: (path: string, staged: boolean) => void;
   /** 跳 diff 页（行双击或"查看对比"按钮） */
   onOpenDiff?: (path: string, staged: boolean) => void;
@@ -384,26 +395,148 @@ function CommitCard({
   );
 }
 
-/** 补丁预览卡片：等宽渲染 patch.text；patchLoading 显 Skeleton；未选中文件时显占位提示 */
-function PatchCard({ patch, patchLoading }: { patch?: DiffFile; patchLoading?: boolean }): React.ReactNode {
+/**
+ * 补丁预览卡片：onHunkStaging 提供时按 hunk 切片渲染（勾选 + 头行标题 + 折叠正文），
+ * 顶栏动作按 previewStaged 分流（已暂存视图→取消暂存；工作区视图→暂存/放弃），
+ * 提交体 file 取 patch.path、hunks 取勾选索引（与服务端切片同源——contracts splitPatchHunks）。
+ * 兜底：无 hunk（空 diff/头部-only）或未接 hunk 回调时回退纯文本渲染（原行为）。
+ */
+function PatchCard({
+  patch,
+  patchLoading,
+  previewStaged = false,
+  onHunkStaging,
+  hunkActing,
+}: {
+  patch?: DiffFile;
+  patchLoading?: boolean;
+  previewStaged?: boolean;
+  onHunkStaging?: (body: HunkStagingBody) => void;
+  hunkActing?: boolean;
+}): React.ReactNode {
+  const [selected, setSelected] = useState<number[]>([]);
+  const split = useMemo(() => (patch ? splitPatchHunks(patch.text) : null), [patch]);
+  // 文件或补丁文本变化时复位勾选：hunk 索引按当前 diff 编号（部分暂存后服务端重算编号，旧勾选会错位）
+  useEffect(() => {
+    setSelected([]);
+  }, [patch?.path, patch?.text]);
+
+  const hunkMode = onHunkStaging !== undefined && split !== null && split.hunks.length > 0;
+  /** 勾选切换：选中集为当前 hunk 索引数组（有序提交，索引越界由服务端校验兜底） */
+  const toggle = (index: number, checked: boolean): void => {
+    setSelected((prev) => (checked ? [...prev, index] : prev.filter((i) => i !== index)));
+  };
+  /** 动作分派：按预览模式给 body（unstage 见已暂存、stage/discard 见工作区） */
+  const fire = (action: HunkStagingBody['action']): void => {
+    if (patch === undefined || selected.length === 0) return;
+    onHunkStaging?.({ action, file: patch.path, hunks: selected });
+  };
+
   return (
     <Card size="small" title={patch ? `补丁预览：${patch.path}` : '补丁预览'} style={{ height: '100%' }}>
       {patchLoading ? (
         <Skeleton active />
       ) : patch ? (
-        <pre
-          data-testid="patch-text"
-          style={{
-            margin: 0,
-            maxHeight: 480,
-            overflow: 'auto',
-            fontFamily: 'monospace',
-            fontSize: 12,
-            whiteSpace: 'pre',
-          }}
-        >
-          {patch.text}
-        </pre>
+        hunkMode ? (
+          <Flex vertical gap={8}>
+            <Flex align="center" gap={8} wrap="wrap">
+              {previewStaged ? (
+                <Button
+                  size="small"
+                  data-testid="hunk-unstage"
+                  disabled={selected.length === 0}
+                  loading={hunkActing}
+                  onClick={() => fire('unstage')}
+                >
+                  取消暂存选中
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="small"
+                    type="primary"
+                    data-testid="hunk-stage"
+                    disabled={selected.length === 0}
+                    loading={hunkActing}
+                    onClick={() => fire('stage')}
+                  >
+                    暂存选中
+                  </Button>
+                  <Popconfirm
+                    title="放弃选中 hunk 的修改？不可恢复"
+                    okText="确定"
+                    cancelText="取消"
+                    onConfirm={() => fire('discard')}
+                  >
+                    <Button size="small" danger data-testid="hunk-discard" disabled={selected.length === 0}>
+                      放弃选中
+                    </Button>
+                  </Popconfirm>
+                </>
+              )}
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                已选 {selected.length} / {split!.hunks.length} 个 hunk
+              </Typography.Text>
+            </Flex>
+            <Collapse
+              size="small"
+              items={split!.hunks.map((hunk) => ({
+                key: hunk.index,
+                label: (
+                  <Flex align="center" gap={8}>
+                    {/* 勾选点击不触发展开/收起：内层包 span 拦截冒泡，其余标签区点击仍可展开折叠 */}
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
+                      <Checkbox
+                        data-testid={`hunk-check-${hunk.index}`}
+                        checked={selected.includes(hunk.index)}
+                        onChange={(e) => toggle(hunk.index, e.target.checked)}
+                      />
+                    </span>
+                    <Typography.Text code style={{ fontSize: 12 }}>
+                      hunk {hunk.index + 1}
+                    </Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+                      {patchHunkHeading(hunk.header)}
+                    </Typography.Text>
+                  </Flex>
+                ),
+                children: (
+                  <pre
+                    data-testid={`hunk-text-${hunk.index}`}
+                    style={{
+                      margin: 0,
+                      maxHeight: 240,
+                      overflow: 'auto',
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      whiteSpace: 'pre',
+                    }}
+                  >
+                    {hunk.text}
+                  </pre>
+                ),
+              }))}
+            />
+          </Flex>
+        ) : (
+          <pre
+            data-testid="patch-text"
+            style={{
+              margin: 0,
+              maxHeight: 480,
+              overflow: 'auto',
+              fontFamily: 'monospace',
+              fontSize: 12,
+              whiteSpace: 'pre',
+            }}
+          >
+            {patch.text}
+          </pre>
+        )
       ) : (
         <Typography.Text type="secondary">点击文件查看补丁预览</Typography.Text>
       )}
@@ -420,6 +553,9 @@ export function StatusPage({
   committing,
   patch,
   patchLoading,
+  previewStaged,
+  onHunkStaging,
+  hunkActing,
   onSelectPatch,
   onOpenDiff,
   changelists,
@@ -568,7 +704,13 @@ export function StatusPage({
           />
         </Flex>
         <Flex vertical style={{ flex: 1, minWidth: 320 }}>
-          <PatchCard patch={patch} patchLoading={patchLoading} />
+          <PatchCard
+            patch={patch}
+            patchLoading={patchLoading}
+            previewStaged={previewStaged}
+            onHunkStaging={onHunkStaging}
+            hunkActing={hunkActing}
+          />
         </Flex>
       </Flex>
       <CommitCard committing={committing} onCommit={onCommit} />

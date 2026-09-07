@@ -232,6 +232,121 @@ describe('StatusPage', () => {
   });
 });
 
+/** 双 hunk 补丁夹具：头部 + 两个 @@（第二个带函数上下文标题） */
+const PATCH_TEXT =
+  'diff --git a/a.ts b/a.ts\nindex 111..222 100644\n--- a/a.ts\n+++ b/a.ts\n' +
+  '@@ -1,2 +1,2 @@\n ctx\n-old\n+new\n' +
+  '@@ -10,3 +10,4 @@ fn bar()\n more\n+added\n';
+
+describe('StatusPage hunk 级操作', () => {
+  it('未传 onHunkStaging 时保持纯文本渲染（向后兼容）', () => {
+    render(<StatusPage status={makeStatus([])} {...makeHandlers()} patch={{ path: 'a.ts', text: PATCH_TEXT }} />);
+    expect(screen.getByTestId('patch-text')).toBeInTheDocument();
+    expect(screen.queryByTestId('hunk-check-0')).not.toBeInTheDocument();
+  });
+
+  it('传 onHunkStaging 时按 hunk 切片渲染（勾选 + 头行标题）', () => {
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'a.ts', text: PATCH_TEXT }}
+        onHunkStaging={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('hunk-check-0')).toBeInTheDocument();
+    expect(screen.getByTestId('hunk-check-1')).toBeInTheDocument();
+    expect(screen.getByText('fn bar()')).toBeInTheDocument();
+    // 工作区视图：暂存/放弃按钮在位，未勾选时禁用
+    expect(screen.getByTestId('hunk-stage').closest('button')).toBeDisabled();
+    expect(screen.getByTestId('hunk-discard').closest('button')).toBeDisabled();
+  });
+
+  it('工作区视图：勾选 hunk → 暂存选中发 {action:stage,file,hunks:[索引]}', () => {
+    const onHunkStaging = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'a.ts', text: PATCH_TEXT }}
+        onHunkStaging={onHunkStaging}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('hunk-check-0'));
+    fireEvent.click(screen.getByTestId('hunk-check-1'));
+    fireEvent.click(screen.getByTestId('hunk-stage'));
+    expect(onHunkStaging).toHaveBeenCalledWith({ action: 'stage', file: 'a.ts', hunks: [0, 1] });
+  });
+
+  it('工作区视图：放弃选中经 Popconfirm 确认发 {action:discard}', async () => {
+    const onHunkStaging = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'a.ts', text: PATCH_TEXT }}
+        onHunkStaging={onHunkStaging}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('hunk-check-0'));
+    fireEvent.click(screen.getByTestId('hunk-discard'));
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
+    expect(onHunkStaging).toHaveBeenCalledWith({ action: 'discard', file: 'a.ts', hunks: [0] });
+  });
+
+  it('已暂存视图：仅「取消暂存选中」，发 {action:unstage}', () => {
+    const onHunkStaging = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'a.ts', text: PATCH_TEXT }}
+        previewStaged
+        onHunkStaging={onHunkStaging}
+      />,
+    );
+    expect(screen.queryByTestId('hunk-stage')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('hunk-discard')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('hunk-check-1'));
+    fireEvent.click(screen.getByTestId('hunk-unstage'));
+    expect(onHunkStaging).toHaveBeenCalledWith({ action: 'unstage', file: 'a.ts', hunks: [1] });
+  });
+
+  it('切换文件或补丁文本变化时勾选复位（hunk 编号随当前 diff 重算，旧勾选会错位）', () => {
+    const { rerender } = render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'a.ts', text: PATCH_TEXT }}
+        onHunkStaging={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('hunk-check-0'));
+    expect(screen.getByTestId('hunk-check-0')).toBeChecked();
+    // 同文件新补丁文本：部分暂存后服务端重算编号的场景
+    rerender(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'a.ts', text: '@@ -10,3 +10,4 @@ fn bar()\n more\n+added\n' }}
+        onHunkStaging={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('hunk-check-0')).not.toBeChecked();
+    // 切换文件：同样复位
+    fireEvent.click(screen.getByTestId('hunk-check-0'));
+    rerender(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'b.ts', text: PATCH_TEXT }}
+        onHunkStaging={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('hunk-check-0')).not.toBeChecked();
+  });
+});
+
 /** 测试变更列表视图工厂：默认列表 + 两个普通列表；assignments 按需覆盖 */
 function makeChangelists(assignments: Record<string, string> = {}): ChangelistView {
   return {
