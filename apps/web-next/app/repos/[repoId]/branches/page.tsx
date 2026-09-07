@@ -46,6 +46,17 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             .then(() => mutateBranches())
             .catch(onError);
         }}
+        onCleanupMerged={() => {
+          // 清理已合并到 HEAD 的本地非当前分支：逐条走既有 delete（已合并无需 force），全部完成后重验证列表
+          const targets = branches.branches.filter((b) => !b.remote && b.mergedIntoHead && !b.current);
+          void (async () => {
+            for (const branch of targets) {
+              await branchAction({ action: 'delete', name: branch.name });
+            }
+            void mutateBranches();
+            void message.success(`已清理 ${targets.length} 个已合并分支`);
+          })().catch(onError);
+        }}
         acting={actingBranch || checkingOut}
       />
     </Flex>

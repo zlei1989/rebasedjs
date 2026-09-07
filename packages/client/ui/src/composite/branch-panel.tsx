@@ -3,6 +3,8 @@
  *  行内信息：current 标记、upstream+ ahead/behind 徽标（0 不显示）、mergedIntoHead 图标（绿色对勾 Tooltip"已合并"）。
  *  操作：新建分支（Modal：名称 + 起始点可选 + 创建后检出开关）、检出、删除（Popconfirm；未合并提示需 force）、
  *        重命名（Modal 单输入）、设上游（Modal 单输入）。远程行 v1 只读展示。
+ *  过滤/查找：文本过滤（名称子串，两组共用）+「仅看已合并」开关 +「清理已合并」批量删除（Popconfirm 确认，
+ *        容器经既有 delete action 顺序删除——本地已合并且非当前分支，可安全删除无需 force）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈（message.error）由容器负责。
  */
 import { useMemo, useState } from 'react';
@@ -19,13 +21,15 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { CheckOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
+import { CheckOutlined, DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
 import type { BranchAction, BranchList, BranchRef, CheckoutAction } from '@rebased/contracts';
 
 export interface BranchPanelProps {
   branches: BranchList;
   onAction: (action: BranchAction) => void;
   onCheckout: (action: CheckoutAction) => void;
+  /** 清理已合并到 HEAD 的本地分支（容器按顺序逐条 delete；已合并删除无需 force）；缺省不渲染清理按钮 */
+  onCleanupMerged?: () => void;
   acting?: boolean;
 }
 
@@ -255,9 +259,21 @@ function BranchGroupCard({
   );
 }
 
-export function BranchPanel({ branches, onAction, onCheckout, acting }: BranchPanelProps): React.ReactNode {
+export function BranchPanel({ branches, onAction, onCheckout, onCleanupMerged, acting }: BranchPanelProps): React.ReactNode {
+  // 过滤态：文本（名称大小写不敏感子串）+「仅看已合并」（本地/远程两组同筛选——Java 查找已合并语义）
+  const [filterText, setFilterText] = useState('');
+  const [mergedOnly, setMergedOnly] = useState(false);
+  const match = (b: BranchRef): boolean => {
+    if (mergedOnly && !b.mergedIntoHead) return false;
+    const q = filterText.trim().toLowerCase();
+    return q === '' || b.name.toLowerCase().includes(q);
+  };
   const locals = useMemo(() => branches.branches.filter((b) => !b.remote), [branches]);
   const remotes = useMemo(() => branches.branches.filter((b) => b.remote), [branches]);
+  /** 清理目标：本地已合并且非当前分支（当前分支不可删） */
+  const mergedLocals = useMemo(() => locals.filter((b) => b.mergedIntoHead && !b.current), [locals]);
+  const visibleLocals = useMemo(() => locals.filter(match), [locals, filterText, mergedOnly]);
+  const visibleRemotes = useMemo(() => remotes.filter(match), [remotes, filterText, mergedOnly]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
@@ -284,8 +300,8 @@ export function BranchPanel({ branches, onAction, onCheckout, acting }: BranchPa
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
-      {/* 顶部工具条：新建分支入口 */}
-      <Flex>
+      {/* 顶部工具条：新建分支 + 过滤/查找已合并 + 清理已合并 */}
+      <Flex align="center" gap={8} wrap="wrap">
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -295,15 +311,47 @@ export function BranchPanel({ branches, onAction, onCheckout, acting }: BranchPa
         >
           新建分支
         </Button>
+        <Input
+          data-testid="branch-filter"
+          placeholder="过滤分支名"
+          allowClear
+          style={{ width: 200 }}
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+        />
+        <Checkbox checked={mergedOnly} onChange={(e) => setMergedOnly(e.target.checked)}>
+          仅看已合并
+        </Checkbox>
+        {onCleanupMerged !== undefined ? (
+          <Popconfirm
+            title={`清理 ${mergedLocals.length} 个已合并分支？不可恢复`}
+            okText="确定"
+            cancelText="取消"
+            disabled={mergedLocals.length === 0}
+            onConfirm={onCleanupMerged}
+          >
+            <Button
+              data-testid="cleanup-merged"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={mergedLocals.length === 0}
+              loading={acting}
+            >
+              清理已合并（{mergedLocals.length}）
+            </Button>
+          </Popconfirm>
+        ) : null}
       </Flex>
 
       <BranchGroupCard
-        title={`本地分支（${locals.length}）`}
+        title={`本地分支（${visibleLocals.length}${visibleLocals.length !== locals.length ? `/${locals.length}` : ''}）`}
         rows={
-          locals.length === 0 ? (
-            <Typography.Text type="secondary">无本地分支</Typography.Text>
+          visibleLocals.length === 0 ? (
+            <Typography.Text type="secondary">
+              {filterText.trim() !== '' || mergedOnly ? '无匹配的本地分支' : '无本地分支'}
+            </Typography.Text>
           ) : (
-            locals.map((branch) => (
+            visibleLocals.map((branch) => (
               <LocalBranchRow
                 key={branch.name}
                 branch={branch}
@@ -317,12 +365,14 @@ export function BranchPanel({ branches, onAction, onCheckout, acting }: BranchPa
         }
       />
       <BranchGroupCard
-        title={`远程分支（${remotes.length}）`}
+        title={`远程分支（${visibleRemotes.length}${visibleRemotes.length !== remotes.length ? `/${remotes.length}` : ''}）`}
         rows={
-          remotes.length === 0 ? (
-            <Typography.Text type="secondary">无远程分支</Typography.Text>
+          visibleRemotes.length === 0 ? (
+            <Typography.Text type="secondary">
+              {filterText.trim() !== '' || mergedOnly ? '无匹配的远程分支' : '无远程分支'}
+            </Typography.Text>
           ) : (
-            remotes.map((branch) => <RemoteBranchRow key={branch.name} branch={branch} />)
+            visibleRemotes.map((branch) => <RemoteBranchRow key={branch.name} branch={branch} />)
           )
         }
       />

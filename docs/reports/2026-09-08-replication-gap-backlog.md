@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 45 项（分布于 23 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 44 项（分布于 23 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -69,7 +69,7 @@
 
 **CommitDialog 等效面（4）**：amend 历史提交/reword 直通按钮；GPG 签名/commit template 提交链路消费（白名单键已可读写）；CRLF 提示（`GitCrlfDialog`）；commit & push / push up to commit 组合执行器。
 
-**BranchPanel（6）**：最近检出/标签分组与过滤；查找已合并/清理已合并与过时分支；保护分支设置联动；force-push 后修复（`GitForcePushedBranchUpdateAction`）；checkout with rebase；检出文件。
+**BranchPanel（5）**：最近检出/标签分组与过滤的剩余分组维度（文本过滤与「仅看已合并」已落地）；保护分支设置联动；force-push 后修复（`GitForcePushedBranchUpdateAction`）；checkout with rebase；检出文件（查找已合并/清理已合并已落地——「仅看已合并」开关 +「清理已合并（N）」批量删除）。
 
 **MergeDialog（1）**：远程分支直接合并（当前仅本地分支 Select）。
 

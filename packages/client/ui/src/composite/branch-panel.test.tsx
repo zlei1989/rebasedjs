@@ -224,3 +224,46 @@ describe('BranchPanel 行操作', () => {
     expect(onAction).toHaveBeenCalledWith({ action: 'setUpstream', name: 'dev', upstream: 'origin/dev' });
   });
 });
+
+describe('BranchPanel 过滤/查找已合并', () => {
+  const LIST = makeList([
+    makeBranch({ name: 'main', current: true }),
+    makeBranch({ name: 'feature-merged', mergedIntoHead: true }),
+    makeBranch({ name: 'feature-old', mergedIntoHead: false }),
+    makeBranch({ name: 'origin/main', remote: true, mergedIntoHead: true }),
+  ]);
+
+  it('文本过滤：大小写不敏感子串匹配（两组同筛），计数带「匹配/总数」', () => {
+    render(<BranchPanel branches={LIST} {...makeHandlers()} />);
+    fireEvent.change(screen.getByTestId('branch-filter'), { target: { value: 'FEATURE' } });
+    expect(screen.getByTestId('row-local-feature-merged')).toBeInTheDocument();
+    expect(screen.getByTestId('row-local-feature-old')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-local-main')).not.toBeInTheDocument();
+    expect(screen.getByText('本地分支（2/3）')).toBeInTheDocument();
+    expect(screen.getByText('远程分支（0/1）')).toBeInTheDocument();
+  });
+
+  it('「仅看已合并」：只保留 mergedIntoHead=true 的条目（含远程）', () => {
+    render(<BranchPanel branches={LIST} {...makeHandlers()} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /仅看已合并/ }));
+    expect(screen.getByTestId('row-local-main')).toBeInTheDocument();
+    expect(screen.getByTestId('row-local-feature-merged')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-local-feature-old')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-remote-origin/main')).toBeInTheDocument();
+  });
+
+  it('清理按钮仅显示可选目标计数（已合并且非当前本地分支），确认后回调', async () => {
+    const onCleanupMerged = vi.fn();
+    render(<BranchPanel branches={LIST} {...makeHandlers()} onCleanupMerged={onCleanupMerged} />);
+    const button = screen.getByTestId('cleanup-merged');
+    expect(button).toHaveTextContent('清理已合并（1）'); // feature-merged；main current 不计
+    fireEvent.click(button);
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
+    expect(onCleanupMerged).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传 onCleanupMerged 时不渲染清理按钮', () => {
+    render(<BranchPanel branches={LIST} {...makeHandlers()} />);
+    expect(screen.queryByTestId('cleanup-merged')).not.toBeInTheDocument();
+  });
+});
