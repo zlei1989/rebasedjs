@@ -215,8 +215,8 @@
 | 「更多」菜单：18 项入口聚合 | ✅ | 拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块；GitHub/GitLab 带检测门，工作树/子模块恒渲染 |
 | OperationStatus 操作条（kind 展示 + 中止） | ✅ | `GET /operation` + `operation.state-changed` + `POST /operation/abort` |
 | 远程操作认证重试回路 | ✅ | `AUTH_FAILED` → 关对话框开 AuthDialog（host 自 context，不含 token）→ retry 重放 |
-| 分页（limit ≤500 / skip 游标） | 🟡 | 服务端支持；UI 无"加载更多"入口 |
-| 过滤（author / path） | 🟡 | 服务端支持；UI 无过滤入口 |
+| 分页（limit ≤500 / skip 游标） | ✅ | 「加载更多」limit 阶梯放大（50→100→…→500 封顶）；过滤或翻页时切快照模式（流仅默认视图接入，Ruling 6 同查询约束） |
+| 过滤（author / path） | ✅ | 「文本即滤」双输入（作者/路径，Enter/失焦提交，去首尾空白；清空即恢复）；与服务端 `--author`/`-- path` 过滤一致 |
 | 行右键菜单形态 | 🟡 | 动作以面板按钮/顶栏承载（Reset/Undo/Cherry-pick/Revert 已落地）；右键菜单未做 |
 | 分支折叠 / PermanentGraph 高级视图 | ❌ | 2026-09-08 重新裁定：由「明确不做」改为**可选任务**（依赖过滤 UI 与 PermanentGraph 类缓存结构先行，见任务清单 §2.8） |
 | 新标签页打开 log、为命令过滤的 log | ❌ | internal 动作未做 |

@@ -68,7 +68,17 @@ export default function Page({
   // 无法命中列表，详情面板不渲染——已知限制，见报告）
   const { select } = use(searchParams);
   const router = useRouter();
-  const { data: page, mutate: mutateLog } = useLogPage(repoId);
+  // 过滤/分页（P2 收取）：author/path 过滤（文本即滤，对齐 Java）；limit 阶梯放大（50→500 上限）实现「加载更多」。
+  // 过滤或翻页会改变查询语义——此时流（Ruling 6 同查询渐进渲染）与快照不再同查询，故仅默认视图（无过滤且 limit=50）接入流合并
+  const [author, setAuthor] = useState('');
+  const [path, setPath] = useState('');
+  const [limit, setLimit] = useState(50);
+  const streamEnabled = author === '' && path === '' && limit === 50;
+  const { data: page, mutate: mutateLog, isLoading: logLoading } = useLogPage(repoId, {
+    ...(author === '' ? {} : { author }),
+    ...(path === '' ? {} : { path }),
+    limit,
+  });
   const [refreshKey, setRefreshKey] = useState(0);
   const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId, refreshKey);
   const { data: status, mutate } = useRepoStatus(repoId);
@@ -119,8 +129,11 @@ export default function Page({
     if (streamError) void message.error(streamError);
   }, [streamError]);
   const commits = useMemo(
-    () => mergeLogCommits(page?.commits ?? [], streamCommits, streamConnected),
-    [page, streamCommits, streamConnected],
+    () =>
+      streamEnabled
+        ? mergeLogCommits(page?.commits ?? [], streamCommits, streamConnected)
+        : page?.commits ?? [],
+    [page, streamCommits, streamConnected, streamEnabled],
   );
   const selectedCommit: CommitInfo | null = commits.find((c) => c.hash === selectedHash) ?? null;
   // 「Reset 到此处」：从 commits 找目标提交生成展示 label（短哈希 + 主题），打开 ResetDialog
@@ -329,6 +342,16 @@ export default function Page({
         onOpenPush={() => setOpenDialog('push')}
         onOpenUpdate={() => setOpenDialog('update')}
         onOpenRemotes={() => router.push(`/repos/${repoId}/remotes`)}
+        filters={{ author, path }}
+        onFiltersChange={(f) => {
+          // 过滤变更：回到首屏窗口（limit 复位 50），选定提交不在窗口时的降级由详情面板缺省逻辑承载
+          setAuthor(f.author ?? '');
+          setPath(f.path ?? '');
+          setLimit(50);
+        }}
+        hasMore={(page?.hasMore ?? false) && limit < 500}
+        loadingMore={logLoading && limit > 50}
+        onLoadMore={() => setLimit((prev) => Math.min(prev * 2, 500))}
       />
       {/* 变基对话框：双模式状态机（简单 → useRebase；交互 → base 驱动 todo 重取 + useInteractiveRebase 提交）；
           取消即复位（RebaseDialog 内部状态自行复位，base 归空使 useRebaseTodo 挂 null key 停止重取） */}

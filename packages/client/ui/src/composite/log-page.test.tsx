@@ -535,3 +535,62 @@ describe('LogPage', () => {
     expect(screen.queryByTestId('revert')).not.toBeInTheDocument();
   });
 });
+
+describe('LogPage 过滤/分页', () => {
+  it('未传 onFiltersChange 时不渲染过滤行', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} />);
+    expect(screen.queryByTestId('log-filter-row')).not.toBeInTheDocument();
+  });
+
+  it('过滤输入回车提交（去首尾空白）', () => {
+    const onFiltersChange = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onFiltersChange={onFiltersChange} />);
+    fireEvent.change(screen.getByTestId('log-filter-author'), { target: { value: ' Alice ' } });
+    fireEvent.change(screen.getByTestId('log-filter-path'), { target: { value: 'src/main.ts' } });
+    fireEvent.keyDown(screen.getByTestId('log-filter-author'), { key: 'Enter' });
+    expect(onFiltersChange).toHaveBeenCalledWith({ author: 'Alice', path: 'src/main.ts' });
+  });
+
+  it('filters 受控：初始值回显草稿，清空作者后上抛仅路径', () => {
+    const onFiltersChange = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        filters={{ author: 'Bob', path: 'lib/' }}
+        onFiltersChange={onFiltersChange}
+      />,
+    );
+    expect(screen.getByTestId('log-filter-author')).toHaveValue('Bob');
+    fireEvent.change(screen.getByTestId('log-filter-author'), { target: { value: '' } });
+    fireEvent.blur(screen.getByTestId('log-filter-author'));
+    expect(onFiltersChange).toHaveBeenCalledWith({ path: 'lib/' });
+  });
+
+  it('hasMore 与 onLoadMore 提供时渲染「加载更多」，点击触发回调；hasMore=false 时禁用', () => {
+    const onLoadMore = vi.fn();
+    const { rerender } = render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onFiltersChange={() => {}}
+        hasMore
+        onLoadMore={onLoadMore}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('log-load-more'));
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <LogPage repoName="alpha" status={status} commits={commits} onFiltersChange={() => {}} hasMore={false} onLoadMore={onLoadMore} />,
+    );
+    expect(screen.getByTestId('log-load-more').closest('button')).toBeDisabled();
+  });
+
+  it('未传 onLoadMore 时不渲染「加载更多」', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onFiltersChange={() => {}} hasMore />);
+    expect(screen.queryByTestId('log-load-more')).not.toBeInTheDocument();
+  });
+});

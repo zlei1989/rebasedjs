@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 50 项（分布于 24 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 48 项（分布于 24 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -57,9 +57,11 @@
 | 7 | 最近列表移除动作 | `removeRepo`（幂等；同清 `recentRepoIds` 与该仓库 changelists 簿记）+ `DELETE /api/repos/:id` + `useRemoveRepo`（SWR mutation key 占位、URL 经 arg 拼装）；容器注 `onRemove` → Popconfirm → mutate 刷新 |
 | 8 | 列表项分支后缀/图标/失效标记 | ❌ 装饰性后置（保留） |
 
-### 2.3 P2：各域功能点补齐（按域 50 项）
+### 2.3 P2：各域功能点补齐（按域 48 项）
 
-**LogPage（5）**：分页「加载更多」UI；过滤 UI（author/path，对齐 Java「文本即滤 + 分支过滤弹窗」）；行右键菜单形态（checkout、New Branch/Tag from Commit、Push up to Commit、Open in Browser、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
+**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）。
+
+**LogPage（3）**：行右键菜单形态（checkout、New Branch/Tag from Commit、Push up to Commit、Open in Browser、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
 
 **DiffPage（4）**：word diff/同步滚动/折叠/上下文行数 UI 开关；hunk 级应用/回退；三版本对比（本地/暂存/HEAD）；与分支比较（`GitCompareWithBranchAction`）；（分块渲染已落地，见 §2.1 #1 完成记录）。
 
@@ -176,9 +178,9 @@ browse（历史快照浏览）：✅ 已完成（§2.8 完成记录）；`initRe
 
 - **原裁定依据**（组装 spec §3.1:88、A.2:283-284、§1.3:32）：① graph-layout 移植为最小必需集，`PermanentGraph`（提交图缓存）属「缓存与高级视图」层不在首跑范围；② 频率证据——折叠家族高频入口仅「文本即滤 + 分支过滤弹窗」（列为 P2 次优先），分支折叠无高频使用证据；③ 折叠/虚线过滤边依赖 PermanentGraph 类缓存结构。
 - **重新裁定理由**：折叠是独立可评估的可视化能力，不应与 PermanentGraph 缓存机制永久绑定定性；待过滤 UI 落地、大仓库图密度成为实际问题后值得重新评估。
-- **前置依赖**：① LogPage 过滤 UI（§2.3 LogPage 项，P2 次优先）；② PermanentGraph 类缓存结构或自研等价物（折叠状态存储）。
+- **前置依赖**：① LogPage 过滤 UI —— 已落地（§2.3 完成记录，2026-09-08）；② PermanentGraph 类缓存结构或自研等价物（折叠状态存储）—— 未动。
 - **工作量**：中-大（缓存结构移植 + 折叠交互 + 虚线过滤边渲染），单独立项时再估。
-- **触发条件**：过滤 UI 落地后、出现大仓库折叠诉求时启动评估。
+- **触发条件**：大仓库折叠诉求出现时启动评估（过滤 UI 前置已落地，仅剩缓存结构项）。
 
 ---
 

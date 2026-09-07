@@ -9,12 +9,19 @@
  * 回调全缺省时不渲染「更多」按钮。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
-import { Button, Dropdown, Popconfirm } from 'antd';
+import { Button, Dropdown, Input, Popconfirm } from 'antd';
 import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
 import { RepoStatusBar } from '../domain/repo-status-bar';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
+import { useEffect, useState } from 'react';
+
+/** 日志过滤条件（受控：容器持有，变更即重查快照；为空时才是默认全量视图） */
+export interface LogFilters {
+  author?: string;
+  path?: string;
+}
 
 export interface LogPageProps {
   repoName: string;
@@ -93,6 +100,16 @@ export interface LogPageProps {
   onRevert?: (hash: string) => void;
   /** 透传给 CommitDetailsPanel 的「浏览快照」回调（选中提交 → /browse?rev=）；缺省详情面板不渲染该按钮 */
   onBrowse?: (hash: string) => void;
+  /** 过滤条件（受控）；与 onFiltersChange 同传时渲染过滤输入行 */
+  filters?: LogFilters;
+  /** 过滤变更回调（输入去首尾空白后上抛；清空 = 空对象） */
+  onFiltersChange?: (filters: LogFilters) => void;
+  /** 「加载更多」可用（快照 hasMore 且未到上限）；缺省不渲染按钮 */
+  hasMore?: boolean;
+  /** 「加载更多」进行中：按钮 loading 态 */
+  loadingMore?: boolean;
+  /** 「加载更多」回调（容器增大 limit 重查，推荐 ≤500 阶梯式） */
+  onLoadMore?: () => void;
 }
 
 export function LogPage({
@@ -136,7 +153,25 @@ export function LogPage({
   onCherryPick,
   onRevert,
   onBrowse,
+  filters,
+  onFiltersChange,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: LogPageProps): React.ReactNode {
+  // 过滤输入（受控）：本地草稿即时回显，提交（Enter/失焦）才上抛——避免每击键重查快照
+  const [authorDraft, setAuthorDraft] = useState(filters?.author ?? '');
+  const [pathDraft, setPathDraft] = useState(filters?.path ?? '');
+  useEffect(() => {
+    setAuthorDraft(filters?.author ?? '');
+    setPathDraft(filters?.path ?? '');
+  }, [filters?.author, filters?.path]);
+  const applyFilters = (): void => {
+    const author = authorDraft.trim();
+    const path = pathDraft.trim();
+    if (author === (filters?.author ?? '') && path === (filters?.path ?? '')) return;
+    onFiltersChange?.({ ...(author === '' ? {} : { author }), ...(path === '' ? {} : { path }) });
+  };
   // 「更多」菜单项：仅装配容器注入回调的入口（P3-C 只读浏览 溯源/历史/已提交/搜索 + 本地操作 变基/标签
   // + 远程操作 拉取/推送/更新项目/远程管理 + P3-D 补丁/搁置/控制台/忽略）；全缺省时连「更多」按钮都不渲染
   const moreItems = [
@@ -282,6 +317,49 @@ export function LogPage({
           </Dropdown>
         ) : null}
       </div>
+      {/* 过滤/分页行：仅容器同时注入过滤回调时渲染（过滤受控，Enter/失焦提交防每击键重查）；
+          加载更多按 hasMore 展示（服务端 limit≤500，容器按阶梯放大重查） */}
+      {onFiltersChange !== undefined ? (
+        <div
+          data-testid="log-filter-row"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderBottom: '1px solid #f0f0f0' }}
+        >
+          <Input
+            data-testid="log-filter-author"
+            placeholder="作者过滤"
+            allowClear
+            size="small"
+            style={{ width: 180 }}
+            value={authorDraft}
+            onChange={(e) => setAuthorDraft(e.target.value)}
+            onPressEnter={applyFilters}
+            onBlur={applyFilters}
+          />
+          <Input
+            data-testid="log-filter-path"
+            placeholder="路径过滤（如 src/）"
+            allowClear
+            size="small"
+            style={{ width: 220 }}
+            value={pathDraft}
+            onChange={(e) => setPathDraft(e.target.value)}
+            onPressEnter={applyFilters}
+            onBlur={applyFilters}
+          />
+          {hasMore !== undefined && onLoadMore !== undefined ? (
+            <Button
+              size="small"
+              data-testid="log-load-more"
+              disabled={!hasMore}
+              loading={loadingMore}
+              onClick={onLoadMore}
+              style={{ marginLeft: 'auto' }}
+            >
+              加载更多
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
           <CommitGraph commits={commits} onSelect={onSelectCommit} />
