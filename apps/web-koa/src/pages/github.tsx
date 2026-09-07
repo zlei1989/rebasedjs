@@ -10,10 +10,12 @@
  */
 import {
   useAddGithubComment,
+  useAddGithubPrReviewComment,
   useBranches,
   useCheckoutGithubPr,
   useGithubPrDetail,
   useGithubPrFiles,
+  useGithubPrReviewComments,
   useGithubPrs,
   useGithubStatus,
   useGithubTimeline,
@@ -43,11 +45,14 @@ export function RepoGithubPage(): React.ReactNode {
   const { data: detail, error: detailError, mutate: mutateDetail } = useGithubPrDetail(repoId, number);
   const { data: timeline, error: timelineError, mutate: mutateTimeline } = useGithubTimeline(repoId, number);
   const { data: files, error: filesError, mutate: mutateFiles } = useGithubPrFiles(repoId, number);
+  // 行级评审评论：选中 PR 后条件拉取（number 为 null 挂 null key 不发请求）；添加后列表由 hook 显式回写
+  const { data: reviewComments, mutate: mutateReviewComments } = useGithubPrReviewComments(repoId, number);
   // mutation 需要非空 number：仅在选中 PR（number !== null，详情操作区已渲染）时才可能被触发，0 仅为挂载占位
   const { trigger: addComment, isMutating: commenting } = useAddGithubComment(repoId, number ?? 0);
   const { trigger: submitReview, isMutating: reviewing } = useSubmitGithubReview(repoId, number ?? 0);
   const { trigger: mergePr, isMutating: merging } = useMergeGithubPr(repoId, number ?? 0);
   const { trigger: checkoutPr, isMutating: checkingOut } = useCheckoutGithubPr(repoId, number ?? 0);
+  const { trigger: addReviewComment, isMutating: commentActing } = useAddGithubPrReviewComment(repoId, number ?? 0);
   // checkout 跨键回写（status/branches）的订阅承接：本页挂载两键使重取生效（数据不以本页展示为主）
   useRepoStatus(repoId);
   useBranches(repoId);
@@ -120,6 +125,8 @@ export function RepoGithubPage(): React.ReactNode {
             detail={detail ?? null}
             timeline={timeline ?? null}
             files={files ?? null}
+            reviewComments={reviewComments ?? null}
+            commentActing={commentActing}
             loading={prsLoading}
             acting={acting}
             onSelectPr={setNumber}
@@ -128,9 +135,13 @@ export function RepoGithubPage(): React.ReactNode {
               void mutateDetail();
               void mutateTimeline();
               void mutateFiles();
+              void mutateReviewComments();
             }}
             onComment={(body) => {
               addComment({ body }).catch(onError);
+            }}
+            onAddReviewComment={(body) => {
+              addReviewComment(body).catch(onError);
             }}
             onReview={(event, body) => {
               // body 为空不带（照 githubReviewBodySchema 可选）

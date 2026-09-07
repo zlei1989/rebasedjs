@@ -16,10 +16,10 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **83 / 95**（web-next 83 个 route.ts ↔ web-koa repos.ts 95 注册，12 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **85 / 99**（web-next 85 个 route.ts ↔ web-koa repos.ts 99 注册，14 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 100 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 57、领域类型/别名 82、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| `@rebased/api` 公共出口 | 104 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 59、领域类型/别名 86、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
 | 导航边（104 条） | 52 ✅（含等价边）+ 9 🟡 + 7 ➖ + 36 ❌ |
 
 ### 1.2 口径与图例
@@ -102,7 +102,7 @@
 
 ## 三、接口盘点
 
-### 3.1 端点总表（83 路径 / 95 方法，两端完全对称）
+### 3.1 端点总表（85 路径 / 99 方法，两端完全对称）
 
 > 路径前缀 `/api`；`id` 即 `repoId`。SSE 3 个：`log/stream`、`diff/stream`、`events`。每个路由只做三件事：zod 校验 → 调 `@rebased/api` → 错误映射。
 
@@ -146,23 +146,23 @@
 | shelf | `repos/:id/shelves` | GET/POST | 搁置列表 / save/restore/drop | ShelfPanel | ✅ |
 | console | `repos/:id/console` | GET | 命令执行记录（token 剥离） | ConsolePanel | ✅ |
 | ignore | `repos/:id/ignore`、`ignore/add`、`ignore/templates` | GET/PUT + 2 项 | .gitignore/exclude 读写 / 一键忽略 / 内建模板 | IgnoreDialog、StatusPage | ✅ |
-| github | `repos/:id/github/status`、`prs`、`prs/:n`、`prs/:n/timeline`、`prs/:n/comments`、`prs/:n/files`、`prs/:n/review`、`prs/:n/merge`、`prs/:n/checkout` | GET×6 + POST×4 | 检测（远程+令牌三态）/ PR 列表·详情·时间线·评论·文件·审查·三策略合并·检出 | GitHubPanel | ✅ |
-| gitlab | `repos/:id/gitlab/status`、`mrs`、`mrs/:iid`、`mrs/:iid/timeline`、`mrs/:iid/comments`、`mrs/:iid/files`、`mrs/:iid/review`、`mrs/:iid/merge`、`mrs/:iid/checkout` | GET×5 + POST×5（mrs 双方法） | 检测 / MR 列表·新建·详情·时间线·评论·文件·审查·合并·检出 | GitLabPanel | ✅ |
+| github | `repos/:id/github/status`、`prs`、`prs/:n`、`prs/:n/timeline`、`prs/:n/comments`、`prs/:n/review-comments`、`prs/:n/files`、`prs/:n/review`、`prs/:n/merge`、`prs/:n/checkout` | GET×7 + POST×5 | 检测（远程+令牌三态）/ PR 列表·详情·时间线·评论·**行级评审评论**·文件·审查·三策略合并·检出 | GitHubPanel | ✅ |
+| gitlab | `repos/:id/gitlab/status`、`mrs`、`mrs/:iid`、`mrs/:iid/timeline`、`mrs/:iid/comments`、`mrs/:iid/discussions`、`mrs/:iid/files`、`mrs/:iid/review`、`mrs/:iid/merge`、`mrs/:iid/checkout` | GET×6 + POST×6（mrs 双方法） | 检测 / MR 列表·新建·详情·时间线·评论·**行级讨论**·文件·审查·合并·检出 | GitLabPanel | ✅ |
 | worktree | `repos/:id/worktrees`、`worktrees/remove`、`worktrees/prune` | GET/POST + 2×POST | 工作树列表 / 创建 / 移除 / 清理 | WorktreePanel | ✅ |
 | submodule | `repos/:id/submodules`、`submodules/update` | GET/POST | 子模块列表（四态）/ 更新（init/recursive） | SubmodulePanel | ✅ |
 
-**小结**：83 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
+**小结**：85 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
 
 ### 3.2 契约层（`@rebased/contracts`）
 
-- **zod schema（57 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff/settings/config、staging/commit、branch/checkout、reset、merge/conflict、stash/changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore、github/gitlab、worktree/submodule——全部被两端路由使用，无闲置。
+- **zod schema（59 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff/settings/config、staging/commit、branch/checkout、reset、merge/conflict、stash/changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore、github（注释/审查/合并/**行级评论**）、gitlab（评论/讨论/审查/合并/创建）、worktree/submodule——全部被两端路由使用，无闲置。
 - **SSE 事件（6 种在用）**：`log.line`、`diff.chunk`、`repo.state-changed`、`operation.state-changed`（events 首帧双事件）、`refs.changed`（fetch/pull/push 后引用移动，首帧全量基线）、`stream.error`（流内错误帧）。`operation.progress` 未实现（无进度型长任务 UI 面）。
 - **错误码（12 个）**：实际产生 8 个——`REPO_NOT_FOUND`、`NOT_A_GIT_REPO`、`INVALID_QUERY`、`GIT_ERROR`、`INVALID_REF`、`OPERATION_IN_PROGRESS`、`AUTH_FAILED`（远程 401 → 认证重试回路）、`RATE_LIMITED`（GitHub 限流）；预留 4 个——`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`。映射表 `httpStatusFor` 两端共用。
-- **领域类型（82 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
+- **领域类型（86 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
 
 ### 3.3 服务层与使用状态
 
-- `@rebased/api` 公共出口 100 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
+- `@rebased/api` 公共出口 104 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
 - **未挂端点 0**：`initRepo`/`cloneRepo` 已随 repo 域收尾挂 `/repos/init`、`/repos/clone`（见任务清单 §2.2 完成记录）。
 - **半使用接口 2 个**：`streamDiffEvents`（diff/stream 已订阅未渲染）、`applyHunkStaging`（无 UI 入口）。
 
@@ -530,7 +530,7 @@ GitHub 集成——认证、PR 全流程；对应 `github-core`（accounts/pullr
 | 账户/token 认证 | ✅ | `findToken('github.com')` + Settings 账户卡片（PAT 录入） |
 | PR 列表/详情/时间线/评论 | ✅ | 时间线 = issue comments + review summaries 合并（旧→新）；空评论拦截 |
 | PR 审查（approve/request changes） | ✅ | reviewDecision 徽标 |
-| diff 视图 | ✅ | 行级视图落地：逐 hunk 两侧 MonacoDiffView（`parseUnifiedDiff` 行映射；`@@` 绝对行号头行 + 上下文标题）；降级：renamed 无内容 → 仅提示、空 patch → 二进制/截断提示、截断按部分渲染；行级评论锚点与提交见任务清单 §2.7 #3 待办 |
+| diff 视图 | ✅ | 行级视图落地：逐 hunk 两侧 MonacoDiffView（`parseUnifiedDiff` 行映射；`@@` 绝对行号头行 + 上下文标题）；降级：renamed 无内容 → 仅提示、空 patch → 二进制/截断提示、截断按部分渲染；**行级评论锚点与提交落地**（GET/POST `/pulls/:n/review-comments`，新侧行号 Select + 输入 + 发送，线程按 hunk 挂靠——见任务清单 §2.7） |
 | 三种合并策略 | ✅ | merge/squash/rebase + warning 路径 |
 | 检出 PR 分支 | ✅ | fetch `+refs/pull/N/head` + `checkoutNewBranch('pr-N','FETCH_HEAD')`；跨键回写 status/branches |
 | 克隆/分享、Gist、AI 描述 | ❌ 明确不做 | — |
@@ -545,7 +545,7 @@ GitLab 集成——认证、MR 全流程；对应 `gitlab-core`（mergerequest�
 |--------|------|------|
 | 账户认证 | ✅ | `findToken('gitlab.com')` + Settings 账户卡片 |
 | MR 创建/列表/详情/评论 | ✅ | 列表四徽标；新建 MR（源/目标分支 + 标题 + 描述）；时间线 notes+reviews 尽力合并 |
-| MR diff 视图 | ✅ | 行级视图落地：逐 hunk 两侧 MonacoDiffView（与 GitHub 共用 `parseUnifiedDiff`/HunkDiffView）；降级同 GitHub；行级评论锚点与提交见任务清单 §2.7 #3 待办 |
+| MR diff 视图 | ✅ | 行级视图落地：逐 hunk 两侧 MonacoDiffView（与 GitHub 共用 `parseUnifiedDiff`/HunkDiffView）；降级同 GitHub；**行级讨论锚点与提交落地**（GET/POST `/mrs/:iid/discussions`，`position{new_path,new_line}` 投递——见任务清单 §2.7） |
 | MR 审查（approve/request changes）/合并 | ✅ | 三映射（approve 端点 / reviews{state:rejected} / notes）+ reviewState 徽标；`merge {squash?}` |
 | MR 检出 | ✅ | fetch `refs/merge-requests/:iid/head` + `checkoutNewBranch('mr-N','FETCH_HEAD')` |
 | Snippet、自托管实例 | ❌ 明确不做 | — |
@@ -784,7 +784,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 ## 六、结论与下一步
 
 1. **页面**：31/31 全覆盖（29 ✅ + 2 🟡 等效）；功能域 36/36（browse 已落地，见任务清单 §2.8），可选 2 项明确不做（1.3 决策清单）。
-2. **接口**：83 路径 / 95 方法两端对称、全部有消费方（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`）；半使用 0（diff/stream 与 staging/hunks 两项均已接渲染入口）。
+2. **接口**：85 路径 / 99 方法两端对称、全部有消费方（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`）；半使用 0（diff/stream 与 staging/hunks 两项均已接渲染入口）。
 3. **导航**：104 条边中 52 ✅（含等价边）+ 9 🟡 + 7 ➖ + 36 ❌；形态等价判定规则见 1.2，明确不做项均记录在案。
 
 **下一步**（按任务清单 `docs/reports/2026-09-08-replication-gap-backlog.md` 执行）：
@@ -805,9 +805,9 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 层 | 位置 |
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
-| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 100 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（83 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（95 注册）+ `src/middleware/error.ts` |
+| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 104 出口） |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（85 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（99 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |

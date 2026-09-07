@@ -29,9 +29,11 @@ export { deleteAccount, listAccounts, upsertAccount } from './auth';
 export { applyRemoteAction, fetchRepo, getRemotes, pullRepo, pushRepo } from './remote';
 export {
   addGithubPrComment,
+  addGithubPrReviewComment,
   checkoutGithubPr,
   getGithubPrDetail,
   getGithubPrFiles,
+  getGithubPrReviewComments,
   getGithubPrs,
   getGithubPrTimeline,
   getGithubStatus,
@@ -41,9 +43,11 @@ export {
 } from './github';
 export {
   addGitlabMrComment,
+  addGitlabMrDiscussion,
   checkoutGitlabMr,
   createGitlabMr,
   getGitlabMrDetail,
+  getGitlabMrDiscussions,
   getGitlabMrFiles,
   getGitlabMrs,
   getGitlabMrTimeline,

@@ -2,20 +2,22 @@
 
 /**
  * GitHub 面板页容器：useGithubStatus（驱动面板提示卡：未检测远程/未配置令牌）+ useGithubPrs（open/closed
- * Tab，缺省 open）+ 选中 PR 后的 detail/timeline/files 条件 hooks（number 为 null 挂 null key 不发请求）
- * + 四个 mutation 注入 ui GitHubPanel（与 web-koa 容器同构）。
- * 顶部返回按钮回日志页；「刷新」按钮重取 prs/detail/timeline/files 四键（照 P3-D console 页做法，
- * null key 的 mutate 为空转）；acting 并合四个 mutation 的 isMutating。
+ * Tab，缺省 open）+ 选中 PR 后的 detail/timeline/files/review-comments 条件 hooks（number 为 null 挂 null key 不发请求）
+ * + 五个 mutation 注入 ui GitHubPanel（与 web-koa 容器同构）。
+ * 顶部返回按钮回日志页；「刷新」按钮重取 prs/detail/timeline/files/review-comments 五键（照 P3-D console 页做法，
+ * null key 的 mutate 为空转）；acting 并合五个 mutation 的 isMutating。
  * 错误处理：页面级查询错误按裁定分派——prs AUTH_FAILED →「GitHub 认证失败」提示卡 + 去设置链接；
  * RATE_LIMITED → 限流提示；其余（含 detail/timeline/files 查询失败与 mutation 失败）toast。
  * checkout 跨键回写（status/branches）已内置于 hook：本容器挂 useRepoStatus/useBranches 订阅承接重取。
  */
 import {
   useAddGithubComment,
+  useAddGithubPrReviewComment,
   useBranches,
   useCheckoutGithubPr,
   useGithubPrDetail,
   useGithubPrFiles,
+  useGithubPrReviewComments,
   useGithubPrs,
   useGithubStatus,
   useGithubTimeline,
@@ -45,11 +47,14 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { data: detail, error: detailError, mutate: mutateDetail } = useGithubPrDetail(repoId, number);
   const { data: timeline, error: timelineError, mutate: mutateTimeline } = useGithubTimeline(repoId, number);
   const { data: files, error: filesError, mutate: mutateFiles } = useGithubPrFiles(repoId, number);
+  // 行级评审评论：选中 PR 后条件拉取（number 为 null 挂 null key 不发请求）；添加后列表由 hook 显式回写
+  const { data: reviewComments, mutate: mutateReviewComments } = useGithubPrReviewComments(repoId, number);
   // mutation 需要非空 number：仅在选中 PR（number !== null，详情操作区已渲染）时才可能被触发，0 仅为挂载占位
   const { trigger: addComment, isMutating: commenting } = useAddGithubComment(repoId, number ?? 0);
   const { trigger: submitReview, isMutating: reviewing } = useSubmitGithubReview(repoId, number ?? 0);
   const { trigger: mergePr, isMutating: merging } = useMergeGithubPr(repoId, number ?? 0);
   const { trigger: checkoutPr, isMutating: checkingOut } = useCheckoutGithubPr(repoId, number ?? 0);
+  const { trigger: addReviewComment, isMutating: commentActing } = useAddGithubPrReviewComment(repoId, number ?? 0);
   // checkout 跨键回写（status/branches）的订阅承接：本页挂载两键使重取生效（数据不以本页展示为主）
   useRepoStatus(repoId);
   useBranches(repoId);
@@ -122,6 +127,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             detail={detail ?? null}
             timeline={timeline ?? null}
             files={files ?? null}
+            reviewComments={reviewComments ?? null}
+            commentActing={commentActing}
             loading={prsLoading}
             acting={acting}
             onSelectPr={setNumber}
@@ -130,9 +137,13 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
               void mutateDetail();
               void mutateTimeline();
               void mutateFiles();
+              void mutateReviewComments();
             }}
             onComment={(body) => {
               addComment({ body }).catch(onError);
+            }}
+            onAddReviewComment={(body) => {
+              addReviewComment(body).catch(onError);
             }}
             onReview={(event, body) => {
               // body 为空不带（照 githubReviewBodySchema 可选）

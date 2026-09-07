@@ -277,6 +277,23 @@ export type GitHubReviewBody = z.infer<typeof githubReviewBodySchema>;
 export const githubMergeBodySchema = z.object({ method: z.enum(['merge', 'squash', 'rebase']) });
 export type GitHubMergeBody = z.infer<typeof githubMergeBodySchema>;
 
+/** 行级评审评论请求体：path 文件相对路径；line 该侧文件行号（正整数）；side 默认 RIGHT（新侧锚定是本产品录入口径，LEFT 仅供测试/兼容）；body 非空且 ≤10_000 */
+export const githubReviewCommentBodySchema = z.object({
+  path: z.string().min(1),
+  line: z.number().int().positive(),
+  side: z.enum(['LEFT', 'RIGHT']).default('RIGHT'),
+  body: z.string().min(1).max(10_000),
+});
+export type GitHubReviewCommentBody = z.infer<typeof githubReviewCommentBodySchema>;
+
+/** MR 行级讨论请求体：path 文件相对路径；line 新侧行号（GitLab position.new_line）；body 非空且 ≤10_000 */
+export const gitlabDiscussionBodySchema = z.object({
+  path: z.string().min(1),
+  line: z.number().int().positive(),
+  body: z.string().min(1).max(10_000),
+});
+export type GitLabDiscussionBody = z.infer<typeof gitlabDiscussionBodySchema>;
+
 /** GitLab MR 列表查询：state=all 为全量；缺省 opened（查询参数走字符串，enum 无需 coerce） */
 export const gitlabMrQuerySchema = z.object({ state: z.enum(['opened', 'closed', 'merged', 'locked', 'all']).default('opened') });
 export type GitLabMrQuery = z.infer<typeof gitlabMrQuerySchema>;

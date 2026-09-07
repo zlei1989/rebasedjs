@@ -5,9 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   addGithubPrComment,
+  addGithubPrReviewComment,
   checkoutGithubPr,
   getGithubPrDetail,
   getGithubPrFiles,
+  getGithubPrReviewComments,
   getGithubPrs,
   getGithubPrTimeline,
   getGithubStatus,
@@ -491,6 +493,47 @@ describe('写操作：POST body/方法契约', () => {
     expect(url).toBe('https://api.github.com/repos/acme/demo/pulls/7/merge');
     expect(init.method).toBe('POST');
     expect(init.body).toBe(JSON.stringify({ merge_method: 'squash' }));
+  });
+});
+
+describe('行级评审评论（review-comments）', () => {
+  it('getGithubPrReviewComments：GET /pulls/{n}/comments 映射（line 兜底 original_line、side 原样）', async () => {
+    const repo = repoWithRemote('https://github.com/acme/demo.git');
+    await upsertAccount({ host: 'github.com', account: 'alice', token: TOKEN });
+    const fetchMock = mockFetchSequence({
+      json: [
+        { id: 1, path: 'src/a.ts', line: 3, original_line: null, side: 'RIGHT', user: { login: 'bob' }, created_at: '2026-07-01T08:30:00Z', body: '这里需要修正' },
+        { id: 2, path: 'src/a.ts', line: null, original_line: 4, side: 'LEFT', user: { login: 'carol' }, created_at: '2026-07-02T09:00:00Z', body: '旧侧评论' },
+      ],
+    });
+
+    const result = await getGithubPrReviewComments(repo, 7);
+
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('https://api.github.com/repos/acme/demo/pulls/7/comments');
+    expect(result.comments).toHaveLength(2);
+    expect(result.comments[0]).toEqual({
+      id: 1, path: 'src/a.ts', line: 3, side: 'RIGHT', author: 'bob', atIso: '2026-07-01T08:30:00Z', body: '这里需要修正',
+    });
+    // 旧侧评论：line 兜底 original_line
+    expect(result.comments[1]).toMatchObject({ line: 4, side: 'LEFT', author: 'carol' });
+  });
+
+  it('addGithubPrReviewComment：POST /pulls/{n}/comments 带 {path,line,side,body}，返回刷新列表', async () => {
+    const repo = repoWithRemote('https://github.com/acme/demo.git');
+    await upsertAccount({ host: 'github.com', account: 'alice', token: TOKEN });
+    const fetchMock = mockFetchSequence(
+      { json: { id: 9, path: 'src/a.ts', line: 3, original_line: null, side: 'RIGHT', user: { login: 'alice' }, created_at: '2026-07-03T10:00:00Z', body: 'ok' } },
+      { json: [{ id: 9, path: 'src/a.ts', line: 3, original_line: null, side: 'RIGHT', user: { login: 'alice' }, created_at: '2026-07-03T10:00:00Z', body: 'ok' }] },
+    );
+
+    const result = await addGithubPrReviewComment(repo, 7, { path: 'src/a.ts', line: 3, side: 'RIGHT', body: 'ok' });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.github.com/repos/acme/demo/pulls/7/comments');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ path: 'src/a.ts', line: 3, side: 'RIGHT', body: 'ok' });
+    expect(result.comments).toHaveLength(1);
+    expect(result.comments[0].id).toBe(9);
   });
 });
 

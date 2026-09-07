@@ -285,6 +285,28 @@ describe('GitLabPanel 文件', () => {
     expect(screen.queryByTestId('gitlab-diff-toggle-1')).not.toBeInTheDocument();
   });
 
+  it('行级讨论注记按 newPath 过滤挂靠；添加行发射 onAddDiscussion(path+line+body)', async () => {
+    const onAddDiscussion = vi.fn();
+    renderPanel({
+      loader: STUB_LOADER,
+      discussions: {
+        notes: [
+          { id: 51, author: 'bob', atIso: '2026-07-01T08:30:00+08:00', body: '这里呢？', newPath: 'src/panel.tsx', newLine: 1 },
+          { id: 52, author: 'carol', atIso: '2026-07-02T09:00:00+08:00', body: '另一文件的讨论', newPath: 'src/old.ts', newLine: 1 },
+        ],
+      },
+      onAddDiscussion,
+    });
+    fireEvent.click(screen.getByRole('tab', { name: '文件' }));
+    fireEvent.click(screen.getByTestId('gitlab-diff-toggle-0'));
+    expect(await screen.findByText('这里呢？')).toBeInTheDocument();
+    expect(screen.queryByText('另一文件的讨论')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('hunk-comment-input-0'), { target: { value: '锚定评论' } });
+    fireEvent.click(screen.getByTestId('hunk-comment-send-0'));
+    expect(onAddDiscussion).toHaveBeenCalledWith({ path: 'src/panel.tsx', line: 1, body: '锚定评论' });
+  });
+
   it('文件列表为空渲染「暂无文件变更」', () => {
     renderPanel({ files: { files: [] } });
     fireEvent.click(screen.getByRole('tab', { name: '文件' }));

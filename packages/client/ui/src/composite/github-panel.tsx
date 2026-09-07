@@ -24,6 +24,9 @@ import type {
   GitHubPrFiles,
   GitHubPrList,
   GitHubPrSummary,
+  GitHubReviewComment,
+  GitHubReviewCommentBody,
+  GitHubReviewComments,
   GitHubStatus,
   GitHubTimeline,
   GitHubTimelineEntry,
@@ -38,7 +41,13 @@ export interface GitHubPanelProps {
   status: GitHubStatus;
   prs: GitHubPrList; number: number | null;
   detail: GitHubPrDetail | null; timeline: GitHubTimeline | null; files: GitHubPrFiles | null;
+  /** 行级评审评论（PR 全量，纯展示/线程挂靠由 ui 按 path 过滤）；null 视同无 */
+  reviewComments?: GitHubReviewComments | null;
   loading?: boolean; acting?: boolean;
+  /** 添加行级评审评论进行中 */
+  commentActing?: boolean;
+  /** 添加行级评审评论回调（容器接 useAddGithubPrReviewComment） */
+  onAddReviewComment?: (body: GitHubReviewCommentBody) => void;
   /** 测试注入点：行级差异视图的 Monaco 加载器（缺省懒加载真实 monaco） */
   loader?: MonacoDiffLoader;
   onSelectPr: (number: number) => void;
@@ -151,9 +160,24 @@ function TimelineRow({ entry }: { entry: GitHubTimelineEntry }): React.ReactNode
   );
 }
 
-/** 文件行：path/status 徽标/增删行 + 「查看差异」展开区（行级视图：逐 hunk 两侧 MonacoDiffView，2026-09-08 裁定 §2.7）；
+/** 文件行：path/status 徽标/增删行 + 「查看差异」展开区（行级视图：逐 hunk 两侧 MonacoDiffView + 行级评论线程，2026-09-08 裁定 §2.7）；
  *  patch 空串时仅 renamed（无内容变更）与 removed（二进制/截断）渲染展开——由 HunkDiffView 降级提示 */
-function FileRow({ file, index, loader }: { file: GitHubPrFile; index: number; loader?: MonacoDiffLoader }): React.ReactNode {
+function FileRow({
+  file,
+  index,
+  comments,
+  onAddReviewComment,
+  commentActing,
+  loader,
+}: {
+  file: GitHubPrFile;
+  index: number;
+  /** 该文件的行级评审评论（容器已按 path 过滤；line=null 的无锚点条目在此丢弃） */
+  comments: GitHubReviewComment[];
+  onAddReviewComment?: (body: GitHubReviewCommentBody) => void;
+  commentActing?: boolean;
+  loader?: MonacoDiffLoader;
+}): React.ReactNode {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -179,7 +203,18 @@ function FileRow({ file, index, loader }: { file: GitHubPrFile; index: number; l
           >
             {expanded ? '收起差异' : '查看差异'}
           </Button>
-          {expanded ? <HunkDiffView patch={file.patch} status={file.status} loader={loader} /> : null}
+          {expanded ? (
+            <HunkDiffView
+              patch={file.patch}
+              status={file.status}
+              loader={loader}
+              comments={comments
+                .filter((c) => c.line !== null)
+                .map((c) => ({ id: String(c.id), line: c.line as number, author: c.author, atIso: c.atIso, body: c.body }))}
+              adding={commentActing}
+              onAddComment={(line, body) => onAddReviewComment?.({ path: file.path, line, side: 'RIGHT', body })}
+            />
+          ) : null}
         </Flex>
       ) : null}
     </Flex>
@@ -249,8 +284,11 @@ function PrDetailBlock({
   detail,
   timeline,
   files,
+  reviewComments,
   acting,
+  commentActing,
   loader,
+  onAddReviewComment,
   onComment,
   onReview,
   onMerge,
@@ -259,9 +297,15 @@ function PrDetailBlock({
   detail: GitHubPrDetail;
   timeline: GitHubTimeline | null;
   files: GitHubPrFiles | null;
+  /** 行级评审评论（全量文件混合）；FileRow 内按 path 过滤 */
+  reviewComments: GitHubReviewComment[] | null;
   acting?: boolean;
+  /** 添加行级评论进行中：hunk 线程发送按钮 loading */
+  commentActing?: boolean;
   /** 测试注入点：行级差异视图的 Monaco 加载器（缺省懒加载真实 monaco） */
   loader?: MonacoDiffLoader;
+  /** 添加行级评审评论回调（path + line + side + body 由 ui 组装，容器接 hook） */
+  onAddReviewComment?: (body: GitHubReviewCommentBody) => void;
   onComment: (body: string) => void;
   onReview: (event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body?: string) => void;
   onMerge: (method: 'merge' | 'squash' | 'rebase') => void;
@@ -378,7 +422,15 @@ function PrDetailBlock({
               ) : (
                 <Flex vertical>
                   {files.files.map((file, index) => (
-                    <FileRow key={file.path} file={file} index={index} loader={loader} />
+                    <FileRow
+                      key={file.path}
+                      file={file}
+                      index={index}
+                      loader={loader}
+                      comments={(reviewComments ?? []).filter((c) => c.path === file.path)}
+                      onAddReviewComment={onAddReviewComment}
+                      commentActing={commentActing}
+                    />
                   ))}
                 </Flex>
               ),
@@ -404,9 +456,12 @@ export function GitHubPanel(props: GitHubPanelProps): React.ReactNode {
     detail,
     timeline,
     files,
+    reviewComments,
     loading,
     acting,
+    commentActing,
     loader,
+    onAddReviewComment,
     onSelectPr,
     onRefresh,
     onComment,
@@ -465,8 +520,11 @@ export function GitHubPanel(props: GitHubPanelProps): React.ReactNode {
               detail={detail}
               timeline={timeline}
               files={files}
+              reviewComments={reviewComments?.comments ?? null}
               acting={acting}
+              commentActing={commentActing}
               loader={loader}
+              onAddReviewComment={onAddReviewComment}
               onComment={onComment}
               onReview={onReview}
               onMerge={onMerge}

@@ -14,9 +14,11 @@
  */
 import {
   useAddGitlabComment,
+  useAddGitlabDiscussion,
   useBranches,
   useCheckoutGitlabMr,
   useCreateGitlabMr,
+  useGitlabDiscussions,
   useGitlabMrDetail,
   useGitlabMrFiles,
   useGitlabMrs,
@@ -48,12 +50,15 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { data: detail, error: detailError, mutate: mutateDetail } = useGitlabMrDetail(repoId, iid);
   const { data: timeline, error: timelineError, mutate: mutateTimeline } = useGitlabTimeline(repoId, iid);
   const { data: files, error: filesError, mutate: mutateFiles } = useGitlabMrFiles(repoId, iid);
+  // 行级讨论注记：选中 MR 后条件拉取（iid 为 null 挂 null key 不发请求）；添加后列表由 hook 显式回写
+  const { data: discussions, mutate: mutateDiscussions } = useGitlabDiscussions(repoId, iid);
   // mutation 需要非空 iid：仅在选中 MR（iid !== null，详情操作区已渲染）时才可能被触发，0 仅为挂载占位
   const { trigger: createMr, isMutating: creating } = useCreateGitlabMr(repoId);
   const { trigger: addComment, isMutating: commenting } = useAddGitlabComment(repoId, iid ?? 0);
   const { trigger: submitReview, isMutating: reviewing } = useSubmitGitlabReview(repoId, iid ?? 0);
   const { trigger: mergeMr, isMutating: merging } = useMergeGitlabMr(repoId, iid ?? 0);
   const { trigger: checkoutMr, isMutating: checkingOut } = useCheckoutGitlabMr(repoId, iid ?? 0);
+  const { trigger: addDiscussion, isMutating: commentActing } = useAddGitlabDiscussion(repoId, iid ?? 0);
   // branches 供新建 MR Modal 源/目标分支选择；checkout 跨键回写（status/branches）的订阅承接：本页挂载两键使重取生效
   const { data: branches } = useBranches(repoId);
   useRepoStatus(repoId);
@@ -126,6 +131,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             detail={detail ?? null}
             timeline={timeline ?? null}
             files={files ?? null}
+            discussions={discussions ?? null}
+            commentActing={commentActing}
             branches={branches?.branches ?? []}
             loading={mrsLoading}
             acting={acting}
@@ -135,6 +142,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
               void mutateDetail();
               void mutateTimeline();
               void mutateFiles();
+              void mutateDiscussions();
             }}
             onCreateMr={(body) => {
               // T5 裁定：Modal 确认即关+复位——容器只 trigger + toast + 回写（hook 已跨键前置插入列表）
@@ -144,6 +152,9 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             }}
             onComment={(body) => {
               addComment({ body }).catch(onError);
+            }}
+            onAddDiscussion={(body) => {
+              addDiscussion(body).catch(onError);
             }}
             onReview={(event, body) => {
               // body 为空不带（照 gitlabReviewBodySchema 可选）

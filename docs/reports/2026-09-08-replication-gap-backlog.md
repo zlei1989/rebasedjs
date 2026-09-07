@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 47 项（分布于 24 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 46 项（分布于 23 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -103,7 +103,7 @@
 
 **SettingsPage（4）**：git 可执行文件检测/引导（`GitExecutableSelectorPanel`）；GPG/SSH 专属配置对话框（白名单键已可读写，缺对话框形态）；保护分支设置；自动 fetch 设置（或确认以事件推送替代的终稿口径）。
 
-**GitHubPanel / GitLabPanel（1）**：行级评论锚点与提交（§2.7 #3——行级 diff 视图已落地，见 §2.7 完成记录）。
+**GitHubPanel / GitLabPanel（0）**：行级评论锚点与提交已落地（§2.7 完成记录）。
 
 ### 2.4 P3：导航边缺口（33 条可做 + 2 条 🟡 直达，按目标页分组）
 
@@ -142,18 +142,18 @@ gitlab checkout Bearer 注入 hardening（真机验证 + core 层改 Basic/PRIVA
 
 browse（历史快照浏览）：✅ 已完成（§2.8 完成记录）；`initRepo`/`cloneRepo` 端点：✅ 已完成（§2.2 完成记录）；终稿盘点仍以架构 spec §4.2 域表逐行核；`operation.progress` SSE（有进度型长任务 UI 面时实现）；预留错误码 4 个（`CONFLICT`/`HOOK_FAILED`/`STALE_LOCK`/`CANCELLED`）随对应功能落地消费。
 
-### 2.7 PR/MR 行级 diff 视图（2026-09-08 新裁定：由「明确不做」改为可排期）——#1/#2/#4 ✅，剩 #3
+### 2.7 PR/MR 行级 diff 视图（2026-09-08 新裁定：由「明确不做」改为可排期）——✅ 全部完成
 
 **裁定依据**：Java `GHPRDiffVirtualFile` / `GitLabMergeRequestDiffVirtualFile` 的评审功能集（语法高亮、行号、并排/内联、行级评论锚点、增删统计）可经 Monaco 行级视图功能对等复刻——复用既有 `monaco-diff-view`/`monaco-lazy`（MergeView 已为三编辑器先例）；`GitHubPrFile.patch`/`GitLabMrFile.diff` 已含每文件 unified diff 全文，hunk 头 `@@ -a,b +c,d @@` 自带行号，行映射可解析（GitLab 汇总字段不逐文件给行数不构成阻塞）。不可复刻者仅为 Java 平台编辑器的通用能力（本地搜索/检查集成），不属 PR diff 功能口径。
 
 | # | 任务 | 状态 |
 |---|------|------|
 | 1 | unified diff 行映射解析器 | ✅ contracts `parseUnifiedDiff`/`parseHunkHeader`/`hunkSides`（@@ 头算术两侧行号游标；`\ No newline` → no-newline 行；新建/删除文件 `-0,0`/`+0,0`；hunk 外容错按部分渲染；纯函数 9 单测） |
-| 2 | 文件 tab 改为行级视图 | ✅ ui `domain/hunk-diff-view.tsx`（逐 hunk 两侧 MonacoDiffView：绝对行号头行 + 上下文标题、块高自适应；GitHub/GitLab 共用、loader 注入）；两面板 FileRow 由 patch 文本预览升级为「查看差异」行级视图（保留 status/增删行徽标）；两端面板测试以 stub loader 覆盖（60 用例） |
-| 3 | 行级评论锚点 | 待办：新侧行 → 评论锚定（GitHub inline review comments：`path + line + side`，需新增 `/pulls/:n/review-comments` GET/POST 端点——现有 `comments` 为 issue comment；GitLab discussions：`position[new_line]`，新增 discussions 端点）；glyph margin 图标 + 行点击开评论 + 提交后回写时间线 |
+| 2 | 文件 tab 改为行级视图 | ✅ ui `domain/hunk-diff-view.tsx`（逐 hunk 两侧 MonacoDiffView：绝对行号头行 + 上下文标题、块高自适应；GitHub/GitLab 共用、loader 注入）；两面板 FileRow 由 patch 文本预览升级为「查看差异」行级视图（保留 status/增删行徽标）；两端面板测试以 stub loader 覆盖 |
+| 3 | 行级评论锚点 | ✅ 端点 GET/POST `/pulls/:n/review-comments`（GitHub：path+line+side，line 兜底 original_line）与 `/mrs/:iid/discussions`（GitLab：position{new_path,new_line} 投递）；契约 GitHubReviewComment(s)/GitLabDiscussionNote(s) + `githubReviewCommentBodySchema`/`gitlabDiscussionBodySchema`；hooks `useGithubPrReviewComments`/`useAddGithubPrReviewComment`/`useGitlabDiscussions`/`useAddGitlabDiscussion`（显式回写键）；ui HunkDiffView 线程：按 hunk 新侧范围挂靠 + 新侧行号 Select + 输入 + 发送（提交后列表刷新）；两端容器接线（刷新联动）；api 4 单测 + client 5 单测 + ui 4 单测（线程/发射/降级） |
 | 4 | 降级路径 | ✅ 0 hunk 按 status 分流：renamed → 仅重命名提示；其余 → 二进制/超限截断提示；截断按部分渲染（解析出多少显示多少） |
 
-> 盘点报告 4.26/4.27 的 diff 视图行与边 #98 已由 🟡 转 ✅（行级评论锚点 #3 完成后补 glyph 锚定与回写；保留 AI 描述、克隆/分享等其余裁定）。
+> 盘点报告 4.26/4.27 的 diff 视图行与边 #98 均已转 ✅（保留 AI 描述、克隆/分享等其余裁定）。
 
 ### 2.8 browse 历史快照浏览（2026-09-08 首次裁定：立项轻量复刻）——✅ 已完成
 

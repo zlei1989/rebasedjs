@@ -21,6 +21,9 @@ import type {
   GitHubPrSummary,
   GitHubRepoRef,
   GitHubReviewBody,
+  GitHubReviewComment,
+  GitHubReviewCommentBody,
+  GitHubReviewComments,
   GitHubStatus,
   GitHubTimeline,
   GitHubTimelineEntry,
@@ -206,6 +209,16 @@ interface GhFile {
   deletions: number;
   patch?: string;
 }
+interface GhReviewComment {
+  id: number;
+  path: string;
+  line: number | null;
+  original_line: number | null;
+  side: 'LEFT' | 'RIGHT';
+  user: GhUser | null;
+  created_at: string;
+  body: string | null;
+}
 
 function toPrSummary(p: GhPull): GitHubPrSummary {
   return {
@@ -244,6 +257,19 @@ function reviewStateOf(state: string): GitHubTimelineEntry['reviewState'] {
 }
 
 const FILE_STATUSES = new Set<string>(['added', 'modified', 'removed', 'renamed']);
+
+/** review comment → 契约形状：line 优先（新侧），缺失兜底 original_line（旧侧——GitHub 对旧侧评论给 line 为 null）；两者皆无保留 null（UI 丢弃无锚点条目） */
+function toReviewComment(c: GhReviewComment): GitHubReviewComment {
+  return {
+    id: c.id,
+    path: c.path,
+    line: c.line ?? c.original_line ?? null,
+    side: c.side === 'LEFT' ? 'LEFT' : 'RIGHT',
+    author: c.user?.login ?? 'unknown',
+    atIso: c.created_at,
+    body: c.body ?? '',
+  };
+}
 
 /* ---------------------------------- 服务入口 ---------------------------------- */
 
@@ -305,6 +331,24 @@ export async function addGithubPrComment(repoPath: string, number: number, body:
   const session = await resolveGithubRepo(repoPath);
   await githubRequest<GhComment>(session, `/issues/${number}/comments`, { method: 'POST', body: { body } });
   return getGithubPrTimeline(repoPath, number);
+}
+
+/** 行级评审评论列表：GET pulls/{n}/comments（评审内联评论——区别于 issues/{n}/comments 的全局评论） */
+export async function getGithubPrReviewComments(repoPath: string, number: number): Promise<GitHubReviewComments> {
+  const session = await resolveGithubRepo(repoPath);
+  const comments = await githubRequest<GhReviewComment[]>(session, `/pulls/${number}/comments`);
+  return { comments: comments.map(toReviewComment) };
+}
+
+/** 添加行级评审评论：POST pulls/{n}/comments {path,line,side,body}（line 为新侧行号，side 恒 RIGHT——本产品录入口径）；返回刷新后的完整列表 */
+export async function addGithubPrReviewComment(
+  repoPath: string,
+  number: number,
+  body: GitHubReviewCommentBody,
+): Promise<GitHubReviewComments> {
+  const session = await resolveGithubRepo(repoPath);
+  await githubRequest<GhReviewComment>(session, `/pulls/${number}/comments`, { method: 'POST', body });
+  return getGithubPrReviewComments(repoPath, number);
 }
 
 /** PR 文件：GET pulls/{n}/files；patch 缺省（API 行为）→ '' */

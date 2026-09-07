@@ -324,6 +324,18 @@ export interface GitHubTimeline { entries: GitHubTimelineEntry[]; }
 /** PR 文件变更：patch 为文件级 diff 全文（GitHub API 可能缺省 → ''） */
 export interface GitHubPrFile { path: string; status: 'added' | 'modified' | 'removed' | 'renamed'; additions: number; deletions: number; patch: string; }
 export interface GitHubPrFiles { files: GitHubPrFile[]; }
+/** 行级评审评论：side=LEFT 旧侧/RIGHT 新侧（本产品仅新侧录入，旧侧评论原样呈现）；line 为该侧文件行号（评论必须锚定，null 兜底丢弃该条） */
+export interface GitHubReviewComment {
+  id: number;
+  path: string;
+  line: number | null;
+  side: 'LEFT' | 'RIGHT';
+  author: string;
+  atIso: string;
+  body: string;
+}
+/** 行级评审评论列表（按 id 升序——GitHub 返回创建序） */
+export interface GitHubReviewComments { comments: GitHubReviewComment[]; }
 /** 合并结果：merged=false 时 message 为拒绝原因（如 merge conflict） */
 export interface GitHubPrMergeResult { merged: boolean; message: string; }
 /** PR 检出结果：branchName 为本地分支名（pr-N） */
@@ -344,6 +356,17 @@ export interface GitLabTimeline { entries: GitLabTimelineEntry[]; }
 /** MR 文件变更：diff 为文件级 diff 全文（GitLab API diff 字段） */
 export interface GitLabMrFile { path: string; status: 'added' | 'modified' | 'removed' | 'renamed'; additions: number; deletions: number; diff: string; }
 export interface GitLabMrFiles { files: GitLabMrFile[]; }
+/** 行级讨论注记：newPath/newLine 为 position 锚点（无位置/陈旧讨论为 null——纯文本讨论不入行级线程） */
+export interface GitLabDiscussionNote {
+  id: number;
+  author: string;
+  atIso: string;
+  body: string;
+  newPath: string | null;
+  newLine: number | null;
+}
+/** 行级讨论注记列表（按 id 升序） */
+export interface GitLabDiscussions { notes: GitLabDiscussionNote[]; }
 /** 合并结果：merged=false 时 message 为拒绝原因（如 merge conflict） */
 export interface GitLabMrMergeResult { merged: boolean; message: string; }
 /** MR 检出结果：branchName 为本地分支名（mr-N） */

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   BranchList,
   GitLabCommentBody,
+  GitLabDiscussionBody,
+  GitLabDiscussions,
   GitLabMrCheckoutResult,
   GitLabMrCreateBody,
   GitLabMrDetail,
@@ -21,8 +23,10 @@ import type {
 import { useBranches } from './branches';
 import {
   useAddGitlabComment,
+  useAddGitlabDiscussion,
   useCheckoutGitlabMr,
   useCreateGitlabMr,
+  useGitlabDiscussions,
   useGitlabMrDetail,
   useGitlabMrFiles,
   useGitlabMrs,
@@ -90,6 +94,9 @@ const DETAIL_CREATED: GitLabMrDetail = {
 
 const TIMELINE_A: GitLabTimeline = {
   entries: [{ id: 1, author: 'alice', atIso: '2026-01-01T00:00:00.000Z', body: 'looks good', kind: 'comment' }],
+};
+const DISCUSSIONS_A: GitLabDiscussions = {
+  notes: [{ id: 51, author: 'bob', atIso: '2026-02-01T00:00:00.000Z', body: '这里呢？', newPath: 'src/a.ts', newLine: 5 }],
 };
 const TIMELINE_B: GitLabTimeline = {
   entries: [
@@ -384,6 +391,86 @@ describe('useGitlabMrFiles', () => {
 
     expect(data).toBeUndefined();
     expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useGitlabDiscussions', () => {
+  it('以 /api/repos/:repoId/gitlab/mrs/:iid/discussions 为键发起 GET 并返回 GitLabDiscussions', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(DISCUSSIONS_A), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let data: GitLabDiscussions | null | undefined;
+    function Probe() {
+      data = useGitlabDiscussions('r-gl-disc', 7).data;
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(data).toEqual(DISCUSSIONS_A));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-gl-disc/gitlab/mrs/7/discussions');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('iid 为 null 时挂 null key：不发请求', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let data: GitLabDiscussions | null | undefined;
+    function Probe() {
+      data = useGitlabDiscussions('r-gl-disc2', null).data;
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+
+    expect(data).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useAddGitlabDiscussion', () => {
+  it('trigger 发起 POST …/discussions（JSON body），响应显式回写讨论键；全程恰好 1 次 POST', async () => {
+    const fetchMock = vi.fn(async (_input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify(DISCUSSIONS_A), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    let triggerFn!: (body: GitLabDiscussionBody) => Promise<GitLabDiscussions>;
+    function Probe() {
+      const { trigger } = useAddGitlabDiscussion('r-gl-disc3', 7);
+      triggerFn = trigger;
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    let result: GitLabDiscussions | undefined;
+    await act(async () => {
+      result = await triggerFn({ path: 'src/a.ts', line: 5, body: '锚定评论' });
+    });
+
+    expect(result).toEqual(DISCUSSIONS_A);
+    const postCall = fetchMock.mock.calls.find((c) => (c[1] as RequestInit)?.method === 'POST');
+    expect((postCall?.[0] as string)).toBe('/api/repos/r-gl-disc3/gitlab/mrs/7/discussions');
+    expect(JSON.parse((postCall?.[1] as RequestInit).body as string)).toEqual({ path: 'src/a.ts', line: 5, body: '锚定评论' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     await act(async () => {
       renderer.unmount();
     });

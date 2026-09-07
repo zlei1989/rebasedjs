@@ -5,9 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   addGitlabMrComment,
+  addGitlabMrDiscussion,
   checkoutGitlabMr,
   createGitlabMr,
   getGitlabMrDetail,
+  getGitlabMrDiscussions,
   getGitlabMrFiles,
   getGitlabMrs,
   getGitlabMrTimeline,
@@ -480,6 +482,51 @@ describe('写操作：方法/body 契约', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBe(JSON.stringify({ body: 'new comment' }));
     expect(init.headers).toMatchObject({ 'Content-Type': 'application/json' });
+  });
+
+  it('getGitlabMrDiscussions：GET /merge_requests/{iid}/discussions 展平 notes（position 锚点保留 newPath/newLine）', async () => {
+    const repo = authedRepo();
+    const fetchMock = mockFetchSequence({
+      json: [
+        {
+          id: 5,
+          notes: [
+            { id: 51, author: { username: 'me' }, created_at: '2026-02-01T00:00:00Z', body: '这里呢？', position: { new_path: 'src/a.ts', new_line: 5 } },
+            { id: 52, author: { username: 'bob' }, created_at: '2026-02-02T00:00:00Z', body: '同上', position: null },
+          ],
+        },
+        { id: 6, notes: [{ id: 61, author: { username: 'carol' }, created_at: '2026-02-03T00:00:00Z', body: '无位置讨论' }] },
+      ],
+    });
+
+    const result = await getGitlabMrDiscussions(repo, 7);
+
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('https://gitlab.com/api/v4/projects/g%2Fs%2Frepo/merge_requests/7/discussions');
+    expect(result.notes).toEqual([
+      { id: 51, author: 'me', atIso: '2026-02-01T00:00:00Z', body: '这里呢？', newPath: 'src/a.ts', newLine: 5 },
+      { id: 52, author: 'bob', atIso: '2026-02-02T00:00:00Z', body: '同上', newPath: null, newLine: null },
+      { id: 61, author: 'carol', atIso: '2026-02-03T00:00:00Z', body: '无位置讨论', newPath: null, newLine: null },
+    ]);
+  });
+
+  it('addGitlabMrDiscussion：POST /discussions 带 {body, position:{position_type,new_path,new_line}}，返回刷新列表', async () => {
+    const repo = authedRepo();
+    const fetchMock = mockFetchSequence(
+      { status: 201, json: { id: 5, notes: [{ id: 61, author: { username: 'me' }, created_at: '2026-02-04T00:00:00Z', body: '锚定评论', position: { new_path: 'src/a.ts', new_line: 8 } }] } },
+      { json: [{ id: 5, notes: [{ id: 61, author: { username: 'me' }, created_at: '2026-02-04T00:00:00Z', body: '锚定评论', position: { new_path: 'src/a.ts', new_line: 8 } }] }] },
+    );
+
+    const result = await addGitlabMrDiscussion(repo, 7, { path: 'src/a.ts', line: 8, body: '锚定评论' });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://gitlab.com/api/v4/projects/g%2Fs%2Frepo/merge_requests/7/discussions');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      body: '锚定评论',
+      position: { position_type: 'text', new_path: 'src/a.ts', new_line: 8 },
+    });
+    expect(result.notes).toHaveLength(1);
+    expect(result.notes[0]).toMatchObject({ id: 61, newLine: 8 });
   });
 
   it('submitGitlabMrReview：APPROVE → POST .../approve（无 body），返回刷新详情（reviewState APPROVED）', async () => {

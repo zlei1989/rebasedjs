@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { HunkDiffView } from './hunk-diff-view';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
 
@@ -47,5 +47,34 @@ describe('HunkDiffView', () => {
     unmount();
     render(<HunkDiffView patch="" status="modified" loader={loader} />);
     expect(screen.getByTestId('hunk-diff-degraded')).toHaveTextContent('二进制文件或超限截断');
+  });
+
+  it('评论线程按 hunk 新侧范围挂靠（锚点线不在区间不入线程）', async () => {
+    const { loader } = makeStubLoader();
+    render(
+      <HunkDiffView
+        patch={PATCH}
+        status="modified"
+        loader={loader}
+        comments={[
+          { id: 'c1', line: 2, author: 'bob', atIso: '2026-07-01T08:30:00+08:00', body: '这里需要修正' },
+          { id: 'c2', line: 99, author: 'carol', atIso: '2026-07-02T09:00:00+08:00', body: '超范围不入线程' },
+        ]}
+      />,
+    );
+    expect(await screen.findByText('这里需要修正')).toBeInTheDocument();
+    expect(screen.getByText(/bob/)).toBeInTheDocument();
+    expect(screen.queryByText('超范围不入线程')).not.toBeInTheDocument();
+  });
+
+  it('添加行：默认选中 hunk 起始行，发射 onAddComment(line, body)；空输入禁用', async () => {
+    const onAddComment = vi.fn();
+    const { loader } = makeStubLoader();
+    render(<HunkDiffView patch={PATCH} status="modified" loader={loader} onAddComment={onAddComment} />);
+    const send = screen.getByTestId('hunk-comment-send-0');
+    expect(send.closest('button')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('hunk-comment-input-0'), { target: { value: '新评论' } });
+    fireEvent.click(send);
+    expect(onAddComment).toHaveBeenCalledWith(1, '新评论'); // hunk0 afterStart=1
   });
 });

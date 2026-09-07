@@ -238,6 +238,28 @@ describe('GitHubPanel 文件', () => {
     expect(screen.queryByTestId('github-diff-toggle-1')).not.toBeInTheDocument();
   });
 
+  it('行级评论线程按 path 过滤挂靠；添加行发射 onAddReviewComment(path+line+side+body)', async () => {
+    const onAddReviewComment = vi.fn();
+    renderPanel({
+      loader: STUB_LOADER,
+      reviewComments: {
+        comments: [
+          { id: 1, path: 'src/panel.tsx', line: 1, side: 'RIGHT', author: 'bob', atIso: '2026-07-01T08:30:00+08:00', body: '这里需要修正' },
+          { id: 2, path: 'src/old.ts', line: 1, side: 'RIGHT', author: 'carol', atIso: '2026-07-02T09:00:00+08:00', body: '另一文件的评论' },
+        ],
+      },
+      onAddReviewComment,
+    });
+    fireEvent.click(screen.getByRole('tab', { name: '文件' }));
+    fireEvent.click(screen.getByTestId('github-diff-toggle-0'));
+    expect(await screen.findByText('这里需要修正')).toBeInTheDocument();
+    expect(screen.queryByText('另一文件的评论')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('hunk-comment-input-0'), { target: { value: '新评论' } });
+    fireEvent.click(screen.getByTestId('hunk-comment-send-0'));
+    expect(onAddReviewComment).toHaveBeenCalledWith({ path: 'src/panel.tsx', line: 1, side: 'RIGHT', body: '新评论' });
+  });
+
   it('文件列表为空渲染「暂无文件变更」', () => {
     renderPanel({ files: { files: [] } });
     fireEvent.click(screen.getByRole('tab', { name: '文件' }));

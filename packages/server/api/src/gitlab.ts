@@ -10,6 +10,9 @@
  */
 import { checkoutBranch, checkoutNewBranch, fetchRemote, GitExitError, listBranches } from '@rebased/core';
 import type {
+  GitLabDiscussionBody,
+  GitLabDiscussionNote,
+  GitLabDiscussions,
   GitLabMergeBody,
   GitLabMrCheckoutResult,
   GitLabMrCreateBody,
@@ -235,6 +238,18 @@ interface GlFileChange {
   renamed_file?: boolean;
   diff?: string | null;
 }
+/** 行级讨论注记：position（内联文本讨论锚点：new_path + new_line）；无 position 的讨论为全局讨论，不入行级线程 */
+interface GlDiscussionNote {
+  id: number;
+  body?: string | null;
+  author?: GlUser | null;
+  created_at?: string;
+  position?: { new_path?: string | null; new_line?: number | null } | null;
+}
+interface GlDiscussion {
+  id: number;
+  notes?: GlDiscussionNote[] | null;
+}
 
 const MR_STATES = new Set<string>(['opened', 'closed', 'merged', 'locked']);
 
@@ -378,6 +393,41 @@ export async function addGitlabMrComment(repoPath: string, iid: number, body: st
   const session = await resolveGitlabRepo(repoPath);
   await gitlabRequest<GlNote>(session, `/merge_requests/${iid}/notes`, { method: 'POST', body: { body } });
   return getGitlabMrTimeline(repoPath, iid);
+}
+
+/** 行级讨论注记 → 契约形状：newPath/newLine 取 position（无锚点 → null，UI 按 path+line 过滤） */
+function toDiscussionNote(n: GlDiscussionNote): GitLabDiscussionNote {
+  return {
+    id: n.id,
+    author: authorNameOf(n.author),
+    atIso: n.created_at ?? '',
+    body: n.body ?? '',
+    newPath: n.position?.new_path ?? null,
+    newLine: n.position?.new_line ?? null,
+  };
+}
+
+/** 行级讨论注记列表：GET .../discussions → 展平各讨论的 notes（讨论序 → 注记序；原 id 序不重排——挂靠展示以线程为准） */
+export async function getGitlabMrDiscussions(repoPath: string, iid: number): Promise<GitLabDiscussions> {
+  const session = await resolveGitlabRepo(repoPath);
+  const raw = await gitlabRequest<unknown>(session, `/merge_requests/${iid}/discussions`);
+  const list = Array.isArray(raw) ? (raw as GlDiscussion[]) : [];
+  const notes = list.flatMap((d) => (d.notes ?? []).map(toDiscussionNote));
+  return { notes };
+}
+
+/** 添加行级讨论：POST .../discussions {body, position:{position_type:'text', new_path, new_line}}（新侧锚定）；返回刷新后的注记列表 */
+export async function addGitlabMrDiscussion(
+  repoPath: string,
+  iid: number,
+  body: GitLabDiscussionBody,
+): Promise<GitLabDiscussions> {
+  const session = await resolveGitlabRepo(repoPath);
+  await gitlabRequest<unknown>(session, `/merge_requests/${iid}/discussions`, {
+    method: 'POST',
+    body: { body: body.body, position: { position_type: 'text', new_path: body.path, new_line: body.line } },
+  });
+  return getGitlabMrDiscussions(repoPath, iid);
 }
 
 /** MR 文件：GET .../changes → changes[] 映射 {path: new_path ?? old_path, status 按旗标,

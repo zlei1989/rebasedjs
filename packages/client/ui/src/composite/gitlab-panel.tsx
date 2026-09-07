@@ -24,6 +24,9 @@ import {
 } from 'antd';
 import type {
   BranchRef,
+  GitLabDiscussionBody,
+  GitLabDiscussionNote,
+  GitLabDiscussions,
   GitLabMrCreateBody,
   GitLabMrDetail,
   GitLabMrFile,
@@ -45,7 +48,13 @@ export interface GitLabPanelProps {
   mrs: GitLabMrList; iid: number | null;
   detail: GitLabMrDetail | null; timeline: GitLabTimeline | null; files: GitLabMrFiles | null;
   branches: BranchRef[];
+  /** 行级讨论注记（MR 全量，纯展示/线程挂靠由 ui 按 newPath 过滤）；null 视同无 */
+  discussions?: GitLabDiscussions | null;
   loading?: boolean; acting?: boolean;
+  /** 添加行级讨论进行中 */
+  commentActing?: boolean;
+  /** 添加行级讨论回调（容器接 useAddGitlabDiscussion） */
+  onAddDiscussion?: (body: GitLabDiscussionBody) => void;
   /** 测试注入点：行级差异视图的 Monaco 加载器（缺省懒加载真实 monaco） */
   loader?: MonacoDiffLoader;
   onSelectMr: (iid: number) => void;
@@ -155,9 +164,24 @@ function TimelineRow({ entry }: { entry: GitLabTimelineEntry }): React.ReactNode
   );
 }
 
-/** 文件行：path/status 徽标/增删行 + 「查看差异」展开区（行级视图：逐 hunk 两侧 MonacoDiffView，2026-09-08 裁定 §2.7）；
+/** 文件行：path/status 徽标/增删行 + 「查看差异」展开区（行级视图：逐 hunk 两侧 MonacoDiffView + 行级讨论线程，2026-09-08 裁定 §2.7）；
  *  diff 空串时仅 renamed（无内容变更）与 removed（二进制/截断）渲染展开——由 HunkDiffView 降级提示 */
-function FileRow({ file, index, loader }: { file: GitLabMrFile; index: number; loader?: MonacoDiffLoader }): React.ReactNode {
+function FileRow({
+  file,
+  index,
+  notes,
+  onAddDiscussion,
+  commentActing,
+  loader,
+}: {
+  file: GitLabMrFile;
+  index: number;
+  /** 该文件的行级讨论注记（容器已按 newPath 过滤；newLine=null 的无锚点条目在此丢弃） */
+  notes: GitLabDiscussionNote[];
+  onAddDiscussion?: (body: GitLabDiscussionBody) => void;
+  commentActing?: boolean;
+  loader?: MonacoDiffLoader;
+}): React.ReactNode {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -183,7 +207,18 @@ function FileRow({ file, index, loader }: { file: GitLabMrFile; index: number; l
           >
             {expanded ? '收起差异' : '查看差异'}
           </Button>
-          {expanded ? <HunkDiffView patch={file.diff} status={file.status} loader={loader} /> : null}
+          {expanded ? (
+            <HunkDiffView
+              patch={file.diff}
+              status={file.status}
+              loader={loader}
+              comments={notes
+                .filter((n) => n.newLine !== null)
+                .map((n) => ({ id: String(n.id), line: n.newLine as number, author: n.author, atIso: n.atIso, body: n.body }))}
+              adding={commentActing}
+              onAddComment={(line, body) => onAddDiscussion?.({ path: file.path, line, body })}
+            />
+          ) : null}
         </Flex>
       ) : null}
     </Flex>
@@ -337,8 +372,11 @@ function MrDetailBlock({
   detail,
   timeline,
   files,
+  notes,
   acting,
+  commentActing,
   loader,
+  onAddDiscussion,
   onComment,
   onReview,
   onMerge,
@@ -347,9 +385,15 @@ function MrDetailBlock({
   detail: GitLabMrDetail;
   timeline: GitLabTimeline | null;
   files: GitLabMrFiles | null;
+  /** 行级讨论注记（全量文件混合）；FileRow 内按 newPath 过滤 */
+  notes: GitLabDiscussionNote[] | null;
   acting?: boolean;
+  /** 添加行级讨论进行中：hunk 线程发送按钮 loading */
+  commentActing?: boolean;
   /** 测试注入点：行级差异视图的 Monaco 加载器（缺省懒加载真实 monaco） */
   loader?: MonacoDiffLoader;
+  /** 添加行级讨论回调（path + line + body 由 ui 组装，容器接 hook） */
+  onAddDiscussion?: (body: GitLabDiscussionBody) => void;
   onComment: (body: string) => void;
   onReview: (event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body?: string) => void;
   onMerge: (squash: boolean) => void;
@@ -466,7 +510,15 @@ function MrDetailBlock({
               ) : (
                 <Flex vertical>
                   {files.files.map((file, index) => (
-                    <FileRow key={file.path} file={file} index={index} loader={loader} />
+                    <FileRow
+                      key={file.path}
+                      file={file}
+                      index={index}
+                      loader={loader}
+                      notes={(notes ?? []).filter((n) => n.newPath === file.path)}
+                      onAddDiscussion={onAddDiscussion}
+                      commentActing={commentActing}
+                    />
                   ))}
                 </Flex>
               ),
@@ -496,7 +548,10 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
     branches,
     loading,
     acting,
+    discussions,
+    commentActing,
     loader,
+    onAddDiscussion,
     onSelectMr,
     onRefresh,
     onCreateMr,
@@ -566,8 +621,11 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
               detail={detail}
               timeline={timeline}
               files={files}
+              notes={discussions?.notes ?? null}
               acting={acting}
+              commentActing={commentActing}
               loader={loader}
+              onAddDiscussion={onAddDiscussion}
               onComment={onComment}
               onReview={onReview}
               onMerge={onMerge}

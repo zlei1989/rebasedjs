@@ -3,6 +3,8 @@ import useSWR, { useSWRConfig, type SWRResponse } from 'swr';
 import useSWRMutation from 'swr/mutation';
 import type {
   GitLabCommentBody,
+  GitLabDiscussionBody,
+  GitLabDiscussions,
   GitLabMrCheckoutResult,
   GitLabMrCreateBody,
   GitLabMrDetail,
@@ -54,6 +56,32 @@ export function useGitlabMrFiles(repoId: string, iid: number | null): SWRRespons
     iid === null ? null : `/api/repos/${repoId}/gitlab/mrs/${iid}/files`,
     getJson,
   );
+}
+
+/** 行级讨论注记：GET …/gitlab/mrs/:iid/discussions；iid 为 null 时挂 null key 不发请求 */
+export function useGitlabDiscussions(repoId: string, iid: number | null): SWRResponse<GitLabDiscussions | null> {
+  return useSWR<GitLabDiscussions | null>(
+    iid === null ? null : `/api/repos/${repoId}/gitlab/mrs/${iid}/discussions`,
+    getJson,
+  );
+}
+
+/** 添加行级讨论（mutation）：POST …/discussions，响应（刷新列表）显式回写 discussions 缓存键 */
+export function useAddGitlabDiscussion(repoId: string, iid: number): { trigger: (body: GitLabDiscussionBody) => Promise<GitLabDiscussions>; isMutating: boolean } {
+  const { mutate } = useSWRConfig();
+  const { trigger, isMutating } = useSWRMutation(
+    `/api/repos/${repoId}/gitlab/mrs/${iid}/discussions`,
+    (key: string, { arg }: { arg: GitLabDiscussionBody }) => postJson<GitLabDiscussions>(key, arg),
+    { revalidate: false },
+  );
+  return {
+    trigger: async (body) => {
+      const discussions = await trigger(body);
+      await mutate(`/api/repos/${repoId}/gitlab/mrs/${iid}/discussions`, discussions, { revalidate: false });
+      return discussions;
+    },
+    isMutating,
+  };
 }
 
 /** 创建 MR（mutation）：POST …/gitlab/mrs，响应（重查详情）前置插入 opened/all 两 list 键（detail 继承 summary，直接入列） */

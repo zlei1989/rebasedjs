@@ -13,6 +13,8 @@ import type {
   GitHubPrMergeResult,
   GitHubPrSummary,
   GitHubReviewBody,
+  GitHubReviewCommentBody,
+  GitHubReviewComments,
   GitHubStatus,
   GitHubTimeline,
   RepoStatus,
@@ -20,9 +22,11 @@ import type {
 import { useBranches } from './branches';
 import {
   useAddGithubComment,
+  useAddGithubPrReviewComment,
   useCheckoutGithubPr,
   useGithubPrDetail,
   useGithubPrFiles,
+  useGithubPrReviewComments,
   useGithubPrs,
   useGithubStatus,
   useGithubTimeline,
@@ -87,6 +91,10 @@ const TIMELINE_B: GitHubTimeline = {
 
 const FILES_A: GitHubPrFiles = {
   files: [{ path: 'src/a.ts', status: 'modified', additions: 12, deletions: 3, patch: '@@ -1 +1 @@' }],
+};
+
+const REVIEW_COMMENTS: GitHubReviewComments = {
+  comments: [{ id: 1, path: 'src/a.ts', line: 3, side: 'RIGHT', author: 'bob', atIso: '2026-07-01T08:30:00+08:00', body: '这里需要修正' }],
 };
 
 const COMMENT_BODY: GitHubCommentBody = { body: 'nice work' };
@@ -370,6 +378,87 @@ describe('useGithubPrFiles', () => {
 
     expect(data).toBeUndefined();
     expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useGithubPrReviewComments', () => {
+  it('以 /api/repos/:repoId/github/prs/:number/review-comments 为键发起 GET 并返回 GitHbReviewComments', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(REVIEW_COMMENTS), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let data: GitHubReviewComments | null | undefined;
+    function Probe() {
+      data = useGithubPrReviewComments('r-gh-rc', 7).data;
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(data).toEqual(REVIEW_COMMENTS));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-gh-rc/github/prs/7/review-comments');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('number 为 null 时挂 null key：不发请求', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let data: GitHubReviewComments | null | undefined;
+    function Probe() {
+      data = useGithubPrReviewComments('r-gh-rc2', null).data;
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+
+    expect(data).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useAddGithubPrReviewComment', () => {
+  it('trigger 发起 POST …/review-comments（JSON body），响应显式回写评论键；全程恰好 1 次 GET', async () => {
+    const fetchMock = vi.fn(async (_input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify(REVIEW_COMMENTS), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    let triggerFn!: (body: GitHubReviewCommentBody) => Promise<GitHubReviewComments>;
+    function Probe() {
+      const { trigger } = useAddGithubPrReviewComment('r-gh-rc3', 7);
+      triggerFn = trigger;
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    let result: GitHubReviewComments | undefined;
+    await act(async () => {
+      result = await triggerFn({ path: 'src/a.ts', line: 3, side: 'RIGHT', body: 'ok' });
+    });
+
+    expect(result).toEqual(REVIEW_COMMENTS);
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-gh-rc3/github/prs/7/review-comments', expect.objectContaining({ method: 'POST' }));
+    const body = JSON.parse((fetchMock.mock.calls.find((c) => (c[1] as RequestInit)?.method === 'POST')?.[1] as RequestInit).body as string);
+    expect(body).toEqual({ path: 'src/a.ts', line: 3, side: 'RIGHT', body: 'ok' });
+    // 回写后 key 直接命中缓存：无额外 GET（1 次 POST + 0 次 GET）
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     await act(async () => {
       renderer.unmount();
     });

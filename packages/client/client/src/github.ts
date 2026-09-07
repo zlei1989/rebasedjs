@@ -10,6 +10,8 @@ import type {
   GitHubPrList,
   GitHubPrMergeResult,
   GitHubReviewBody,
+  GitHubReviewCommentBody,
+  GitHubReviewComments,
   GitHubStatus,
   GitHubTimeline,
 } from '@rebased/contracts';
@@ -50,6 +52,32 @@ export function useGithubPrFiles(repoId: string, number: number | null): SWRResp
     number === null ? null : `/api/repos/${repoId}/github/prs/${number}/files`,
     getJson,
   );
+}
+
+/** 行级评审评论：GET …/github/prs/:number/review-comments；number 为 null 时挂 null key 不发请求 */
+export function useGithubPrReviewComments(repoId: string, number: number | null): SWRResponse<GitHubReviewComments | null> {
+  return useSWR<GitHubReviewComments | null>(
+    number === null ? null : `/api/repos/${repoId}/github/prs/${number}/review-comments`,
+    getJson,
+  );
+}
+
+/** 添加行级评审评论（mutation）：POST …/review-comments，响应（刷新列表）显式回写 review-comments 缓存键 */
+export function useAddGithubPrReviewComment(repoId: string, number: number): { trigger: (body: GitHubReviewCommentBody) => Promise<GitHubReviewComments>; isMutating: boolean } {
+  const { mutate } = useSWRConfig();
+  const { trigger, isMutating } = useSWRMutation(
+    `/api/repos/${repoId}/github/prs/${number}/review-comments`,
+    (key: string, { arg }: { arg: GitHubReviewCommentBody }) => postJson<GitHubReviewComments>(key, arg),
+    { revalidate: false },
+  );
+  return {
+    trigger: async (body) => {
+      const comments = await trigger(body);
+      await mutate(`/api/repos/${repoId}/github/prs/${number}/review-comments`, comments, { revalidate: false });
+      return comments;
+    },
+    isMutating,
+  };
 }
 
 /** 添加评论（mutation）：POST …/github/prs/:number/comments，响应（刷新时间线）显式回写 timeline 缓存键 */
