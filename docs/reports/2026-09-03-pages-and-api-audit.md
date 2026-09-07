@@ -606,7 +606,7 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 
 | Java 容器形态 | 页面 | Web 等价形态 |
 |---------------|------|--------------|
-| 独立窗口/帧 | RepoPage；ConflictsPanel 的 3-way 合并视图 | 路由页 `/`；MergeView 全屏 Modal |
+| 独立窗口/帧 | RepoPage；ConflictsPanel 的 3-way 合并视图；BrowsePanel（`RepositoryBrowser`） | 路由页 `/`；MergeView 全屏 Modal；`/browse` 路由页 |
 | Version Control 工具窗口 tab | StatusPage、LogPage、StashPanel、ConflictsPanel、HistoryPanel、CommittedChangesPanel、ShelfPanel、GitConsole、WorktreePanel；GitHub/GitLab PR/MR 窗口 | `/repos/:id/<页>` 路由（LogPage 为枢纽页）；GitHub/GitLab 面板带远程检测门 |
 | 模态对话框 | CommitDialog、ResetDialog、MergeDialog、RebaseDialog、TagPanel、RemotePanel、PushDialog、PullDialog、UpdateProjectDialog、PatchPanel、Stash save/Unstash As、Worktree 创建 | 内嵌 Modal（Reset/Rebase/Push/Pull/Update/MergeView/AuthDialog）或页面化路由（Merge/Settings/Remote/Tag/Patch/Stash）；CommitDialog=内嵌提交框 |
 | 弹出（非模态弹窗/菜单） | BranchPanel、QuickActionsMenu、SearchPanel | 路由页；顶栏+更多菜单聚合 |
