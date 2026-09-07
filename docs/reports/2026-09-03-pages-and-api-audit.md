@@ -250,6 +250,50 @@ P2 阶段 12 个功能域（operation、reset、staging、changelist、commit、
 
 ---
 
+## 〇、进度更新（2026-09-07，P4-B 关账（worktree/submodule），基线 `92c71f8`）
+
+> P4-B（工作树 + 子模块）已按计划落地并关账（计划+关账记录：`docs/superpowers/plans/2026-09-03-rebasedjs-p4b-worktree-submodule.md`；实现区间 `68e0d44..92c71f8`，关账 `98ffed5`）。纯 git 域（无外部 REST）。增量口径与 0.16–0.19 同构。
+
+### 0.21 总览（增量对照 0.16）
+
+| 口径 | 上一基线（`6054559`） | 当前（`92c71f8`） |
+|------|------------------|------------------|
+| 操作页面/面板（30 个） | 16 ✅ + 2 🟡 等效 | **18 ✅ + 2 🟡 等效**（=67%） |
+| 功能域 | 23 | **25**（+worktree、submodule） |
+| 端点路径 / HTTP 方法 | 59 / 65 | **65 / 71**（新增 6 方法，两端完全对称） |
+| `@rebased/api` 公共出口 | 71 函数 | **77 函数**（+6：worktree/submodule 服务） |
+| SSE 事件类型在用 | 5 | 5（本域无新事件——watcher 对 worktree/submodule 操作不产事件，刷新兜底） |
+
+### 0.22 页面进度（对应附录 C.23 / C.24）
+
+| 页面 | 状态 | 落点与说明 |
+|------|------|-----------|
+| WorktreePanel | ✅ | `/repos/:id/worktrees` 两端路由；`git worktree list --porcelain` 列表（path/branch/detached 徽标+「当前」标记——服务端 realpath 归一改写主工作树 path，修复 Windows 8.3/斜杠形态缺口）+ 创建 Modal（互斥 Radio：关联已有分支/创建新分支；**realpath 归一校验阻止仓库内/嵌套工作树**——git 自身不禁止嵌套，曾为可达成绕过）+ 行内移除 + 清理（prune）；「打开」明确不做（用户自开仓库） |
+| SubmodulePanel | ✅ | `/repos/:id/submodules` 两端路由；`.gitmodules` 解析（子模块名含空格/点号陷阱有单测锁定）+ `submodule status` 四态徽标（未初始化/已检出/提交漂移/冲突）+ 行内更新 + 更新全部（recursive Checkbox）；损坏 .gitmodules → 诚实 GIT_ERROR（不静默空列表）；「无独立 UI」的 Java 形态以独立面板承载（流程内更新属 update.ts 域，明确不做） |
+| QuickActionsMenu | 🟡 不变 | 部分等效（P2 各域落地后聚合）——剩余可选域后置 |
+
+### 0.23 接口增量（新增 6 方法，全部两端对称）
+
+| 端点 | 用途 | 客户端消费 | 状态 |
+|------|------|-----------|------|
+| `GET/POST /api/repos/:id/worktrees` | 工作树列表 / 创建 | WorktreePanel（创建 Modal） | ✅ |
+| `POST /api/repos/:id/worktrees/remove` | 移除工作树（`--force` API 支持，UI 单参不带 force） | 行内移除 | ✅ |
+| `POST /api/repos/:id/worktrees/prune` | 清理失效工作树 | 清理按钮 | ✅ |
+| `GET /api/repos/:id/submodules` | 子模块列表（状态四态） | SubmodulePanel | ✅ |
+| `POST /api/repos/:id/submodules/update` | 子模块更新（--init [--recursive] [-- name]） | 行内/全量更新 | ✅ |
+
+### 0.24 导航边增量
+
+活动跳转边由 24 条增至 **26 条**：LogPage「更多」菜单新增「工作树」「子模块」两项（恒渲染，无检测门——纯本地域）→ `/repos/:id/worktrees|submodules`；「返回日志」回边。边 #88（Git 菜单 New Worktree/Show Worktrees）✅（菜单入口等效）；#70（BranchPanel New Working Tree）明确不做。
+
+### 0.25 下一步建议（更新 §三）
+
+1. **剩余功能面**：可选域 terminal（`intellij.terminal` 打包插件——Git 终端集成）与 local-history（本地历史）；QuickActionsMenu 聚合（🟡 部分等效——各域入口已齐，聚合菜单后置）。**之后**：Playwright 真实操作 e2e 扫尾 + 全量终审 + 审计报告终稿。
+2. 排期项（延续清单）：gitlab checkout Bearer hardening；web-next JSON body 500 全局评估；createOpen 跨仓库保持打开；无令牌卡「去设置」链接；worktree 回滚失败包 gitFailure；resolveSubmodulePath 白名单；core vitest fileParallelism；unborn HEAD 补丁/搁置；execLogByCwd 淘汰；面板 key kind+id；addIgnore path 字符集；存档名 . / .. 边界。
+3. 半使用接口不变（diff/stream 分块渲染、staging/hunks 无 UI 入口）。
+
+---
+
 ## 一、问题 1：操作页面数量与实现对照
 
 ### 1.1 Java 版 Rebased 有多少个操作页面？
