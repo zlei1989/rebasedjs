@@ -3,13 +3,14 @@
  * 实测（git 2.47.0.windows.2）：
  * - status 未 init 的 gitlink 输出 `-<sha> path` 且退出码 0（非 128）——「不初始化」以
  *   前缀 `-` 判定而非退出码判定；仅有 .gitmodules 无 gitlink 时输出为空、退出码 0。
- * - `.gitmodules` 损坏时 status 与 config 均以退出码 128 失败——兜底覆盖此路径：
- *   status 失败（任意原因）→ 全量按 uninitialized（无 commitSha）。
+ * - `.gitmodules` 损坏时 status 与 config 均以退出码 128 失败——按控制器裁定：config 解析失败
+ *   抛「子模块配置解析失败：<stderr 首行>」（诚实报错，GIT_ERROR 语义，不静默返回空列表）；
+ *   config 正常而 status 失败（任意原因）→ 全量按 uninitialized（无 commitSha）。
  * - 子模块名在配置键 `submodule.<name>.path` 中逐字保留大小写（可含空格/点）。
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { runGit } from './exec';
+import { GitExitError, runGit } from './exec';
 
 export interface SubmoduleEntry {
   name: string;
@@ -81,14 +82,29 @@ export function mergeSubmoduleStatuses(
 
 export async function listSubmodules(cwd: string): Promise<SubmoduleEntry[]> {
   if (!existsSync(join(cwd, '.gitmodules'))) return [];
-  const { stdout } = await runGit(['config', '-f', '.gitmodules', '--get-regexp', CONFIG_KEYS_RE], { cwd });
-  const entries = parseSubmodulesConfig(stdout);
+  let configOut: string;
+  try {
+    const config = await runGit(['config', '-f', '.gitmodules', '--get-regexp', CONFIG_KEYS_RE], { cwd });
+    configOut = config.stdout;
+  } catch (e) {
+    // 控制器裁定：config 解析失败（如 .gitmodules 损坏，exit 128）→ 诚实报错而非静默空列表；
+    // 取 stderr 首行（GitExitError）或错误消息作为上下文
+    const firstLine =
+      e instanceof GitExitError
+        ? (e.stderr.trim().split('\n')[0] ?? e.message)
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    throw new Error(`子模块配置解析失败：${firstLine}`, { cause: e });
+  }
+  const entries = parseSubmodulesConfig(configOut);
   let statusRaw: string | null;
   try {
     const status = await runGit(['submodule', 'status'], { cwd });
     statusRaw = status.stdout;
   } catch {
-    // 实测 .gitmodules 损坏等情形 status 退出 128：兜底全量按 uninitialized（见文件头）
+    // config 已正常而 status 失败（退化状态；未 init 实为 `-` 前缀 exit 0，不触发）→
+    // 全量按 uninitialized 兜底（见文件头）
     statusRaw = null;
   }
   return mergeSubmoduleStatuses(entries, statusRaw);

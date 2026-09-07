@@ -1,7 +1,7 @@
 /** submodule 原语集成测试（真实 git；本地 file URL 需 -c protocol.file.allow=always 造夹具，见 task-2-report） */
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { listSubmodules, mergeSubmoduleStatuses, parseSubmodulesConfig, updateSubmodules } from './submodule';
 import type { SubmoduleConfigEntry } from './submodule';
@@ -151,6 +151,13 @@ describe('submodule 原语', () => {
     expect(list).toEqual([
       { name: 'MixedCase', path: 'sub/sub', url: './nowhere.git', status: 'uninitialized' },
     ]);
+  });
+
+  it('损坏 .gitmodules + gitlink → config 解析失败抛「子模块配置解析失败」（不静默空列表）', { timeout: 180_000 }, async () => {
+    const { super: superRepo } = makeSubmoduleSuper();
+    writeFileSync(join(superRepo, '.gitmodules'), 'this is not config');
+
+    await expect(listSubmodules(superRepo)).rejects.toThrow(/子模块配置解析失败/);
   });
 
   it('parseSubmodulesConfig：名称含点/大小写保留/branch 可选/顺序保持', () => {
