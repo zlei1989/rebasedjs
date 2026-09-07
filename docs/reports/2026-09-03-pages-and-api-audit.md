@@ -294,6 +294,43 @@ P2 阶段 12 个功能域（operation、reset、staging、changelist、commit、
 
 ---
 
+## 〇、进度更新（2026-09-07，P4-C 决策 + 计数更正 + Playwright e2e 启动前）
+
+> 本节含三项：① **计数更正**（0.6 起各版「总览」的页面计数漏计 P3-A/B/C 批次——P3-A/C 系本会话系列之外会话落地，其 4+2+4=10 页面未计入后续各批递增基数）；② **P4-C 决策**（terminal/local-history/QuickActionsMenu 明确不做）；③ e2e 启动基线。
+
+### 0.26 计数更正（全口径，30 页面）
+
+| 页面清单 | 状态（截至 `92c71f8`） |
+|------|------|
+| P1（3）：RepoPage、LogPage、DiffPage | ✅ |
+| P2（9+1🟡）：StatusPage、ResetDialog、BranchPanel、MergeDialog、ConflictsPanel、StashPanel、SettingsPage、QuickActionsMenu🟡、CommitDialog🟡 | 7✅+2🟡 |
+| P3-A（4）：RemotePanel、PushDialog、PullDialog、UpdateProjectDialog | ✅ |
+| P3-B（2）：RebaseDialog、TagPanel | ✅ |
+| P3-C（4）：BlameView、HistoryPanel、CommittedChangesPanel、SearchPanel | ✅ |
+| P3-D（4）：PatchPanel、ShelfPanel、IgnoreDialog、GitConsole | ✅ |
+| P3-E（1）：GitHubPanel | ✅ |
+| P4-A（1）：GitLabPanel | ✅ |
+| P4-B（2）：WorktreePanel、SubmodulePanel | ✅ |
+| **合计** | **28 ✅ + 2 🟡 = 30/30**（等效口径：CommitDialog 内嵌提交框、QuickActionsMenu 顶栏+更多菜单聚合） |
+
+**功能域口径更正**：各版「总览」功能域计数同样按批次递增但基线与实现批次口径不一；以计划批为单位计：P1 5 + P2 12 + P3-A remote/update + P3-B rebase(cherry-pick/revert/tag) + P3-C blame/history/committed/search + P3-D patch/shelf/console/ignore + P3-E github + P4-A gitlab + P4-B worktree/submodule = **25 批（/36+2 可选）。剩余为 spec §4.2 域表内未单列 UI 的行级能力（如 ssh/gpg 配置面、fetch spec 管理扩展）与 2 可选域**——终稿盘点时以 spec 域表逐行核。
+
+### 0.27 P4-C 决策（明确不做，记录在案）
+
+| 项 | 决策 | 理由 |
+|----|------|------|
+| terminal（内置终端，xterm.js——`intellij.terminal` 打包插件） | ❌ 明确不做 | web 端服务端 shell（WebSocket + 伪终端）安全面大（任意命令执行暴露于 HTTP 面）且与 Git 客户端核心价值正交；审计口径「可选后置 2 项」之一，不入 30 页面。 |
+| local-history（平台能力——编辑器级本地历史） | ❌ 明确不做 | rebasedjs 无编辑器宿主（仅 git 视图）；与 Git 提交历史功能重叠（LogPage 已承载）；「可选后置 2 项」之二。 |
+| QuickActionsMenu（独立聚合菜单组件） | ❌ 不做独立组件 | 已 🟡 等效：LogPage 顶栏（状态/分支/合并/贮藏/设置 5 按钮）+「更多」菜单（补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块）+ OperationStatus 操作条（中止/去解决冲突）+ 合并中链接。边 #64/#72/#73/#74 等效覆盖（Branches→顶栏、Push/Stash→各面板、Resolve Conflicts→链接、Working Trees→菜单、Unshallow——**Unshallow 能力：P3-A `unshallow` 系 fetch 端点既有（P3-A 契约）**，审计终稿核）。 |
+
+### 0.28 e2e 启动基线
+
+- 现状：仓库无任何 Playwright 依赖/配置（grep 全仓零命中）；`.gitignore` 有 `.playwright-mcp`（IDE 侧 MCP 工作目录忽略）。
+- 目标（goal 要求「playwright 模拟人工测试」）：P4-C 计划 = Playwright 套件驱动真实仓库 + 真实 UI 操作（web-next dev server + REBASED_CONFIG_DIR 隔离 + 本地裸仓库装置），覆盖核心流与工具域全链；github/gitlab 数据面不依赖网络（检测态/渲染级）。
+- 基线：HEAD `92c71f8`（P4-B 关账点）；下批次计划 `docs/superpowers/plans/2026-09-03-rebasedjs-p4c-playwright-e2e.md`。
+
+---
+
 ## 一、问题 1：操作页面数量与实现对照
 
 ### 1.1 Java 版 Rebased 有多少个操作页面？
