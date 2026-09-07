@@ -17,10 +17,9 @@ const configDir = mkdtempSync(join(tmpdir(), 'rebased-e2e-config-'));
 
 export default defineConfig({
   testDir: './tests',
-  // Windows + Next dev 首路由编译可能数十秒：测试级超时放宽到 90s；断言超时 30s
-  // （冷启动时 SWR/首路由编译可能超过 15s——复审 Fix round 1 上调）
+  // Windows + Next dev 首路由编译可能数十秒：测试级超时放宽到 90s
   timeout: 90_000,
-  expect: { timeout: 30_000 },
+  expect: { timeout: 15_000 },
   // 单一 dev server + 串行确定性：本包测试串行跑（后续任务引入多 spec 时按需放开）
   fullyParallel: false,
   workers: 1,
@@ -41,7 +40,7 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       REBASED_CONFIG_DIR: configDir,
-      // PORT 有意不传：web-next dev 脚本固定 `-p 3030`（端口已在命令行声明，避免重复声明的误导）
+      PORT: '3030',
       NEXT_TELEMETRY_DISABLED: '1',
     },
   },
