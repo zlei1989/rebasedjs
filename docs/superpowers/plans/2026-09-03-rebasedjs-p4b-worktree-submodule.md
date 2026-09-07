@@ -1,4 +1,4 @@
-# P4-B：工作树 + 子模块实施计划
+﻿# P4-B：工作树 + 子模块实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -267,3 +267,28 @@ export function SubmodulePanel(props: SubmodulePanelProps): React.ReactNode;
 - 类型一致性：WorktreeEntry/WorktreeList/SubmoduleEntry/SubmoduleList + 3 schema 跨任务签名对齐；错误复用 12 码不新增。
 - 简化裁定：worktree current 标记由容器 currentPath prop；分支输入用文本（不引 branches prop）；submodule status 未 init 兜底 uninitialized；Submodule 无外部 REST 所以不需要检测门；子模块 URL 用本地路径装置离线可测。
 - 风险：`git worktree list --porcelain` 的 msys2 路径转义（Task 2 实测记录）；`git submodule status` 在未 init 仓库的退出码（Task 2 实例验证）；子模块 gitlink 装置（`git submodule add -c protocol.file.allow=always`）在 CI 环境的口径。
+
+
+---
+
+## 关账记录（P4-B）
+
+**流水线**：6 任务全完成（contracts → core（porcelain/子模块实证解析）→ api 服务 → 两端路由+client hooks → 双面板 → 装配），终审 Merge-with-fixes → 修复波 `92c71f8`（I1 currentPath 服务端改写 / I2 create 形态盲区 realpath 校验+回滚 / core `--` 加固 / RIG_TIMEOUT / 空 stderr 死代码）→ 限定复审 5/5 all addressed → **关账**。实现区间 `68e0d44..92c71f8`。Task 2 实现者中途卡滞（探针阶段），重派后交付（实测记录成为本域最有价值资产）。
+
+**终审结论**：无 Critical；2 Important（I1 currentPath 形态缺口——8.3 短路径+反斜杠 vs git realpath 长形式+正斜杠，T6 冒烟实证「当前」标记不命中；I2 create 预检形态盲区——8.3/大小写变体可绕过「不在仓库目录内」字符串守卫，git 自身不禁止嵌套工作树，实证 exit 0）；28 条 deferred minors 逐条 triage（全部接受；3 条升级本轮顺手修复：core `--`、空 stderr 死代码、RIG_TIMEOUT）；跨任务一致性 8/9 ✅（api 预检项= I2）；**安全面确认：纯本地 git 域零泄漏面**（spawn 无 shell、isAbsolute 阻断 `-` 前缀参数注入、submodule `..` 逃逸由 git 自身拒绝——零逃逸面）；零夹带（41 文件全属本域 + .gitignore 2 行基础设施豁免，check-ignore 实测无泄漏）。
+
+**Rulings（控制器裁定）**：
+- currentPath 修复 = 服务端改写主工作树 path 为 repoPath 原字符串（pathsEqual realpath 判定；UI/core 零改动；remove 预检对称性无损）——修复波落地。
+- create 校验分层防御：前置预拒（父目录 realpath 归一 + `baseReal+sep` 双向，sibling `-wt` 经典前缀陷阱关闭）+ post-add 回滚（在原任一工作树内 → 强制移除 + INVALID_QUERY）——修复波落地。
+- 子模块语义：损坏 .gitmodules → 诚实 GIT_ERROR（不静默空列表）；未 init 是 `-` 前缀 exit 0（实测推翻计划假设）；config 正常 status 失败 → uninitialized 兜底。
+- worktree 数据模型：主/副同等列出、不加 isMain（UI「当前」由 currentPath 比较）；`--` 分隔符加固（实测位置：选项后、path 前，不吞 commit-ish）。
+- LogPage worktree/submodules 恒渲染（无检测门——本域无外部依赖）；onRemove 单参不带 force（force 仅终端）。
+- 计划文字 2 处更正：①「path 不在仓库目录内」须 realpath 归一后校验（I2 实证）；②「submodule status 失败→兜底」补充 config 失败语义（关账记录此处）。
+
+**triage（deferred → 排期/不修）**：
+- 排期：① 回滚失败路径包 gitFailure（病态 remove --force 失败 → 500 而非 INVALID_QUERY——可选加固）；② resolveSubmodulePath 白名单（`..`/绝对形态——git 现兜底，零逃逸面）；③ `-b` 回滚后分支保留（git 标准语义）；④ 空 .gitmodules 归类「解析失败」消息上下文为空（行为可辩护——诚实 GIT_ERROR）。
+- 不修（记录在案）：T2 M1-M6（porcelain 导出未用/描述剥离正则实际不误剥/CRLF spawn 恒 LF/空仓库 head=''/Omit 类型宽松/update(name) 消息不对称）；T3 M1-I2 关闭、M2 远程分支名 detached（工作流不断裂）、M3 注释、M4 性能数字；T4 .gitignore 位/{} 载荷/报告计数；T5 Popconfirm 取消断言/Flex align；T6 M1 无事件订阅/M2 副工作树永不「当前」（设计本意）；submodule fixture 慢（180s 上限）。
+
+**环境备注**：core 30s 超时/EPERM/ECONNRESET flake 均为既有环境缺陷（串行复跑全绿、与本域零耦合）；T2 探针（probe/rebased-* 临时夹具）与 %TEMP% 8.3 短路径（本机 TEMP=ZHANGL~1 短形式）为实证关键环境特征。
+
+**冒烟**：worktree 全链路（koa 真实服务 create sibling → CLI `git worktree list` 复核 → remove → 复核）；submodule 全链路（本地 bare URL rig：GET checked-out → 漂移 different-commit → update {name} 复原 → CLI `git submodule status` 复核）；currentPath 形态实证（8.3 vs realpath——修复波后主工作树 path 恒等于 repoPath，字符串全等成立）；两端 build 全过。
