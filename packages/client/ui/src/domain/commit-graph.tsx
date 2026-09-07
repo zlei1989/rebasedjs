@@ -15,6 +15,8 @@ import { formatCommitDate } from './format';
 export interface CommitGraphProps {
   commits: CommitInfo[];
   onSelect?: (hash: string) => void;
+  /** 行右键回调（LogPage 受控菜单挂接：右键行 → 记录 hash，DropDown contextMenu 展示）；缺省不绑定 */
+  onContextMenu?: (hash: string) => void;
   height?: number;
   /** tag chips 开关（默认 false，对齐 Java VcsLogApplicationSettings.showTagNames） */
   showTags?: boolean;
@@ -44,7 +46,13 @@ function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): Re
   );
 }
 
-export function CommitGraph({ commits, onSelect, height = 480, showTags = false }: CommitGraphProps): React.ReactNode {
+export function CommitGraph({
+  commits,
+  onSelect,
+  onContextMenu,
+  height = 480,
+  showTags = false,
+}: CommitGraphProps): React.ReactNode {
   const layoutCommits: LayoutCommit[] = useMemo(
     () => commits.map((c) => ({ hash: c.hash, parents: c.parents, refs: c.refs })),
     [commits],
@@ -71,6 +79,7 @@ export function CommitGraph({ commits, onSelect, height = 480, showTags = false 
               whiteSpace: 'nowrap',
             }}
             onClick={() => onSelect?.(commit.hash)}
+            onContextMenu={() => onContextMenu?.(commit.hash)}
           >
             <GraphCanvas
               rows={rows.slice(Math.max(0, index - 1), index + 2)}

@@ -15,7 +15,9 @@
  */
 import {
   useAbortOperation,
+  useBranchAction,
   useCherryPick,
+  useCheckout,
   useGithubStatus,
   useGitlabStatus,
   useInteractiveRebase,
@@ -32,6 +34,7 @@ import {
   useRepoStatus,
   useReset,
   useRevert,
+  useTagAction,
   useUndoCommit,
   useUpdateProject,
   useUpsertAccount,
@@ -84,6 +87,10 @@ export function RepoPage(): React.ReactNode {
   const { trigger: abortOperation, isMutating: abortingOperation } = useAbortOperation(repoId);
   const { trigger: resetTrigger, isMutating: resetting } = useReset(repoId);
   const { trigger: undoCommit, isMutating: undoCommitting } = useUndoCommit(repoId);
+  // 行右键菜单（Java Vcs.Log.ContextMenu 组）：检出/新建分支/新建标签 mutation + 浏览器打开链接（GitHub/GitLab 提交页）
+  const { trigger: checkout, isMutating: checkingOut } = useCheckout(repoId);
+  const { trigger: branchAction } = useBranchAction(repoId);
+  const { trigger: tagAction, isMutating: tagActing } = useTagAction(repoId);
   // 远程操作区：远程列表（pull/push 对话框数据源）+ pull/push/update 突变 + 账户保存（认证重试回路用）
   const { data: remotes } = useRemotes(repoId);
   const { trigger: pull, isMutating: pulling } = usePull(repoId);
@@ -346,6 +353,41 @@ export function RepoPage(): React.ReactNode {
         hasMore={(page?.hasMore ?? false) && limit < 500}
         loadingMore={logLoading && limit > 50}
         onLoadMore={() => setLimit((prev) => Math.min(prev * 2, 500))}
+        onCheckoutRevision={(hash) => {
+          Modal.confirm({
+            title: '检出此提交',
+            content: '将切换到游离 HEAD 状态（建议先确认工作区干净），确定？',
+            okText: '确定',
+            cancelText: '取消',
+            onOk: () =>
+              checkout({ action: 'detach', ref: hash })
+                .then(() => {
+                  void message.success('已检出');
+                  void mutateLog();
+                })
+                .catch(onError),
+          });
+        }}
+        onCheckoutNewBranch={(hash, name) => {
+          checkout({ action: 'newBranch', name, startPoint: hash })
+            .then(() => void message.success(`已创建并检出分支 ${name}`))
+            .catch(onError);
+        }}
+        onCreateTag={(hash, name, tagMessage) => {
+          tagAction({ action: 'create', name, ref: hash, ...(tagMessage === undefined ? {} : { message: tagMessage }) })
+            .then(() => void message.success(`已创建标签 ${name}`))
+            .catch(onError);
+        }}
+        onOpenInBrowser={(hash) => {
+          // 托管平台提交页链接：GitHub/GitLab 域检测（status 已挂载）；两者皆无 → 不渲染菜单项（回调不注入即隐藏）
+          const gh = githubStatus?.repo;
+          if (gh !== undefined) {
+            window.open(`https://github.com/${gh.owner}/${gh.name}/commit/${hash}`, '_blank', 'noopener');
+            return;
+          }
+          const gl = gitlabStatus?.repo;
+          if (gl !== undefined) window.open(`https://gitlab.com/${gl.owner}/${gl.name}/-/commit/${hash}`, '_blank', 'noopener');
+        }}
       />
       {/* 变基对话框：双模式状态机（简单 → useRebase；交互 → base 驱动 todo 重取 + useInteractiveRebase 提交）；
           取消即复位（RebaseDialog 内部状态自行复位，base 归空使 useRebaseTodo 挂 null key 停止重取） */}

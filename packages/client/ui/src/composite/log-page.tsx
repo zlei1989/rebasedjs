@@ -9,13 +9,14 @@
  * 回调全缺省时不渲染「更多」按钮。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
-import { Button, Dropdown, Input, Popconfirm } from 'antd';
+import { Button, Dropdown, Flex, Input, Modal, Popconfirm } from 'antd';
+import type { MenuProps } from 'antd';
 import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
 import { RepoStatusBar } from '../domain/repo-status-bar';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 /** 日志过滤条件（受控：容器持有，变更即重查快照；为空时才是默认全量视图） */
 export interface LogFilters {
@@ -110,6 +111,14 @@ export interface LogPageProps {
   loadingMore?: boolean;
   /** 「加载更多」回调（容器增大 limit 重查，推荐 ≤500 阶梯式） */
   onLoadMore?: () => void;
+  /** 行右键「检出此提交（游离 HEAD）」回调；缺省不渲染该菜单项 */
+  onCheckoutRevision?: (hash: string) => void;
+  /** 行右键「从此处新建分支（创建后检出）」回调（hash + 分支名）；缺省不渲染该菜单项 */
+  onCheckoutNewBranch?: (hash: string, name: string) => void;
+  /** 行右键「从此处新建标签」回调（hash + 标签名 + 可选附注）；缺省不渲染该菜单项 */
+  onCreateTag?: (hash: string, name: string, message?: string) => void;
+  /** 行右键「在浏览器中打开」（托管平台提交页链接由容器解析）；缺省不渲染该菜单项 */
+  onOpenInBrowser?: (hash: string) => void;
 }
 
 export function LogPage({
@@ -158,7 +167,44 @@ export function LogPage({
   hasMore,
   loadingMore,
   onLoadMore,
+  onCheckoutRevision,
+  onCheckoutNewBranch,
+  onCreateTag,
+  onOpenInBrowser,
 }: LogPageProps): React.ReactNode {
+  // 行右键菜单：右键记录 hash（菜单项按 hash 组装），点击项分发对应回调；Modal 输入在菜单项后展开
+  const [menuHash, setMenuHash] = useState<string | null>(null);
+  const [branchModalOpen, setBranchModalOpen] = useState(false);
+  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [branchName, setBranchName] = useState('');
+  const [tagName, setTagName] = useState('');
+  const [tagMessage, setTagMessage] = useState('');
+  const menuItems = useMemo<MenuProps['items']>(() => {
+    const hash = menuHash;
+    if (hash === null) return [];
+    const items: NonNullable<MenuProps['items']> = [];
+    if (onCheckoutRevision !== undefined) items.push({ key: 'checkout-revision', label: '检出此提交（游离 HEAD）' });
+    if (onCheckoutNewBranch !== undefined) items.push({ key: 'new-branch', label: '从此处新建分支…' });
+    if (onCreateTag !== undefined) items.push({ key: 'new-tag', label: '从此处新建标签…' });
+    if (onOpenInBrowser !== undefined) items.push({ key: 'open-in-browser', label: '在浏览器中打开' });
+    if (items.length > 0) items.push({ type: 'divider' });
+    if (onCherryPick !== undefined) items.push({ key: 'cherry-pick', label: '摘樱桃' });
+    if (onRevert !== undefined) items.push({ key: 'revert', label: '还原' });
+    if (onResetHere !== undefined) items.push({ key: 'reset-here', label: 'Reset 当前分支到此处' });
+    if (onBrowse !== undefined) items.push({ key: 'browse', label: '浏览快照' });
+    return items;
+  }, [menuHash, onCheckoutRevision, onCheckoutNewBranch, onCreateTag, onOpenInBrowser, onCherryPick, onRevert, onResetHere, onBrowse]);
+  const onMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
+    if (menuHash === null) return;
+    if (key === 'checkout-revision') onCheckoutRevision?.(menuHash);
+    else if (key === 'new-branch') setBranchModalOpen(true);
+    else if (key === 'new-tag') setTagModalOpen(true);
+    else if (key === 'open-in-browser') onOpenInBrowser?.(menuHash);
+    else if (key === 'cherry-pick') onCherryPick?.(menuHash);
+    else if (key === 'revert') onRevert?.(menuHash);
+    else if (key === 'reset-here') onResetHere?.(menuHash);
+    else if (key === 'browse') onBrowse?.(menuHash);
+  };
   // 过滤输入（受控）：本地草稿即时回显，提交（Enter/失焦）才上抛——避免每击键重查快照
   const [authorDraft, setAuthorDraft] = useState(filters?.author ?? '');
   const [pathDraft, setPathDraft] = useState(filters?.path ?? '');
@@ -362,7 +408,13 @@ export function LogPage({
       ) : null}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
-          <CommitGraph commits={commits} onSelect={onSelectCommit} />
+          {/* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
+              antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */}
+          <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
+            <div style={{ height: '100%' }}>
+              <CommitGraph commits={commits} onSelect={onSelectCommit} onContextMenu={setMenuHash} />
+            </div>
+          </Dropdown>
         </div>
         {selectedCommit ? (
           <div
@@ -379,6 +431,66 @@ export function LogPage({
           </div>
         ) : null}
       </div>
+      {/* 行右键 Modal：从此处新建分支（创建+检出语义由容器经 checkout newBranch 承载）/ 新建标签（附注可选） */}
+      <Modal
+        title="从此处新建分支"
+        open={branchModalOpen && menuHash !== null}
+        okText="确定"
+        cancelText="取消"
+        okButtonProps={{ disabled: branchName.trim() === '' }}
+        onOk={() => {
+          if (menuHash !== null && branchName.trim() !== '') onCheckoutNewBranch?.(menuHash, branchName.trim());
+          setBranchName('');
+          setBranchModalOpen(false);
+        }}
+        onCancel={() => {
+          setBranchName('');
+          setBranchModalOpen(false);
+        }}
+      >
+        <Input
+          data-testid="log-branch-name"
+          placeholder="分支名（如 feature/xxx）"
+          value={branchName}
+          onChange={(e) => setBranchName(e.target.value)}
+        />
+      </Modal>
+      <Modal
+        title="从此处新建标签"
+        open={tagModalOpen && menuHash !== null}
+        okText="确定"
+        cancelText="取消"
+        okButtonProps={{ disabled: tagName.trim() === '' }}
+        onOk={() => {
+          const message = tagMessage.trim();
+          if (menuHash !== null && tagName.trim() !== '') {
+            onCreateTag?.(menuHash, tagName.trim(), message === '' ? undefined : message);
+          }
+          setTagName('');
+          setTagMessage('');
+          setTagModalOpen(false);
+        }}
+        onCancel={() => {
+          setTagName('');
+          setTagMessage('');
+          setTagModalOpen(false);
+        }}
+      >
+        <Flex vertical gap={8}>
+          <Input
+            data-testid="log-tag-name"
+            placeholder="标签名（如 v1.0.0）"
+            value={tagName}
+            onChange={(e) => setTagName(e.target.value)}
+          />
+          <Input
+            data-testid="log-tag-message"
+            placeholder="附注信息（可选；留空为轻量标签）"
+            value={tagMessage}
+            onChange={(e) => setTagMessage(e.target.value)}
+          />
+        </Flex>
+      </Modal>
     </div>
   );
 }

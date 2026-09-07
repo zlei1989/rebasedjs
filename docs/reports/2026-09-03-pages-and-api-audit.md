@@ -217,7 +217,7 @@
 | 远程操作认证重试回路 | ✅ | `AUTH_FAILED` → 关对话框开 AuthDialog（host 自 context，不含 token）→ retry 重放 |
 | 分页（limit ≤500 / skip 游标） | ✅ | 「加载更多」limit 阶梯放大（50→100→…→500 封顶）；过滤或翻页时切快照模式（流仅默认视图接入，Ruling 6 同查询约束） |
 | 过滤（author / path） | ✅ | 「文本即滤」双输入（作者/路径，Enter/失焦提交，去首尾空白；清空即恢复）；与服务端 `--author`/`-- path` 过滤一致 |
-| 行右键菜单形态 | 🟡 | 动作以面板按钮/顶栏承载（Reset/Undo/Cherry-pick/Revert 已落地）；右键菜单未做 |
+| 行右键菜单形态 | ✅ | 行右键菜单（对齐 Java `Vcs.Log.ContextMenu` 组）：检出（游离 HEAD）/ 从此处新建分支（创建后检出）/ 从此处新建标签（附注可选）/ 在浏览器中打开（GitHub/GitLab 提交页链接）+ 摘樱桃·还原·Reset·浏览快照复用面板按钮；Push up to Commit、Show All Affected、reword/fixup/squash/drop 直通为余项（见任务清单 §2.3） |
 | 分支折叠 / PermanentGraph 高级视图 | ❌ | 2026-09-08 重新裁定：由「明确不做」改为**可选任务**（依赖过滤 UI 与 PermanentGraph 类缓存结构先行，见任务清单 §2.8） |
 | 新标签页打开 log、为命令过滤的 log | ❌ | internal 动作未做 |
 
@@ -656,15 +656,15 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 15 | LogPage → Undo Commit | 右键 Undo Commit | `Git.Uncommit`（backend.xml:347） | ✅ 顶栏 Popconfirm |
 | 16 | LogPage → RebaseDialog | 右键 Interactively Rebase from Here | `GitInteractiveRebaseAction.kt:16-24`（backend.xml:354） | ✅ 「更多」→ 内嵌模态（简单/交互双模式） |
 | 17 | LogPage → PushDialog | 右键 Push Commits up to Here | `GitPushUpToCommitAction.kt:60`（backend.xml:355） | ❌（PushDialog 已落地，「推至指定提交」语义未做） |
-| 18 | LogPage → New Branch 对话框 | 右键 New Branch… | backend.xml:361-363 | ❌（BranchPanel 新建可带起始点，右键入口未做） |
-| 19 | LogPage → New Tag | 右键 New Tag… | `GitCreateTagAction.java:39`（backend.xml:364） | ❌（TagPanel 创建 ref 默认 HEAD，右键入口未做） |
-| 20 | LogPage → 分支/标签操作子菜单 | 右键分支操作组 | `GitLogBranchOperationsActionGroup.java:188-205`（backend.xml:360） | ❌（Merge/Rebase 经 #79/#80，其余未做） |
+| 18 | LogPage → New Branch 对话框 | 右键 New Branch… | backend.xml:361-363 | ✅ 行右键「从此处新建分支…」Modal（起始点=该提交，创建后检出） |
+| 19 | LogPage → New Tag | 右键 New Tag… | `GitCreateTagAction.java:39`（backend.xml:364） | ✅ 行右键「从此处新建标签…」Modal（附注可选；ref=该提交） |
+| 20 | LogPage → 分支/标签操作子菜单 | 右键分支操作组 | `GitLogBranchOperationsActionGroup.java:188-205`（backend.xml:360） | 🟡 行右键菜单已含检出/New Branch/New Tag；Merge/Rebase 经 #79/#80；Push up to Commit 未做 |
 | 21 | LogPage → Revert/Reword/Fixup/Squash/Drop | 右键（后四者入 rebase 引擎） | backend.xml:346-353 | 🟡 Revert=面板按钮直通；Reword/Fixup/Squash/Drop 经交互式变基编辑器可达 |
-| 22 | LogPage → Checkout / 浏览历史快照 | 右键 Checkout 组 / Browse at Revision | backend.xml:337-342 | 🟡 Checkout 组经 BranchPanel 承载；浏览历史快照 ✅（详情面板「浏览快照」→ `/browse?rev=`） |
+| 22 | LogPage → Checkout / 浏览历史快照 | 右键 Checkout 组 / Browse at Revision | backend.xml:337-342 | ✅ 行右键「检出此提交（游离 HEAD）」+ 详情面板「浏览快照」 |
 | 23 | LogPage → PatchPanel | 右键 Create Patch from commit | vcs-log.xml:273 | ✅ 「更多」→ 创建 Modal 提交区间三态 |
 | 24 | LogPage → GitConsole | tab 下拉 Console | vcs-log.xml:321-322 | ✅ 「更多」→ `/console` |
 | 25 | LogPage → HistoryPanel | tab 下拉 Show History | vcs-log.xml:321 | ✅ 「更多」→ `/history`（页内输入路径） |
-| 26 | LogPage → Open in Browser | 右键托管平台链接 | backend.xml:555-561 | ❌ |
+| 26 | LogPage → Open in Browser | 右键托管平台链接 | backend.xml:555-561 | ✅ 行右键「在浏览器中打开」（GitHub/GitLab 提交页链接，域检测驱动） |
 | 27 | DiffPage 页内 | 多文件 Prev/Next | `DiffNextFileAction`/`DiffPreviousFileAction` | ❌（单文件模型） |
 | 28 | 编辑器/项目树 → HistoryPanel | 右键 Show History | backend.xml:115 | ➖（无编辑器宿主；等价=「更多」+ 页内输入） |
 | 29 | BlameView → HistoryPanel | gutter 右键 Show in History | `ShowInFileHistoryAnnotationActionProvider.kt:55` | ❌ |
@@ -766,10 +766,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **53 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 3、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 6、repo 入库链 2（#2/#87 克隆） |
-| 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#21 右键动作集、#22 浏览快照已通（checkout 部分仍经 BranchPanel）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
+| ✅ 已复刻（含等价边） | **57 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 3、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 6、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26） |
+| 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **36 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree、Checkout 组） |
+| ❌ 未复刻 | **32 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree） |
 
 ### 5.5 关键联动流程
 

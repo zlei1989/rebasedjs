@@ -594,3 +594,82 @@ describe('LogPage 过滤/分页', () => {
     expect(screen.queryByTestId('log-load-more')).not.toBeInTheDocument();
   });
 });
+
+describe('LogPage 行右键菜单', () => {
+  it('右键提交行 → 菜单出现；点击「检出此提交」回调带该行 hash', async () => {
+    const onCheckoutRevision = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onCheckoutRevision={onCheckoutRevision}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('初始提交'));
+    fireEvent.click(await screen.findByText('检出此提交（游离 HEAD）'));
+    expect(onCheckoutRevision).toHaveBeenCalledWith('c1');
+  });
+
+  it('菜单项仅渲染对应回调注入的项；检查点：未注入 onOpenInBrowser 时不含「在浏览器中打开」', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onCheckoutRevision={() => {}} />);
+    fireEvent.contextMenu(screen.getByText('初始提交'));
+    expect(await screen.findByText('检出此提交（游离 HEAD）')).toBeInTheDocument();
+    expect(screen.queryByText('在浏览器中打开')).not.toBeInTheDocument();
+  });
+
+  it('从此处新建分支：Modal 输入名称 → onCheckoutNewBranch(hash, name)', async () => {
+    const onCheckoutNewBranch = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onCheckoutNewBranch={onCheckoutNewBranch}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('第二笔提交'));
+    fireEvent.click(await screen.findByText('从此处新建分支…'));
+    fireEvent.change(await screen.findByTestId('log-branch-name'), { target: { value: 'feature/x' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onCheckoutNewBranch).toHaveBeenCalledWith('c2', 'feature/x');
+  });
+
+  it('从此处新建标签：附注留空 → message undefined；填写 → 原样透传', async () => {
+    const onCreateTag = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onCreateTag={onCreateTag} />);
+    fireEvent.contextMenu(screen.getByText('初始提交'));
+    fireEvent.click(await screen.findByText('从此处新建标签…'));
+    fireEvent.change(await screen.findByTestId('log-tag-name'), { target: { value: 'v1.0.0' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onCreateTag).toHaveBeenCalledWith('c1', 'v1.0.0', undefined);
+
+    fireEvent.contextMenu(screen.getByText('初始提交'));
+    fireEvent.click(await screen.findByText('从此处新建标签…'));
+    fireEvent.change(await screen.findByTestId('log-tag-name'), { target: { value: 'v2.0.0' } });
+    fireEvent.change(screen.getByTestId('log-tag-message'), { target: { value: 'release' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onCreateTag).toHaveBeenCalledWith('c1', 'v2.0.0', 'release');
+  });
+
+  it('右键菜单含既有动作（摘樱桃/还原/Reset/浏览快照）且复用对应回调', async () => {
+    const onBrowse = vi.fn();
+    const onCherryPick = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        selectedCommit={null}
+        onBrowse={onBrowse}
+        onCherryPick={onCherryPick}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('初始提交'));
+    fireEvent.click(await screen.findByText('浏览快照'));
+    expect(onBrowse).toHaveBeenCalledWith('c1');
+    fireEvent.contextMenu(screen.getByText('初始提交'));
+    fireEvent.click(await screen.findByText('摘樱桃'));
+    expect(onCherryPick).toHaveBeenCalledWith('c1');
+  });
+});
