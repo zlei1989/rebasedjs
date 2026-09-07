@@ -54,3 +54,5 @@ export {
   useMergeGitlabMr,
   useCheckoutGitlabMr,
 } from './gitlab';
+export { useWorktrees, useCreateWorktree, useRemoveWorktree, usePruneWorktrees } from './worktree';
+export { useSubmodules, useUpdateSubmodules } from './submodule';

@@ -55,6 +55,7 @@ data/
 .superpowers
 .playwright-mcp
 **/worktrees/
+!apps/web-next/app/api/repos/\[repoId\]/worktrees/
 /*.png
 
 # SDD 工作区与 git worktree 目录
