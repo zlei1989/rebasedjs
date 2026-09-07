@@ -1231,7 +1231,7 @@ describe('web-koa rebase/cherry-pick/revert/tags 端点', () => {
   });
 });
 
-describe('web-koa blame/history/committed/search 端点', () => {
+describe('web-koa blame/history/browse/committed/search 端点', () => {
   /** 本组用例 git 进程密集（多提交/重命名/搜索遍历），统一放宽用例超时 */
   const RIG_TIMEOUT = 120000;
 
@@ -1268,6 +1268,43 @@ describe('web-koa blame/history/committed/search 端点', () => {
     expect(body.map((e) => e.subject)).toEqual(['rename to b', 'init']);
     expect(body[0].hash).toMatch(/^[0-9a-f]{40}$/);
     expect(body[0].author).toBe('Test User');
+  });
+
+  it('browse 端点：rev=HEAD 返回 200 与 BrowseTree 形状；content 返回文本内容与二进制标记', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    writeFileSync(join(repoPath, 'b.txt'), 'two\n');
+    execFileSync('git', ['-C', repoPath, 'add', 'b.txt']);
+    execFileSync('git', ['-C', repoPath, 'commit', '-q', '-m', 'second']);
+
+    const res = await fetch(`${base}/api/repos/${repoId}/browse?rev=HEAD`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { rev: string; entries: Array<{ mode: string; type: string; hash: string; path: string }> };
+    expect(body.rev).toBe('HEAD'); // rev 原样回显（输入即用户所见），终端哈希见条目 hash 字段
+    expect(body.entries.map((e) => e.path).sort()).toEqual(['a.txt', 'b.txt']);
+    expect(body.entries[0]).toMatchObject({ mode: '100644', type: 'blob' });
+    expect(body.entries[0].hash).toMatch(/^[0-9a-f]{40}$/);
+
+    const contentRes = await fetch(`${base}/api/repos/${repoId}/browse/content?rev=HEAD&file=a.txt`);
+    expect(contentRes.status).toBe(200);
+    expect(await contentRes.json()).toEqual({ content: 'hello\n', binary: false });
+  });
+
+  it('browse 端点：缺 rev 或无效 rev 返回 400；未注册 repoId 两个端点返回 404 REPO_NOT_FOUND', async () => {
+    const { repoId } = registerRepo();
+    const missingRes = await fetch(`${base}/api/repos/${repoId}/browse`);
+    expect(missingRes.status).toBe(400);
+    expect(await missingRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+
+    const badRes = await fetch(`${base}/api/repos/${repoId}/browse?rev=nope`);
+    expect(badRes.status).toBe(400);
+    expect(await badRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+
+    const notFoundRes = await fetch(`${base}/api/repos/nope/browse?rev=HEAD`);
+    const contentNotFound = await fetch(`${base}/api/repos/nope/browse/content?rev=HEAD&file=a.txt`);
+    for (const res of [notFoundRes, contentNotFound]) {
+      expect(res.status).toBe(404);
+      expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+    }
   });
 
   it('committed 端点：默认全量 200 hasMore false；limit=1 分页 hasMore true；skip 越界空页', { timeout: RIG_TIMEOUT }, async () => {

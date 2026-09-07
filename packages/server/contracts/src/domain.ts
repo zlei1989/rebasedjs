@@ -246,6 +246,24 @@ export interface FileHistoryEntry {
   dateIso: string;
 }
 
+/** 历史快照树条目：mode 为 git 8 进制模式串（120000=符号链接）；type 为 blob/commit（commit=子模块 gitlink） */
+export interface BrowseEntry {
+  mode: string;
+  type: 'blob' | 'commit';
+  hash: string;
+  path: string;
+}
+/** 历史快照树：entries 为 ls-tree -r 平铺（目录节点按 path 前缀聚合，由 UI 层负责） */
+export interface BrowseTree {
+  rev: string;
+  entries: BrowseEntry[];
+}
+/** 历史快照文件内容：binary=true 表示检出含 NUL 字节（二进制/大文件），content 为可读文本（二进制时为空串语义，仅展示提示） */
+export interface BrowseContent {
+  content: string;
+  binary: boolean;
+}
+
 /** git name-status 变更状态码：A 新增 / M 修改 / D 删除 / R 重命名 / C 复制 / T 类型变更（typechange——如普通文件→符号链接，git --name-status 真实输出） */
 export type CommittedFileStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T';
 

@@ -8,6 +8,7 @@ export { getLogPage, streamLogEvents } from './log';
 export { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
 export { getFileBlame } from './blame';
 export { getFileHistory } from './history';
+export { getBrowseContent, getBrowseTree } from './browse';
 export { getCommittedPage } from './committed';
 export { searchCommitsService } from './search';
 export { applyHunkStaging, applyStaging } from './staging';

@@ -20,9 +20,17 @@ export interface CommitDetailsPanelProps {
   onCherryPick?: (hash: string) => void;
   /** 「还原」回调（携带当前提交 hash）；缺省不渲染该按钮 */
   onRevert?: (hash: string) => void;
+  /** 「浏览快照」回调（携带当前提交 hash → /browse?rev=）；缺省不渲染该按钮 */
+  onBrowse?: (hash: string) => void;
 }
 
-export function CommitDetailsPanel({ commit, onResetHere, onCherryPick, onRevert }: CommitDetailsPanelProps): React.ReactNode {
+export function CommitDetailsPanel({
+  commit,
+  onResetHere,
+  onCherryPick,
+  onRevert,
+  onBrowse,
+}: CommitDetailsPanelProps): React.ReactNode {
   const { branches, tags } = classifyRefs(commit.refs);
   const subject = commit.message.split('\n')[0];
   const copyHash = (): void => {
@@ -67,9 +75,14 @@ export function CommitDetailsPanel({ commit, onResetHere, onCherryPick, onRevert
           ))}
         </div>
       ) : null}
-      {/* 操作区：摘樱桃/还原/Reset 当前分支到此处——逐个按回调注入渲染（仅调用方注入回调时出现；确认弹窗与 hook 调用由容器持有） */}
-      {onResetHere || onCherryPick || onRevert ? (
+      {/* 操作区：浏览快照/摘樱桃/还原/Reset 当前分支到此处——逐个按回调注入渲染（仅调用方注入回调时出现；确认弹窗与 hook 调用由容器持有） */}
+      {onResetHere || onCherryPick || onRevert || onBrowse ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {onBrowse ? (
+            <Button data-testid="browse-snapshot" size="small" onClick={() => onBrowse(commit.hash)}>
+              浏览快照
+            </Button>
+          ) : null}
           {onCherryPick ? (
             <Button data-testid="cherry-pick" size="small" onClick={() => onCherryPick(commit.hash)}>
               摘樱桃

@@ -209,6 +209,13 @@ export const blameQuerySchema = z.object({ file: z.string().min(1) });
 /** 文件历史查询：file 必填（git log --follow 跟随重命名） */
 export const historyQuerySchema = z.object({ file: z.string().min(1) });
 
+/** 历史快照浏览（BrowsePanel）查询：rev 为任意 tree-ish（提交/分支/标签） */
+export const browseQuerySchema = z.object({ rev: z.string().min(1) });
+
+/** 历史快照文件内容查询：rev 为 tree-ish；file 为该版本内相对路径（必填） */
+export const browseContentQuerySchema = z.object({ rev: z.string().min(1), file: z.string().min(1) });
+export type BrowseContentQuery = z.infer<typeof browseContentQuerySchema>;
+
 /** Committed Changes 分页查询：limit≤200、skip 游标（沿用 log 端点先例） */
 export const committedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),

@@ -16,6 +16,8 @@ export { searchCommits } from './search';
 export type { CoreSearchResult } from './search';
 export { collectFileDiff, streamFileDiff } from './diff';
 export type { FileDiffOptions } from './diff';
+export { listTreeAtRevision, parseTreeList } from './tree';
+export type { CoreTreeEntry } from './tree';
 export { readFileAtRev } from './content';
 export { getGitConfigEntries, setGitConfigLocal } from './config';
 export type { CoreConfigEntry } from './config';

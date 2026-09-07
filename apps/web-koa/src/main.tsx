@@ -9,6 +9,7 @@ import { ConfigProvider, theme, App as AntApp } from 'antd';
 import './index.css';
 import { ReposPage } from './pages';
 import { RepoBlamePage } from './pages/blame';
+import { RepoBrowsePage } from './pages/browse';
 import { RepoBranchesPage } from './pages/branches';
 import { RepoCommittedPage } from './pages/committed';
 import { RepoConflictsPage } from './pages/conflicts';
@@ -38,6 +39,7 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<ReposPage />} />
           <Route path="/repos/:repoId" element={<RepoPage />} />
+          <Route path="/repos/:repoId/browse" element={<RepoBrowsePage />} />
           <Route path="/repos/:repoId/blame" element={<RepoBlamePage />} />
           <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
           <Route path="/repos/:repoId/committed" element={<RepoCommittedPage />} />

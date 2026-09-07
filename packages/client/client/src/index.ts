@@ -7,6 +7,7 @@ export { useLogPage, useLogStream } from './log';
 export { useFileDiff, useDiffStream, useDiffPatch } from './diff';
 export { useBlame } from './blame';
 export { useHistory } from './history';
+export { useBrowseTree, useBrowseContent } from './browse';
 export { useCommittedPage } from './committed';
 export { useSearch } from './search';
 export { useSettings } from './settings';

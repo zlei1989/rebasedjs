@@ -300,6 +300,7 @@ export default function Page({
         onUndoCommit={onUndoCommit}
         undoCommitting={undoCommitting}
         onResetHere={onResetHere}
+        onBrowse={(hash) => router.push(`/repos/${repoId}/browse?rev=${hash}`)}
         onOpenSettings={() => router.push(`/repos/${repoId}/settings`)}
         onOpenStatus={() => router.push(`/repos/${repoId}/status`)}
         onOpenBranches={() => router.push(`/repos/${repoId}/branches`)}

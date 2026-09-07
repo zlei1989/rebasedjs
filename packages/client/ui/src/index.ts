@@ -1,5 +1,7 @@
 export { VirtualList, type VirtualListProps } from './base/virtual-list';
 export { GraphCanvas, type GraphCanvasProps } from './base/graph-canvas';
+export { FileTree, type FileTreeNode, type FileTreeProps } from './base/file-tree';
+export { buildDirectoryTree } from './domain/directory-tree';
 export {
   MonacoDiffView,
   type MonacoDiffViewProps,
@@ -31,6 +33,7 @@ export { GitLabPanel, type GitLabPanelProps } from './composite/gitlab-panel';
 export { BranchPanel, type BranchPanelProps } from './composite/branch-panel';
 export { BlameView, type BlameViewProps } from './composite/blame-view';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
+export { BrowsePanel, type BrowsePanelProps } from './composite/browse-panel';
 export {
   CommittedChangesPanel,
   type CommittedChangesPanelProps,

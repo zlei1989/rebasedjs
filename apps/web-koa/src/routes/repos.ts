@@ -4,8 +4,8 @@
  * SSE：写 ctx.res（TextEncoder 字节帧）+ 监听 ctx.req close → AbortController → api opts.signal。
  */
 import Router, { type RouterContext } from '@koa/router';
-import { abortOperation, addGithubPrComment, addGitlabMrComment, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, checkoutGithubPr, checkoutGitlabMr, cherryPick, continueMergeOperation, continueOperation, createCommit, createGitlabMr, createPatch, createWorktree, deleteAccount, deletePatch, fetchRepo, getBranches, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getGithubPrDetail, getGithubPrFiles, getGithubPrs, getGithubPrTimeline, getGithubStatus, getGitlabMrDetail, getGitlabMrFiles, getGitlabMrs, getGitlabMrTimeline, getGitlabStatus, getStashes, getSubmodules, getTags, getWorktrees, listAccounts, listRecentRepos, mergeBranchIntoCurrent, mergeGithubPr, mergeGitlabMr, openRepo, pruneWorktrees, pullRepo, pushRepo, putIgnore, rebaseBranch, removeWorktree, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, submitGithubPrReview, submitGitlabMrReview, undoCommit, updateProject, updateSettings, updateSubmodules, upsertAccount, watchRepoStatus } from '@rebased/api';
-import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, githubCommentBodySchema, githubMergeBodySchema, githubPrNumberSchema, githubPrQuerySchema, githubReviewBodySchema, gitlabCommentBodySchema, gitlabMergeBodySchema, gitlabMrCreateBodySchema, gitlabMrIidSchema, gitlabMrQuerySchema, gitlabReviewBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, submoduleUpdateBodySchema, tagActionSchema, updateBodySchema, worktreeCreateBodySchema, worktreeRemoveBodySchema, type SseEvent } from '@rebased/contracts';
+import { abortOperation, addGithubPrComment, addGitlabMrComment, addIgnore, applyBranchAction, applyChangelistAction, applyCheckout, applyHunkStaging, applyPatchService, applyRemoteAction, applyReset, applyShelfAction, applyStaging, applyStashAction, applyTagAction, checkoutGithubPr, checkoutGitlabMr, cherryPick, continueMergeOperation, continueOperation, createCommit, createGitlabMr, createPatch, createWorktree, deleteAccount, deletePatch, fetchRepo, getBranches, getBrowseContent, getBrowseTree, getChangelists, getCommittedPage, getConflictContents, getConflicts, getConsole, getFileBlame, getFileDiff, getFileHistory, getIgnore, getIgnoreTemplates, getLogPage, getOperation, getPatches, getRebaseTodo, getRemotes, getShelves, getRepoConfig, getRepoStatus, getSettings, getFileVersions, getGithubPrDetail, getGithubPrFiles, getGithubPrs, getGithubPrTimeline, getGithubStatus, getGitlabMrDetail, getGitlabMrFiles, getGitlabMrs, getGitlabMrTimeline, getGitlabStatus, getStashes, getSubmodules, getTags, getWorktrees, listAccounts, listRecentRepos, mergeBranchIntoCurrent, mergeGithubPr, mergeGitlabMr, openRepo, pruneWorktrees, pullRepo, pushRepo, putIgnore, rebaseBranch, removeWorktree, resolveConflict, revert, runInteractiveRebaseService, searchCommitsService, setRepoConfig, streamDiffEvents, streamLogEvents, submitGithubPrReview, submitGitlabMrReview, undoCommit, updateProject, updateSettings, updateSubmodules, upsertAccount, watchRepoStatus } from '@rebased/api';
+import { accountBodySchema, accountDeleteBodySchema, blameQuerySchema, branchActionSchema, browseContentQuerySchema, browseQuerySchema, changelistActionSchema, checkoutActionSchema, commitBodySchema, committedQuerySchema, configPutBodySchema, conflictContentsQuerySchema, consoleQuerySchema, diffQuerySchema, fetchBodySchema, githubCommentBodySchema, githubMergeBodySchema, githubPrNumberSchema, githubPrQuerySchema, githubReviewBodySchema, gitlabCommentBodySchema, gitlabMergeBodySchema, gitlabMrCreateBodySchema, gitlabMrIidSchema, gitlabMrQuerySchema, gitlabReviewBodySchema, historyQuerySchema, hunkStagingBodySchema, ignoreAddBodySchema, ignorePutBodySchema, interactiveRebaseBodySchema, logQuerySchema, mergeBodySchema, openRepoBodySchema, patchApplyBodySchema, patchCreateBodySchema, patchDeleteBodySchema, pickBodySchema, pullBodySchema, pushBodySchema, rebaseBodySchema, rebaseTodoQuerySchema, remoteActionSchema, resetBodySchema, resolveConflictBodySchema, searchQuerySchema, serializeSseEvent, settingsPatchSchema, shelfActionSchema, stagingBodySchema, stashActionSchema, submoduleUpdateBodySchema, tagActionSchema, updateBodySchema, worktreeCreateBodySchema, worktreeRemoveBodySchema, type SseEvent } from '@rebased/contracts';
 import { z } from 'zod';
 import { handleApiError, resolveRepo } from '../server-context';
 
@@ -221,6 +221,26 @@ router.get('/api/repos/:repoId/history', async (ctx) => {
   try {
     const query = historyQuerySchema.parse(ctx.query);
     ctx.body = await getFileHistory(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.file);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/browse —— zod 校验查询 → getBrowseTree（指定版本文件树）→ 200 BrowseTree；无效 rev → 400 INVALID_REF */
+router.get('/api/repos/:repoId/browse', async (ctx) => {
+  try {
+    const query = browseQuerySchema.parse(ctx.query);
+    ctx.body = await getBrowseTree(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.rev);
+  } catch (error) {
+    handleApiError(error, ctx);
+  }
+});
+
+/** GET /api/repos/:repoId/browse/content —— zod 校验查询 → getBrowseContent（指定版本单文件内容 + 二进制标记）→ 200 BrowseContent */
+router.get('/api/repos/:repoId/browse/content', async (ctx) => {
+  try {
+    const query = browseContentQuerySchema.parse(ctx.query);
+    ctx.body = await getBrowseContent(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query);
   } catch (error) {
     handleApiError(error, ctx);
   }

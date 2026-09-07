@@ -16,9 +16,9 @@
 | 未挂端点能力 | 2（`initRepo`、`cloneRepo`） | §2.2 #3 |
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
-| 功能域 | 1（browse 历史快照浏览——2026-09-08 裁定立项轻量复刻） | §2.8 |
+| 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
 | 页面功能点缺口 | 57 项（分布于 24 个页面） | §2.2 / §2.3 |
-| 导航边缺口 | 33 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
+| 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
 
@@ -123,9 +123,9 @@
 
 gitlab checkout Bearer 注入 hardening（真机验证 + core 层改 Basic/PRIVATE-TOKEN）；web-next 空/非法 JSON body 500 与 koa 400 全局评估；createOpen 跨仓库保持打开；worktree 回滚失败包 gitFailure；resolveSubmodulePath 白名单；core vitest `fileParallelism`；unborn HEAD 建补丁/搁置（staged→`git diff --cached`、缺省→两段拼接）；execLogByCwd 仓库级淘汰；面板 key `kind+id`；addIgnore path 字符集收紧；存档名 `.`/`..` 边界统一。
 
-### 2.6 功能域与契约（4 项）
+### 2.6 功能域与契约（3 项）
 
-browse（历史快照浏览）：2026-09-08 裁定**立项轻量复刻**（§2.8）；终稿盘点仍以架构 spec §4.2 域表逐行核；`operation.progress` SSE（有进度型长任务 UI 面时实现）；预留错误码 4 个（`CONFLICT`/`HOOK_FAILED`/`STALE_LOCK`/`CANCELLED`）随对应功能落地消费；`initRepo`/`cloneRepo` 端点（同 2.2 #3）。
+browse（历史快照浏览）：✅ 已完成（§2.8 完成记录）；终稿盘点仍以架构 spec §4.2 域表逐行核；`operation.progress` SSE（有进度型长任务 UI 面时实现）；预留错误码 4 个（`CONFLICT`/`HOOK_FAILED`/`STALE_LOCK`/`CANCELLED`）随对应功能落地消费；`initRepo`/`cloneRepo` 端点（同 2.2 #3）。
 
 ### 2.7 PR/MR 行级 diff 视图（2026-09-08 新裁定：由「明确不做」改为可排期）
 
@@ -140,20 +140,22 @@ browse（历史快照浏览）：2026-09-08 裁定**立项轻量复刻**（§2.8
 
 > 完成后盘点报告 4.26/4.27 的 diff 视图行与边 #98 由 🟡 转 ✅（保留 AI 描述、克隆/分享等其余裁定）。
 
-### 2.8 browse 历史快照浏览（2026-09-08 首次裁定：立项轻量复刻）
+### 2.8 browse 历史快照浏览（2026-09-08 首次裁定：立项轻量复刻）——✅ 已完成
 
-**裁定依据**：Java `GitBrowseRepoAtRevisionAction` = 日志右键在指定提交上打开平台 `RepositoryBrowser`——以该提交为根的**只读文件树浏览**（展开目录、打开文件在该版本的内容；虚拟文件 + commit 上下文，不触碰工作区）。Web 复刻成本低-中：核心原语基本齐备（`readFileAtRev` 已被 DiffPage 使用），文件树组件可与 CommittedChangesPanel 目录树任务共享；补全后功能域 36/36。
+**裁定依据**（保留）：Java `GitBrowseRepoAtRevisionAction` = 日志右键在指定提交上打开平台 `RepositoryBrowser`——以该提交为根的**只读文件树浏览**（展开目录、打开文件在该版本的内容；虚拟文件 + commit 上下文，不触碰工作区）。Web 复刻成本低-中：核心原语基本齐备（`readFileAtRev` 已被 DiffPage 使用），文件树组件与 CommittedChangesPanel 目录树任务共享；补全后功能域 36/36。
 
-| # | 任务 | 说明 |
+**完成记录**（随批落地，含单测 / UI 测试）：
+
+| # | 任务 | 落点 |
 |---|------|------|
-| 1 | core `listTreeAtRevision` 原语 | `git ls-tree -r <rev>` 解析（path/类型/子树聚合），薄封装 + 单测 |
-| 2 | `api/browse.ts` + `GET /api/repos/:id/browse?rev=` | 返回指定提交的文件树（按目录嵌套或平铺带 path 前缀） |
-| 3 | `composite/BrowsePanel` + 路由 `/repos/:id/browse?rev=` | **共享 `FileTree` 基础组件**（与 §2.3 CommittedChangesPanel 目录树任务共用）；目录懒加载 |
-| 4 | 文件内容只读查看 | 复用 `readFileAtRev` / 两侧全文路径（`git show <rev>:<file>`）；点文件 → 只读内容视图或 DiffPage from/to 联动 |
-| 5 | 入口与导航边 | LogPage 详情面板「浏览快照」按钮（或「更多」菜单）→ 边 #22 由 ❌ 转 ✅（checkout 部分仍经 BranchPanel） |
-| 6 | 降级边界 | 二进制文件提示；子模块/符号链接展示为条目不深入 |
+| 1 | core `listTreeAtRevision` 原语 | `packages/server/core/src/tree.ts`：`git ls-tree -r -z <rev>` 解析（mode/type/hash/path，NUL 分隔）；单测 4 例（解析/嵌套+gitlink/空提交/无效 rev） |
+| 2 | `api/browse.ts` + `GET /api/repos/:id/browse?rev=` | `getBrowseTree`（`verifyCommitish` 预检 → `INVALID_REF`）+ `getBrowseContent`（路径越界 → `INVALID_QUERY`；版本内不存在 → `INVALID_REF`；含 NUL → binary 标记）；单测 7 例 |
+| 3 | `composite/BrowsePanel` + 路由 `/repos/:id/browse?rev=` | `base/file-tree.tsx`（antd Tree 受控选择包装：目录行点击=展开/收起、叶子=onSelect）+ `domain/directory-tree.ts`（平铺路径 → 嵌套树纯函数，目录在前字母序，与 CommittedChangesPanel 目录树共用）；`composite/browse-panel.tsx`（左树右内容，子模块/符号链接徽标、二进制提示、空/加载/错误态）；两端路由与页面容器（web-next 22 子路由 / web-koa 22 文件） |
+| 4 | 文件内容只读查看 | 复用 `readFileAtRev`（`git show <rev>:<file>`），`GET /api/repos/:id/browse/content?rev=&file=`；UI 测试 9 例（含目录点击不选文件） |
+| 5 | 入口与导航边 | LogPage 提交详情面板「浏览快照」按钮（`onBrowse` 回调链：ui → 两端容器 → `/browse?rev=<hash>`）；边 #22 浏览部分转 ✅ |
+| 6 | 降级边界 | 二进制（NUL 检测）提示；子模块/符号链接展示为条目不深入（不可选中）；空版本空态；无效版本显式报错 |
 
-> 完成后：功能域 36/36；盘点报告 §2.1 P4 行、边 #22、§六.1 同步更新。
+> 完成后：功能域 36/36（盘点报告 §2.1 P4 行、§4.31 BrowsePanel、边 #22、§六 已同步更新）。
 
 ### 2.9 可选任务（低价值后置，1 项）
 

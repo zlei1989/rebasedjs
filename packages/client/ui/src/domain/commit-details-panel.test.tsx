@@ -88,4 +88,15 @@ describe('CommitDetailsPanel', () => {
     expect(onRevert).toHaveBeenCalledTimes(1);
     expect(onRevert).toHaveBeenCalledWith('abc1234567890def');
   });
+
+  it('未传 onBrowse 时不渲染浏览快照按钮，传入时点击回调携带当前提交 hash', () => {
+    render(<CommitDetailsPanel commit={commit} onResetHere={() => {}} />);
+    expect(screen.queryByTestId('browse-snapshot')).not.toBeInTheDocument();
+
+    const onBrowse = vi.fn();
+    render(<CommitDetailsPanel commit={commit} onBrowse={onBrowse} />);
+    fireEvent.click(screen.getByTestId('browse-snapshot'));
+    expect(onBrowse).toHaveBeenCalledTimes(1);
+    expect(onBrowse).toHaveBeenCalledWith('abc1234567890def');
+  });
 });

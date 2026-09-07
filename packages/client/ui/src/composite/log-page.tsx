@@ -91,6 +91,8 @@ export interface LogPageProps {
   onCherryPick?: (hash: string) => void;
   /** 透传给 CommitDetailsPanel 的「还原」回调；缺省详情面板不渲染该按钮 */
   onRevert?: (hash: string) => void;
+  /** 透传给 CommitDetailsPanel 的「浏览快照」回调（选中提交 → /browse?rev=）；缺省详情面板不渲染该按钮 */
+  onBrowse?: (hash: string) => void;
 }
 
 export function LogPage({
@@ -133,6 +135,7 @@ export function LogPage({
   onResetHere,
   onCherryPick,
   onRevert,
+  onBrowse,
 }: LogPageProps): React.ReactNode {
   // 「更多」菜单项：仅装配容器注入回调的入口（P3-C 只读浏览 溯源/历史/已提交/搜索 + 本地操作 变基/标签
   // + 远程操作 拉取/推送/更新项目/远程管理 + P3-D 补丁/搁置/控制台/忽略）；全缺省时连「更多」按钮都不渲染
@@ -293,6 +296,7 @@ export function LogPage({
               onResetHere={onResetHere}
               onCherryPick={onCherryPick}
               onRevert={onRevert}
+              onBrowse={onBrowse}
             />
           </div>
         ) : null}

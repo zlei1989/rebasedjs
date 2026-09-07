@@ -294,6 +294,7 @@ export function RepoPage(): React.ReactNode {
         onUndoCommit={onUndoCommit}
         undoCommitting={undoCommitting}
         onResetHere={onResetHere}
+        onBrowse={(hash) => navigate(`/repos/${repoId}/browse?rev=${hash}`)}
         onOpenSettings={() => navigate(`/repos/${repoId}/settings`)}
         onOpenStatus={() => navigate(`/repos/${repoId}/status`)}
         onOpenBranches={() => navigate(`/repos/${repoId}/branches`)}
