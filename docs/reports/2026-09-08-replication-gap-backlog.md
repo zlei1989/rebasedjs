@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 40 项（分布于 21 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 37 项（分布于 19 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -85,9 +85,9 @@
 
 **UpdateProjectDialog（2）**：更新会话进度/结果汇总（Java 多仓库会话；Web 单仓库模型下至少做单仓库结果面板）；修复跟踪分支（对话框左下 Reset to tracked）。
 
-**BlameView（2）**：Show in History 联动（gutter 语义 → 跳 HistoryPanel）；Show All Affected（受影响提交对话框）。
+**BlameView（1）**：Show All Affected（受影响提交对话框——需专用查询端点）；行内「差异」（父哈希出 blame `parents` 批量解析，根提交 root=1）与「历史」已落地。
 
-**HistoryPanel（2）**：双击版本 → DiffPage（from/to 已可达，差入口）；Annotate Revision → BlameView。
+**HistoryPanel（0）**：双击 → DiffPage（%P 父哈希，根提交 root=1）与 Annotate Revision → `/blame?rev=`（blame rev 指定版本溯源）已落地（core parents 批量解析 + history %P）。
 
 **CommittedChangesPanel（1）**：目录树组织变更文件（`FileTree` 基础组件）。
 
@@ -123,8 +123,8 @@
 | BranchPanel | #10 | Compare with Branch 对比视图 → LogPage |
 | BranchPanel | #67/#69 | 弹窗 fetch 按钮；Show Diff with Working Tree |
 | BranchPanel | #70 外 | （New Working Tree 明确不做） |
-| HistoryPanel | #30/#31 | 双击 → DiffPage；Annotate Revision → BlameView |
-| BlameView | #29/#33/#34 | Show in History；Show Diff；Show All Affected |
+| HistoryPanel | #30/#31 | ✅ 已落地（双击 → DiffPage；Annotate Revision → /blame?rev=，见 §2.3 完成记录） |
+| BlameView | #29/#33/#34 | #29/#33 ✅ 已落地（行内「历史」「差异」）；#34 Show All Affected 待办（见 §2.3） |
 | StatusPage | #43/#44/#45/#47/#48/#49 | 冲突入口、Create Patch、Shelve、Annotate/History、三版本、Stash Files |
 | CommitDialog 等效面 | #50 | commit & push 组合执行器 |
 | PatchPanel | #52 | Import Patches into Shelf |

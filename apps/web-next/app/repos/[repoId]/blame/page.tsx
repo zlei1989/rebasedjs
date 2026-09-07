@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * 溯源页容器：?file= 查询串（入口通道：未来从提交详情/文件列表带入）+ 页内文件路径输入 → useBlame → ui BlameView
- * （与 web-koa 容器同构；repoId 取 Next params、返回导航用 router）。
+ * 溯源页容器：?file=[&rev=] 查询串（入口通道：历史页「Annotate Revision」带 rev）+ 页内文件路径输入
+ * → useBlame → ui BlameView（与 web-koa 容器同构；repoId 取 Next params、返回导航用 router）。
  * 查询串只作输入初始值，提交后不回写 URL（v1 简化，页内状态即来源）；
  * file 为空串时 useBlame 挂 null key 不发请求，页面渲染空态引导。
+ * 行内联动：差异 → /diff?file&from=parents[0]&to=hash（根提交 → root=1）；历史 → /history?file。
  */
 import { useBlame } from '@rebased/client';
 import { BlameView, EmptyState } from '@rebased/ui';
@@ -17,23 +18,28 @@ export default function Page({
   searchParams,
 }: {
   params: Promise<{ repoId: string }>;
-  searchParams: Promise<{ file?: string }>;
+  searchParams: Promise<{ file?: string; rev?: string }>;
 }): React.ReactNode {
   const { repoId } = use(params);
-  const { file: initialFile = '' } = use(searchParams);
+  const { file: initialFile = '', rev: initialRev = '' } = use(searchParams);
   const router = useRouter();
   const [file, setFile] = useState(initialFile);
   const [draft, setDraft] = useState(initialFile);
+  const [rev, setRev] = useState(initialRev);
   // 仓库切换（两端 SPA 同挂载实例复用）或查询串变更时重置输入与查询（useState 初始化器只在首挂载生效）
   useEffect(() => {
     setFile(initialFile);
     setDraft(initialFile);
-  }, [repoId, initialFile]);
-  const { data: lines, isLoading, error } = useBlame(repoId, file);
-  /** 提交输入：空白不触发（与 hook null-key 不发请求的语义一致） */
+    setRev(initialRev);
+  }, [repoId, initialFile, initialRev]);
+  const { data: lines, isLoading, error } = useBlame(repoId, file, rev);
+  /** 提交输入：空白不触发（与 hook null-key 不发请求的语义一致）；换文件后清除 rev（回到工作区溯源） */
   const submit = (): void => {
     const trimmed = draft.trim();
-    if (trimmed !== '') setFile(trimmed);
+    if (trimmed !== '') {
+      setFile(trimmed);
+      setRev('');
+    }
   };
   return (
     <Flex vertical align="flex-start" gap={8}>
@@ -69,6 +75,15 @@ export default function Page({
           loading={isLoading}
           error={error?.message}
           onOpenCommit={(hash) => router.push(`/repos/${repoId}?select=${hash}`)}
+          onShowDiff={(hash, parents) => {
+            // 根提交（无父）→ root=1；其余 → from=父哈希、to=该提交
+            if (parents.length === 0) {
+              router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&root=1`);
+            } else {
+              router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&from=${parents[0]}&to=${hash}`);
+            }
+          }}
+          onShowInHistory={(path) => router.push(`/repos/${repoId}/history?file=${encodeURIComponent(path)}`)}
         />
       )}
     </Flex>

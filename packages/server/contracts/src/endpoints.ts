@@ -223,8 +223,9 @@ export const tagActionSchema = z.discriminatedUnion('action', [
 ]);
 export type TagAction = z.infer<typeof tagActionSchema>;
 
-/** 溯源查询：file 必填（相对仓库根路径） */
-export const blameQuerySchema = z.object({ file: z.string().min(1) });
+/** 溯源查询：file 必填（相对仓库根路径）；rev 可选（指定版本溯源——Annotate Revision 语义） */
+export const blameQuerySchema = z.object({ file: z.string().min(1), rev: z.string().optional() });
+export type BlameQuery = z.infer<typeof blameQuerySchema>;
 
 /** 文件历史查询：file 必填（git log --follow 跟随重命名） */
 export const historyQuerySchema = z.object({ file: z.string().min(1) });

@@ -62,6 +62,15 @@ export function RepoHistoryPage(): React.ReactNode {
           loading={isLoading}
           error={error?.message}
           onSelectCommit={(hash) => navigate(`/repos/${repoId}?select=${hash}`)}
+          onOpenDiff={(hash, parents) => {
+            // 根提交（无父）→ root=1；其余 → from=父哈希、to=该提交
+            if (parents.length === 0) {
+              navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&root=1`);
+            } else {
+              navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&from=${parents[0]}&to=${hash}`);
+            }
+          }}
+          onAnnotate={(hash) => navigate(`/repos/${repoId}/blame?file=${encodeURIComponent(file)}&rev=${hash}`)}
         />
       )}
     </Flex>

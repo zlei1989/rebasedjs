@@ -6,7 +6,7 @@ export { getStatus, parsePorcelainV2 } from './status';
 export type { CoreChangeEntry, CoreStatus } from './status';
 export { parseLogRecord, streamLog } from './log';
 export type { CoreCommit, StreamLogOptions } from './log';
-export { fileBlame, parseBlamePorcelain } from './blame';
+export { fileBlame, parentHashesOf, parseBlamePorcelain } from './blame';
 export type { CoreBlameLine } from './blame';
 export { fileHistory, parseHistoryRecords } from './history';
 export type { CoreFileHistoryEntry } from './history';

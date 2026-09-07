@@ -1,4 +1,4 @@
-/** GET /api/repos/:repoId/blame —— zod 校验查询 → getFileBlame（单文件逐行溯源）→ 200 BlameLine[] */
+/** GET /api/repos/:repoId/blame —— zod 校验查询 → getFileBlame（单文件逐行溯源；rev 可选指定版本）→ 200 BlameLine[] */
 import { getFileBlame } from '@rebased/api';
 import { blameQuerySchema } from '@rebased/contracts';
 import { z } from 'zod';
@@ -8,7 +8,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ repoId: 
   try {
     const { repoId } = await params;
     const query = blameQuerySchema.parse(Object.fromEntries(new URL(req.url).searchParams));
-    const lines = await getFileBlame(resolveRepo(z.string().min(1).parse(repoId)), query.file);
+    const lines = await getFileBlame(resolveRepo(z.string().min(1).parse(repoId)), query.file, query.rev);
     return Response.json(lines);
   } catch (error) {
     return handleApiError(error);

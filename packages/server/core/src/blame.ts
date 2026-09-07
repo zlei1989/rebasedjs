@@ -101,8 +101,26 @@ function formatAuthorIso(epochSecs: number, tz: string): string {
   return `${wall.getUTCFullYear()}-${pad(wall.getUTCMonth() + 1)}-${pad(wall.getUTCDate())}T${pad(wall.getUTCHours())}:${pad(wall.getUTCMinutes())}:${pad(wall.getUTCSeconds())}${m[1]}${m[2]}:${m[3]}`;
 }
 
-/** 单文件逐行溯源：--line-porcelain 一次取全量（文件行数不大，无分页场景） */
-export async function fileBlame(cwd: string, file: string): Promise<CoreBlameLine[]> {
-  const { stdout } = await runGit(['blame', '--line-porcelain', '--', file], { cwd });
+/** 单文件逐行溯源：--line-porcelain 一次取全量（文件行数不大，无分页场景）；
+ *  rev 可选：指定版本溯源（git blame <rev> -- file；Annotate Revision 语义），缺省当前工作区文件 */
+export async function fileBlame(cwd: string, file: string, rev?: string): Promise<CoreBlameLine[]> {
+  const args = rev === undefined
+    ? ['blame', '--line-porcelain', '--', file]
+    : ['blame', '--line-porcelain', rev, '--', file];
+  const { stdout } = await runGit(args, { cwd });
   return parseBlamePorcelain(stdout);
+}
+
+/** 批量取提交父哈希：git log --no-walk --format=%H%x00%P <hash…>（blame 结果去重置 hash 一次取全量，供 diff 导航与根提交降级） */
+export async function parentHashesOf(cwd: string, hashes: string[]): Promise<Record<string, string[]>> {
+  const result: Record<string, string[]> = {};
+  if (hashes.length === 0) return result;
+  const { stdout } = await runGit(['log', '--no-walk', '--format=%H%x00%P', ...hashes], { cwd });
+  for (const line of stdout.split('\n')) {
+    const sep = line.indexOf('\0');
+    if (sep <= 0) continue;
+    const parents = line.slice(sep + 1).trim();
+    result[line.slice(0, sep)] = parents === '' ? [] : parents.split(' ');
+  }
+  return result;
 }

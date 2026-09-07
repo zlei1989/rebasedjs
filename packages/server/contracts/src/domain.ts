@@ -246,6 +246,8 @@ export interface BlameLine {
   content: string;
   /** 该行在责任提交版本中的源行号（源自块头 orig 字段）；在无位移编辑/重命名场景恰等同于前一次提交中的行号，插入/位移编辑时可能指向无关行——精确映射留待增强；无则 null——如文件首创建 */
   previousLineno: number | null;
+  /** 责任提交的父哈希（批量 no-walk 解析；根提交为空数组）——diff 导航与根提交降级用 */
+  parents: string[];
 }
 
 /** 文件历史条目（git log --follow 序，最新在前） */
@@ -256,6 +258,8 @@ export interface FileHistoryEntry {
   author: string;
   /** 日期为 ISO 字符串（git %aI，带作者时区偏移；blame 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;
+  /** 父提交哈希（%P 解析）；根提交为空数组——双击 diff 导航据此降级为 root=1 */
+  parents: string[];
 }
 
 /** 历史快照树条目：mode 为 git 8 进制模式串（120000=符号链接）；type 为 blob/commit（commit=子模块 gitlink） */

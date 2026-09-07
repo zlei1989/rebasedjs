@@ -410,7 +410,7 @@ Update Project——策略化更新入口；对应 `GitUpdateOptionsDialog` / `G
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | 注解展示 | ✅（等效形态） | 行列表（行号/作者/日期/内容 + hash 短名徽标）承载注解语义（Web 无编辑器 gutter） |
-| 注解点击联动 | 🟡 | hash 徽标 → LogPage `?select=<hash>`；Show in History 联动未做 |
+| 注解点击联动 | ✅ | hash 徽标 → LogPage `?select=`；行内「差异」→ DiffPage from/to（父哈希出 blame `parents` 批量解析，根提交 → `root=1`）；行内「历史」→ HistoryPanel（边 #29/#33） |
 | previousLineno 边界 | ✅ | orig 近似边界注释在案 |
 
 ### 4.17 HistoryPanel ✅
@@ -423,7 +423,7 @@ Update Project——策略化更新入口；对应 `GitUpdateOptionsDialog` / `G
 |--------|------|------|
 | 文件历史列表 | ✅ | 条目：短哈希 + subject + 作者 + 日期 |
 | 重命名跟随（`--follow`） | ✅ | 改名前的提交同样列出 |
-| 版本 diff 联动 | 🟡 | 条目点击 → 日志页 `?select=`；双击 → DiffPage 未做 |
+| 版本 diff 联动 | ✅ | 条目点击 → 日志页 `?select=`；双击 → DiffPage from=父哈希&to=该提交（%P 解析，根提交 `root=1`）；行内「Annotate Revision」→ `/blame?rev=`（边 #30/#31）；历史条目与溯源行现均带父哈希 |
 
 ### 4.18 CommittedChangesPanel ✅
 
@@ -670,11 +670,11 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 26 | LogPage → Open in Browser | 右键托管平台链接 | backend.xml:555-561 | ✅ 行右键「在浏览器中打开」（GitHub/GitLab 提交页链接，域检测驱动） |
 | 27 | DiffPage 页内 | 多文件 Prev/Next | `DiffNextFileAction`/`DiffPreviousFileAction` | ❌（单文件模型） |
 | 28 | 编辑器/项目树 → HistoryPanel | 右键 Show History | backend.xml:115 | ➖（无编辑器宿主；等价=「更多」+ 页内输入） |
-| 29 | BlameView → HistoryPanel | gutter 右键 Show in History | `ShowInFileHistoryAnnotationActionProvider.kt:55` | ❌ |
-| 30 | HistoryPanel → DiffPage | 双击版本/变更 | `ChangesBrowserBase.onDoubleClick:211` | ❌（点击去日志页） |
-| 31 | HistoryPanel → BlameView | Annotate Revision | `AnnotateRevisionFromHistoryAction` | ❌ |
+| 29 | BlameView → HistoryPanel | gutter 右键 Show in History | `ShowInFileHistoryAnnotationActionProvider.kt:55` | ✅ 行内「历史」按钮 → `/history?file=` |
+| 30 | HistoryPanel → DiffPage | 双击版本/变更 | `ChangesBrowserBase.onDoubleClick:211` | ✅ 双击条目 → `/diff?file&from=父哈希&to=该提交`（根提交 `root=1`） |
+| 31 | HistoryPanel → BlameView | Annotate Revision | `AnnotateRevisionFromHistoryAction` | ✅ 行内「Annotate Revision」→ `/blame?rev=` |
 | 32 | 编辑器 → BlameView | 右键 Annotate | `AnnotateToggleAction`（VcsActions.xml:20） | ➖（无编辑器宿主；等价=「更多」+ 页内输入） |
-| 33 | BlameView → DiffPage | gutter 右键 Show Diff | `ShowDiffFromAnnotation.java:85` | ❌ |
+| 33 | BlameView → DiffPage | gutter 右键 Show Diff | `ShowDiffFromAnnotation.java:85` | ✅ 行内「差异」→ DiffPage from/to（根提交 `root=1`） |
 | 34 | BlameView → 受影响提交对话框 | 点击 Show All Affected | `AbstractVcsHelperImpl.java:551-564` | ❌ |
 | 35 | BlameView 关闭 | 右键 Close Annotations | `EditorGutterComponentImpl:2719` | ➖（页面离开即关闭） |
 | 36 | 任意处 → SearchPanel | Search Everywhere Git tab | `GitSearchEverywhereContributor` | ✅ 「更多」→ `/search` |
@@ -769,10 +769,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **60 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 4（#48 三版本）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26） |
+| ✅ 已复刻（含等价边） | **64 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 4（#48 三版本）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **29 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree） |
+| ❌ 未复刻 | **25 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree） |
 
 ### 5.5 关键联动流程
 

@@ -13,6 +13,7 @@ function makeBlameLine(partial: Partial<BlameLine> & { lineno: number }): BlameL
     dateIso: '2026-01-01T00:00:00Z',
     content: `content ${partial.lineno}`,
     previousLineno: null,
+    parents: [],
     ...partial,
   };
 }
@@ -67,5 +68,30 @@ describe('BlameView 行交互', () => {
 
     expect(onOpenCommit).toHaveBeenCalledTimes(1);
     expect(onOpenCommit).toHaveBeenCalledWith('hash3');
+  });
+
+  it('行内「差异」以 (hash, parents) 调 onShowDiff；「历史」以 file 调 onShowInHistory', () => {
+    const onShowDiff = vi.fn();
+    const onShowInHistory = vi.fn();
+    render(
+      <BlameView
+        file="src/app.ts"
+        lines={[makeBlameLine({ lineno: 1, parents: ['parent111'] })]}
+        onShowDiff={onShowDiff}
+        onShowInHistory={onShowInHistory}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('blame-diff-1'));
+    fireEvent.click(screen.getByTestId('blame-history-1'));
+
+    expect(onShowDiff).toHaveBeenCalledWith('hash1', ['parent111']);
+    expect(onShowInHistory).toHaveBeenCalledWith('src/app.ts');
+  });
+
+  it('未传 onShowDiff/onShowInHistory 时不渲染对应按钮', () => {
+    render(<BlameView file="src/app.ts" lines={[makeBlameLine({ lineno: 1 })]} />);
+    expect(screen.queryByTestId('blame-diff-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('blame-history-1')).not.toBeInTheDocument();
   });
 });

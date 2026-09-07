@@ -257,11 +257,11 @@ router.get('/api/repos/:repoId/diff/patch', async (ctx) => {
   }
 });
 
-/** GET /api/repos/:repoId/blame —— zod 校验查询 → getFileBlame（单文件逐行溯源）→ 200 BlameLine[]；缺 file → 400，文件不存在 → 400 INVALID_REF */
+/** GET /api/repos/:repoId/blame —— zod 校验查询 → getFileBlame（单文件逐行溯源；rev 可选指定版本）→ 200 BlameLine[]；缺 file → 400，文件不存在 → 400 INVALID_REF */
 router.get('/api/repos/:repoId/blame', async (ctx) => {
   try {
     const query = blameQuerySchema.parse(ctx.query);
-    ctx.body = await getFileBlame(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.file);
+    ctx.body = await getFileBlame(resolveRepo(z.string().min(1).parse(ctx.params.repoId)), query.file, query.rev);
   } catch (error) {
     handleApiError(error, ctx);
   }

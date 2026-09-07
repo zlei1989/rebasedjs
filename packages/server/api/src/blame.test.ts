@@ -60,6 +60,22 @@ describe('getFileBlame 服务', () => {
       expect(line.dateIso).toMatch(/(Z|[+-]\d{2}:\d{2})$/);
       expect(Number.isNaN(new Date(line.dateIso).getTime())).toBe(false);
     }
+    // 父哈希批量解析：首提交根（[]）、次提交单父
+    expect(lines[0].parents).toEqual([]);
+    expect(lines[1].parents).toEqual([h1]);
+  });
+
+  // rev 指定版本溯源（Annotate Revision）：在首提交版本上溯源 → 全部行归属首提交
+  it('rev 指定版本：整文件归属该版本（首提交行全部 hash=h1）', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const h1 = commitFile(repo, 'f.txt', 'alpha\nbeta', 'first');
+    commitFile(repo, 'f.txt', 'alpha\nBETA', 'second');
+
+    const lines = await getFileBlame(repo, 'f.txt', h1);
+
+    expect(lines).toHaveLength(2);
+    expect(lines.map((l) => l.hash)).toEqual([h1, h1]);
   });
 
   // 成功矩阵：子目录文件（相对路径）

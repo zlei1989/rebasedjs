@@ -10,6 +10,7 @@ function makeEntry(partial: Partial<FileHistoryEntry> & { hash: string }): FileH
     subject: `subject ${partial.hash}`,
     author: `author ${partial.hash}`,
     dateIso: '2026-01-02T03:04:00Z',
+    parents: [],
     ...partial,
   };
 }
@@ -65,5 +66,44 @@ describe('HistoryPanel 行交互', () => {
 
     expect(onSelectCommit).toHaveBeenCalledTimes(1);
     expect(onSelectCommit).toHaveBeenCalledWith('fullhash123');
+  });
+
+  it('双击条目以 (hash, parents) 调 onOpenDiff', () => {
+    const onOpenDiff = vi.fn();
+    render(
+      <HistoryPanel
+        file="src/app.ts"
+        entries={[makeEntry({ hash: 'fullhash123', parents: ['parent111'] })]}
+        onOpenDiff={onOpenDiff}
+      />,
+    );
+
+    fireEvent.doubleClick(screen.getByTestId('history-entry-0'));
+
+    expect(onOpenDiff).toHaveBeenCalledTimes(1);
+    expect(onOpenDiff).toHaveBeenCalledWith('fullhash123', ['parent111']);
+  });
+
+  it('Annotate 按钮：点击回调带 hash 且不触发行选中', () => {
+    const onSelectCommit = vi.fn();
+    const onAnnotate = vi.fn();
+    render(
+      <HistoryPanel
+        file="src/app.ts"
+        entries={[makeEntry({ hash: 'fullhash123' })]}
+        onSelectCommit={onSelectCommit}
+        onAnnotate={onAnnotate}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('history-annotate-0'));
+
+    expect(onAnnotate).toHaveBeenCalledWith('fullhash123');
+    expect(onSelectCommit).not.toHaveBeenCalled();
+  });
+
+  it('未传 onAnnotate 时不渲染按钮', () => {
+    render(<HistoryPanel file="src/app.ts" entries={[makeEntry({ hash: 'h' })]} />);
+    expect(screen.queryByTestId('history-annotate-0')).not.toBeInTheDocument();
   });
 });

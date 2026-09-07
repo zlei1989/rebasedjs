@@ -7,8 +7,8 @@ import { useBlame } from './blame';
 import { freshCache } from './testing/fresh-cache';
 
 const LINES: BlameLine[] = [
-  { lineno: 1, hash: 'aaaaaa', shortHash: 'aaaaaa', author: 'Ann', authorEmail: 'ann@ex.com', dateIso: '2024-01-01T00:00:00Z', content: 'line 1', previousLineno: null },
-  { lineno: 2, hash: 'bbbbbb', shortHash: 'bbbbbb', author: 'Bob', authorEmail: 'bob@ex.com', dateIso: '2024-01-02T00:00:00Z', content: 'line 2', previousLineno: 1 },
+  { lineno: 1, hash: 'aaaaaa', shortHash: 'aaaaaa', author: 'Ann', authorEmail: 'ann@ex.com', dateIso: '2024-01-01T00:00:00Z', content: 'line 1', previousLineno: null, parents: [] },
+  { lineno: 2, hash: 'bbbbbb', shortHash: 'bbbbbb', author: 'Bob', authorEmail: 'bob@ex.com', dateIso: '2024-01-02T00:00:00Z', content: 'line 2', previousLineno: 1, parents: ['aaaaaa'] },
 ];
 
 afterEach(() => {

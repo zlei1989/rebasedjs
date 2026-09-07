@@ -8,7 +8,7 @@ import { fileHistory, type CoreFileHistoryEntry } from '@rebased/core';
 import type { FileHistoryEntry } from '@rebased/contracts';
 import { assertValidFilePath } from './blame';
 
-/** core 历史条目 → contracts FileHistoryEntry（字段同构，映射在此收敛） */
+/** core 历史条目 → contracts FileHistoryEntry（字段同构 + parents 透传，映射在此收敛） */
 function toFileHistoryEntry(entry: CoreFileHistoryEntry): FileHistoryEntry {
   return {
     hash: entry.hash,
@@ -16,6 +16,7 @@ function toFileHistoryEntry(entry: CoreFileHistoryEntry): FileHistoryEntry {
     subject: entry.subject,
     author: entry.author,
     dateIso: entry.dateIso,
+    parents: entry.parents,
   };
 }
 

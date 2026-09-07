@@ -4,13 +4,16 @@
  * 入参在此校验（预检先于 git 调用）：路径越界 → INVALID_QUERY '非法的文件路径'；
  * 文件不存在（工作区 stat）→ INVALID_REF '文件不存在：…'。
  *
+ * rev 可选：指定版本溯源（Annotate Revision）；责任提交的父哈希经 parentHashesOf 批量解析
+ * （一次 no-walk 取全量去重 hash，供 UI 双击 diff 导航与根提交降级）。
+ *
  * 日期透传（P3-C 终审裁定）：BlameLine.dateIso 为 core 已转换的 ISO 字符串——author-time epoch 秒 +
  * author-tz 时区偏移 → %aI 等价的「作者时区墙钟」偏移 ISO（无 author-tz 时回退 UTC Z）；
  * 与 history/committed/search 的 %aI 显示口径一致（ui 的 formatCommitDate 直取字符串字段，不做日期解析）。
  */
 import { statSync, type Stats } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
-import { fileBlame, type CoreBlameLine } from '@rebased/core';
+import { fileBlame, parentHashesOf, type CoreBlameLine } from '@rebased/core';
 import { ServiceError, type BlameLine } from '@rebased/contracts';
 
 /**
@@ -42,8 +45,9 @@ export function assertValidFilePath(repoPath: string, file: string): void {
   }
 }
 
-/** core 溯源行 → contracts BlameLine（字段同构，映射在此收敛，core 不依赖 contracts） */
-function toBlameLine(line: CoreBlameLine): BlameLine {
+/** core 溯源行 → contracts BlameLine（字段同构，映射在此收敛，core 不依赖 contracts）；
+ *  parents 经批量解析补全（一次 no-walk 取全量去重 hash 的父提交） */
+async function toBlameLine(line: CoreBlameLine, parentsByHash: Record<string, string[]>): Promise<BlameLine> {
   return {
     lineno: line.lineno,
     hash: line.hash,
@@ -53,12 +57,16 @@ function toBlameLine(line: CoreBlameLine): BlameLine {
     dateIso: line.dateIso,
     content: line.content,
     previousLineno: line.previousLineno,
+    parents: parentsByHash[line.hash] ?? [],
   };
 }
 
-/** 单文件逐行溯源：预检通过后调用 core，逐行映射；文件行数不大，一次全量返回 */
-export async function getFileBlame(repoPath: string, file: string): Promise<BlameLine[]> {
+/** 单文件逐行溯源：预检通过后调用 core，逐行映射；文件行数不大，一次全量返回；
+ *  rev 可选（指定版本溯源）；责任提交父哈希批量解析供 diff 导航（根提交 parents=[]） */
+export async function getFileBlame(repoPath: string, file: string, rev?: string): Promise<BlameLine[]> {
   assertValidFilePath(repoPath, file);
-  const lines = await fileBlame(repoPath, file);
-  return lines.map(toBlameLine);
+  const lines = await fileBlame(repoPath, file, rev);
+  const hashes = [...new Set(lines.map((l) => l.hash))];
+  const parentsByHash = await parentHashesOf(repoPath, hashes);
+  return Promise.all(lines.map((line) => toBlameLine(line, parentsByHash)));
 }

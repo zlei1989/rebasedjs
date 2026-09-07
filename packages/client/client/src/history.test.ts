@@ -7,8 +7,8 @@ import { useHistory } from './history';
 import { freshCache } from './testing/fresh-cache';
 
 const ENTRIES: FileHistoryEntry[] = [
-  { hash: 'bbbbbb', shortHash: 'bbbbbb', subject: 'rename + edit', author: 'Bob', dateIso: '2024-01-02T00:00:00Z' },
-  { hash: 'aaaaaa', shortHash: 'aaaaaa', subject: 'add file', author: 'Ann', dateIso: '2024-01-01T00:00:00Z' },
+  { hash: 'bbbbbb', shortHash: 'bbbbbb', subject: 'rename + edit', author: 'Bob', dateIso: '2024-01-02T00:00:00Z', parents: ['aaaaaa'] },
+  { hash: 'aaaaaa', shortHash: 'aaaaaa', subject: 'add file', author: 'Ann', dateIso: '2024-01-01T00:00:00Z', parents: [] },
 ];
 
 afterEach(() => {
