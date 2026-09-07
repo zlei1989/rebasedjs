@@ -137,7 +137,11 @@ describe('useDiffStream', () => {
       renderer = TestRenderer.create(createElement(Probe));
     });
 
-    expect(subscribeMock).toHaveBeenCalledWith('/api/repos/r-diff-2/diff/stream?file=b.ts', expect.any(Function), expect.any(AbortSignal));
+    expect(subscribeMock).toHaveBeenCalledWith(
+      '/api/repos/r-diff-2/diff/stream?file=b.ts&staged=false',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
     expect(result.connected).toBe(true);
     expect(result.text).toBe('');
 
@@ -187,6 +191,33 @@ describe('useDiffStream', () => {
     expect(result.connected).toBe(false);
     expect(captured.signal?.aborted).toBe(true);
 
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('staged/from/to 同参透传：分块流与全文查询同口径（渐进渲染，Ruling 6）', async () => {
+    let captured!: { onEvent: (event: SseEvent) => void; signal?: AbortSignal };
+    subscribeMock.mockImplementation(async (_url, onEvent, signal) => {
+      captured = { onEvent, signal };
+      await new Promise(() => {});
+    });
+
+    let result!: ReturnType<typeof useDiffStream>;
+    function Probe() {
+      result = useDiffStream('r-diff-4', 'd.ts', true, 'aaaaaa~1', 'bbbbbb');
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(Probe));
+    });
+
+    expect(subscribeMock).toHaveBeenCalledWith(
+      '/api/repos/r-diff-4/diff/stream?file=d.ts&staged=true&from=aaaaaa%7E1&to=bbbbbb',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
     await act(async () => {
       renderer.unmount();
     });

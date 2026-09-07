@@ -8,6 +8,7 @@ export {
   type MonacoDiffInnerProps,
   type MonacoDiffLoader,
 } from './base/monaco-diff-view';
+export { MonacoTextView, type MonacoTextViewProps } from './base/monaco-text-view';
 export { EmptyState, type EmptyStateProps } from './base/empty-state';
 export { OperationStatus, type OperationStatusProps } from './base/operation-status';
 export * from './graph-layout';
@@ -34,6 +35,7 @@ export { BranchPanel, type BranchPanelProps } from './composite/branch-panel';
 export { BlameView, type BlameViewProps } from './composite/blame-view';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
 export { BrowsePanel, type BrowsePanelProps } from './composite/browse-panel';
+export { DiffStreamView, type DiffStreamViewProps } from './composite/diff-stream-view';
 export {
   CommittedChangesPanel,
   type CommittedChangesPanelProps,

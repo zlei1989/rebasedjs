@@ -17,7 +17,7 @@
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
 | 端点路径 / HTTP 方法 | **83 / 95**（web-next 83 个 route.ts ↔ web-koa repos.ts 95 注册，12 路径双方法，两端完全对称） |
-| 半使用接口 | 1：diff/stream 分块渲染（staging/hunks 已接 StatusPage 行内 hunk 选择） |
+| 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 100 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 57、领域类型/别名 82、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
 | 导航边（104 条） | 52 ✅（含等价边）+ 9 🟡 + 7 ➖ + 36 ❌ |
@@ -96,7 +96,7 @@
 ### 2.3 汇总
 
 - ✅ 已复刻 29 个；🟡 等效 2 个（CommitDialog、QuickActionsMenu）。
-- 功能点级 🟡 遗留（不影响页面级结论）：LogPage 过滤/分页 UI、DiffPage 分块渲染、BranchPanel 最近检出/标签分组与过滤、MergeDialog 远程分支合并、BlameView/HistoryPanel 的 diff 联动等——逐一见 §四各页功能点表。
+- 功能点级 🟡 遗留（不影响页面级结论）：LogPage 过滤/分页 UI、BranchPanel 最近检出/标签分组与过滤、MergeDialog 远程分支合并、BlameView/HistoryPanel 的 diff 联动等——逐一见 §四各页功能点表。
 
 ---
 
@@ -116,7 +116,7 @@
 | status | `repos/:id/status` | GET | 工作区状态（分支/上游/变更条目） | LogPage 状态条、StatusPage | ✅ |
 | log | `repos/:id/log`、`repos/:id/log/stream` | GET | 提交历史分页快照 / SSE 增量流 | LogPage（快照+流 merge 去重） | ✅ |
 | diff | `repos/:id/diff` | GET | 单文件两侧全文（staged/from/to） | DiffPage、CommittedChangesPanel | ✅ |
-| diff | `repos/:id/diff/stream` | GET | 大 diff SSE 分块流 | DiffPage 订阅（保活/预热） | ⚠️ 半使用 |
+| diff | `repos/:id/diff/stream` | GET | 大 diff SSE 分块流 | DiffStreamView 渐进渲染（全文未就绪期间呈现当前进度） | ✅ |
 | diff | `repos/:id/diff/patch` | GET | unified patch 全文 | StatusPage 补丁预览、PatchPanel | ✅ |
 | events | `repos/:id/events` | GET | SSE 仓库状态/操作推送（首帧双事件） | LogPage、StatusPage 等自订阅 | ✅ |
 | settings | `settings` | GET/PUT | 应用设置读写 | SettingsPage | ✅ |
@@ -151,7 +151,7 @@
 | worktree | `repos/:id/worktrees`、`worktrees/remove`、`worktrees/prune` | GET/POST + 2×POST | 工作树列表 / 创建 / 移除 / 清理 | WorktreePanel | ✅ |
 | submodule | `repos/:id/submodules`、`submodules/update` | GET/POST | 子模块列表（四态）/ 更新（init/recursive） | SubmodulePanel | ✅ |
 
-**小结**：83 路径全部有客户端消费方，无死接口；半使用 1 个（diff/stream 分块文本未接入 Monaco——已知预留，见任务清单 §2.1）。
+**小结**：83 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
 
 ### 3.2 契约层（`@rebased/contracts`）
 
@@ -235,7 +235,7 @@
 | 任意两版本对比（from/to 成对校验） | ✅ | CommittedChangesPanel 文件点击 → `from=<hash>~1&to=<hash>` |
 | 新增/删除/重命名文件两侧渲染 | ✅ | A/D/R 侧缺失修复；重命名 renameFrom 呈现 |
 | unified diff 文本视图 | ✅ | `GET /diff/patch` 供补丁预览/创建/hunk 索引；本页走两侧全文路径 |
-| 大 diff 分块流渲染 | 🟡 | 已订阅（保活/预热），分块文本未接入 Monaco |
+| 大 diff 分块流渲染 | ✅ | 分块文本接入 Monaco（DiffStreamView：language `diff` 只读渐进渲染；与全文同参 Ruling 6，全文到达切换标准视图） |
 | word diff/同步滚动/折叠/上下文行数 | 🟡 | 默认值文档化对齐；无 UI 开关 |
 | hunk 级应用 / 回退、三版本对比、与分支比较 | ❌ | 未做（`GitStageDiffAction` / `GitStageCompareThreeVersionsAction` / `GitCompareWithBranchAction`） |
 
@@ -784,12 +784,12 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 ## 六、结论与下一步
 
 1. **页面**：31/31 全覆盖（29 ✅ + 2 🟡 等效）；功能域 36/36（browse 已落地，见任务清单 §2.8），可选 2 项明确不做（1.3 决策清单）。
-2. **接口**：83 路径 / 95 方法两端对称、全部有消费方（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`）；半使用 1 个（diff/stream 分块渲染，staging/hunks 已接行内 hunk 选择）。
+2. **接口**：83 路径 / 95 方法两端对称、全部有消费方（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`）；半使用 0（diff/stream 与 staging/hunks 两项均已接渲染入口）。
 3. **导航**：104 条边中 52 ✅（含等价边）+ 9 🟡 + 7 ➖ + 36 ❌；形态等价判定规则见 1.2，明确不做项均记录在案。
 
 **下一步**（按任务清单 `docs/reports/2026-09-08-replication-gap-backlog.md` 执行）：
 
-1. **P0 半使用接口消化**（清单 §2.1，剩 1 项）：diff/stream 分块渲染接入 Monaco（hunk 级暂存 UI 已落地，见 §2.1 完成记录）。
+1. **P0 半使用接口消化**：✅ 全部完成（hunk 级暂存 UI 见 §2.1 #2 完成记录；diff/stream 分块渲染见 §2.1 #1 完成记录）。
 2. **P2 各域功能点补齐**（§2.3，50 项按域）：LogPage 过滤/分页/右键形态、DiffPage hunk 应用与三版本、BranchPanel 清理/保护分支、Push rejected 联动、Settings GPG/SSH 等逐项落地。
 3. **专项裁定任务**：PR/MR 行级 diff 视图（§2.7，2026-09-08 裁定）——完成后边 #98 转 ✅。
 4. **P3 导航边缺口**（§2.4，32 条 ❌ + 2 条 🟡 直达）：按目标页分组落地（LogPage 右键动作集、StatusPage 六入口、Stash/Patch/Shelf 回边等）。

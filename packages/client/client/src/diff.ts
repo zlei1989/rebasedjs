@@ -21,8 +21,15 @@ export function useDiffPatch(repoId: string, file: string, staged: boolean): SWR
   return useSWR<DiffFile>(file === '' ? null : `/api/repos/${repoId}/diff/patch?${params.toString()}`, getJson);
 }
 
-/** 订阅 diff 分块：SSE diff.chunk → text 累积拼接；stream.error → error 暴露并断开；connected 表示订阅存活，卸载即中止 */
-export function useDiffStream(repoId: string, file: string): { text: string; connected: boolean; error: string | null } {
+/** 订阅 diff 分块：SSE diff.chunk → text 累积拼接；stream.error → error 暴露并断开；connected 表示订阅存活，卸载即中止。
+ *  staged/from/to 与 useFileDiff 同口径（分块流与全文查询必须同参：流视图是同一查询的渐进渲染，Ruling 6）。 */
+export function useDiffStream(
+  repoId: string,
+  file: string,
+  staged = false,
+  from?: string,
+  to?: string,
+): { text: string; connected: boolean; error: string | null } {
   const [text, setText] = useState('');
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +38,10 @@ export function useDiffStream(repoId: string, file: string): { text: string; con
     setText('');
     setError(null);
     setConnected(true);
-    const url = `/api/repos/${repoId}/diff/stream?file=${encodeURIComponent(file)}`;
+    const params = new URLSearchParams({ file, staged: String(staged) });
+    if (from !== undefined) params.set('from', from);
+    if (to !== undefined) params.set('to', to);
+    const url = `/api/repos/${repoId}/diff/stream?${params.toString()}`;
     void subscribeSse(url, (event) => {
       if (event.type === 'diff.chunk') setText((prev) => prev + (event.payload as { text: string }).text);
       if (event.type === 'stream.error') {
@@ -48,6 +58,6 @@ export function useDiffStream(repoId: string, file: string): { text: string; con
       ac.abort();
       setConnected(false);
     };
-  }, [repoId, file]);
+  }, [repoId, file, staged, from, to]);
   return { text, connected, error };
 }

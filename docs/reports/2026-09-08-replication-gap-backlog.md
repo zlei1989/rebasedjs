@@ -12,12 +12,12 @@
 
 | 类别 | 缺口 | 任务位置 |
 |------|------|----------|
-| 半使用接口 | 1（diff/stream 分块渲染；staging/hunks 已落地，见 §2.1 完成记录） | §2.1 |
+| 半使用接口 | 0（diff/stream 分块渲染、staging/hunks 行内选择均已落地，见 §2.1 完成记录） | §2.1 |
 | 未挂端点能力 | 0（`initRepo`/`cloneRepo` 已挂端点，见 §2.2 完成记录） | §2.2 |
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 51 项（分布于 24 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 50 项（分布于 24 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -26,7 +26,15 @@
 
 ## 二、任务清单
 
-### 2.1 P0：半使用接口消化（剩 1 项）
+### 2.1 P0：半使用接口消化 —— ✅ 全部完成
+
+#### #1 diff/stream 分块渲染接入 Monaco —— ✅ 已完成
+
+**完成记录**：
+
+| 任务 | 落点 |
+|------|------|
+| 分块文本接入渲染 | `useDiffStream` 扩 staged/from/to 同参（与全文查询同口径——流是同一查询的渐进渲染，Ruling 6）；新建 ui `base/monaco-text-view.tsx`（Monaco 单编辑器懒加载包装）+ `composite/diff-stream-view.tsx`（language `diff` 只读渐进渲染累积分块文本；connected/error 态呈现）；两端 DiffPage 容器：全文未就绪且流已有文本 → DiffStreamView，全文（FileVersions）到达切换标准并排/行内视图（全文路径不变，spec §4.4）；client 1 新单测 + ui 3 新单测 |
 
 #### #2 hunk 级暂存 UI —— ✅ 已完成
 
@@ -35,9 +43,6 @@
 | 任务 | 落点 |
 |------|------|
 | 行内 hunk 选择 | contracts 新增共享切片 `splitPatchHunks`/`patchHunkHeading`（api 服务端 hunk 索引重组与 ui 行内选择**同源切片**，索引编号天然对齐；原 api 局部 splitHunks 删除）；StatusPage 补丁预览按 hunk 渲染：Collapse 每 hunk（勾选 + 序号 + `@@` 上下文标题 + 折叠正文），顶栏动作按预览取数模式分流（工作区视图→暂存选中/放弃选中 Popconfirm；已暂存视图→取消暂存选中）；`previewStaged`/`onHunkStaging`/`hunkActing` props 驱动；两端容器接 `useHunkStaging`（hook 回写 status 缓存 + 失效重取 patch）；契约 5 单测 + ui 6 单测 + api 既有 3 用例回归 |
-
-#### #1 diff/stream 分块渲染接入 Monaco —— 待办
-页面已订阅（保活/预热），`diff.chunk` 文本未接入渲染 | DiffPage 容器 + `useDiffStream`
 
 ### 2.2 P1：repo 域收尾（init/clone + RepoPage 遗留）——✅ 已完成
 
@@ -56,7 +61,7 @@
 
 **LogPage（5）**：分页「加载更多」UI；过滤 UI（author/path，对齐 Java「文本即滤 + 分支过滤弹窗」）；行右键菜单形态（checkout、New Branch/Tag from Commit、Push up to Commit、Open in Browser、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
 
-**DiffPage（5）**：word diff/同步滚动/折叠/上下文行数 UI 开关；hunk 级应用/回退；三版本对比（本地/暂存/HEAD）；与分支比较（`GitCompareWithBranchAction`）；（分块渲染见 2.1）。
+**DiffPage（4）**：word diff/同步滚动/折叠/上下文行数 UI 开关；hunk 级应用/回退；三版本对比（本地/暂存/HEAD）；与分支比较（`GitCompareWithBranchAction`）；（分块渲染已落地，见 §2.1 #1 完成记录）。
 
 **StatusPage（1）**：三版本对比；（hunk 级已落地，见 §2.1 完成记录）。
 
