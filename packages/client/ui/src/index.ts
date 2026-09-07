@@ -39,6 +39,8 @@ export { SearchPanel, type SearchPanelProps } from './composite/search-panel';
 export { StashPanel, type StashPanelProps } from './composite/stash-panel';
 export { PatchPanel, type PatchPanelProps } from './composite/patch-panel';
 export { ShelfPanel, type ShelfPanelProps } from './composite/shelf-panel';
+export { WorktreePanel, type WorktreePanelProps } from './composite/worktree-panel';
+export { SubmodulePanel, type SubmodulePanelProps } from './composite/submodule-panel';
 export { ResetDialog, type ResetDialogProps } from './composite/reset-dialog';
 export { MergeDialog, type MergeDialogProps } from './composite/merge-dialog';
 export { RebaseDialog, type RebaseDialogProps } from './composite/rebase-dialog';
