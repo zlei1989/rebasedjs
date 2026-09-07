@@ -54,6 +54,13 @@ export interface FileVersions {
   after: string;
 }
 
+/** 三版本对比（HEAD / 暂存区 / 工作区）：GitStageCompareThreeVersionsAction 语义——三侧全文一次取出 */
+export interface FileThreeVersions {
+  head: string;
+  staged: string;
+  working: string;
+}
+
 export interface SettingsState {
   logInEditor: boolean;
   recentRepoIds: string[];

@@ -1,7 +1,7 @@
 /** diff 功能：单文件全文与流式事件，core 原语 → contracts 形状，入参在此校验。 */
 import { isAbsolute } from 'node:path';
 import { GitExitError, collectFileDiff, readFileAtRev, streamFileDiff } from '@rebased/core';
-import { ServiceError, type DiffEvent, type DiffFile, type DiffQuery, type FileVersions } from '@rebased/contracts';
+import { ServiceError, type DiffEvent, type DiffFile, type DiffQuery, type FileThreeVersions, type FileVersions, type ThreeWayQuery } from '@rebased/contracts';
 
 /**
  * 校验 diff 查询入参，非法即抛 INVALID_QUERY。
@@ -70,4 +70,18 @@ export async function getFileVersions(repoPath: string, query: DiffQuery, opts: 
     ? await readFileAtRev(repoPath, { file: query.file, rev: '' })
     : await readFileAtRev(repoPath, { file: query.file });
   return { before, after };
+}
+
+/** 三版本对比：HEAD / 暂存区（:file）/ 工作区三侧全文（GitStageCompareThreeVersionsAction 语义）；
+ *  路径预检沿 assertValidQuery 的文件边界规则（越界 → INVALID_QUERY）。 */
+export async function getFileThreeVersions(repoPath: string, query: ThreeWayQuery): Promise<FileThreeVersions> {
+  if (query.file.split(/[\\/]/).includes('..') || isAbsolute(query.file)) {
+    throw new ServiceError('INVALID_QUERY', 'diff 查询 file 必须是仓库内相对路径');
+  }
+  const [head, staged, working] = await Promise.all([
+    readFileAtRev(repoPath, { file: query.file, rev: 'HEAD' }),
+    readFileAtRev(repoPath, { file: query.file, rev: '' }),
+    readFileAtRev(repoPath, { file: query.file }),
+  ]);
+  return { head, staged, working };
 }

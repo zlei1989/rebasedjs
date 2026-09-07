@@ -34,6 +34,10 @@ export const diffQuerySchema = z.object({
 });
 export type DiffQuery = z.infer<typeof diffQuerySchema>;
 
+/** 三版本对比查询：file 必填（HEAD / 暂存区 / 工作区 三侧全文，GitStageCompareThreeVersionsAction 语义） */
+export const threeWayQuerySchema = z.object({ file: z.string().min(1) });
+export type ThreeWayQuery = z.infer<typeof threeWayQuerySchema>;
+
 export const settingsPatchSchema = z.object({
   logInEditor: z.boolean().optional(),
   recentRepoIds: z.array(z.string()).optional(),

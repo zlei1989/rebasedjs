@@ -1,13 +1,17 @@
 /**
- * Diff 查看器：MonacoDiffView 包装 + 模式切换。
- * UX 对齐 #4：默认并排（side-by-side）；忽略空白开关（默认不忽略，对齐 Java DEFAULT）；
+ * Diff 查看器：MonacoDiffView 包装 + 模式/呈现选项。
+ * UX 对齐 #4：默认并排（side-by-side）；忽略空白（默认不忽略，对齐 Java DEFAULT）；
  * staged/工作区切换由调用方持有状态（受控组件）。
+ * 呈现选项（P2 收取，#4 域「word diff/同步滚动/折叠/上下文行数」的 Web 落点——对齐 Java TextDiffSettingsHolder：
+ * word diff 与同步滚动由 Monaco diff 引擎内建（行内词级高亮 + 双侧联动滚动），无需开关；
+ * 「折叠」→ folding；「空白字符」→ renderWhitespace；「上下文行数」→ hideUnchangedRegions（仅变更区 + N 行上下文，
+ * 对齐 Java context lines 默认 5）；ContextLineOptions 明示全部显示/0/2/5（默认）/7/15。
  *
  * 已知限制：monaco-lazy 的 effect 依赖仅 [language]，options 变化不会重建编辑器——
- * 这里用 key 随模式/空白开关变化强制重挂载，保证 renderSideBySide/ignoreTrimWhitespace 生效。
+ * 这里用 key 随全部开关变化强制重挂载，保证 renderSideBySide/ignoreTrimWhitespace/folding 等生效。
  */
 import { useState } from 'react';
-import { Segmented, Switch } from 'antd';
+import { Checkbox, Flex, Segmented, Select, Switch, Typography } from 'antd';
 import type { FileVersions } from '@rebased/contracts';
 import { MonacoDiffView, type MonacoDiffLoader } from '../base/monaco-diff-view';
 
@@ -24,6 +28,16 @@ export interface DiffViewerProps {
   loader?: MonacoDiffLoader;
 }
 
+/** 上下文行数选项：'all'=全部显示（hideUnchangedRegions 关闭）；数值=仅变更区 + N 行上下文（对齐 Java context lines，默认 5） */
+const CONTEXT_LINES = [
+  { value: 'all' as const, label: '全部显示' },
+  { value: '0' as const, label: '上下文 0 行' },
+  { value: '2' as const, label: '上下文 2 行' },
+  { value: '5' as const, label: '上下文 5 行' },
+  { value: '7' as const, label: '上下文 7 行' },
+  { value: '15' as const, label: '上下文 15 行' },
+];
+
 export function DiffViewer({
   versions,
   staged,
@@ -34,11 +48,20 @@ export function DiffViewer({
   fromTo,
   loader,
 }: DiffViewerProps): React.ReactNode {
-  // 默认并排（UX 对齐 #4）
+  // 默认并排（UX 对齐 #4）；呈现选项默认对齐 Java TextDiffSettingsHolder（折叠开、空白不显示、上下文 5 行）
   const [sideBySide, setSideBySide] = useState(true);
+  const [folding, setFolding] = useState(true);
+  const [renderWhitespace, setRenderWhitespace] = useState<'none' | 'all'>('none');
+  const [contextLines, setContextLines] = useState<'all' | '0' | '2' | '5' | '7' | '15'>('5');
+  const contextOptions = {
+    // 'all' = 关闭隐藏未变更区（整文件全展示——Web 便捷项，Java 无对应）；数值 = 仅变更区 + N 行上下文
+    ...(contextLines === 'all'
+      ? {}
+      : { hideUnchangedRegions: { enabled: true as const, contextLineCount: Number(contextLines) } }),
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <Flex align="center" gap={12} wrap="wrap">
         <Segmented
           options={[
             { label: '并排', value: 'side' },
@@ -62,15 +85,53 @@ export function DiffViewer({
           <Switch checked={ignoreWhitespace} onChange={(checked) => onToggleWhitespace?.(checked)} />
           忽略空白
         </span>
-      </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Checkbox
+            data-testid="diff-folding"
+            checked={folding}
+            onChange={(e) => setFolding(e.target.checked)}
+          >
+            折叠
+          </Checkbox>
+        </span>
+        <Select
+          data-testid="diff-whitespace"
+          size="small"
+          style={{ width: 130 }}
+          value={renderWhitespace === 'all' ? 'all' : 'none'}
+          options={[
+            { value: 'none', label: '空白不显示' },
+            { value: 'all', label: '空白显示' },
+          ]}
+          onChange={(v) => setRenderWhitespace(v === 'all' ? 'all' : 'none')}
+        />
+        <Select
+          data-testid="diff-context"
+          size="small"
+          style={{ width: 140 }}
+          value={contextLines}
+          options={CONTEXT_LINES}
+          onChange={setContextLines}
+        />
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          word diff / 同步滚动为 Monaco 内建
+        </Typography.Text>
+      </Flex>
       <div style={{ flex: 1, minHeight: 0 }}>
         <MonacoDiffView
           // monaco-lazy 不会因 options 变化重建：key 变化强制重挂载使新 options 生效
-          key={`${sideBySide ? 'side' : 'inline'}-${ignoreWhitespace ? 'nowrap' : 'raw'}`}
+          key={`${sideBySide ? 'side' : 'inline'}-${ignoreWhitespace ? 'nowrap' : 'raw'}-${folding ? 'fold' : 'nofold'}-${renderWhitespace}-${contextLines}`}
           original={versions.before}
           modified={versions.after}
           language={language}
-          options={{ renderSideBySide: sideBySide, ignoreTrimWhitespace: ignoreWhitespace, readOnly: true }}
+          options={{
+            renderSideBySide: sideBySide,
+            ignoreTrimWhitespace: ignoreWhitespace,
+            readOnly: true,
+            folding,
+            renderWhitespace,
+            ...contextOptions,
+          }}
           loader={loader}
         />
       </div>

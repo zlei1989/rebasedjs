@@ -520,6 +520,34 @@ describe('StatusPage 忽略入口', () => {
     expect(onSelectPatch).not.toHaveBeenCalled();
   });
 
+  it('「三版本」行按钮：已暂存/工作区组渲染（未跟踪不渲染），点击回调带路径且不触发行选中', () => {
+    const onSelectPatch = vi.fn();
+    const onOpenThreeWay = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([
+          { path: 'staged.ts', code: 'M.' },
+          { path: 'work.ts', code: '.M' },
+          { path: 'new.ts', code: '??' },
+        ])}
+        {...makeHandlers()}
+        onSelectPatch={onSelectPatch}
+        onOpenThreeWay={onOpenThreeWay}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('three-way-staged-staged.ts'));
+    expect(onOpenThreeWay).toHaveBeenCalledWith('staged.ts');
+    fireEvent.click(screen.getByTestId('three-way-unstaged-work.ts'));
+    expect(onOpenThreeWay).toHaveBeenCalledWith('work.ts');
+    expect(screen.queryByTestId('three-way-untracked-new.ts')).not.toBeInTheDocument();
+    expect(onSelectPatch).not.toHaveBeenCalled();
+  });
+
+  it('未传 onOpenThreeWay 时不渲染「三版本」按钮', () => {
+    render(<StatusPage status={makeStatus([{ path: 'a.ts', code: 'M.' }])} {...makeHandlers()} />);
+    expect(screen.queryByTestId('three-way-staged-a.ts')).not.toBeInTheDocument();
+  });
+
   it('onIgnore 缺省时未跟踪行不渲染「忽略」（向后兼容）', () => {
     render(<StatusPage status={makeStatus([{ path: 'new.ts', code: '??' }])} {...makeHandlers()} />);
     expect(screen.queryByTestId('ignore-untracked-new.ts')).not.toBeInTheDocument();

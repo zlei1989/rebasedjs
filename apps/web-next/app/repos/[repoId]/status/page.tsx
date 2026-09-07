@@ -115,6 +115,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onSelectPatch={(path, staged) => setPatchSel({ path, staged })}
         // 跳既有 diff 页（仅带 file 参数；staged 切换在 diff 页内完成）
         onOpenDiff={(path) => router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}`)}
+        // 三版本对比（HEAD/暂存/工作区三侧）：跳 diff 页 three=1 模式
+        onOpenThreeWay={(path) => router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&three=1`)}
         // 一键忽略（仅未跟踪行渲染忽略按钮）：Modal.confirm 确认 → addIgnore（追加 /<path> 到 .gitignore）→
         // 重取 status 键使该文件从变更列表消失（ignore 键已由 useAddIgnore 回写，无需再管）
         onIgnore={(path) => {

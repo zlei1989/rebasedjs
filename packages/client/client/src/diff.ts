@@ -1,7 +1,7 @@
 /** 差异 hooks：一次性 SWR + SSE 分块流（text 累积 + connected/error 状态） */
 import { useEffect, useState } from 'react';
 import useSWR, { type SWRResponse } from 'swr';
-import type { DiffFile, FileVersions } from '@rebased/contracts';
+import type { DiffFile, FileThreeVersions, FileVersions } from '@rebased/contracts';
 import { getJson } from './http';
 import { subscribeSse } from './events';
 
@@ -19,6 +19,12 @@ export function useFileDiff(repoId: string, file: string, staged = false, from?:
 export function useDiffPatch(repoId: string, file: string, staged: boolean): SWRResponse<DiffFile> {
   const params = new URLSearchParams({ file, staged: String(staged) });
   return useSWR<DiffFile>(file === '' ? null : `/api/repos/${repoId}/diff/patch?${params.toString()}`, getJson);
+}
+
+/** 三版本对比：GET /api/repos/:repoId/diff/three-way?file（HEAD/暂存/工作区三侧全文；file 为空串挂 null key 不发请求） */
+export function useFileThreeWay(repoId: string, file: string): SWRResponse<FileThreeVersions> {
+  const params = new URLSearchParams({ file });
+  return useSWR<FileThreeVersions>(file === '' ? null : `/api/repos/${repoId}/diff/three-way?${params.toString()}`, getJson);
 }
 
 /** 订阅 diff 分块：SSE diff.chunk → text 累积拼接；stream.error → error 暴露并断开；connected 表示订阅存活，卸载即中止。

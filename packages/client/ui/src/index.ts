@@ -37,6 +37,7 @@ export { BlameView, type BlameViewProps } from './composite/blame-view';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
 export { BrowsePanel, type BrowsePanelProps } from './composite/browse-panel';
 export { DiffStreamView, type DiffStreamViewProps } from './composite/diff-stream-view';
+export { ThreeWayView, type ThreeWayViewProps } from './composite/three-way-view';
 export {
   CommittedChangesPanel,
   type CommittedChangesPanelProps,

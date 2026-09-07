@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
+import { getFileDiff, getFileThreeVersions, getFileVersions, streamDiffEvents } from './diff';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -67,6 +67,26 @@ describe('diff 功能', () => {
     expect(staged).toEqual({ before: 'v1', after: 'v2' });
     const ranged = await getFileVersions(repo, { file: 'a.txt', from: 'HEAD', to: 'HEAD', staged: false });
     expect(ranged).toEqual({ before: 'v1', after: 'v1' });
+  });
+
+  it('getFileThreeVersions 三侧全文：HEAD 保持 v1、暂存区 v2、工作区 v3', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    writeFileSync(join(repo, 'a.txt'), 'v3');
+    const three = await getFileThreeVersions(repo, { file: 'a.txt' });
+    expect(three).toEqual({ head: 'v1', staged: 'v2', working: 'v3' });
+  });
+
+  it('getFileThreeVersions 路径越界 → INVALID_QUERY；文件不存在 → GIT_ERROR 上抛', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    await expect(getFileThreeVersions(repo, { file: '../secret' })).rejects.toMatchObject({ code: 'INVALID_QUERY' });
+    await expect(getFileThreeVersions(repo, { file: 'no-such.txt' })).rejects.toBeInstanceOf(Error);
   });
 
   it('getFileVersions 沿用成对校验', async () => {

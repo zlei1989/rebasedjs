@@ -60,6 +60,8 @@ export interface StatusPageProps {
   onChangelistAction?: (action: ChangelistAction) => void;
   /** 行内「忽略」入口（未跟踪组）：未传时不渲染该按钮（向后兼容） */
   onIgnore?: (path: string) => void;
+  /** 行内「三版本」入口（已暂存/工作区组；HEAD/暂存/工作区三侧对比）：未传时不渲染该按钮 */
+  onOpenThreeWay?: (path: string) => void;
 }
 
 /** porcelain X 码（暂存区列）：M/A/D/R/C 视为已暂存 */
@@ -144,6 +146,7 @@ function ChangeGroup({
   changelists,
   onChangelistAction,
   onIgnore,
+  onOpenThreeWay,
 }: {
   title: string;
   group: ChangeGroupKind;
@@ -156,6 +159,8 @@ function ChangeGroup({
   onChangelistAction?: (action: ChangelistAction) => void;
   /** 行内「忽略」入口：仅未跟踪组渲染（缺省不渲染，向后兼容） */
   onIgnore?: (path: string) => void;
+  /** 行内「三版本」入口：已暂存/工作区组渲染（缺省不渲染） */
+  onOpenThreeWay?: (path: string) => void;
 }): React.ReactNode {
   const [selected, setSelected] = useState<string[]>([]);
   const paths = useMemo(() => entries.map((e) => e.path), [entries]);
@@ -230,6 +235,19 @@ function ChangeGroup({
           <Flex onClick={(e) => e.stopPropagation()}>
             <Button size="small" type="text" data-testid={`ignore-${group}-${entry.path}`} onClick={() => onIgnore(entry.path)}>
               忽略
+            </Button>
+          </Flex>
+        )}
+        {/* 「三版本」行操作：已暂存/工作区组渲染（未跟踪无版本三侧可对比）；点击不触发行选中 */}
+        {group !== 'untracked' && onOpenThreeWay !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="small"
+              type="text"
+              data-testid={`three-way-${group}-${entry.path}`}
+              onClick={() => onOpenThreeWay(entry.path)}
+            >
+              三版本
             </Button>
           </Flex>
         )}
@@ -561,6 +579,7 @@ export function StatusPage({
   changelists,
   onChangelistAction,
   onIgnore,
+  onOpenThreeWay,
 }: StatusPageProps): React.ReactNode {
   const grouped = useMemo(() => groupChanges(status.entries), [status.entries]);
 
@@ -625,6 +644,7 @@ export function StatusPage({
             entries={grouped.staged}
             onSelectPatch={onSelectPatch}
             onOpenDiff={onOpenDiff}
+            onOpenThreeWay={onOpenThreeWay}
             changelists={changelistMode ? changelists : undefined}
             onChangelistAction={onChangelistAction}
             actions={(selected) => (
@@ -644,6 +664,7 @@ export function StatusPage({
             entries={grouped.unstaged}
             onSelectPatch={onSelectPatch}
             onOpenDiff={onOpenDiff}
+            onOpenThreeWay={onOpenThreeWay}
             changelists={changelistMode ? changelists : undefined}
             onChangelistAction={onChangelistAction}
             actions={(selected) => (

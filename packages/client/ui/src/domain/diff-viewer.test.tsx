@@ -82,4 +82,12 @@ describe('DiffViewer', () => {
     expect(screen.queryByText('已暂存')).not.toBeInTheDocument();
     expect(screen.getByText('并排')).toBeInTheDocument();
   });
+
+  it('呈现选项渲染：折叠 Checkbox / 空白字符 Select / 上下文行数 Select（默认 5 行）', () => {
+    render(<DiffViewer versions={versions} staged={false} ignoreWhitespace={false} loader={stubLoader} />);
+    expect(screen.getByTestId('diff-folding')).toBeChecked();
+    expect(screen.getByTestId('diff-whitespace')).toHaveTextContent('空白不显示');
+    expect(screen.getByTestId('diff-context')).toHaveTextContent('上下文 5 行');
+    expect(screen.getByText(/word diff \/ 同步滚动为 Monaco 内建/)).toBeInTheDocument();
+  });
 });

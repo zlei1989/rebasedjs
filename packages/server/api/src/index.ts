@@ -5,7 +5,7 @@ export { watchRepoStatus } from './events';
 export { getRepoConfig, setRepoConfig } from './config';
 export { abortOperation, assertNoOperationInProgress, continueOperation, getOperation } from './operation';
 export { getLogPage, streamLogEvents } from './log';
-export { getFileDiff, getFileVersions, streamDiffEvents } from './diff';
+export { getFileDiff, getFileThreeVersions, getFileVersions, streamDiffEvents } from './diff';
 export { getFileBlame } from './blame';
 export { getFileHistory } from './history';
 export { getBrowseContent, getBrowseTree } from './browse';

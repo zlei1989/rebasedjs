@@ -2,9 +2,9 @@
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DiffFile, FileVersions, SseEvent } from '@rebased/contracts';
+import type { DiffFile, FileThreeVersions, FileVersions, SseEvent } from '@rebased/contracts';
 import { subscribeSse } from './events';
-import { useDiffPatch, useDiffStream, useFileDiff } from './diff';
+import { useDiffPatch, useDiffStream, useFileDiff, useFileThreeWay } from './diff';
 import { freshCache } from './testing/fresh-cache';
 
 vi.mock('./events', () => ({ subscribeSse: vi.fn() }));
@@ -103,6 +103,55 @@ describe('useDiffPatch', () => {
     let result: { data?: DiffFile; error?: unknown } | undefined;
     function Probe() {
       const { data, error } = useDiffPatch('r-diff-5', '', true);
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+
+    expect(result?.data).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useFileThreeWay', () => {
+  it('按 file 拼接查询串请求 three-way 端点并返回 FileThreeVersions', async () => {
+    const THREE: FileThreeVersions = { head: 'v1', staged: 'v2', working: 'v3' };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(THREE), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: FileThreeVersions; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useFileThreeWay('r-diff-6', 'a.txt');
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result?.data).toEqual(THREE));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-diff-6/diff/three-way?file=a.txt');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('file 为空串时挂 null key：不发请求', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: FileThreeVersions; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useFileThreeWay('r-diff-7', '');
       result = { data, error };
       return null;
     }
