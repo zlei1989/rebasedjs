@@ -69,3 +69,8 @@ export async function isAncestor(cwd: string, hash: string): Promise<boolean> {
 export async function continuePick(cwd: string, kind: 'cherry-pick' | 'revert'): Promise<void> {
   await runGit(['-c', 'core.editor=true', kind, '--continue'], { cwd });
 }
+
+/** 跳过冲突中的摘樱桃/还原：git <kind> --skip（放弃该次应用的变更，继续后续；EmptyCherryPickResolutionStrategy 语义） */
+export async function skipPick(cwd: string, kind: 'cherry-pick' | 'revert'): Promise<void> {
+  await runGit(['-c', 'core.editor=true', kind, '--skip'], { cwd });
+}

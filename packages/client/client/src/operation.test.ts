@@ -3,7 +3,7 @@ import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OperationState, RepoStatus } from '@rebased/contracts';
-import { useAbortOperation, useContinueOperation, useOperation } from './operation';
+import { useAbortOperation, useContinueOperation, useOperation, useSkipOperation } from './operation';
 import { useRepoStatus } from './repos';
 import { freshCache } from './testing/fresh-cache';
 
@@ -144,6 +144,55 @@ describe('useContinueOperation', () => {
       body: JSON.stringify({}),
     });
     // 响应值显式回写 status 缓存键（revalidate:false，不触发二次 GET）
+    await act(async () => {
+      await vi.waitFor(() => expect(result.data).toEqual(STATUS_AFTER));
+    });
+    const getCalls = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method !== 'POST');
+    expect(getCalls).toHaveLength(1);
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useSkipOperation', () => {
+  it('trigger 发起 POST operation/skip（空体 {}）并以响应回写 useRepoStatus 缓存；全程恰好 1 次 GET', async () => {
+    const fetchMock = vi.fn(async (_input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify(STATUS_AFTER), { status: 200 });
+      return new Response(JSON.stringify(STATUS_BEFORE), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: {
+      data?: RepoStatus;
+      trigger?: () => Promise<RepoStatus>;
+      isMutating?: boolean;
+    } = {};
+    function Probe() {
+      const { data } = useRepoStatus('r-op-4');
+      const { trigger, isMutating } = useSkipOperation('r-op-4');
+      result = { data, trigger, isMutating };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result.data).toEqual(STATUS_BEFORE));
+    });
+
+    let status: RepoStatus | undefined;
+    await act(async () => {
+      status = await result.trigger!();
+    });
+
+    expect(status).toEqual(STATUS_AFTER);
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-op-4/operation/skip', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
     await act(async () => {
       await vi.waitFor(() => expect(result.data).toEqual(STATUS_AFTER));
     });

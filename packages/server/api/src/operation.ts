@@ -1,5 +1,5 @@
 /** 进行中操作功能：core 操作原语 → contracts OperationState 的薄映射；无操作时中止抛 INVALID_QUERY。 */
-import { abortGitOperation, canContinueMerge, continueMerge, continuePick, continueRebase, getOperationState } from '@rebased/core';
+import { abortGitOperation, canContinueMerge, continueMerge, continuePick, continueRebase, getOperationState, skipPick, skipRebase } from '@rebased/core';
 import { ServiceError } from '@rebased/contracts';
 import type { OperationState, RepoStatus } from '@rebased/contracts';
 import { getRepoStatus } from './status';
@@ -53,6 +53,27 @@ export async function continueOperation(repoPath: string): Promise<RepoStatus> {
       }
       await continueMerge(repoPath); // squash 退化：无 MERGE_HEAD，core 以 commit --no-edit 收尾
       break;
+  }
+  return getRepoStatus(repoPath);
+}
+
+/**
+ * 跳过冲突中的操作（GitRebaseResumeMode.SKIP / EmptyCherryPickResolutionStrategy 语义）：
+ * rebase → git rebase --skip；cherry-pick/revert → git <kind> --skip（丢弃当前不适用变更，继续后续）；
+ * merge 无 skip 概念 → INVALID_QUERY。无态同样 INVALID_QUERY。成功后返回刷新状态。
+ */
+export async function skipOperation(repoPath: string): Promise<RepoStatus> {
+  const op = await getOperation(repoPath);
+  switch (op.kind) {
+    case 'rebase':
+      await skipRebase(repoPath);
+      break;
+    case 'cherry-pick':
+    case 'revert':
+      await skipPick(repoPath, op.kind);
+      break;
+    default:
+      throw new ServiceError('INVALID_QUERY', '当前没有可跳过的操作（仅 rebase/cherry-pick/revert 支持跳过）');
   }
   return getRepoStatus(repoPath);
 }

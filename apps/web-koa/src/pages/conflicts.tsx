@@ -14,6 +14,7 @@ import {
   useOperation,
   useRepoEvents,
   useResolveConflict,
+  useSkipOperation,
 } from '@rebased/client';
 import { ConflictsPanel, MergeView, continueKindLabel } from '@rebased/ui';
 import { Button, Flex, message, Modal, Typography } from 'antd';
@@ -27,6 +28,7 @@ export function RepoConflictsPage(): React.ReactNode {
   const { data: operation } = useOperation(repoId);
   const { trigger: resolveConflict, isMutating: resolving } = useResolveConflict(repoId);
   const { trigger: continueOperation, isMutating: continuing } = useContinueOperation(repoId);
+  const { trigger: skipOperation, isMutating: skipping } = useSkipOperation(repoId);
   // 手动合并目标路径；'' 表示 Modal 关闭（useConflictContents 空串挂 null key 不发请求，可无条件挂载）
   const [mergePath, setMergePath] = useState('');
   const { data: contents } = useConflictContents(repoId, mergePath);
@@ -95,6 +97,19 @@ export function RepoConflictsPage(): React.ReactNode {
         }}
         onOpenMergeView={setMergePath}
         onContinue={onContinue}
+        // skip：rebase/cherry-pick/revert 冲突时丢弃当前提交的变更继续后续（merge 无 skip 概念不渲染）
+        onSkip={
+          operation && operation.kind !== 'none' && operation.kind !== 'merge'
+            ? () => {
+              skipOperation()
+                .then(() => {
+                  void message.success('已跳过');
+                  back();
+                })
+                .catch(onError);
+            }
+            : undefined
+        }
       />
       {/* 手动合并全屏 Modal：仅包 MergeView 内容区；destroyOnHidden 关闭即卸载 Monaco 与编辑态 */}
       <Modal

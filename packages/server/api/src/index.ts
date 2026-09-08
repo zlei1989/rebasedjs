@@ -3,7 +3,7 @@ export { cloneRepo, getAppHomeDir, getRepoById, initRepo, listRecentRepos, openR
 export { getRepoStatus } from './status';
 export { watchRepoStatus } from './events';
 export { getRepoConfig, setRepoConfig } from './config';
-export { abortOperation, assertNoOperationInProgress, continueOperation, getOperation } from './operation';
+export { abortOperation, assertNoOperationInProgress, continueOperation, getOperation, skipOperation } from './operation';
 export { getLogPage, streamLogEvents } from './log';
 export { getFileDiff, getFileThreeVersions, getFileVersions, streamDiffEvents } from './diff';
 export { getFileBlame } from './blame';

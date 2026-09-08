@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError, runGit } from './exec';
 import { getOperationState } from './operation';
-import { continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase } from './rebase';
+import { continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -234,5 +234,18 @@ describe('continueRebase', () => {
     expect(await getOperationState(repo)).toEqual({ kind: 'none' });
     expect(await headSubjects(repo, 3)).toEqual(['main', 'side', 'base']);
     expect((await runGit(['show', 'HEAD:a.txt'], { cwd: repo })).stdout).toBe('resolved\n');
+  });
+
+  it('skipRebase：冲突时跳过当前提交（其变更被丢弃），继续后续提交且操作态回到 none', async () => {
+    const repo = makeRepo();
+    await makeRebaseConflict(repo);
+    expect((await rebaseOnto(repo, { onto: 'side' })).status).toBe('conflicts');
+    expect((await getOperationState(repo)).kind).toBe('rebase');
+
+    await skipRebase(repo);
+
+    expect(await getOperationState(repo)).toEqual({ kind: 'none' });
+    // 变基链重放到 side 之上（main 提交被跳过——冲突提交放弃，无合并提交）
+    expect(await headSubjects(repo, 2)).toEqual(['side', 'base']);
   });
 });

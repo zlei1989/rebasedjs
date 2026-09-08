@@ -229,6 +229,43 @@ describe('ConflictsPanel 完成合并', () => {
     render(<ConflictsPanel conflicts={{ conflicts: [] }} continuing {...makeHandlers()} />);
     expect(screen.getByRole('button', { name: /完成合并/ })).toHaveClass('ant-btn-loading');
   });
+
+  it('onSkip 提供时渲染「跳过」（Popconfirm 确认后触发 onSkip；无冲突时禁用）', async () => {
+    const onSkip = vi.fn();
+    render(
+      <ConflictsPanel
+        conflicts={CONFLICTS}
+        onResolve={() => {}}
+        onOpenMergeView={() => {}}
+        onContinue={() => {}}
+        onSkip={onSkip}
+      />,
+    );
+    const skipBtn = screen.getByTestId('skip-operation');
+    expect(skipBtn).not.toBeDisabled();
+    fireEvent.click(skipBtn);
+    expect(await screen.findByText(/跳过当前提交/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onSkip).toHaveBeenCalledTimes(1);
+  });
+
+  it('全部解决（空列表）时「跳过」禁用', () => {
+    render(
+      <ConflictsPanel
+        conflicts={{ conflicts: [] }}
+        onResolve={() => {}}
+        onOpenMergeView={() => {}}
+        onContinue={() => {}}
+        onSkip={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('skip-operation')).toBeDisabled();
+  });
+
+  it('onSkip 缺省时不渲染「跳过」（merge 无 skip 概念，向后兼容）', () => {
+    render(<ConflictsPanel conflicts={CONFLICTS} {...makeHandlers()} />);
+    expect(screen.queryByTestId('skip-operation')).not.toBeInTheDocument();
+  });
 });
 
 describe('ConflictsPanel continue 文案（按操作种类泛化）', () => {

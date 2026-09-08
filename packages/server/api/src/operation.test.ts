@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ServiceError } from '@rebased/contracts';
-import { abortOperation, continueOperation, getOperation } from './operation';
+import { abortOperation, continueOperation, getOperation, skipOperation } from './operation';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 function git(dir: string, args: string[]): void {
@@ -191,5 +191,34 @@ describe('continueOperation', () => {
     expect(status.entries).toEqual([]);
     expect(gitOut(repo, ['log', '--format=%s', '-1']).trim()).toBe('Revert "one"');
     expect(gitOut(repo, ['show', 'HEAD:a.txt'])).toBe('base\n');
+  });
+});
+
+describe('skipOperation', () => {
+  let repo: string;
+  beforeEach(() => { repo = createTmpRepo(); });
+  afterEach(() => { cleanupTmpRepo(repo); });
+
+  it('无进行中操作 → INVALID_QUERY（无态可跳）', async () => {
+    await expect(skipOperation(repo)).rejects.toMatchObject({ code: 'INVALID_QUERY' });
+  });
+
+  it('rebase 冲突 → 跳过：冲突提交丢弃、操作态回 none、返回刷新状态', async () => {
+    makeMergeScenario(repo);
+    try {
+      git(repo, ['rebase', 'side']);
+    } catch {
+      // rebase 冲突以非零退出码结束，忽略
+    }
+    expect((await getOperation(repo)).kind).toBe('rebase');
+
+    const status = await skipOperation(repo);
+    expect(status.headHash).toMatch(/^[0-9a-f]{40}$/);
+    expect(gitOut(repo, ['log', '--format=%s', '-2']).trim().split('\n')).toEqual(['side', 'base']);
+  });
+
+  it('merge 冲突 → INVALID_QUERY（merge 无 skip 概念）', async () => {
+    createMergeConflict(repo);
+    await expect(skipOperation(repo)).rejects.toMatchObject({ code: 'INVALID_QUERY' });
   });
 });

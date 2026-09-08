@@ -143,3 +143,8 @@ export async function runInteractiveRebase(
 export async function continueRebase(cwd: string): Promise<void> {
   await runGit(['-c', 'core.editor=true', 'rebase', '--continue'], { cwd });
 }
+
+/** 跳过冲突中的变基提交：git rebase --skip（GitRebaseResumeMode.SKIP 语义——丢弃当前提交，继续后续） */
+export async function skipRebase(cwd: string): Promise<void> {
+  await runGit(['-c', 'core.editor=true', 'rebase', '--skip'], { cwd });
+}

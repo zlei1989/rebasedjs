@@ -46,9 +46,9 @@ export { addRemote, fetchRemote, isShallowRepo, listRemotes, pullRemote, pushBra
 export type { CoreRemote } from './remote';
 export { diffRefsSnapshots, takeRefsSnapshot } from './refs';
 export type { RefsSnapshot } from './refs';
-export { continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase } from './rebase';
+export { continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
 export type { CoreRebaseResult } from './rebase';
-export { cherryPickCommits, continuePick, isAncestor, revertCommits } from './pick';
+export { cherryPickCommits, continuePick, isAncestor, revertCommits, skipPick } from './pick';
 export type { CorePickResult } from './pick';
 export { createTag, deleteRemoteTag, deleteTag, listTags, pushAllTags, pushTag } from './tag';
 export type { CoreTag } from './tag';

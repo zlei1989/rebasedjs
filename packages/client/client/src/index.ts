@@ -20,7 +20,7 @@ export { useCommittedPage } from './committed';
 export { useSearch } from './search';
 export { useSettings } from './settings';
 export { useRepoConfig, useSetConfig } from './config';
-export { useAbortOperation, useContinueOperation, useOperation } from './operation';
+export { useAbortOperation, useContinueOperation, useOperation, useSkipOperation } from './operation';
 export { useRebase, useRebaseTodo, useInteractiveRebase } from './rebase';
 export { useCherryPick, useRevert } from './pick';
 export { useTags, useTagAction } from './tag';

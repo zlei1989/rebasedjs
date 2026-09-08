@@ -16,6 +16,8 @@ export interface ConflictsPanelProps {
   onResolve: (body: ResolveConflictBody) => void;
   onOpenMergeView: (path: string) => void;
   onContinue: () => void;
+  /** 跳过冲突中的操作（rebase --skip / cherry-pick|revert --skip 语义）；缺省不渲染「跳过」按钮（merge 无 skip 概念） */
+  onSkip?: () => void;
   /** 解决请求进行中：行操作按钮禁用 */
   resolving?: boolean;
   /** 完成合并请求进行中：底部按钮 loading 态 */
@@ -145,6 +147,7 @@ export function ConflictsPanel({
   onResolve,
   onOpenMergeView,
   onContinue,
+  onSkip,
   resolving,
   continuing,
   operationKind,
@@ -183,8 +186,21 @@ export function ConflictsPanel({
       </Card>
       {/* continue：仅在全部解决后可用；未解决时禁用 + Tooltip 提示原因。
           文案按 operationKind 泛化（merge/rebase/cherry-pick/revert），缺省 merge。
-          禁用按钮不派发 hover 事件，按 antd 官方做法在 Tooltip 与 Button 间包一层 span 承接提示 */}
-      <Flex justify="flex-end">
+          禁用按钮不派发 hover 事件，按 antd 官方做法在 Tooltip 与 Button 间包一层 span 承接提示。
+          「跳过」：rebase/cherry-pick/revert 冲突时可用（丢弃当前不适用变更继续后续——onSkip 提供才渲染） */}
+      <Flex justify="flex-end" gap={8}>
+        {onSkip !== undefined && (
+          <Popconfirm
+            title="跳过当前提交（其变更将被丢弃）？"
+            okText="确定"
+            cancelText="取消"
+            onConfirm={onSkip}
+          >
+            <Button data-testid="skip-operation" disabled={remaining === 0}>
+              跳过
+            </Button>
+          </Popconfirm>
+        )}
         <Tooltip title={remaining > 0 ? '还有未解决的冲突' : undefined}>
           <span data-testid="continue-merge-wrap">
             <Button

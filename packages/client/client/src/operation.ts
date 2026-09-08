@@ -48,3 +48,21 @@ export function useContinueOperation(repoId: string): { trigger: () => Promise<R
     isMutating,
   };
 }
+
+/** 跳过冲突中的操作（mutation）：POST operation/skip（无请求体；rebase --skip / cherry-pick|revert --skip），
+ *  响应 RepoStatus 回写 status 缓存键（同 continue 约定） */
+export function useSkipOperation(repoId: string): { trigger: () => Promise<RepoStatus>; isMutating: boolean } {
+  const { mutate } = useSWRConfig();
+  const { trigger, isMutating } = useSWRMutation(
+    `/api/repos/${repoId}/operation/skip`,
+    (key: string) => postJson<RepoStatus>(key, {}),
+  );
+  return {
+    trigger: async () => {
+      const status = await trigger();
+      await mutate(`/api/repos/${repoId}/status`, status, { revalidate: false });
+      return status;
+    },
+    isMutating,
+  };
+}
