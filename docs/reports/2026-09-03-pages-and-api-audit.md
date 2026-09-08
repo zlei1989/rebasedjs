@@ -131,7 +131,7 @@
 | reset | `repos/:id/reset`、`reset/undo-commit` | POST | 三模式 reset / 撤销最近提交 | LogPage ResetDialog / 顶栏 | ✅ |
 | merge | `repos/:id/merge`、`merge/continue` | POST | 合并（四选项）/ 完成合并 | MergeDialog / ConflictsPanel | ✅ |
 | conflicts | `repos/:id/conflicts`、`conflicts/contents`、`conflicts/resolve` | GET/GET/POST | 冲突列表 / 三阶段内容 / 四策略解决 | ConflictsPanel、MergeView | ✅ |
-| stash | `repos/:id/stashes` | GET/POST | 贮藏列表 / save/apply/pop/drop/branch | StashPanel | ✅ |
+| stash | `repos/:id/stashes` | GET/POST | 贮藏列表 / save(-u/--keep-index)/apply/pop/drop/branch | StashPanel | ✅ |
 | stash | `repos/:id/stashes/:index/diff`、`stashes/unstash-as` | GET + POST | 贮藏差异（`git stash show -p`）/ Unstash As（检出目标分支+apply） | StashPanel | ✅ |
 | changelist | `repos/:id/changelists` | GET/POST | 变更列表查询 / create/rename/delete/setDefault/move | StatusPage 分组与管理 | ✅ |
 | remote | `repos/:id/remotes`、`fetch`、`pull`、`push`、`update` | GET/POST + 4×POST | 远程 CRUD（含 fetch spec/unshallow）/ 拉取 / 推送（forceWithLease/setUpstream）/ 策略化更新 | RemotePanel、Pull/Push/Update 对话框 | ✅ |
@@ -340,7 +340,7 @@ rebase 对话框 + 交互式 rebase 编辑器；对照 `GitRebaseCommitsTableVie
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| stash save | ✅ | message 可空 + includeUntracked（`-u`）；keep index 未做 |
+| stash save | ✅ | message 可空 + includeUntracked（`-u`）+ keepIndex（`--keep-index`，保持暂存区） |
 | pop / apply / drop | ✅ | 按 `stash@{index}`；弹出/删除 Popconfirm；不存在 → `INVALID_REF` |
 | stash as branch | ✅ | 转分支 Modal（`git stash branch`） |
 | Unstash As 对话框 | ✅ | 行「Unstash As…」Modal：目标本地分支 Select（检出目标分支 + apply，不 drop——GitUnstashAsDialog 语义） |

@@ -36,21 +36,24 @@ function formatStashDate(dateIso: string): string {
   return Number.isNaN(d.getTime()) ? dateIso : d.toLocaleString();
 }
 
-/** 保存表单 Card：message 输入 + 含未跟踪文件勾选 + 保存按钮；提交后复位输入 */
+/** 保存表单 Card：message 输入 + 含未跟踪文件/保持暂存区勾选 + 保存按钮；提交后复位输入 */
 function SaveForm({ acting, onAction }: { acting?: boolean; onAction: (action: StashAction) => void }): React.ReactNode {
   const [message, setMessage] = useState('');
   const [includeUntracked, setIncludeUntracked] = useState(false);
+  const [keepIndex, setKeepIndex] = useState(false);
 
-  /** 提交：message 去除首尾空白后仅非空时携带（契约 save.message 为 optional） */
+  /** 提交：message 去除首尾空白后仅非空时携带（契约 save.message 为 optional）；提交后复位全部输入 */
   const submit = (): void => {
     const trimmed = message.trim();
     onAction({
       action: 'save',
       ...(trimmed === '' ? {} : { message: trimmed }),
       includeUntracked,
+      ...(keepIndex ? { keepIndex: true } : {}),
     });
     setMessage('');
     setIncludeUntracked(false);
+    setKeepIndex(false);
   };
 
   return (
@@ -68,6 +71,14 @@ function SaveForm({ acting, onAction }: { acting?: boolean; onAction: (action: S
           onChange={(e) => setIncludeUntracked(e.target.checked)}
         >
           包含未跟踪文件
+        </Checkbox>
+        {/* keep-index（--keep-index）：贮藏后暂存区保持不动（工作区变更回退，索引内容留在暂存区） */}
+        <Checkbox
+          data-testid="stash-keep-index"
+          checked={keepIndex}
+          onChange={(e) => setKeepIndex(e.target.checked)}
+        >
+          保持暂存区（keep-index）
         </Checkbox>
         <Button
           type="primary"

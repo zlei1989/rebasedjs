@@ -43,7 +43,7 @@ export async function applyStashAction(repoPath: string, action: StashAction): P
   switch (action.action) {
     case 'save':
       await requireStashableChanges(repoPath, action.includeUntracked ?? false);
-      await saveStash(repoPath, { message: action.message, includeUntracked: action.includeUntracked });
+      await saveStash(repoPath, { message: action.message, includeUntracked: action.includeUntracked, keepIndex: action.keepIndex });
       break;
     case 'apply':
       await requireStashIndex(repoPath, action.index);

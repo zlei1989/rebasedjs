@@ -120,9 +120,9 @@ export const resolveConflictBodySchema = z.discriminatedUnion('strategy', [
 ]);
 export type ResolveConflictBody = z.infer<typeof resolveConflictBodySchema>;
 
-/** 贮藏操作（判别联合）：save 保存当前工作区（includeUntracked 对应 -u）；apply/pop/drop 按 index；branch 把贮藏转为新分支（git stash branch） */
+/** 贮藏操作（判别联合）：save 保存当前工作区（includeUntracked 对应 -u；keepIndex 对应 --keep-index）；apply/pop/drop 按 index；branch 把贮藏转为新分支（git stash branch） */
 export const stashActionSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('save'), message: z.string().optional(), includeUntracked: z.boolean().optional() }),
+  z.object({ action: z.literal('save'), message: z.string().optional(), includeUntracked: z.boolean().optional(), keepIndex: z.boolean().optional() }),
   z.object({ action: z.literal('apply'), index: z.number().int().min(0) }),
   z.object({ action: z.literal('pop'), index: z.number().int().min(0) }),
   z.object({ action: z.literal('drop'), index: z.number().int().min(0) }),

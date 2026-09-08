@@ -265,6 +265,12 @@ describe('stashActionSchema（贮藏操作判别联合）', () => {
     expect(stashActionSchema.parse({ action: 'save', message: '进行中', includeUntracked: true }))
       .toEqual({ action: 'save', message: '进行中', includeUntracked: true });
   });
+  it('接受 save 带 keepIndex（--keep-index 保持暂存区）', () => {
+    expect(stashActionSchema.parse({ action: 'save', keepIndex: true }))
+      .toEqual({ action: 'save', keepIndex: true });
+    expect(stashActionSchema.parse({ action: 'save', message: 'x', includeUntracked: true, keepIndex: true }))
+      .toEqual({ action: 'save', message: 'x', includeUntracked: true, keepIndex: true });
+  });
   it('接受 apply / pop / drop 按非负整数 index', () => {
     expect(stashActionSchema.parse({ action: 'apply', index: 0 }))
       .toEqual({ action: 'apply', index: 0 });
@@ -286,9 +292,10 @@ describe('stashActionSchema（贮藏操作判别联合）', () => {
     expect(() => stashActionSchema.parse({ action: 'pop', index: 0.5 })).toThrow();
     expect(() => stashActionSchema.parse({ action: 'drop' })).toThrow();
   });
-  it('拒绝枚举外 action 与非布尔 includeUntracked', () => {
+  it('拒绝枚举外 action 与非布尔 includeUntracked/keepIndex', () => {
     expect(() => stashActionSchema.parse({ action: 'clear' })).toThrow();
     expect(() => stashActionSchema.parse({ action: 'save', includeUntracked: 'yes' })).toThrow();
+    expect(() => stashActionSchema.parse({ action: 'save', keepIndex: 'yes' })).toThrow();
   });
 });
 

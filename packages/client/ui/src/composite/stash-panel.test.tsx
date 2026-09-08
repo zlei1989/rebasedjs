@@ -58,6 +58,22 @@ describe('StashPanel 保存表单', () => {
     expect(onAction).toHaveBeenCalledWith({ action: 'save', message: 'msg', includeUntracked: false });
     expect(input).toHaveValue('');
   });
+
+  it('勾选 keep-index：提交含 {keepIndex:true}，提交后复位', () => {
+    const onAction = vi.fn();
+    render(<StashPanel stashes={makeList([])} onAction={onAction} />);
+    fireEvent.change(screen.getByTestId('stash-message-input'), { target: { value: 'keep' } });
+    fireEvent.click(screen.getByTestId('stash-keep-index'));
+    fireEvent.click(screen.getByTestId('stash-save-button'));
+    expect(onAction).toHaveBeenCalledWith({
+      action: 'save',
+      message: 'keep',
+      includeUntracked: false,
+      keepIndex: true,
+    });
+    const keepIndexBox = screen.getByTestId('stash-keep-index');
+    expect(keepIndexBox).not.toBeChecked();
+  });
 });
 
 describe('StashPanel 行操作', () => {

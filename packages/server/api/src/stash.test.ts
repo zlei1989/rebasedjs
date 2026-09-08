@@ -43,6 +43,20 @@ describe('stash 功能', () => {
     expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v1');
   });
 
+  it('save keepIndex：暂存区保持不动（--keep-index 语义），工作区变更被收走', async () => {
+    const repo = repoWithCommit();
+    // 工作区 v2 + 暂存 v2（a.txt 已被 add）；再改回 v3 留工作区
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+    writeFileSync(join(repo, 'a.txt'), 'v3');
+
+    const list = await applyStashAction(repo, { action: 'save', message: 'keep', keepIndex: true });
+    expect(list.stashes).toHaveLength(1);
+    // --keep-index：工作区回退到暂存区内容（v2），索引仍含 v2
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
+    expect(execFileSync('git', ['-C', repo, 'diff', '--cached', '--name-only'], { encoding: 'utf8' }).trim()).toBe('a.txt');
+  });
+
   it('无工作区改动 save → INVALID_QUERY', async () => {
     const repo = repoWithCommit();
     await expect(applyStashAction(repo, { action: 'save' })).rejects.toMatchObject({
