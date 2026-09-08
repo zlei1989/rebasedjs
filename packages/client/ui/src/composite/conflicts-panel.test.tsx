@@ -1,7 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ConflictList } from '@rebased/contracts';
-import { ConflictsPanel, conflictKindLabel } from './conflicts-panel';
+import { ConflictsPanel, conflictKindLabel, groupConflictsByDir } from './conflicts-panel';
+
+describe('groupConflictsByDir（按目录分组）', () => {
+  it('根目录归 "" 键；多目录键排序、组内按路径排序', () => {
+    const grouped = groupConflictsByDir([
+      { path: 'a.ts', stages: [1] },
+      { path: 'src/z.ts', stages: [1] },
+      { path: 'src/a.ts', stages: [1] },
+      { path: 'lib/b.ts', stages: [1] },
+    ]);
+    expect([...grouped.keys()]).toEqual(['', 'lib', 'src']);
+    expect(grouped.get('src')!.map((e) => e.path)).toEqual(['src/a.ts', 'src/z.ts']);
+    expect(grouped.get('')!.map((e) => e.path)).toEqual(['a.ts']);
+  });
+});
 
 describe('conflictKindLabel', () => {
   it('[1,2,3] → 双方修改', () => {
@@ -62,6 +76,27 @@ describe('ConflictsPanel 列表渲染', () => {
     render(<ConflictsPanel conflicts={{ conflicts: [] }} {...makeHandlers()} />);
     expect(screen.queryByTestId(/^conflict-row-/)).not.toBeInTheDocument();
     expect(screen.getByText('无冲突')).toBeInTheDocument();
+  });
+
+  it('按目录子标题分组渲染（根目录/子目录标题带计数）', () => {
+    render(
+      <ConflictsPanel
+        conflicts={{
+          conflicts: [
+            { path: 'root.ts', stages: [1, 2, 3] },
+            { path: 'src/a.ts', stages: [1, 2, 3] },
+            { path: 'src/b.ts', stages: [1, 2, 3] },
+          ],
+        }}
+        {...makeHandlers()}
+      />,
+    );
+    expect(screen.getByTestId('conflict-dir-(root)')).toHaveTextContent('根目录（1）');
+    expect(screen.getByTestId('conflict-dir-src')).toHaveTextContent('src（2）');
+    // 行仍全部渲染（分组只改变组织方式）
+    expect(screen.getByTestId('conflict-row-root.ts')).toBeInTheDocument();
+    expect(screen.getByTestId('conflict-row-src/a.ts')).toBeInTheDocument();
+    expect(screen.getByTestId('conflict-row-src/b.ts')).toBeInTheDocument();
   });
 });
 

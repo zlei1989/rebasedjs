@@ -1,8 +1,9 @@
 /**
  * 冲突面板（对照 Java GitConflictsPanel）：
- *  冲突文件列表（路径 + 冲突类型徽标，由 stages 组合推导）+ 行操作「用我们的」「用他们的」「手动合并」
- *  （手动合并开 MergeView，由容器承接）+ 底部「继续」按钮（文案按 operationKind 泛化：
- *  merge→完成合并、rebase→继续变基、cherry-pick→继续摘樱桃、revert→继续还原；全部解决后可用，否则禁用并 Tooltip 提示）。
+ *  冲突文件列表（路径 + 冲突类型徽标，由 stages 组合推导；按目录子标题分组）+ 行操作
+ *  「用我们的」「用他们的」「手动合并」（手动合并开 MergeView，由容器承接）+ 底部「继续」按钮
+ *  （文案按 operationKind 泛化：merge→完成合并、rebase→继续变基、cherry-pick→继续摘樱桃、
+ *  revert→继续还原；全部解决后可用，否则禁用并 Tooltip 提示）。
  *  删除/修改冲突（stages 缺 2 或 3）：对应整侧采纳按钮禁用（该侧无版本，checkout 必失败），
  *  并额外渲染「删除该文件」（Popconfirm 确认；对照 Java 版把采纳映射为删除的路径）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入。
@@ -52,6 +53,29 @@ export function conflictKindLabel(stages: number[]): string {
   if (key === '1,2') return '对方删除/我方修改';
   if (key === '1,3') return '我方删除/对方修改';
   return '冲突';
+}
+
+/**
+ * 按目录分组（容器/测试复用，单层——不递归子目录）：
+ *  目录 = 路径的 dirname 部分（含 `/` 分隔），根目录归 `''` 键，展示为「根目录」；
+ *  键按目录名排序、组内按路径排序（稳定顺序）。
+ */
+export function groupConflictsByDir(entries: ConflictEntry[]): Map<string, ConflictEntry[]> {
+  const grouped = new Map<string, ConflictEntry[]>();
+  for (const entry of entries) {
+    const idx = entry.path.lastIndexOf('/');
+    const dir = idx < 0 ? '' : entry.path.slice(0, idx);
+    const bucket = grouped.get(dir);
+    if (bucket) bucket.push(entry);
+    else grouped.set(dir, [entry]);
+  }
+  for (const bucket of grouped.values()) bucket.sort((a, b) => (a.path < b.path ? -1 : 1));
+  return new Map([...grouped.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+}
+
+/** 目录子标题文案：根目录显示「根目录」，其余显示目录名 + 计数 */
+function dirLabel(dir: string, count: number): string {
+  return dir === '' ? `根目录（${count}）` : `${dir}（${count}）`;
 }
 
 /** 冲突文件行：路径 + 类型徽标 + 行尾操作（用我们的/用他们的/手动合并；删除/修改冲突加「删除该文件」） */
@@ -129,19 +153,30 @@ export function ConflictsPanel({
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
       <Card size="small" title={`冲突文件（${remaining}）`}>
-        {/* 行列表用 Flex vertical 渲染（antd v6 已弃用 List），行结构对齐 status-page 的 Flex 行约定 */}
+        {/* 行列表用 Flex vertical 渲染（antd v6 已弃用 List）；按目录子标题分组（单层） */}
         <Flex vertical>
           {remaining === 0 ? (
             <Typography.Text type="secondary">无冲突</Typography.Text>
           ) : (
-            conflicts.conflicts.map((entry) => (
-              <ConflictRow
-                key={entry.path}
-                entry={entry}
-                resolving={resolving}
-                onResolve={onResolve}
-                onOpenMergeView={onOpenMergeView}
-              />
+            [...groupConflictsByDir(conflicts.conflicts).entries()].map(([dir, entries]) => (
+              <Flex vertical key={dir}>
+                <Typography.Text
+                  type="secondary"
+                  data-testid={`conflict-dir-${dir === '' ? '(root)' : dir}`}
+                  style={{ padding: '4px 0' }}
+                >
+                  {dirLabel(dir, entries.length)}
+                </Typography.Text>
+                {entries.map((entry) => (
+                  <ConflictRow
+                    key={entry.path}
+                    entry={entry}
+                    resolving={resolving}
+                    onResolve={onResolve}
+                    onOpenMergeView={onOpenMergeView}
+                  />
+                ))}
+              </Flex>
             ))
           )}
         </Flex>
