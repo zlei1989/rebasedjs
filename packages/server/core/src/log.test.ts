@@ -42,6 +42,27 @@ describe('log 原语', () => {
     expect(commits.every((c) => c.graph.length > 0)).toBe(true);
   });
 
+  // 分支对比视图语义：range 'master..feature' 只含分支独有提交（c2），反向只含当前独有（c1）
+  it('streamLog range 过滤：双分支独有提交双向视图（分支对比）', { timeout: 60000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commit(repo, 'a.txt', 'c1');
+    const base = execFileSync('git', ['-C', repo, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    execFileSync('git', ['-C', repo, 'checkout', '-q', '-b', 'feature']);
+    commit(repo, 'b.txt', 'c2');
+    // 切换到原分支补一个提交（制造「当前独有」）
+    execFileSync('git', ['-C', repo, 'checkout', '-q', base]);
+    commit(repo, 'c.txt', 'c3');
+
+    const featureOnly = [];
+    for await (const c of streamLog(repo, { range: `${base}..feature` })) featureOnly.push(c.message);
+    expect(featureOnly).toEqual(['c2']);
+
+    const baseOnly = [];
+    for await (const c of streamLog(repo, { range: `feature..${base}` })) baseOnly.push(c.message);
+    expect(baseOnly).toEqual(['c3']);
+  });
+
   // 复现审查缺陷：chunk 恰在 \x02 处结束时，终结符 \n 随下一 chunk 到达会缀到
   // 下一条记录头部（graph 变 '\n*'、width 虚增、图字符开头的内容行被多剥）
   it('frameRecords 在 chunk 恰以 \x02 结尾时不把终结符 \n 带进下条记录', { timeout: 30000 }, async () => {

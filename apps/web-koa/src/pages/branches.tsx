@@ -54,6 +54,8 @@ export function RepoBranchesPage(): React.ReactNode {
             void message.success(`已清理 ${targets.length} 个已合并分支`);
           })().catch(onError);
         }}
+        // 与当前分支比较（GitCompareWithBranchAction 语义 #10）：跳日志页 ?compare=<branch>（对比视图）
+        onCompare={(branch) => navigate(`/repos/${repoId}?compare=${encodeURIComponent(branch)}`)}
         acting={actingBranch || checkingOut}
       />
     </Flex>

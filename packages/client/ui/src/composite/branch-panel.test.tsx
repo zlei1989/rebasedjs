@@ -154,6 +154,29 @@ describe('BranchPanel 行操作', () => {
     expect(onCheckout).toHaveBeenCalledWith({ action: 'branch', name: 'dev' });
   });
 
+  it('行内「比较」：非当前分支可点，以分支名调 onCompare；当前分支禁用（A..A 无意义）', () => {
+    const onCompare = vi.fn();
+    render(
+      <BranchPanel
+        branches={makeList([
+          makeBranch({ name: 'dev' }),
+          makeBranch({ name: 'main', current: true }),
+        ])}
+        {...makeHandlers()}
+        onCompare={onCompare}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('compare-local-dev'));
+    expect(onCompare).toHaveBeenCalledTimes(1);
+    expect(onCompare).toHaveBeenCalledWith('dev');
+    expect(screen.getByTestId('compare-local-main')).toBeDisabled();
+  });
+
+  it('未传 onCompare 时不渲染「比较」按钮（向后兼容）', () => {
+    render(<BranchPanel branches={makeList([makeBranch({ name: 'dev' })])} {...makeHandlers()} />);
+    expect(screen.queryByTestId('compare-local-dev')).not.toBeInTheDocument();
+  });
+
   it('删除未合并分支：Popconfirm 提示强制删除，确认后传 force:true', async () => {
     const onAction = vi.fn();
     render(

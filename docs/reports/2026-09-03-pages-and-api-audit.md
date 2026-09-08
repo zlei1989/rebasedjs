@@ -20,7 +20,7 @@
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 109 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 64、领域类型/别名 89、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（104 条） | 73 ✅（含等价边）+ 8 🟡 + 7 ➖ + 16 ❌ |
+| 导航边（104 条） | 74 ✅（含等价边）+ 8 🟡 + 7 ➖ + 15 ❌ |
 
 ### 1.2 口径与图例
 
@@ -239,7 +239,7 @@
 | 大 diff 分块流渲染 | ✅ | 分块文本接入 Monaco（DiffStreamView：language `diff` 只读渐进渲染；与全文同参 Ruling 6，全文到达切换标准视图） |
 | word diff/同步滚动/折叠/上下文行数 | ✅ | word diff 与同步滚动为 Monaco diff 引擎内建（行内词级高亮 + 双侧联动）；「折叠」→ folding、「空白字符」→ renderWhitespace、「上下文行数」→ hideUnchangedRegions（仅变更区 + N 行，默认 5——对齐 Java context lines）均有 UI 开关 |
 | 三版本对比（本地/暂存/HEAD） | ✅ | `GET /diff/three-way`（三侧全文）+ ui ThreeWayView（HEAD→暂存、暂存→工作区两段 MonacoDiffView）+ StatusPage 行「三版本」入口（→ `/diff?three=1`）；若文件仅一个维度有差异，另一段显示「无差异」空视图 |
-| hunk 级应用 / 回退、与分支比较 | ❌ | 未做（`GitStageDiffAction` / `GitCompareWithBranchAction`） |
+| hunk 级应用 / 回退、与分支比较 | ✅ | hunk 级应用/回退经 StatusPage 补丁预览行内 hunk 选择（等效通道，见 4.4）；「与分支比较」→ 分支页行内「比较」→ 日志页对比视图（双 range 双向提交差异，对齐 GitCompareBranchesUi） |
 
 ### 4.4 StatusPage ✅
 
@@ -304,6 +304,7 @@ Reset 与 Undo Commit；对应 `GitResetAction` / `GitNewResetDialog` / `GitUnco
 | 创建（起始点可选 + 创建后检出开关）/删除（未合并提示 force）/重命名/设上游 | ✅ | 删除走 Popconfirm |
 | 检出：既有分支 / 新建并检出 / detached（标签/提交） | ✅ | 三态；检出文件未做 |
 | 查找已合并 / 清理已合并与过时分支 | ✅ | 「仅看已合并」开关 +「清理已合并（N）」批量删除（已合并且非当前本地分支，Popconfirm → 逐条 delete，完成重验证列表） |
+| 与当前分支比较 | ✅ | 行内「比较」→ 日志页 `?compare=<branch>` 对比视图（双 range 双向提交差异；「当前」分支禁用） |
 | 保护分支 / force-push 后修复 / checkout with rebase | ❌ | 未做 |
 
 ### 4.8 MergeDialog ✅（页面化对话框）
@@ -657,7 +658,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | # | 源 → 目标 | 手势/入口 | Java 证据 | rebasedjs |
 |---|-----------|-----------|-----------|-----------|
 | 9 | Git 菜单 → LogPage | Show Git Log | `Vcs.Show.Log`（backend.xml:181） | ➖（LogPage 即仓库主页） |
-| 10 | BranchPanel → LogPage | Compare with Branch | `GitCompareWithBranchAction.kt:33` | ❌ |
+| 10 | BranchPanel → LogPage | Compare with Branch | `GitCompareWithBranchAction.kt:33` | ✅ 行内「比较」→ 日志页 `?compare=<branch>` 对比视图（双 range 双向提交差异，对齐 GitCompareBranchesUi 双侧日志） |
 | 11 | SearchPanel → LogPage | 结果回车定位 | `GitSearchEverywhereContributor.kt:179` | ✅ 结果点击 → `?select=<hash>` |
 | 12 | HistoryPanel → LogPage | Show Commit in Log | `ShowCommitInLogAction`（vcs-log.xml:235） | ✅ 条目点击 → `?select=<hash>` |
 | 13 | LogPage → DiffPage | 双击/Ctrl+D；Compare Revisions | `ShowDiffAction.java:114`；vcs-log.xml:275-276 | 🟡 经 StatusPage `onOpenDiff`、CommittedChangesPanel from/to 可达，LogPage 无直达 |
@@ -775,10 +776,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **73 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update） |
+| ✅ 已复刻（含等价边） | **74 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 4（#10 比较 + #61/#62/#65 既有）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **16 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
+| ❌ 未复刻 | **15 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
 
 ### 5.5 关键联动流程
 

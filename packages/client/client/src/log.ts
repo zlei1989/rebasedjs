@@ -5,15 +5,19 @@ import type { CommitInfo, LogPage, LogQuery } from '@rebased/contracts';
 import { getJson } from './http';
 import { subscribeSse } from './events';
 
-/** 分页拉取提交历史：GET /api/repos/:repoId/log?limit&skip&author&path */
+/** 分页拉取提交历史：GET /api/repos/:repoId/log?limit&skip&author&path&range；repoId 为空挂 null key 不发请求（条件拉取） */
 export function useLogPage(repoId: string, query?: Partial<LogQuery>) {
   const params = new URLSearchParams();
   if (query?.limit !== undefined) params.set('limit', String(query.limit));
   if (query?.skip !== undefined) params.set('skip', String(query.skip));
   if (query?.author) params.set('author', query.author);
   if (query?.path) params.set('path', query.path);
+  if (query?.range) params.set('range', query.range);
   const qs = params.toString();
-  return useSWR<LogPage>(`/api/repos/${repoId}/log${qs ? `?${qs}` : ''}`, getJson);
+  return useSWR<LogPage>(
+    repoId === '' ? null : `/api/repos/${repoId}/log${qs ? `?${qs}` : ''}`,
+    getJson,
+  );
 }
 
 /** 订阅日志增量：SSE log.line → commits 追加；stream.error → error 暴露并断开；connected 表示订阅存活，卸载即中止。

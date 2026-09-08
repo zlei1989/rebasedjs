@@ -52,7 +52,7 @@ import {
   type ResetBody,
   type UpdateBody,
 } from '@rebased/contracts';
-import { AuthDialog, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
+import { AuthDialog, BranchCompareView, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
 import { Modal, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
@@ -64,12 +64,12 @@ export default function Page({
   searchParams,
 }: {
   params: Promise<{ repoId: string }>;
-  searchParams: Promise<{ select?: string }>;
+  searchParams: Promise<{ select?: string; compare?: string }>;
 }): React.ReactNode {
   const { repoId } = use(params);
   // 深链选中：blame/history/search 页的提交行跳回本页 ?select=<hash>，初始化选中提交（加载窗口外的提交
   // 无法命中列表，详情面板不渲染——已知限制，见报告）
-  const { select } = use(searchParams);
+  const { select, compare } = use(searchParams);
   const router = useRouter();
   // 过滤/分页（P2 收取）：author/path 过滤（文本即滤，对齐 Java）；limit 阶梯放大（50→500 上限）实现「加载更多」。
   // 过滤或翻页会改变查询语义——此时流（Ruling 6 同查询渐进渲染）与快照不再同查询，故仅默认视图（无过滤且 limit=50）接入流合并
@@ -85,6 +85,19 @@ export default function Page({
   const [refreshKey, setRefreshKey] = useState(0);
   const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId, refreshKey);
   const { data: status, mutate } = useRepoStatus(repoId);
+  // 分支对比视图（?compare=<branch>，GitCompareWithBranchAction 语义）：双 range 查询
+  // current..branch（分支独有）与 branch..current（当前独有）；status readiness 由下方守卫保证。
+  const compareBranch = compare === undefined || compare === '' ? null : compare;
+  const compareRangeA = compareBranch !== null ? `${status?.branch ?? 'HEAD'}..${compareBranch}` : null;
+  const compareRangeB = compareBranch !== null ? `${compareBranch}..${status?.branch ?? 'HEAD'}` : null;
+  const { data: compareA } = useLogPage(compareRangeA === null ? '' : repoId, {
+    ...(compareRangeA === null ? {} : { range: compareRangeA }),
+    limit: 500,
+  });
+  const { data: compareB } = useLogPage(compareRangeB === null ? '' : repoId, {
+    ...(compareRangeB === null ? {} : { range: compareRangeB }),
+    limit: 500,
+  });
   // GitHub 面板可用性：检测到 GitHub 远程才给 LogPage 注入入口（对齐 Java 行为）；失败静默隐藏（渐进增强）
   const { data: githubStatus } = useGithubStatus(repoId);
   // GitLab 面板可用性：与 GitHub 并排、各自检测（容器经 useGitlabStatus 判定菜单项显隐）
@@ -333,6 +346,19 @@ export default function Page({
   };
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!status) return null;
+  // 分支对比视图（?compare=<branch>）：双 range 查询就绪前不渲染（compareA/B 为 null key 条件拉取）
+  if (compareBranch !== null) {
+    if (compareA === undefined || compareB === undefined) return null;
+    return (
+      <BranchCompareView
+        branch={compareBranch}
+        branchCommits={compareA.commits}
+        currentCommits={compareB.commits}
+        onSelectCommit={(hash) => router.push(`/repos/${repoId}?select=${hash}`)}
+        onExit={() => router.push(`/repos/${repoId}`)}
+      />
+    );
+  }
   return (
     <>
       <LogPage

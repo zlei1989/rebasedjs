@@ -30,6 +30,8 @@ export interface BranchPanelProps {
   onCheckout: (action: CheckoutAction) => void;
   /** 清理已合并到 HEAD 的本地分支（容器按顺序逐条 delete；已合并删除无需 force）；缺省不渲染清理按钮 */
   onCleanupMerged?: () => void;
+  /** 与当前分支比较（GitCompareWithBranchAction 语义）：本地行渲染「比较」按钮（当前分支禁用）；缺省不渲染 */
+  onCompare?: (branch: string) => void;
   acting?: boolean;
 }
 
@@ -178,13 +180,14 @@ function SingleInputModal({
   );
 }
 
-/** 本地分支行：名称 + current Tag + 上游徽标 + 合并图标 + 行尾 Dropdown（检出/重命名/设上游/删除） */
+/** 本地分支行：名称 + current Tag + 上游徽标 + 合并图标 + 行尾 Dropdown（检出/重命名/设上游/删除）+ 比较按钮 */
 function LocalBranchRow({
   branch,
   pendingDelete,
   onMenuAction,
   onDelete,
   onDeleteCancel,
+  onCompare,
 }: {
   branch: BranchRef;
   /** 当前等待删除确认的分支名（受控 Popconfirm 锚定本行菜单按钮） */
@@ -192,6 +195,8 @@ function LocalBranchRow({
   onMenuAction: (key: 'checkout' | 'rename' | 'setUpstream' | 'delete', branch: BranchRef) => void;
   onDelete: (branch: BranchRef) => void;
   onDeleteCancel: () => void;
+  /** 与当前分支比较（GitCompareWithBranchAction 语义）；当前分支无意义（A..A 空循环），禁用 */
+  onCompare?: (branch: string) => void;
 }): React.ReactNode {
   return (
     <Flex data-testid={`row-local-${branch.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
@@ -201,6 +206,18 @@ function LocalBranchRow({
       {branch.current && <Tag color="green">当前</Tag>}
       <UpstreamInfo branch={branch} />
       <MergedIcon branch={branch} />
+      {/* 「比较」：对比视图入口（两分支独有提交双向视图）；点击不触发行其他行为 */}
+      {onCompare !== undefined && (
+        <Button
+          size="small"
+          type="text"
+          data-testid={`compare-local-${branch.name}`}
+          disabled={branch.current}
+          onClick={() => onCompare(branch.name)}
+        >
+          比较
+        </Button>
+      )}
       {/* 删除走受控 Popconfirm：Dropdown 菜单项点击即关菜单，故确认框锚定在菜单按钮上按状态开关 */}
       <Popconfirm
         open={pendingDelete === branch.name}
@@ -259,7 +276,7 @@ function BranchGroupCard({
   );
 }
 
-export function BranchPanel({ branches, onAction, onCheckout, onCleanupMerged, acting }: BranchPanelProps): React.ReactNode {
+export function BranchPanel({ branches, onAction, onCheckout, onCleanupMerged, onCompare, acting }: BranchPanelProps): React.ReactNode {
   // 过滤态：文本（名称大小写不敏感子串）+「仅看已合并」（本地/远程两组同筛选——Java 查找已合并语义）
   const [filterText, setFilterText] = useState('');
   const [mergedOnly, setMergedOnly] = useState(false);
@@ -359,6 +376,7 @@ export function BranchPanel({ branches, onAction, onCheckout, onCleanupMerged, a
                 onMenuAction={handleMenuAction}
                 onDelete={handleDelete}
                 onDeleteCancel={() => setPendingDelete(null)}
+                onCompare={onCompare}
               />
             ))
           )

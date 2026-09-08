@@ -65,6 +65,8 @@ export interface StreamLogOptions {
   maxCount?: number;
   author?: string;
   path?: string;
+  /** range 过滤（如 'master..topic' / 'topic...master'，git log <range> 语义——分支对比视图用） */
+  range?: string;
   signal?: AbortSignal;
 }
 
@@ -95,6 +97,7 @@ export async function* frameRecords(chunks: AsyncIterable<string> | Iterable<str
 /** 流式产出提交（逐条解析，不整库读入内存；分页用 --skip） */
 export async function* streamLog(repoPath: string, opts: StreamLogOptions = {}): AsyncIterable<CoreCommit> {
   const args = ['log', '--graph', '--date-order', `--format=${PREFIX_SEP}%H${FIELD_SEP}%h${FIELD_SEP}%P${FIELD_SEP}%an${FIELD_SEP}%ae${FIELD_SEP}%aI${FIELD_SEP}%D${FIELD_SEP}%B${RECORD_SEP}`];
+  if (opts.range) args.push(opts.range);
   if (opts.skip) args.push(`--skip=${opts.skip}`);
   if (opts.maxCount) args.push(`--max-count=${opts.maxCount}`);
   if (opts.author) args.push(`--author=${opts.author}`);

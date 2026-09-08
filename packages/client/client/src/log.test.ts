@@ -47,6 +47,29 @@ describe('useLogPage', () => {
       renderer.unmount();
     });
   });
+
+  it('repoId 为空串：挂 null key 不发请求（条件拉取——分支对比双查询未就绪态）', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ commits: [], hasMore: false }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: LogPage; error?: unknown; isLoading: boolean } | undefined;
+    function Probe() {
+      const { data, error, isLoading } = useLogPage('', { range: 'master..feature' });
+      result = { data, error, isLoading };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(Probe));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result?.data).toBeUndefined());
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
 });
 
 describe('useLogStream', () => {

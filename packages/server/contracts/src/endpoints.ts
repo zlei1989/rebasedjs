@@ -21,6 +21,8 @@ export const logQuerySchema = z.object({
   skip: z.coerce.number().int().min(0).default(0),
   author: z.string().optional(),
   path: z.string().optional(),
+  /** range 过滤（如 'src..main'，git log <range> 语义——分支对比视图用） */
+  range: z.string().optional(),
 });
 export type LogQuery = z.infer<typeof logQuerySchema>;
 
