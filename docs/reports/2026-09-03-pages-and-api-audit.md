@@ -368,7 +368,7 @@ rebase 对话框 + 交互式 rebase 编辑器；对照 `GitRebaseCommitsTableVie
 |--------|------|------|
 | 远程添加/删除/编辑 | ✅ | 编辑 setUrl 同写 fetch/push URL；删除 Popconfirm |
 | fetch（fetch spec、全远程/单远程） | ✅ | `FetchResult.updatedRefs` + `refs.changed` 推送 |
-| shallow 识别 / unshallow | 🟡 | fetch 端点 unshallow 既有；shallow 识别徽标未做 |
+| shallow 识别 / unshallow | ✅ | 远程页卡片顶部「浅克隆（历史截断）」徽标（`RemoteList.shallow`——core isShallowRepo 挂 getRemotes/fetch 响应）；unshallow 经 fetch 端点既有 |
 | HTTPS 认证对话框 / token 存储 | ✅ | 401 → `AUTH_FAILED` → AuthDialog（token 写回账户存储）→ retry 重放；credential helper 由系统 git 自处理（spec §8） |
 
 ### 4.13 PushDialog ✅（内嵌模态）

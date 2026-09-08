@@ -224,9 +224,9 @@ export interface AccountList {
 
 /** 远程条目 */
 export interface RemoteInfo { name: string; fetchUrl: string; pushUrl: string; }
-export interface RemoteList { remotes: RemoteInfo[]; }
-/** fetch 结果：updatedRefs 为发生移动的引用（完整 refname，如 refs/remotes/origin/main） */
-export interface FetchResult { updatedRefs: string[]; }
+export interface RemoteList { remotes: RemoteInfo[]; shallow: boolean; }
+/** fetch 结果：updatedRefs 为发生移动的引用（完整 refname，如 refs/remotes/origin/main）；shallow 表示 fetch 后仓库是否浅克隆（识别徽标用） */
+export interface FetchResult { updatedRefs: string[]; shallow: boolean; }
 /** pull/update 结果：up-to-date | updated | conflicts（合并冲突时附冲突列表由调用方查 conflicts 端点） */
 export interface PullOutcome { status: 'up-to-date' | 'updated' | 'conflicts'; }
 /** push 结果：pushed | rejected | up-to-date；rejected 时 hint 为中文引导 */

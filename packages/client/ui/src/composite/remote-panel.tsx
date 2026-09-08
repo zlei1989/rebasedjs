@@ -6,7 +6,7 @@
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Typography } from 'antd';
+import { Button, Card, Flex, Input, Modal, Popconfirm, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { RemoteAction, RemoteInfo, RemoteList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -181,6 +181,14 @@ export function RemotePanel({ remotes, onAction, onFetch, acting }: RemotePanelP
       </Flex>
 
       <Card size="small" title={`远程列表（${remotes.remotes.length}）`}>
+        {/* shallow 识别徽标：浅克隆仓库提示（unshallow 能力经 fetch 端点） */}
+        {remotes.shallow && (
+          <Flex style={{ marginBottom: 8 }}>
+            <Tag color="orange" data-testid="shallow-badge">
+              浅克隆（历史截断）
+            </Tag>
+          </Flex>
+        )}
         {remotes.remotes.length === 0 ? (
           <EmptyState title="暂无远程" />
         ) : (

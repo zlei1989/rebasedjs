@@ -940,12 +940,13 @@ describe('web-koa remotes/fetch/pull/push/update 端点', () => {
     const { repoId } = registerRepo();
     const getRes = await fetch(`${base}/api/repos/${repoId}/remotes`);
     expect(getRes.status).toBe(200);
-    expect(await getRes.json()).toEqual({ remotes: [] });
+    expect(await getRes.json()).toEqual({ remotes: [], shallow: false });
 
     const addRes = await postJson(`/api/repos/${repoId}/remotes`, { action: 'add', name: 'origin', url: 'https://example.com/a.git' });
     expect(addRes.status).toBe(200);
     expect(await addRes.json()).toEqual({
       remotes: [{ name: 'origin', fetchUrl: 'https://example.com/a.git', pushUrl: 'https://example.com/a.git' }],
+      shallow: false,
     });
 
     const setUrlRes = await postJson(`/api/repos/${repoId}/remotes`, { action: 'setUrl', name: 'origin', url: 'https://example.com/b.git' });
@@ -956,7 +957,7 @@ describe('web-koa remotes/fetch/pull/push/update 端点', () => {
 
     const removeRes = await postJson(`/api/repos/${repoId}/remotes`, { action: 'remove', name: 'origin' });
     expect(removeRes.status).toBe(200);
-    expect(await removeRes.json()).toEqual({ remotes: [] });
+    expect(await removeRes.json()).toEqual({ remotes: [], shallow: false });
   });
 
   it('remotes 端点：add 重名 → 400 INVALID_QUERY；remove 不存在 → 400 INVALID_REF', async () => {

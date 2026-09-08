@@ -5,7 +5,7 @@ import { RemotePanel } from './remote-panel';
 
 /** 测试远程列表工厂 */
 function makeList(remotes: RemoteList['remotes']): RemoteList {
-  return { remotes };
+  return { remotes, shallow: false };
 }
 
 const REMOTES: RemoteList = makeList([
@@ -30,6 +30,14 @@ describe('RemotePanel 列表渲染', () => {
     expect(row).toHaveTextContent('origin');
     expect(row).toHaveTextContent('https://example.com/a.git');
     expect(screen.getByTestId('row-remote-upstream')).toHaveTextContent('upstream');
+  });
+
+  it('shallow=true 渲染浅克隆徽标；false 不渲染', () => {
+    const { unmount } = render(<RemotePanel remotes={{ remotes: REMOTES.remotes, shallow: true }} {...makeHandlers()} />);
+    expect(screen.getByTestId('shallow-badge')).toHaveTextContent('浅克隆');
+    unmount();
+    render(<RemotePanel remotes={REMOTES} {...makeHandlers()} />);
+    expect(screen.queryByTestId('shallow-badge')).not.toBeInTheDocument();
   });
 });
 

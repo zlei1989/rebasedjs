@@ -9,15 +9,17 @@ import { freshCache } from './testing/fresh-cache';
 
 const LIST_A: RemoteList = {
   remotes: [{ name: 'origin', fetchUrl: 'https://example.com/a.git', pushUrl: 'https://example.com/a.git' }],
+  shallow: false,
 };
 const LIST_B: RemoteList = {
   remotes: [
     ...LIST_A.remotes,
     { name: 'upstream', fetchUrl: 'https://example.com/up.git', pushUrl: 'https://example.com/up.git' },
   ],
+  shallow: false,
 };
 const ADD_ACTION: RemoteAction = { action: 'add', name: 'upstream', url: 'https://example.com/up.git' };
-const FETCH_RESULT: FetchResult = { updatedRefs: ['refs/remotes/origin/main'] };
+const FETCH_RESULT: FetchResult = { updatedRefs: ['refs/remotes/origin/main'], shallow: false };
 const PULL_OUTCOME: PullOutcome = { status: 'updated' };
 const PUSH_OUTCOME: PushOutcome = { status: 'pushed' };
 

@@ -7,6 +7,7 @@ import {
   addRemote,
   fetchRemote,
   GitExitError,
+  isShallowRepo,
   listRemotes,
   pullRemote,
   pushBranch,
@@ -107,9 +108,9 @@ export async function withAuth<T>(
   }
 }
 
-/** 远程列表：core 列表原样映射为 contracts 形状 */
+/** 远程列表：core 列表原样映射为 contracts 形状 + 浅克隆状态（shallow 识别徽标数据源） */
 export async function getRemotes(repoPath: string): Promise<RemoteList> {
-  return { remotes: await listRemotes(repoPath) };
+  return { remotes: await listRemotes(repoPath), shallow: await isShallowRepo(repoPath) };
 }
 
 /** 远程写操作分派：add 重名 → INVALID_QUERY 远程已存在；remove/setUrl 不存在 → INVALID_REF 远程不存在；返回刷新列表 */
@@ -138,9 +139,12 @@ export async function applyRemoteAction(repoPath: string, action: RemoteAction):
   return getRemotes(repoPath);
 }
 
-/** fetch：remote 缺省拉全部远程；返回发生移动的引用列表（走认证回路） */
+/** fetch：remote 缺省拉全部远程；返回发生移动的引用列表（走认证回路）+ fetch 后浅克隆状态（shallow 识别徽标） */
 export async function fetchRepo(repoPath: string, body: FetchBody): Promise<FetchResult> {
-  return withAuth(repoPath, body.remote, (extraConfig) => fetchRemote(repoPath, { remote: body.remote, extraConfig }));
+  const { updatedRefs } = await withAuth(repoPath, body.remote, (extraConfig) =>
+    fetchRemote(repoPath, { remote: body.remote, extraConfig }),
+  );
+  return { updatedRefs, shallow: await isShallowRepo(repoPath) };
 }
 
 /** pull：remote 缺省取当前分支上游；rebase 对应 git pull --rebase（走认证回路） */

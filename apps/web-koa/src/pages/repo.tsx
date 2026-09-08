@@ -476,14 +476,14 @@ export function RepoPage(): React.ReactNode {
       {/* 远程列表未就绪时以空列表兜底（对话框内远程 Select 不预选，用户可待加载后重开） */}
       <PullDialog
         open={openDialog === 'pull'}
-        remotes={remotes ?? { remotes: [] }}
+        remotes={remotes ?? { remotes: [], shallow: false }}
         confirming={pulling}
         onOk={onPullOk}
         onCancel={() => setOpenDialog(null)}
       />
       <PushDialog
         open={openDialog === 'push'}
-        remotes={remotes ?? { remotes: [] }}
+        remotes={remotes ?? { remotes: [], shallow: false }}
         currentBranch={status.branch}
         confirming={pushing}
         onOk={onPushOk}

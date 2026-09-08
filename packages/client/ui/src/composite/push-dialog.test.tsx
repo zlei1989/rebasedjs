@@ -8,10 +8,12 @@ const TWO_REMOTES: RemoteList = {
     { name: 'origin', fetchUrl: 'https://example.com/a.git', pushUrl: 'https://example.com/a.git' },
     { name: 'upstream', fetchUrl: 'https://example.com/b.git', pushUrl: 'https://example.com/b.git' },
   ],
+  shallow: false,
 };
 
 const ONE_REMOTE: RemoteList = {
   remotes: [{ name: 'gitee', fetchUrl: 'https://gitee.com/a.git', pushUrl: 'https://gitee.com/a.git' }],
+  shallow: false,
 };
 
 /** 测试回调工厂 */

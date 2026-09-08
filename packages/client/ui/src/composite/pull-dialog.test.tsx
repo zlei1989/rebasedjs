@@ -8,6 +8,7 @@ const REMOTES: RemoteList = {
     { name: 'origin', fetchUrl: 'https://example.com/a.git', pushUrl: 'https://example.com/a.git' },
     { name: 'upstream', fetchUrl: 'https://example.com/b.git', pushUrl: 'https://example.com/b.git' },
   ],
+  shallow: false,
 };
 
 /** 测试回调工厂 */

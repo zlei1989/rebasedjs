@@ -135,10 +135,13 @@ describe('fetch/pull/push 三状态', () => {
       const { repo, bare, defaultBranch } = makeRemoteRig();
 
       expect((await fetchRepo(repo, {})).updatedRefs).toEqual([]);
+      expect((await getRemotes(repo)).shallow).toBe(false);
 
       pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
       const res = await fetchRepo(repo, { remote: 'origin' });
       expect(res.updatedRefs).toContain(`refs/remotes/origin/${defaultBranch}`);
+      // shallow 识别徽标数据源：普通（非浅）克隆 → false
+      expect(res.shallow).toBe(false);
 
       // 泄露断言（P2-H 终审建议）：远程操作响应体序列化后不得含 token 本体
       expect(JSON.stringify(res)).not.toContain(LEAK_TOKEN);
