@@ -498,6 +498,31 @@ export default function Page({
         open={openDialog === 'update'}
         confirming={updating}
         pushRejected={pendingPushRef.current !== null}
+        // Reset to tracked（GitUpdateOptionsDialog 左下，边 #93）：当前分支有上游才展示（Reset 默认关）
+        resetToTracked={
+          status.branch !== null && status.upstream !== null
+            ? { localBranch: status.branch, upstream: status.upstream }
+            : undefined
+        }
+        onResetToTracked={() => {
+          if (status.branch === null || status.upstream === null) return;
+          Modal.confirm({
+            title: 'Reset 到上游分支？',
+            content: `将丢弃 ${status.branch} 的工作区/暂存变更，硬重置到 ${status.upstream}；此操作不可恢复`,
+            okText: '确定',
+            okButtonProps: { danger: true },
+            cancelText: '取消',
+            onOk: () =>
+              resetTrigger({ ref: status.upstream!, mode: 'hard' })
+                .then(() => {
+                  void message.success(`已重置到 ${status.upstream}`);
+                  setOpenDialog(null);
+                  void mutate();
+                })
+                .catch(onError),
+          });
+        }}
+        resetting={resetting}
         onOk={onUpdateOk}
         onCancel={() => {
           pendingPushRef.current = null;

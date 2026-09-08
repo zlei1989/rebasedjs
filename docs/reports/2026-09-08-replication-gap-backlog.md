@@ -17,8 +17,8 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 33 项（分布于 18 个页面） | §2.2 / §2.3 |
-| 导航边缺口 | 11 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
+| 页面功能点缺口 | 32 项（分布于 18 个页面） | §2.2 / §2.3 |
+| 导航边缺口 | 10 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
 
@@ -59,7 +59,7 @@
 
 ### 2.3 P2：各域功能点补齐（按域 48 项）
 
-**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）；BlameView/HistoryPanel 溯源联动（§#29/#30/#31/#33）；PatchPanel Import into Shelf 与 ShelfPanel Unshelve 回边（#52/#54：行内「导入搁置」→ 同样名搁置存补丁全文，成功跳 `/shelves`；restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新）；StatusPage 动作入口五连（#43/#44/#45/#47/#49）；commit & push 组合执行器（#50）；PushDialog rejected→Update 联动（#91）；与分支比较（#10：core `streamLog` 增 `range`（`git log <range>` 语义）+ contracts `logQuerySchema` 增 `range` + client `useLogPage` 增 range 参数与空 repoId→null key 条件拉取；ui `BranchCompareView`（GitCompareBranchesUi 语义——分支独有/当前独有双组卡片，行点击 → ?select=）+ BranchPanel 行内「比较」（当前分支禁用）；两端容器与分支页 onCompare 接线（`?compare=<branch>` → 双 range 查询）。
+**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）；BlameView/HistoryPanel 溯源联动（§#29/#30/#31/#33）；PatchPanel Import into Shelf 与 ShelfPanel Unshelve 回边（#52/#54：行内「导入搁置」→ 同样名搁置存补丁全文，成功跳 `/shelves`；restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新）；StatusPage 动作入口五连（#43/#44/#45/#47/#49）；commit & push 组合执行器（#50）；PushDialog rejected→Update 联动（#91）；与分支比较（#10：core `streamLog` 增 `range`（`git log <range>` 语义）+ contracts `logQuerySchema` 增 `range` + client `useLogPage` 增 range 参数与空 repoId→null key 条件拉取；ui `BranchCompareView`（GitCompareBranchesUi 语义——分支独有/当前独有双组卡片，行点击 → ?select=）+ BranchPanel 行内「比较」（当前分支禁用）；两端容器与分支页 onCompare 接线（`?compare=<branch>` → 双 range 查询）；UpdateProjectDialog Reset to tracked（#93：左下「Reset to tracked」（本地分支 → 上游文案）→ Modal.confirm → `reset --hard <upstream>`；无上游不渲染；ui +3 单测）。
 
 **LogPage（2）**：行右键余项（Push up to Commit、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
 
@@ -83,7 +83,7 @@
 
 **PushDialog（2）**：rejected → 自动弹 Update 对话框联动（`GitRejectedPushUpdateDialog` → 更新引擎 → 续推）✅ 已落地（容器编排：rejected 记录 pendingPush → 自动开 Update（pushRejected 文案）→ 更新成功续推；conflicts 引导解决；再 rejected 循环）；force-push 后修复联动（待办）。
 
-**UpdateProjectDialog（2）**：更新会话进度/结果汇总（Java 多仓库会话；Web 单仓库模型下至少做单仓库结果面板）；修复跟踪分支（对话框左下 Reset to tracked）。
+**UpdateProjectDialog（1）**：更新会话进度/结果汇总（Java 多仓库会话；Web 单仓库模型下至少做单仓库结果面板）。（修复跟踪分支 Reset to tracked 已落地——左下「Reset to tracked」→ Modal.confirm → `reset --hard <upstream>`；无上游不渲染。）
 
 **BlameView（1）**：Show All Affected（受影响提交对话框——需专用查询端点）；行内「差异」（父哈希出 blame `parents` 批量解析，根提交 root=1）与「历史」已落地。
 
@@ -105,7 +105,7 @@
 
 **GitHubPanel / GitLabPanel（0）**：行级评论锚点与提交已落地（§2.7 完成记录）。
 
-### 2.4 P3：导航边缺口（11 条可做 + 2 条 🟡 直达，按目标页分组）
+### 2.4 P3：导航边缺口（10 条可做 + 2 条 🟡 直达，按目标页分组）
 
 > 边号对应盘点报告 §5.3；等效边、明确不做边（#70/#92/#96/#101/#104）不列。
 
@@ -131,7 +131,7 @@
 | ShelfPanel | #54 | ✅ 已落地（restore 后 status 键回写联动；平台 Unshelve 无自动切 tab 证据） |
 | StashPanel | #83/#84 | ✅ 已落地（Unstash As Modal + 查看差异 Modal，见 §2.3 完成记录） |
 | PushDialog | #91 | ✅ 已落地（rejected → 自动弹 Update「推送被拒 — 更新项目」merge/rebase 二选 → 成功自动续推；再 rejected 循环回 Update；conflicts 引导解决） |
-| UpdateProjectDialog | #93 | Reset to tracked |
+| UpdateProjectDialog | #93 | ✅ 已落地（左下「Reset to tracked」→ Modal.confirm → reset --hard <upstream>；无上游不渲染） |
 | 面板 → Settings | #8 | GitHub/GitLab 面板内 Settings 菜单入口（现仅无令牌提示卡回边） |
 
 ### 2.5 工程排期项（11 项，随批消化）

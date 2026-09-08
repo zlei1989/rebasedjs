@@ -54,4 +54,32 @@ describe('UpdateProjectDialog', () => {
     expect(screen.getByText('更新项目')).toBeInTheDocument();
     expect(screen.getByText(/更新方式（fetch 全部远程后合入当前分支）/)).toBeInTheDocument();
   });
+
+  it('resetToTracked 与 onResetToTracked 同传：渲染左下按钮（含本地/上游文案），点击回调', () => {
+    const onResetToTracked = vi.fn();
+    render(
+      <UpdateProjectDialog
+        open
+        {...makeHandlers()}
+        resetToTracked={{ localBranch: 'main', upstream: 'origin/main' }}
+        onResetToTracked={onResetToTracked}
+      />,
+    );
+    const button = screen.getByTestId('reset-to-tracked');
+    expect(button).toHaveTextContent('main → origin/main');
+    fireEvent.click(button);
+    expect(onResetToTracked).toHaveBeenCalledTimes(1);
+  });
+
+  it('缺省 resetToTracked/onResetToTracked：不渲染 Reset 按钮（向后兼容）', () => {
+    render(<UpdateProjectDialog open {...makeHandlers()} />);
+    expect(screen.queryByTestId('reset-to-tracked')).not.toBeInTheDocument();
+  });
+
+  it('resetToTracked 提供了但未传 onResetToTracked：按钮不渲染（回调为准）', () => {
+    render(
+      <UpdateProjectDialog open {...makeHandlers()} resetToTracked={{ localBranch: 'main', upstream: 'origin/main' }} />,
+    );
+    expect(screen.queryByTestId('reset-to-tracked')).not.toBeInTheDocument();
+  });
 });
