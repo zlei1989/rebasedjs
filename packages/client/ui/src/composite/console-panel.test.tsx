@@ -5,7 +5,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ConsoleEntry } from '@rebased/contracts';
-import { ConsolePanel } from './console-panel';
+import { ConsolePanel, foldArgs } from './console-panel';
 
 const ENTRIES: ConsoleEntry[] = [
   { id: 1, args: ['git', 'add', 'a.ts'], exitCode: 0, durationMs: 320, stderrTail: '', atIso: '2026-08-01T10:30:00+08:00' },
@@ -61,5 +61,17 @@ describe('ConsolePanel', () => {
   it('onRefresh 缺省时不渲染刷新按钮', () => {
     render(<ConsolePanel entries={ENTRIES} />);
     expect(screen.queryByTestId('console-refresh')).not.toBeInTheDocument();
+  });
+});
+
+describe('foldArgs（GitConsoleFoldingImpl 语义）', () => {
+  it('连续 -c key=value 折叠为单个 `-c …`（前后原样）', () => {
+    expect(foldArgs(['--no-pager', '-c', 'core.pager=cat', 'log'])).toBe('--no-pager -c … log');
+    expect(foldArgs(['-c', 'core.pager=cat', '-c', 'http.host.extraHeader=x', 'fetch'])).toBe('-c … -c … fetch');
+  });
+
+  it('无 -c 对时原样 join；结尾孤立的 -c 原样保留（防御）', () => {
+    expect(foldArgs(['git', 'add', 'a.ts'])).toBe('git add a.ts');
+    expect(foldArgs(['git', '-c'])).toBe('git -c');
   });
 });

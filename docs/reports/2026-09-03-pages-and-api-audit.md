@@ -570,7 +570,7 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | git 命令输出展示 | ✅ | 环形缓冲（cap 200/仓库，按 cwd 键控）+ token 剥离（`-c`+`/extraheader=/i` 整对删除）+ stderr 尾 500；列表（时间/args/退出码/耗时/stderr 尾）+ 刷新 |
-| 输出折叠 / 按命令分组 | ❌ | 拉取式历史列表不承载实时折叠 |
+| 输出折叠（`-c key=value`） | ✅ | 行显示折叠（GitConsoleFoldingImpl 语义）：`-c ...` 占位（逻辑内新建 `-c …`，折叠整对参数）；进度行折叠不适用拉取式列表 |
 
 ### 4.29 QuickActionsMenu 🟡（等效聚合）
 
