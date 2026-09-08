@@ -17,8 +17,8 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 37 项（分布于 19 个页面） | §2.2 / §2.3 |
-| 导航边缺口 | 32 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
+| 页面功能点缺口 | 36 项（分布于 18 个页面） | §2.2 / §2.3 |
+| 导航边缺口 | 19 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
 
@@ -59,7 +59,7 @@
 
 ### 2.3 P2：各域功能点补齐（按域 48 项）
 
-**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）。
+**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）；BlameView/HistoryPanel 溯源联动（§#29/#30/#31/#33）；PatchPanel Import into Shelf 与 ShelfPanel Unshelve 回边（#52/#54：行内「导入搁置」→ 同样名搁置存补丁全文，成功跳 `/shelves`；restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新）。
 
 **LogPage（2）**：行右键余项（Push up to Commit、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
 
@@ -95,9 +95,9 @@
 
 **ConflictsPanel（2）**：冲突文件分组（按目录）；skip（continue/abort 已通）。
 
-**PatchPanel（1）**：Import Patches into Shelf（`ImportIntoShelfAction`）。
+**PatchPanel（0）**：Import Patches into Shelf（`ImportIntoShelfAction`）已落地——行内「导入搁置」→ 同样名搁置存补丁全文（无未跟踪伴随），成功后跳 `/shelves`（activateView 语义）；重名 → INVALID_QUERY、补丁不存在 → INVALID_REF。
 
-**ShelfPanel（1）**：Shelve Changes from StatusPage（`ShelveChangesAction` 入口）。
+**ShelfPanel（1）**：Shelve Changes from StatusPage（`ShelveChangesAction` 入口）。（Unshelve 回边已落地：restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新。）
 
 **GitConsole（1）**：输出折叠/按命令分组（`GitConsoleFoldingImpl`）。
 
@@ -105,7 +105,7 @@
 
 **GitHubPanel / GitLabPanel（0）**：行级评论锚点与提交已落地（§2.7 完成记录）。
 
-### 2.4 P3：导航边缺口（33 条可做 + 2 条 🟡 直达，按目标页分组）
+### 2.4 P3：导航边缺口（19 条可做 + 2 条 🟡 直达，按目标页分组）
 
 > 边号对应盘点报告 §5.3；等效边、明确不做边（#70/#92/#96/#101/#104）不列。
 
@@ -127,8 +127,8 @@
 | BlameView | #29/#33/#34 | #29/#33 ✅ 已落地（行内「历史」「差异」）；#34 Show All Affected 待办（见 §2.3） |
 | StatusPage | #43/#44/#45/#47/#48/#49 | 冲突入口、Create Patch、Shelve、Annotate/History、三版本、Stash Files |
 | CommitDialog 等效面 | #50 | commit & push 组合执行器 |
-| PatchPanel | #52 | Import Patches into Shelf |
-| ShelfPanel | #54 | Unshelve 后跳转/回写联动 |
+| PatchPanel | #52 | ✅ 已落地（行内「导入搁置」→ 成功跳 /shelves，见 §2.3 完成记录） |
+| ShelfPanel | #54 | ✅ 已落地（restore 后 status 键回写联动；平台 Unshelve 无自动切 tab 证据） |
 | StashPanel | #83/#84 | ✅ 已落地（Unstash As Modal + 查看差异 Modal，见 §2.3 完成记录） |
 | PushDialog | #91 | rejected → Update 联动闭环 |
 | UpdateProjectDialog | #93 | Reset to tracked |

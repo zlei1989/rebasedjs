@@ -22,7 +22,7 @@ export { applyStashAction, getStashDiff, getStashes, unstashAs } from './stash';
 export { getSettings, updateSettings } from './settings';
 export { applyChangelistAction, getChangelists } from './changelist';
 export { applyPatchService, createPatch, deletePatch, getPatches } from './patch';
-export { applyShelfAction, getShelves } from './shelf';
+export { applyShelfAction, getShelves, importPatchIntoShelf } from './shelf';
 export { getConsole } from './console';
 export { addIgnore, getIgnore, getIgnoreTemplates, putIgnore } from './ignore';
 export { deleteAccount, listAccounts, upsertAccount } from './auth';

@@ -261,6 +261,9 @@ export const patchApplyBodySchema = z.object({ name: z.string().min(1) });
 export type PatchApplyBody = z.infer<typeof patchApplyBodySchema>;
 export const patchDeleteBodySchema = z.object({ name: z.string().min(1) });
 export type PatchDeleteBody = z.infer<typeof patchDeleteBodySchema>;
+/** 导入补丁为搁置：路径参数 name（ImportIntoShelfAction 语义——补丁全文以同名搁置存档） */
+export const patchImportShelfSchema = z.object({ name: z.string().min(1) });
+export type PatchImportShelf = z.infer<typeof patchImportShelfSchema>;
 export const shelfActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('save'), name: z.string().min(1).regex(/^[\w.-]+$/) }),
   z.object({ action: z.literal('restore'), name: z.string().min(1) }),

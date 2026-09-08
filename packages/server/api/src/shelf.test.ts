@@ -3,8 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyShelfAction, getShelves } from './shelf';
+import { applyShelfAction, getShelves, importPatchIntoShelf } from './shelf';
 import { getConfigDir } from './lib/config-store';
+import { createPatch, getPatches } from './patch';
 import { openRepo } from './repo';
 import { getRepoStatus } from './status';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
@@ -176,6 +177,53 @@ describe('shelf 功能', () => {
     await expect(applyShelfAction(repo, { action: 'restore', name: 'ghost' })).rejects.toMatchObject({
       code: 'INVALID_REF',
       message: '搁置不存在：ghost',
+    });
+  });
+});
+
+describe('importPatchIntoShelf（Import Patches into Shelf）', () => {
+  it('导入补丁为同名搁置：patch.diff = 补丁全文（仅 tracked 变更，无 untracked 目录），补丁本身保留', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    const patchList = await createPatch(repo, { name: 'import-me' });
+    expect(patchList.patches).toHaveLength(1);
+
+    const list = await importPatchIntoShelf(repo, 'import-me');
+    expect(list.shelves).toHaveLength(1);
+    expect(list.shelves[0]).toMatchObject({ name: 'import-me', untrackedCount: 0 });
+
+    const dir = join(await shelvesDir(repo), 'import-me');
+    expect(readFileSync(join(dir, 'patch.diff'), 'utf8')).toContain('+v2');
+    expect(existsSync(join(dir, 'untracked'))).toBe(false);
+    // 补丁存档不受影响
+    expect((await getPatches(repo)).patches).toHaveLength(1);
+  });
+
+  it('导入后 restore：补丁的 git diff HEAD 形状可直接应用回工作区', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    await createPatch(repo, { name: 'p' });
+    await importPatchIntoShelf(repo, 'p');
+    execFileSync('git', ['-C', repo, 'checkout', '--', 'a.txt']);
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v1');
+
+    await applyShelfAction(repo, { action: 'restore', name: 'p' });
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v2');
+  });
+
+  it('补丁不存在 → INVALID_REF；同名词搁置已存在 → INVALID_QUERY', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    await expect(importPatchIntoShelf(repo, 'ghost')).rejects.toMatchObject({
+      code: 'INVALID_REF',
+      message: '补丁不存在：ghost',
+    });
+
+    await createPatch(repo, { name: 'dup' });
+    await importPatchIntoShelf(repo, 'dup');
+    await expect(importPatchIntoShelf(repo, 'dup')).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '搁置已存在：dup',
     });
   });
 });

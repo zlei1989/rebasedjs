@@ -1,7 +1,7 @@
 /** 补丁 hooks：补丁列表 SWR 查询 + create/apply/delete 写操作 mutation（POST 子路径，响应显式回写 patches/status 缓存键） */
 import useSWR, { useSWRConfig, type SWRResponse } from 'swr';
 import useSWRMutation from 'swr/mutation';
-import type { PatchApplyBody, PatchCreateBody, PatchDeleteBody, PatchList, RepoStatus } from '@rebased/contracts';
+import type { PatchApplyBody, PatchCreateBody, PatchDeleteBody, PatchImportShelf, PatchList, RepoStatus, ShelfList } from '@rebased/contracts';
 import { getJson, postJson } from './http';
 
 /** 补丁列表：GET /api/repos/:repoId/patches */
@@ -62,6 +62,28 @@ export function useDeletePatch(repoId: string): { trigger: (body: PatchDeleteBod
     trigger: async (body) => {
       const list = await trigger(body);
       await mutate(`/api/repos/${repoId}/patches`, list, { revalidate: false });
+      return list;
+    },
+    isMutating,
+  };
+}
+
+/** 导入补丁到搁置（mutation）：POST …/patches/:name/import-shelf，响应 ShelfList 回写 shelves 缓存键（useShelves 订阅）。
+ *  说明：URL 含补丁名（trigger 的 arg），useSWRMutation 的 key 不入参 arg（SWR v2 serialize(key) 不传参），
+ *  故 key 用占位标签、URL 在 fetcher 内经 arg 拼装；该 key 无对应 useSWR 查询，无缓存冲突。 */
+export function useImportPatchIntoShelf(repoId: string): { trigger: (body: PatchImportShelf) => Promise<ShelfList>; isMutating: boolean } {
+  const { mutate } = useSWRConfig();
+  const { trigger, isMutating } = useSWRMutation(
+    `/api/repos/${repoId}/patches/import-shelf`,
+    (_key: string, { arg }: { arg: PatchImportShelf }) =>
+      postJson<ShelfList>(`/api/repos/${repoId}/patches/${encodeURIComponent(arg.name)}/import-shelf`, { name: arg.name }),
+    { revalidate: false },
+  );
+  return {
+    trigger: async (body) => {
+      const list = await trigger(body);
+      // 跨键回写：导入的搁置结果写回 shelves 键（导入补丁改变搁置状态）
+      await mutate(`/api/repos/${repoId}/shelves`, list, { revalidate: false });
       return list;
     },
     isMutating,

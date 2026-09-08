@@ -16,11 +16,11 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **88 / 102**（web-next 88 个 route.ts ↔ web-koa repos.ts 102 注册，14 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **89 / 103**（web-next 89 个 route.ts ↔ web-koa repos.ts 103 注册，14 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 107 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 62、领域类型/别名 88、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（104 条） | 52 ✅（含等价边）+ 9 🟡 + 7 ➖ + 36 ❌ |
+| `@rebased/api` 公共出口 | 108 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 63、领域类型/别名 88、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| 导航边（104 条） | 66 ✅（含等价边）+ 8 🟡 + 7 ➖ + 23 ❌ |
 
 ### 1.2 口径与图例
 
@@ -102,7 +102,7 @@
 
 ## 三、接口盘点
 
-### 3.1 端点总表（88 路径 / 102 方法，两端完全对称）
+### 3.1 端点总表（89 路径 / 103 方法，两端完全对称）
 
 > 路径前缀 `/api`；`id` 即 `repoId`。SSE 3 个：`log/stream`、`diff/stream`、`events`。每个路由只做三件事：zod 校验 → 调 `@rebased/api` → 错误映射。
 
@@ -143,7 +143,7 @@
 | browse | `repos/:id/browse`、`repos/:id/browse/content` | GET ×2 | 指定版本文件树 / 单文件内容（二进制标记） | BrowsePanel | ✅ |
 | committed | `repos/:id/committed` | GET | 已提交变更分页浏览 | CommittedChangesPanel | ✅ |
 | search | `repos/:id/search` | GET | 提交搜索（grep/pickaxe） | SearchPanel | ✅ |
-| patch | `repos/:id/patches`、`patches/create`、`patches/apply`、`patches/delete` | GET + 3×POST | 补丁列表 / 创建（三态）/ 应用（check 先行）/ 删除 | PatchPanel | ✅ |
+| patch | `repos/:id/patches`、`patches/create`、`patches/apply`、`patches/delete`、`patches/:name/import-shelf` | GET + 4×POST | 补丁列表 / 创建（三态）/ 应用（check 先行）/ 删除 / 导入搁置 | PatchPanel | ✅ |
 | shelf | `repos/:id/shelves` | GET/POST | 搁置列表 / save/restore/drop | ShelfPanel | ✅ |
 | console | `repos/:id/console` | GET | 命令执行记录（token 剥离） | ConsolePanel | ✅ |
 | ignore | `repos/:id/ignore`、`ignore/add`、`ignore/templates` | GET/PUT + 2 项 | .gitignore/exclude 读写 / 一键忽略 / 内建模板 | IgnoreDialog、StatusPage | ✅ |
@@ -152,18 +152,18 @@
 | worktree | `repos/:id/worktrees`、`worktrees/remove`、`worktrees/prune` | GET/POST + 2×POST | 工作树列表 / 创建 / 移除 / 清理 | WorktreePanel | ✅ |
 | submodule | `repos/:id/submodules`、`submodules/update` | GET/POST | 子模块列表（四态）/ 更新（init/recursive） | SubmodulePanel | ✅ |
 
-**小结**：88 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
+**小结**：89 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
 
 ### 3.2 契约层（`@rebased/contracts`）
 
-- **zod schema（62 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff（含 three-way）/settings/config、staging/commit、branch/checkout、reset、merge/conflict、stash（含 unstash-as/index）、changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore、github（注释/审查/合并/**行级评论**）、gitlab（评论/讨论/审查/合并/创建）、worktree/submodule——全部被两端路由使用，无闲置。
+- **zod schema（63 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff（含 three-way）/settings/config、staging/commit、branch/checkout、reset、merge/conflict、stash（含 unstash-as/index）、changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore（含 patch import-shelf name）、github（注释/审查/合并/**行级评论**）、gitlab（评论/讨论/审查/合并/创建）、worktree/submodule——全部被两端路由使用，无闲置。
 - **SSE 事件（6 种在用）**：`log.line`、`diff.chunk`、`repo.state-changed`、`operation.state-changed`（events 首帧双事件）、`refs.changed`（fetch/pull/push 后引用移动，首帧全量基线）、`stream.error`（流内错误帧）。`operation.progress` 未实现（无进度型长任务 UI 面）。
 - **错误码（12 个）**：实际产生 8 个——`REPO_NOT_FOUND`、`NOT_A_GIT_REPO`、`INVALID_QUERY`、`GIT_ERROR`、`INVALID_REF`、`OPERATION_IN_PROGRESS`、`AUTH_FAILED`（远程 401 → 认证重试回路）、`RATE_LIMITED`（GitHub 限流）；预留 4 个——`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`。映射表 `httpStatusFor` 两端共用。
 - **领域类型（88 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
 
 ### 3.3 服务层与使用状态
 
-- `@rebased/api` 公共出口 107 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
+- `@rebased/api` 公共出口 108 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
 - **未挂端点 0**：`initRepo`/`cloneRepo` 已随 repo 域收尾挂 `/repos/init`、`/repos/clone`（见任务清单 §2.2 完成记录）。
 - **半使用接口 2 个**：`streamDiffEvents`（diff/stream 已订阅未渲染）、`applyHunkStaging`（无 UI 入口）。
 
@@ -467,13 +467,14 @@ Committed Changes 浏览器——按提交浏览已提交变更；对应 `Commit
 
 补丁创建/应用/已保存补丁管理；对应平台 patch 包 + `GitStageCreatePatchActionProvider`。
 
-- **落点**：路由 `/repos/:id/patches`；组件 `composite/patch-panel.tsx`；服务 `api/patch.ts`；端点 `GET /patches`、`POST /patches/create`、`POST /patches/apply`、`POST /patches/delete`。
+- **落点**：路由 `/repos/:id/patches`；组件 `composite/patch-panel.tsx`；服务 `api/patch.ts` + `api/shelf.ts`；端点 `GET /patches`、`POST /patches/create`、`POST /patches/apply`、`POST /patches/delete`、`POST /patches/:name/import-shelf`。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | 创建补丁（unified diff 导出） | ✅ | 三态：工作区/暂存/提交区间（from/to 单侧缺省=HEAD） |
 | 应用补丁 | ✅ | `git apply --check` 先行；空补丁 no-op；失败诚实报错 |
 | 补丁列表管理 | ✅ | 名/大小/时间 + 删除 Popconfirm；重名 → `INVALID_QUERY` |
+| 导入补丁到搁置 | ✅ | 行内「导入搁置」→ `importPatchIntoShelf`（同名搁置存补丁全文；重名 → `INVALID_QUERY`、补丁不存在 → `INVALID_REF`）；成功后跳 ShelfPanel（`ImportIntoShelfAction:74` activateView 语义） |
 
 ### 4.22 ShelfPanel ✅
 
@@ -485,6 +486,7 @@ Shelf 搁置——变更的本地暂存架（与 git stash 互补的平台能力
 |--------|------|------|
 | 搁置保存 | ✅ | 工作区+暂存 diff + 未跟踪文件随档；重名 → `INVALID_QUERY` |
 | 恢复 / 删除 | ✅ | restore（空补丁跳过 apply 仅回拷；同名冲突跳过不覆盖）/ drop；不存在 → `INVALID_REF` |
+| Unshelve 联动 | ✅ | restore 成功后 status 键重验证（工作区变更进入状态页，边 #54：平台 Unshelve 无自动切 tab 证据，Web 等价 = events 刷新） |
 
 ### 4.23 WorktreePanel ✅
 
@@ -698,9 +700,9 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 49 | StatusPage → StashPanel | Stash Files | backend.xml:420 | ❌ |
 | 50 | CommitDialog → PushDialog | Commit and Push… 执行器 | `GitCommitAndPushExecutor.kt:19` | ❌（PushDialog 独立落地，组合执行器未做） |
 | 51 | Git 菜单 → PatchPanel（应用） | Apply Patch | backend.xml:182 | ✅ 「更多」→ 页内应用（check 先行） |
-| 52 | PatchPanel → ShelfPanel | Import Patches into Shelf | `ImportIntoShelfAction.java:74` | ❌ |
+| 52 | PatchPanel → ShelfPanel | Import Patches into Shelf | `ImportIntoShelfAction.java:74` | ✅ 行内「导入搁置」→ 成功跳 `/shelves`（activateView 语义） |
 | 53 | 工具窗口 → ShelfPanel | Shelf tab | VcsActions.xml:636 | ✅ 「更多」→ `/shelves` |
-| 54 | ShelfPanel → StatusPage | Unshelve | `UnshelveChangesAction.kt:37` | ❌（restore 后 events 刷新，无自动跳转） |
+| 54 | ShelfPanel → StatusPage | Unshelve | `UnshelveChangesAction.kt:37` | ✅ restore 后 status 键回写联动（events 刷新；口径更正：平台 Unshelve 无自动切 tab 证据） |
 | 55 | IgnoreDialog → 编辑器 | 写入后打开 .gitignore | `IgnoreFileAction.kt:82` | ➖（页内预览+保存，无编辑器） |
 | 56 | merge/rebase/update → ConflictsPanel | 冲突后自动出现 tab | `GitConflictsToolWindowManager.java:26` | ✅ 四操作冲突结果均自动跳 `/conflicts` |
 | 57 | Git 菜单 → ConflictsPanel | Resolve Conflicts… | `GitResolveConflictsAction.java:67` | ✅ 操作条「去解决冲突」链接 |
@@ -769,10 +771,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **64 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 4（#48 三版本）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26） |
+| ✅ 已复刻（含等价边） | **66 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 4（#48 三版本）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **25 条**（含明确不做：分享、打开 worktree、Snippet、QuickActions 独立组件、流程内子模块更新、New Working Tree） |
+| ❌ 未复刻 | **23 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
 
 ### 5.5 关键联动流程
 
@@ -780,7 +782,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 2. **提交 → 推送**：StatusPage 提交框 →（推送独立于「更多」菜单 PushDialog）；commit&push 组合执行器未做。
 3. **合并/变基/摘樱桃/还原 → 冲突 → 解决 → 继续**：四操作冲突统一跳 ConflictsPanel → MergeView 逐文件（ours/theirs/manual/delete）→ 「完成合并」`operation/continue` 泛化 → 回日志页；abort 在操作条。
 4. **溯源链路**：BlameView / HistoryPanel / SearchPanel / CommittedChangesPanel 结果 → 日志页 `?select=<hash>` 深链；Committed 文件 → DiffPage from/to。
-5. **变更暂存架**：StatusPage → 补丁（PatchPanel 三态创建）/ 搁置（ShelfPanel save/restore）/ 忽略（一键 add）；Patch→Shelf、Shelve from Status 未做。
+5. **变更暂存架**：StatusPage → 补丁（PatchPanel 三态创建）/ 搁置（ShelfPanel save/restore）/ 忽略（一键 add）；Patch→Shelf（导入搁置 → 跳 ShelfPanel）、Shelve from Status 未做。
 
 ---
 
@@ -808,9 +810,9 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 层 | 位置 |
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
-| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 107 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（88 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（102 注册）+ `src/middleware/error.ts` |
+| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 108 出口） |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（89 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（103 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |

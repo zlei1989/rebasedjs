@@ -120,3 +120,10 @@ export async function deletePatch(repoPath: string, body: PatchDeleteBody): Prom
   rmSync(file);
   return getPatches(repoPath);
 }
+
+/** 读补丁全文（Import into Shelf 数据源）：不存在 → INVALID_REF */
+export function readPatchText(repoPath: string, name: string): string {
+  const file = patchFileOf(patchesDirOf(repoPath), name);
+  if (!existsSync(file)) throw new ServiceError('INVALID_REF', `补丁不存在：${name}`);
+  return readFileSync(file, 'utf8');
+}

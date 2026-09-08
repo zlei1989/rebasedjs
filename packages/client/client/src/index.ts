@@ -29,7 +29,7 @@ export { useCommit } from './commit';
 export { useBranches, useBranchAction } from './branches';
 export { useStashes, useStashAction, useStashDiff, useStashUnstashAs } from './stash';
 export { useChangelists, useChangelistAction } from './changelist';
-export { usePatches, useCreatePatch, useApplyPatch, useDeletePatch } from './patch';
+export { usePatches, useCreatePatch, useApplyPatch, useDeletePatch, useImportPatchIntoShelf } from './patch';
 export { useShelves, useShelfAction } from './shelf';
 export { useConsole } from './console';
 export { useIgnore, usePutIgnore, useAddIgnore, useIgnoreTemplates } from './ignore';

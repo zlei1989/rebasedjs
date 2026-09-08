@@ -1,7 +1,7 @@
 /**
  * PatchPanel 测试：列表渲染（name / size 字节格式 / formatCommitDate 创建时间）、空态、
  * 创建 Modal 三态载荷（工作区省略 staged / 暂存 staged:true / 提交区间 from·to 各自可空省略）、
- * 名称为空禁用确定、取消后重开复位、应用回调、删除 Popconfirm 确认后回调、acting 时行按钮禁用。
+ * 名称为空禁用确定、取消后重开复位、应用/导入搁置回调、删除 Popconfirm 确认后回调、acting 时行按钮禁用。
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -34,6 +34,7 @@ describe('PatchPanel 列表渲染', () => {
         ])}
         onCreate={() => {}}
         onApply={() => {}}
+        onImportShelf={() => {}}
         onDelete={() => {}}
       />,
     );
@@ -50,6 +51,7 @@ describe('PatchPanel 列表渲染', () => {
         patches={makeList([makePatch({ name: 'tiny', size: 512 })])}
         onCreate={() => {}}
         onApply={() => {}}
+        onImportShelf={() => {}}
         onDelete={() => {}}
       />,
     );
@@ -57,7 +59,7 @@ describe('PatchPanel 列表渲染', () => {
   });
 
   it('无补丁时渲染空态', () => {
-    render(<PatchPanel patches={makeList([])} onCreate={() => {}} onApply={() => {}} onDelete={() => {}} />);
+    render(<PatchPanel patches={makeList([])} onCreate={() => {}} onApply={() => {}} onImportShelf={() => {}} onDelete={() => {}} />);
     expect(screen.getByText('暂无补丁')).toBeInTheDocument();
   });
 });
@@ -65,7 +67,7 @@ describe('PatchPanel 列表渲染', () => {
 describe('PatchPanel 创建 Modal 三态载荷', () => {
   it('工作区（默认）：提交 {name}（省略 staged，服务端缺省视为 false）', async () => {
     const onCreate = vi.fn();
-    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onDelete={() => {}} />);
+    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onImportShelf={() => {}} onDelete={() => {}} />);
     await openModalAndFillName();
     fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
     expect(onCreate).toHaveBeenCalledTimes(1);
@@ -74,7 +76,7 @@ describe('PatchPanel 创建 Modal 三态载荷', () => {
 
   it('暂存：提交 {name, staged:true}', async () => {
     const onCreate = vi.fn();
-    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onDelete={() => {}} />);
+    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onImportShelf={() => {}} onDelete={() => {}} />);
     await openModalAndFillName();
     fireEvent.click(screen.getByRole('radio', { name: /暂存/ }));
     fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
@@ -83,7 +85,7 @@ describe('PatchPanel 创建 Modal 三态载荷', () => {
 
   it('提交区间（双侧）：提交 {name, from, to}', async () => {
     const onCreate = vi.fn();
-    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onDelete={() => {}} />);
+    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onImportShelf={() => {}} onDelete={() => {}} />);
     await openModalAndFillName();
     fireEvent.click(screen.getByRole('radio', { name: /提交区间/ }));
     fireEvent.change(screen.getByTestId('patch-create-from'), { target: { value: 'main~3' } });
@@ -94,7 +96,7 @@ describe('PatchPanel 创建 Modal 三态载荷', () => {
 
   it('提交区间（单侧 from）：to 省略（服务端单侧缺省=HEAD）', async () => {
     const onCreate = vi.fn();
-    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onDelete={() => {}} />);
+    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onImportShelf={() => {}} onDelete={() => {}} />);
     await openModalAndFillName();
     fireEvent.click(screen.getByRole('radio', { name: /提交区间/ }));
     fireEvent.change(screen.getByTestId('patch-create-from'), { target: { value: 'main~1' } });
@@ -103,14 +105,14 @@ describe('PatchPanel 创建 Modal 三态载荷', () => {
   });
 
   it('名称为空时确定按钮禁用', async () => {
-    render(<PatchPanel patches={makeList([])} onCreate={() => {}} onApply={() => {}} onDelete={() => {}} />);
+    render(<PatchPanel patches={makeList([])} onCreate={() => {}} onApply={() => {}} onImportShelf={() => {}} onDelete={() => {}} />);
     fireEvent.click(screen.getByTestId('patch-create-button'));
     expect(await screen.findByRole('button', { name: /确\s*定/ })).toBeDisabled();
   });
 
   it('取消后重开：输入与范围已复位', async () => {
     const onCreate = vi.fn();
-    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onDelete={() => {}} />);
+    render(<PatchPanel patches={makeList([])} onCreate={onCreate} onApply={() => {}} onImportShelf={() => {}} onDelete={() => {}} />);
     fireEvent.click(screen.getByTestId('patch-create-button'));
     fireEvent.change(await screen.findByTestId('patch-create-name'), { target: { value: 'wip-fix' } });
     fireEvent.click(screen.getByRole('radio', { name: /提交区间/ }));
@@ -131,12 +133,29 @@ describe('PatchPanel 行操作', () => {
         patches={makeList([makePatch({ name: 'wip-fix' })])}
         onCreate={() => {}}
         onApply={onApply}
+        onImportShelf={() => {}}
         onDelete={() => {}}
       />,
     );
     fireEvent.click(screen.getByTestId('apply-patch-wip-fix'));
     expect(onApply).toHaveBeenCalledTimes(1);
     expect(onApply).toHaveBeenCalledWith('wip-fix');
+  });
+
+  it('「导入搁置」：直接以 name 调 onImportShelf', () => {
+    const onImportShelf = vi.fn();
+    render(
+      <PatchPanel
+        patches={makeList([makePatch({ name: 'wip-fix' })])}
+        onCreate={() => {}}
+        onApply={() => {}}
+        onImportShelf={onImportShelf}
+        onDelete={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('import-patch-wip-fix'));
+    expect(onImportShelf).toHaveBeenCalledTimes(1);
+    expect(onImportShelf).toHaveBeenCalledWith('wip-fix');
   });
 
   it('「删除」：Popconfirm 确认后以 name 调 onDelete', async () => {
@@ -146,6 +165,7 @@ describe('PatchPanel 行操作', () => {
         patches={makeList([makePatch({ name: 'wip-fix' })])}
         onCreate={() => {}}
         onApply={() => {}}
+        onImportShelf={() => {}}
         onDelete={onDelete}
       />,
     );
@@ -163,6 +183,7 @@ describe('PatchPanel 行操作', () => {
         patches={makeList([makePatch({ name: 'wip-fix' })])}
         onCreate={() => {}}
         onApply={() => {}}
+        onImportShelf={() => {}}
         onDelete={onDelete}
       />,
     );
@@ -171,17 +192,19 @@ describe('PatchPanel 行操作', () => {
     expect(onDelete).not.toHaveBeenCalled();
   });
 
-  it('acting 时行内应用/删除按钮禁用', () => {
+  it('acting 时行内应用/导入搁置/删除按钮禁用', () => {
     render(
       <PatchPanel
         patches={makeList([makePatch({ name: 'wip-fix' })])}
         onCreate={() => {}}
         onApply={() => {}}
+        onImportShelf={() => {}}
         onDelete={() => {}}
         acting
       />,
     );
     expect(screen.getByTestId('apply-patch-wip-fix')).toBeDisabled();
+    expect(screen.getByTestId('import-patch-wip-fix')).toBeDisabled();
     expect(screen.getByTestId('delete-patch-wip-fix')).toBeDisabled();
   });
 });

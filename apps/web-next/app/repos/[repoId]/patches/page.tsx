@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * 补丁页容器：usePatches + useCreatePatch/useApplyPatch/useDeletePatch 注入 ui PatchPanel（与 web-koa 容器同构）。
- * 顶部返回按钮回日志页；操作失败统一 message.error（成功响应由 hooks 显式回写 patches/status 缓存键，无需额外刷新）；
- * acting 并合三个 mutation 的 isMutating：任一进行中即禁用行按钮/创建按钮 loading。
+ * 补丁页容器：usePatches + useCreatePatch/useApplyPatch/useDeletePatch/useImportPatchIntoShelf 注入 ui PatchPanel（与 web-koa 容器同构）。
+ * 顶部返回按钮回日志页；操作失败统一 message.error（成功响应由 hooks 显式回写 patches/shelf/status 缓存键，无需额外刷新）；
+ * acting 并合四个 mutation 的 isMutating：任一进行中即禁用行按钮/创建按钮 loading。
  */
-import { useApplyPatch, useCreatePatch, useDeletePatch, usePatches } from '@rebased/client';
+import { useApplyPatch, useCreatePatch, useDeletePatch, useImportPatchIntoShelf, usePatches } from '@rebased/client';
 import { PatchPanel } from '@rebased/ui';
 import { Button, Flex, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -18,6 +18,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { trigger: createPatch, isMutating: creating } = useCreatePatch(repoId);
   const { trigger: applyPatch, isMutating: applying } = useApplyPatch(repoId);
   const { trigger: deletePatch, isMutating: deleting } = useDeletePatch(repoId);
+  const { trigger: importShelf, isMutating: importing } = useImportPatchIntoShelf(repoId);
   // 操作失败统一以服务端中文 message 提示，避免未捕获 rejection
   const onError = (err: unknown): void => {
     void message.error(err instanceof Error ? err.message : String(err));
@@ -40,10 +41,19 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onApply={(name) => {
           applyPatch({ name }).catch(onError);
         }}
+        onImportShelf={(name) => {
+          // ImportIntoShelfAction:74 activateView → 切到 Shelf 视图；Web 等价 = 成功后跳搁置页
+          importShelf({ name })
+            .then(() => {
+              void message.success(`已导入搁置：${name}`);
+              router.push(`/repos/${repoId}/shelves`);
+            })
+            .catch(onError);
+        }}
         onDelete={(name) => {
           deletePatch({ name }).catch(onError);
         }}
-        acting={creating || applying || deleting}
+        acting={creating || applying || deleting || importing}
       />
     </Flex>
   );

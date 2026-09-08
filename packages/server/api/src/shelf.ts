@@ -19,7 +19,7 @@ import { getStatus, runGit } from '@rebased/core';
 import { ServiceError, type ShelfAction, type ShelfEntry, type ShelfList } from '@rebased/contracts';
 import type { AppConfig } from './lib/config-store';
 import { getConfigDir, loadConfig } from './lib/config-store';
-import { applyPatchText } from './patch';
+import { applyPatchText, readPatchText } from './patch';
 
 /** repoPath → repoId：经 config.repos 注册表反查（沿 changelist 先例）；未注册 → REPO_NOT_FOUND（防御） */
 function repoIdOf(config: AppConfig, repoPath: string): string {
@@ -171,5 +171,19 @@ export async function applyShelfAction(repoPath: string, action: ShelfAction): P
       await dropShelf(repoPath, action.name);
       break;
   }
+  return getShelves(repoPath);
+}
+
+/**
+ * 导入补丁为搁置（ImportIntoShelfAction 语义）：已有补丁全文 → 以同名搁置保存（仅 tracked 变更 ——
+ * 补丁本身即 diff 全文，无未跟踪文件伴随）；重名 → INVALID_QUERY（沿 save 约定，用户可先改名补丁）。
+ * 返回刷新后的搁置列表。
+ */
+export async function importPatchIntoShelf(repoPath: string, patchName: string): Promise<ShelfList> {
+  const dir = shelfDirOf(repoPath, patchName);
+  if (existsSync(dir)) throw new ServiceError('INVALID_QUERY', `搁置已存在：${patchName}`);
+  const patch = readPatchText(repoPath, patchName);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'patch.diff'), patch, 'utf8');
   return getShelves(repoPath);
 }

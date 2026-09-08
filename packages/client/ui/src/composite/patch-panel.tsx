@@ -2,8 +2,8 @@
  * 补丁面板（对照 patch 存档动作面）：
  *  顶部「创建补丁」按钮开 Modal（name 必填 + 范围 Radio：工作区 / 暂存 / 提交区间——两输入框均可空，
  *  空侧省略，服务端按"单侧缺省=HEAD"裁定）；
- *  下方补丁列表 Card（空态 EmptyState）：行 = name + 大小（字节格式化）+ 创建时间 + 操作
- *  （应用 / 删除 Popconfirm）。
+ *  底部补丁列表 Card（空态 EmptyState）：行 = name + 大小（字节格式化）+ 创建时间 + 操作
+ *  （应用 / 导入搁置 / 删除 Popconfirm）。
  *  载荷映射（控制器裁定，沿 tag/stash 的 optional 缺省省略惯例）：
  *  工作区 → {name}（省略 staged，服务端缺省视为 false → git diff HEAD）；
  *  暂存 → {name, staged:true}；提交区间 → {name, from?, to?}。
@@ -20,6 +20,7 @@ export interface PatchPanelProps {
   patches: PatchList;
   onCreate: (body: PatchCreateBody) => void;
   onApply: (name: string) => void;
+  onImportShelf: (name: string) => void;
   onDelete: (name: string) => void;
   acting?: boolean;
 }
@@ -34,16 +35,18 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** 补丁行：name + 大小 + 创建时间 + 应用（直发）/ 删除（Popconfirm 确认）；acting 期间行按钮禁用防重复 */
+/** 补丁行：name + 大小 + 创建时间 + 应用（直发）/ 导入搁置（直发）/ 删除（Popconfirm 确认）；acting 期间行按钮禁用防重复 */
 function PatchRow({
   patch,
   acting,
   onApply,
+  onImportShelf,
   onDelete,
 }: {
   patch: PatchEntry;
   acting?: boolean;
   onApply: (name: string) => void;
+  onImportShelf: (name: string) => void;
   onDelete: (name: string) => void;
 }): React.ReactNode {
   return (
@@ -59,6 +62,9 @@ function PatchRow({
       </Typography.Text>
       <Button size="small" data-testid={`apply-patch-${patch.name}`} disabled={acting} onClick={() => onApply(patch.name)}>
         应用
+      </Button>
+      <Button size="small" data-testid={`import-patch-${patch.name}`} disabled={acting} onClick={() => onImportShelf(patch.name)}>
+        导入搁置
       </Button>
       <Popconfirm
         title={`确定删除补丁 ${patch.name}？`}
@@ -166,7 +172,7 @@ function CreatePatchModal({
   );
 }
 
-export function PatchPanel({ patches, onCreate, onApply, onDelete, acting }: PatchPanelProps): React.ReactNode {
+export function PatchPanel({ patches, onCreate, onApply, onImportShelf, onDelete, acting }: PatchPanelProps): React.ReactNode {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -193,6 +199,7 @@ export function PatchPanel({ patches, onCreate, onApply, onDelete, acting }: Pat
                 patch={patch}
                 acting={acting}
                 onApply={onApply}
+                onImportShelf={onImportShelf}
                 onDelete={onDelete}
               />
             ))}

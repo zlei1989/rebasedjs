@@ -1,10 +1,11 @@
-/** patch.ts 测试：usePatches 查询（含共挂载去重）+ create/apply/delete mutation（POST 子路径，响应显式回写 patches / status 键） */
+/** patch.ts 测试：usePatches 查询（含共挂载去重）+ create/apply/delete/import-shelf mutation（POST 子路径，响应显式回写 patches / status / shelves 键） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PatchApplyBody, PatchCreateBody, PatchDeleteBody, PatchList, RepoStatus } from '@rebased/contracts';
-import { useApplyPatch, useCreatePatch, useDeletePatch, usePatches } from './patch';
+import type { PatchApplyBody, PatchCreateBody, PatchDeleteBody, PatchImportShelf, PatchList, RepoStatus, ShelfList } from '@rebased/contracts';
+import { useApplyPatch, useCreatePatch, useDeletePatch, useImportPatchIntoShelf, usePatches } from './patch';
 import { useRepoStatus } from './repos';
+import { useShelves } from './shelf';
 import { freshCache } from './testing/fresh-cache';
 
 const LIST_A: PatchList = {
@@ -19,6 +20,10 @@ const LIST_B: PatchList = {
 const CREATE_BODY: PatchCreateBody = { name: 'feat-p2', from: 'HEAD~1', to: 'HEAD', staged: true };
 const APPLY_BODY: PatchApplyBody = { name: 'fix-main' };
 const DELETE_BODY: PatchDeleteBody = { name: 'feat-p2' };
+const IMPORT_BODY: PatchImportShelf = { name: 'fix-main' };
+const SHELF_LIST: ShelfList = {
+  shelves: [{ name: 'fix-main', createdAtIso: '2026-01-03T00:00:00.000Z', untrackedCount: 0 }],
+};
 const STATUS_A: RepoStatus = {
   branch: 'main',
   upstream: null,
@@ -245,6 +250,85 @@ describe('useDeletePatch', () => {
     });
     const getCalls = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method !== 'POST');
     expect(getCalls).toHaveLength(1);
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useImportPatchIntoShelf', () => {
+  it('trigger 发起 POST patches/:name/import-shelf，响应 ShelfList 显式回写 shelves 键（useShelves 可见）；shelves 不重复 GET', async () => {
+    const fetchMock = vi.fn(async (_input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify(SHELF_LIST), { status: 200 });
+      if (_input === '/api/repos/r-p-6/shelves') return new Response(JSON.stringify({ shelves: [] }), { status: 200 });
+      return new Response(JSON.stringify(LIST_A), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: {
+      shelfData?: ShelfList;
+      trigger?: (body: PatchImportShelf) => Promise<ShelfList>;
+      isMutating?: boolean;
+    } = {};
+    function Probe() {
+      const { data } = useShelves('r-p-6');
+      const { trigger, isMutating } = useImportPatchIntoShelf('r-p-6');
+      result = { shelfData: data, trigger, isMutating };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result.shelfData).toEqual({ shelves: [] }));
+    });
+
+    let imported: ShelfList | undefined;
+    await act(async () => {
+      imported = await result.trigger!(IMPORT_BODY);
+    });
+
+    expect(imported).toEqual(SHELF_LIST);
+    // URL 含补丁名（占位 mutation 键，fetcher 内经 arg 拼装）
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-p-6/patches/fix-main/import-shelf', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(IMPORT_BODY),
+    });
+    // ShelfList 显式回写 shelves 键（revalidate:false，不触发二次 GET）
+    await act(async () => {
+      await vi.waitFor(() => expect(result.shelfData).toEqual(SHELF_LIST));
+    });
+    const shelfGets = fetchMock.mock.calls.filter(
+      ([input, init]) => input === '/api/repos/r-p-6/shelves' && (init as RequestInit | undefined)?.method !== 'POST',
+    );
+    expect(shelfGets).toHaveLength(1);
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('补丁名含空格/斜杠：URL 段 encodeURIComponent 编码', async () => {
+    const fetchMock = vi.fn(async (_input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify(SHELF_LIST), { status: 200 });
+      return new Response(JSON.stringify({ shelves: [] }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    let trigger: ((body: PatchImportShelf) => Promise<ShelfList>) | undefined;
+    function Probe() {
+      ({ trigger } = useImportPatchIntoShelf('r-p-7'));
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await trigger!({ name: 'a b/c' });
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-p-7/patches/a%20b%2Fc/import-shelf', expect.anything());
     await act(async () => {
       renderer.unmount();
     });
