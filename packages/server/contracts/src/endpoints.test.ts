@@ -5,6 +5,7 @@ import {
   checkoutActionSchema,
   commitBodySchema,
   amendSpecificBodySchema,
+  autosquashBodySchema,
   commitAndPushBodySchema,
   committedQuerySchema,
   configPutBodySchema,
@@ -158,6 +159,18 @@ describe('amendSpecificBodySchema（amend 指定历史提交）', () => {
     expect(() => amendSpecificBodySchema.parse({ targetHash: '', message: 'x' })).toThrow();
     expect(() => amendSpecificBodySchema.parse({ targetHash: 'aaaaaa', message: '' })).toThrow();
     expect(() => amendSpecificBodySchema.parse({ targetHash: 'aaaaaa' })).toThrow();
+  });
+});
+
+describe('autosquashBodySchema（auto-squash：fixup!/squash! 提交折入）', () => {
+  it('hash + action 齐备 → 原样解析（action 枚举 fixup/squash）', () => {
+    expect(autosquashBodySchema.parse({ hash: 'aaaaaa', action: 'fixup' })).toEqual({ hash: 'aaaaaa', action: 'fixup' });
+    expect(autosquashBodySchema.parse({ hash: 'aaaaaa', action: 'squash' })).toEqual({ hash: 'aaaaaa', action: 'squash' });
+  });
+  it('hash 空串/缺失或 action 非法 → 抛错', () => {
+    expect(() => autosquashBodySchema.parse({ hash: '', action: 'fixup' })).toThrow();
+    expect(() => autosquashBodySchema.parse({ hash: 'aaaaaa' })).toThrow();
+    expect(() => autosquashBodySchema.parse({ hash: 'aaaaaa', action: 'reword' })).toThrow();
   });
 });
 

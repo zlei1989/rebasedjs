@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 22 项（分布于 13 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 21 项（分布于 13 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 9 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -73,7 +73,7 @@
 
 **MergeDialog（0）**：远程分支直接合并已落地——分支 Select 两组（本地非当前 / 远程 origin/xxx），远程引用名作 merge 参数（服务端核心 git merge 直接解析远程跟踪引用；api +1、ui +1 单测，实测裸仓库 fetch 后 merge origin/side 成功）。
 
-**RebaseDialog（2）**：auto-squash/fixup、squash by subject（`GitAutoSquashCommitAction` 等）。（skip 已落地——冲突页「跳过」走 `operation/skip`，见 §2.3 完成记录。）
+**RebaseDialog（0）**：auto-squash/fixup、squash by subject 已落地——日志行右键「Fixup Commit」「Squash Commit」（`GitCommitFixupBySubjectAction`/`GitCommitSquashBySubjectAction` 语义）：以暂存内容创建 `fixup!/squash! <subject>` 提交 + `rebase -i --autosquash` 折入目标（`POST /autosquash`；squash 经 GIT_EDITOR shim 覆写 `%B`——结果信息=目标原文；无暂存 → INVALID_QUERY；冲突 → 冲突页流）。（skip 已落地——冲突页「跳过」走 `operation/skip`，见 §2.3 完成记录。）
 
 **StashPanel（0）**：keep index 已落地（保存表单「保持暂存区（keep-index）」勾选 → `saveStash --keep-index`）——Unstash As 与贮藏 Show Diff 已落地（行「Unstash As…」Modal（目标本地分支 Select → 检出+apply 不 drop）+「查看差异」Modal（`git stash show -p` 补丁））。
 

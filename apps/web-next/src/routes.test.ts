@@ -44,6 +44,7 @@ import { POST as postAccountDelete } from '../app/api/auth/accounts/delete/route
 import { POST as postRebase } from '../app/api/repos/[repoId]/rebase/route';
 import { GET as getRebaseTodo } from '../app/api/repos/[repoId]/rebase/todo/route';
 import { POST as postInteractiveRebase } from '../app/api/repos/[repoId]/rebase/interactive/route';
+import { POST as postAutosquash } from '../app/api/repos/[repoId]/autosquash/route';
 import { POST as postCherryPick } from '../app/api/repos/[repoId]/cherry-pick/route';
 import { POST as postRevert } from '../app/api/repos/[repoId]/revert/route';
 import { POST as postContinueOperation } from '../app/api/repos/[repoId]/operation/continue/route';
@@ -1176,6 +1177,31 @@ describe('web-next rebase/cherry-pick/revert/tags 路由', () => {
     expect(git(['log', '--format=%s', '-3']).trim().split('\n')).toEqual(['three', 'one', 'init']);
     expect(git(['ls-tree', '-r', '--name-only', 'HEAD']).split('\n')).toContain('one.txt');
     expect(git(['ls-tree', '-r', '--name-only', 'HEAD']).split('\n')).not.toContain('two.txt');
+  });
+
+  it('autosquash 端点：squash! 折入目标提交 → 200 success；无暂存 → 400 INVALID_QUERY；无效哈希 → 400 INVALID_REF', { timeout: RIG_TIMEOUT }, async () => {
+    const repoId = registerRepo();
+    const base = git(['rev-parse', 'HEAD']).trim();
+    makeLocalCommit('one.txt', 'one\n', 'one');
+    makeLocalCommit('two.txt', 'two\n', 'two');
+    // 暂存 a.txt 改动（squash 提交携带；a.txt 在目标提交树中存在）
+    writeFileSync(join(lastRepoPath, 'a.txt'), 'init2\n');
+    execFileSync('git', ['-C', lastRepoPath, 'add', 'a.txt']);
+
+    const res = await postAutosquash(jsonPost(`${repoId}/autosquash`, { hash: base, action: 'squash' }), ctx(repoId));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    // 提交数不变（折入）；目标提交信息保留（squash shim 覆写 %B）
+    expect(execFileSync('git', ['-C', lastRepoPath, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).trim()).toBe('3');
+    expect(git(['log', '--format=%s']).trim().split('\n').reverse()).toEqual(['init', 'one', 'two']);
+
+    const emptyRes = await postAutosquash(jsonPost(`${repoId}/autosquash`, { hash: base, action: 'fixup' }), ctx(repoId));
+    expect(emptyRes.status).toBe(400);
+    expect(await emptyRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+
+    const refRes = await postAutosquash(jsonPost(`${repoId}/autosquash`, { hash: 'deadbeef'.repeat(5), action: 'fixup' }), ctx(repoId));
+    expect(refRes.status).toBe(400);
+    expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });
 
   it('cherry-pick 端点：祖先提交摘樱桃 → 200 success', { timeout: RIG_TIMEOUT }, async () => {

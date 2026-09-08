@@ -1170,6 +1170,33 @@ describe('web-koa rebase/cherry-pick/revert/tags 端点', () => {
     expect(git(repoPath, ['ls-tree', '-r', '--name-only', 'HEAD']).split('\n')).not.toContain('two.txt');
   });
 
+  it('autosquash 端点：squash! 折入目标提交 → 200 success；无暂存 → 400 INVALID_QUERY；无效哈希 → 400 INVALID_REF', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    const base = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'one.txt', 'one\n', 'one');
+    const one = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'two.txt', 'two\n', 'two');
+    // 暂存 a.txt 改动（squash 提交携带；a.txt 在目标提交树中存在）
+    writeFileSync(join(repoPath, 'a.txt'), 'init2\n');
+    execFileSync('git', ['-C', repoPath, 'add', 'a.txt']);
+
+    const res = await jsonPost(`/api/repos/${repoId}/autosquash`, { hash: base, action: 'squash' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    // 提交数不变（折入）；目标提交信息保留（squash shim 覆写 %B）
+    expect(execFileSync('git', ['-C', repoPath, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).trim()).toBe('3');
+    expect(git(repoPath, ['log', '--format=%s']).trim().split('\n').reverse()).toEqual(['init', 'one', 'two']);
+    void one;
+
+    const emptyRes = await jsonPost(`/api/repos/${repoId}/autosquash`, { hash: base, action: 'fixup' });
+    expect(emptyRes.status).toBe(400);
+    expect(await emptyRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+
+    const refRes = await jsonPost(`/api/repos/${repoId}/autosquash`, { hash: 'deadbeef'.repeat(5), action: 'fixup' });
+    expect(refRes.status).toBe(400);
+    expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
   it('cherry-pick 端点：祖先提交摘樱桃 → 200 success', { timeout: RIG_TIMEOUT }, async () => {
     const { repoId, repoPath } = registerRepo();
     const base = git(repoPath, ['rev-parse', 'HEAD']).trim();

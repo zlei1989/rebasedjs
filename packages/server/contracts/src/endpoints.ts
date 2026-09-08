@@ -84,6 +84,14 @@ export const amendSpecificBodySchema = z.object({
 });
 export type AmendSpecificBody = z.infer<typeof amendSpecificBodySchema>;
 
+/** auto-squash（GitCommitFixupBySubjectAction/GitCommitSquashBySubjectAction 语义）：hash 目标提交；
+ *  action 决定提交信息前缀（fixup! / squash!）——服务端构造并以 rebase -i --autosquash 折入 */
+export const autosquashBodySchema = z.object({
+  hash: z.string().min(1),
+  action: z.enum(['fixup', 'squash']),
+});
+export type AutosquashBody = z.infer<typeof autosquashBodySchema>;
+
 /** 分支写操作（判别联合）：create 可带 startPoint；delete 的 force 对应 git branch -D；rename 改名；setUpstream 设置上游 */
 export const branchActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create'), name: z.string().min(1), startPoint: z.string().optional() }),

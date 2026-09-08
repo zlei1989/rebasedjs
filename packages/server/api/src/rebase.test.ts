@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError } from '@rebased/core';
-import { getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
+import { applyAutosquash, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -224,5 +224,39 @@ describe('runInteractiveRebaseService', () => {
       base: side,
       entries: [{ hash: main, action: 'pick' }],
     })).rejects.toMatchObject({ code: 'OPERATION_IN_PROGRESS', message: '已有进行中的操作，请先完成或中止' });
+  });
+});
+
+describe('applyAutosquash（fixup!/squash! 折入）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('fixup 成功：暂存改动折入目标提交（提交数不变、信息保留）', async () => {
+    const repo = makeRepo();
+    makeBaseCommit(repo);
+    const c2 = makeCommit(repo, 'b.txt', 'b1\n', 'c2');
+    makeCommit(repo, 'c.txt', 'c1\n', 'c3');
+    const c1 = git(repo, ['log', '--format=%H', '--reverse']).trim().split('\n')[0];
+    // 暂存 a.txt 改动（a.txt 在目标提交树中存在）
+    writeFileSync(join(repo, 'a.txt'), 'base2\n');
+    git(repo, ['add', 'a.txt']);
+
+    const result = await applyAutosquash(repo, { hash: c1, action: 'fixup' });
+
+    expect(result.status).toBe('success');
+    expect(git(repo, ['rev-list', '--count', 'HEAD']).trim()).toBe('3');
+    expect(git(repo, ['log', '--format=%s']).trim().split('\n').reverse()).toEqual(['base', 'c2', 'c3']);
+    void c2;
+  });
+
+  it('无暂存内容 → INVALID_QUERY（nothing to commit 业务映射）；无效哈希 → INVALID_REF', async () => {
+    const repo = makeRepo();
+    makeBaseCommit(repo);
+    const c1 = git(repo, ['rev-parse', 'HEAD']).trim();
+
+    const emptyErr = await applyAutosquash(repo, { hash: c1, action: 'fixup' }).catch((e: unknown) => e);
+    expect(emptyErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('没有暂存的变更') });
+
+    const refErr = await applyAutosquash(repo, { hash: 'deadbeef'.repeat(5), action: 'squash' }).catch((e: unknown) => e);
+    expect(refErr).toMatchObject({ code: 'INVALID_REF' });
   });
 });

@@ -672,4 +672,31 @@ describe('LogPage 行右键菜单', () => {
     fireEvent.click(await screen.findByText('摘樱桃'));
     expect(onCherryPick).toHaveBeenCalledWith('c1');
   });
+
+  it('Fixup/Squash Commit：onAutosquash 注入时菜单含两项，点击以 (action, hash) 回调', async () => {
+    const onAutosquash = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        onAutosquash={onAutosquash}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('第二笔提交'));
+    fireEvent.click(await screen.findByText('Fixup Commit'));
+    expect(onAutosquash).toHaveBeenCalledWith('fixup', 'c2');
+
+    fireEvent.contextMenu(screen.getByText('第二笔提交'));
+    fireEvent.click(await screen.findByText('Squash Commit'));
+    expect(onAutosquash).toHaveBeenCalledWith('squash', 'c2');
+  });
+
+  it('未注入 onAutosquash 时不渲染 Fixup/Squash Commit 菜单项', async () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} onCheckoutRevision={() => {}} />);
+    fireEvent.contextMenu(screen.getByText('初始提交'));
+    expect(await screen.findByText('检出此提交（游离 HEAD）')).toBeInTheDocument();
+    expect(screen.queryByText('Fixup Commit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Squash Commit')).not.toBeInTheDocument();
+  });
 });

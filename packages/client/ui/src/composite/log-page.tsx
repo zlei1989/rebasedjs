@@ -119,6 +119,9 @@ export interface LogPageProps {
   onCreateTag?: (hash: string, name: string, message?: string) => void;
   /** 行右键「在浏览器中打开」（托管平台提交页链接由容器解析）；缺省不渲染该菜单项 */
   onOpenInBrowser?: (hash: string) => void;
+  /** 行右键「Fixup/Squash Commit」（GitAutoSquashCommitAction 语义：fixup!/squash! 提交折入目标）；
+   *  提供时渲染两项菜单（action + 目标 hash）；缺省不渲染 */
+  onAutosquash?: (action: 'fixup' | 'squash', hash: string) => void;
 }
 
 export function LogPage({
@@ -171,6 +174,7 @@ export function LogPage({
   onCheckoutNewBranch,
   onCreateTag,
   onOpenInBrowser,
+  onAutosquash,
 }: LogPageProps): React.ReactNode {
   // 行右键菜单：右键记录 hash（菜单项按 hash 组装），点击项分发对应回调；Modal 输入在菜单项后展开
   const [menuHash, setMenuHash] = useState<string | null>(null);
@@ -192,8 +196,13 @@ export function LogPage({
     if (onRevert !== undefined) items.push({ key: 'revert', label: '还原' });
     if (onResetHere !== undefined) items.push({ key: 'reset-here', label: 'Reset 当前分支到此处' });
     if (onBrowse !== undefined) items.push({ key: 'browse', label: '浏览快照' });
+    if (onAutosquash !== undefined) {
+      items.push({ type: 'divider' });
+      items.push({ key: 'fixup-commit', label: 'Fixup Commit' });
+      items.push({ key: 'squash-commit', label: 'Squash Commit' });
+    }
     return items;
-  }, [menuHash, onCheckoutRevision, onCheckoutNewBranch, onCreateTag, onOpenInBrowser, onCherryPick, onRevert, onResetHere, onBrowse]);
+  }, [menuHash, onCheckoutRevision, onCheckoutNewBranch, onCreateTag, onOpenInBrowser, onCherryPick, onRevert, onResetHere, onBrowse, onAutosquash]);
   const onMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
     if (menuHash === null) return;
     if (key === 'checkout-revision') onCheckoutRevision?.(menuHash);
@@ -204,6 +213,8 @@ export function LogPage({
     else if (key === 'revert') onRevert?.(menuHash);
     else if (key === 'reset-here') onResetHere?.(menuHash);
     else if (key === 'browse') onBrowse?.(menuHash);
+    else if (key === 'fixup-commit') onAutosquash?.('fixup', menuHash);
+    else if (key === 'squash-commit') onAutosquash?.('squash', menuHash);
   };
   // 过滤输入（受控）：本地草稿即时回显，提交（Enter/失焦）才上抛——避免每击键重查快照
   const [authorDraft, setAuthorDraft] = useState(filters?.author ?? '');

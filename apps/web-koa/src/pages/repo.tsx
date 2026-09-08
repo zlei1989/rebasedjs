@@ -15,6 +15,7 @@
  */
 import {
   useAbortOperation,
+  useAutosquash,
   useBranchAction,
   useCherryPick,
   useCheckout,
@@ -203,6 +204,17 @@ export function RepoPage(): React.ReactNode {
   };
   const onInteractiveRebase = (body: InteractiveRebaseBody): void => {
     interactiveRebase(body).then(dispatchRebaseOutcome).catch(onError);
+  };
+  // === auto-squash（GitAutoSquashCommitAction 语义：fixup!/squash! 提交折入选中提交）===
+  const { trigger: autosquash } = useAutosquash(repoId);
+  const onAutosquash = (action: 'fixup' | 'squash', hash: string): void => {
+    Modal.confirm({
+      title: action === 'fixup' ? 'Fixup Commit' : 'Squash Commit',
+      content: `将以暂存内容创建 ${action}! 提交并折入选中提交（历史将被重写）；无暂存内容请先在状态页暂存`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => autosquash({ hash, action }).then(dispatchRebaseOutcome).catch(onError),
+    });
   };
   // === 摘樱桃/还原区（CommitDetailsPanel 回调 → 容器确认 → hook）===
   const { trigger: cherryPick } = useCherryPick(repoId);
@@ -398,6 +410,7 @@ export function RepoPage(): React.ReactNode {
         onOpenSubmodules={() => navigate(`/repos/${repoId}/submodules`)}
         onCherryPick={onCherryPick}
         onRevert={onRevert}
+        onAutosquash={onAutosquash}
         onOpenPull={() => setOpenDialog('pull')}
         onOpenPush={() => setOpenDialog('push')}
         onOpenUpdate={() => setOpenDialog('update')}

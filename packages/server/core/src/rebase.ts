@@ -38,6 +38,26 @@ if (todoPath === undefined) {
 writeFileSync(todoPath, readFileSync(preparedPath, 'utf8'));
 `;
 
+/**
+ * 提交信息编辑器 shim（auto-squash 的 squash! 步骤用）：git 调消息编辑器时把消息文件路径作末参传入，
+ * 本脚本以 env REBASED_MESSAGE_FILE 指向的「已备消息」覆盖写入——结果提交信息 = 目标提交原信息
+ * （GitSquashedCommitsMessage.prettySquash 语义：去 autosquash 前缀、保原文；fixup! 步骤无需编辑器）。
+ */
+const MESSAGE_SHIM_SOURCE = `import { readFileSync, writeFileSync } from 'node:fs';
+
+const messagePath = process.argv[process.argv.length - 1];
+const preparedPath = process.env.REBASED_MESSAGE_FILE;
+
+if (preparedPath === undefined || preparedPath === '') {
+  throw new Error('REBASED_MESSAGE_FILE 未设置，无法获取已备好的提交信息');
+}
+if (messagePath === undefined) {
+  throw new Error('消息文件路径未作为末参传入');
+}
+
+writeFileSync(messagePath, readFileSync(preparedPath, 'utf8'));
+`;
+
 export interface CoreRebaseResult {
   status: 'success' | 'conflicts' | 'up-to-date';
 }
@@ -61,11 +81,12 @@ async function hasRebaseConflicts(cwd: string): Promise<boolean> {
 /**
  * 执行一次 rebase 并分类结果：非 0 退出且冲突判定成立 → 'conflicts'（状态留给调用方处理），
  * 其余非 0 退出原样透出；退出码 0 时以 HEAD 前后对比区分 'success' / 'up-to-date'。
- * env：注入到 git 子进程的额外环境变量（交互式变基的 GIT_SEQUENCE_EDITOR/REBASED_TODO_FILE）；
- * 固定注入 -c core.editor=true —— 交互式 todo 含 reword/squash 步骤时会开消息编辑器，
- * 服务端无 TTY 必败（P2-E 教训，同 merge.ts continueMerge 手法）。
+ * env：注入到 git 子进程的额外环境变量（交互式变基的 GIT_SEQUENCE_EDITOR/REBASED_TODO_FILE、
+ * auto-squash 的 GIT_EDITOR/REBASED_MESSAGE_FILE）；固定注入 -c core.editor=true ——
+ * 交互式 todo 含 reword/squash 步骤时会开消息编辑器，服务端无 TTY 必败（P2-E 教训，同 merge.ts continueMerge 手法）；
+ * GIT_EDITOR env 优先级高于 core.editor，调用方注入的编辑器 shim 生效。
  */
-async function rebaseWithStatus(cwd: string, args: string[], env: Record<string, string>): Promise<CoreRebaseResult> {
+export async function rebaseWithStatus(cwd: string, args: string[], env: Record<string, string>): Promise<CoreRebaseResult> {
   const before = await headHash(cwd);
   try {
     await runGit(args, { cwd, env, extraConfig: ['core.editor=true'] });
@@ -147,4 +168,56 @@ export async function continueRebase(cwd: string): Promise<void> {
 /** 跳过冲突中的变基提交：git rebase --skip（GitRebaseResumeMode.SKIP 语义——丢弃当前提交，继续后续） */
 export async function skipRebase(cwd: string): Promise<void> {
   await runGit(['-c', 'core.editor=true', 'rebase', '--skip'], { cwd });
+}
+
+/**
+ * auto-squash（GitCommitFixupBySubjectAction / GitCommitSquashBySubjectAction 语义）：
+ * 1) 以暂存内容创建提交，信息 = `<action>! <目标提交subject>`（服务端构造——GitBundle 的
+ *    "fixup! " / "squash! " 前缀）；无暂存内容由 git 报错透出（"nothing to commit"）。
+ * 2) `git rebase -i --autosquash <目标^>`（根提交目标 → --root）：GIT_SEQUENCE_EDITOR=true 接受
+ *    git 自动排好的默认 todo（autosquash 把 fixup!/squash! 提交移到同主题目标之后并折入）；
+ *    squash! 步骤开消息编辑器 → GIT_EDITOR 指向 shim 以目标提交 %B 覆写（prettySquash 语义：
+ *    结果信息 = 目标提交原文）；fixup! 不动编辑器（结果信息 = 目标提交原文）。
+ * 失败语义同 rebaseWithStatus：冲突 → 'conflicts'（rebase 冲突态交冲突页）。
+ */
+export async function autosquashCommit(
+  cwd: string,
+  opts: { hash: string; action: 'fixup' | 'squash' },
+): Promise<CoreRebaseResult> {
+  const { stdout: subjectOut } = await runGit(['log', '-1', '--format=%s', opts.hash], { cwd });
+  await runGit(['commit', '-m', `${opts.action}! ${subjectOut.trim()}`], { cwd });
+  // 根提交判定：目标无父 → --root（todo 从根起）
+  const base = await isRootTarget(cwd, opts.hash)
+    ? '--root'
+    : `${opts.hash}^`;
+  if (opts.action === 'squash') {
+    const { stdout: messageOut } = await runGit(['log', '-1', '--format=%B', opts.hash], { cwd });
+    const dir = await mkdtemp(join(tmpdir(), 'rebased-msg-'));
+    try {
+      const messageFile = join(dir, 'message');
+      const shimFile = join(dir, 'git-message-editor.mjs');
+      await writeFile(messageFile, messageOut, 'utf8');
+      await writeFile(shimFile, MESSAGE_SHIM_SOURCE, 'utf8');
+      const editor = `${quoteForSh(process.execPath)} ${quoteForSh(shimFile)}`;
+      return await rebaseWithStatus(cwd, ['rebase', '-i', '--autosquash', base], {
+        GIT_SEQUENCE_EDITOR: 'true',
+        GIT_EDITOR: editor,
+        REBASED_MESSAGE_FILE: messageFile,
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+  return rebaseWithStatus(cwd, ['rebase', '-i', '--autosquash', base], { GIT_SEQUENCE_EDITOR: 'true' });
+}
+
+/** 根提交判定：<rev>^ 解析失败（--verify --quiet exit 1）即无父（根提交）；其余失败原样上抛（仅本层内部对已校验哈希调用） */
+async function isRootTarget(cwd: string, hash: string): Promise<boolean> {
+  try {
+    await runGit(['rev-parse', '--verify', '--quiet', `${hash}^`], { cwd });
+    return false;
+  } catch (e) {
+    if (e instanceof GitExitError && e.exitCode === 1) return true;
+    throw e;
+  }
 }

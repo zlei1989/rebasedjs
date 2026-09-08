@@ -1,10 +1,10 @@
-/** rebase 原语测试：onto 成功/已最新/冲突、TODO 列表、交互式（drop/squash/fixup/reword/重排）、继续变基。 */
+/** rebase 原语测试：onto 成功/已最新/冲突、TODO 列表、交互式（drop/squash/fixup/reword/重排）、继续变基、auto-squash。 */
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError, runGit } from './exec';
 import { getOperationState } from './operation';
-import { continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
+import { autosquashCommit, continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -247,5 +247,82 @@ describe('continueRebase', () => {
     expect(await getOperationState(repo)).toEqual({ kind: 'none' });
     // 变基链重放到 side 之上（main 提交被跳过——冲突提交放弃，无合并提交）
     expect(await headSubjects(repo, 2)).toEqual(['side', 'base']);
+  });
+});
+
+describe('autosquashCommit（fixup!/squash! 折入，GitAutoSquashCommitAction 语义）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  /** 三提交装置：a.txt/b.txt/c.txt 各一提交（c1/c2/c3），返回 c1 哈希 */
+  async function makeRepo3(repo: string): Promise<{ base: string }> {
+    const base = await makeCommit(repo, 'a.txt', 'v1\n', 'c1');
+    await makeCommit(repo, 'b.txt', 'b1\n', 'c2');
+    await makeCommit(repo, 'c.txt', 'c1\n', 'c3');
+    return { base };
+  }
+
+  it('fixup：暂存改动折入同主题目标提交（目标信息保留、提交数不变、后续提交原样）', async () => {
+    const repo = makeRepo();
+    const { base } = await makeRepo3(repo);
+    // 暂存 a.txt 改动（fixup 提交携带；a.txt 在目标提交树中存在）
+    await writeFile(join(repo, 'a.txt'), 'v2\n');
+    await runGit(['add', 'a.txt'], { cwd: repo });
+
+    const result = await autosquashCommit(repo, { hash: base, action: 'fixup' });
+
+    expect(result.status).toBe('success');
+    // 提交数不变（fixup 折入 → 3 条）
+    const count = (await runGit(['rev-list', '--count', 'HEAD'], { cwd: repo })).stdout.trim();
+    expect(count).toBe('3');
+    // 目标提交信息保留（fixup 语义）；内容包含暂存改动
+    const subjects = (await runGit(['log', '--format=%s'], { cwd: repo })).stdout.trim().split('\n').reverse();
+    expect(subjects).toEqual(['c1', 'c2', 'c3']);
+    const newBase = (await runGit(['log', '--format=%H', '--reverse'], { cwd: repo })).stdout.trim().split('\n')[0];
+    expect((await runGit(['show', `${newBase}:a.txt`], { cwd: repo })).stdout).toBe('v2\n');
+    // 后续提交重放：最终树上 b.txt/c.txt 仍在
+    expect((await runGit(['show', 'HEAD:b.txt'], { cwd: repo })).stdout).toBe('b1\n');
+    expect((await runGit(['show', 'HEAD:c.txt'], { cwd: repo })).stdout).toBe('c1\n');
+  });
+
+  it('squash：目标提交信息 = 原信息（消息编辑器 shim 覆写 %B）、提交数不变', async () => {
+    const repo = makeRepo();
+    const { base } = await makeRepo3(repo);
+    await writeFile(join(repo, 'a.txt'), 'v3\n');
+    await runGit(['add', 'a.txt'], { cwd: repo });
+
+    const result = await autosquashCommit(repo, { hash: base, action: 'squash' });
+
+    expect(result.status).toBe('success');
+    expect((await runGit(['rev-list', '--count', 'HEAD'], { cwd: repo })).stdout.trim()).toBe('3');
+    const subjects = (await runGit(['log', '--format=%s'], { cwd: repo })).stdout.trim().split('\n').reverse();
+    // squash 后信息 = 目标提交原文（shim 覆写；无 "squash! " 前缀残留）
+    expect(subjects).toEqual(['c1', 'c2', 'c3']);
+    const newBase = (await runGit(['log', '--format=%H', '--reverse'], { cwd: repo })).stdout.trim().split('\n')[0];
+    expect((await runGit(['show', `${newBase}:a.txt`], { cwd: repo })).stdout).toBe('v3\n');
+  });
+
+  it('冲突：折入目标与中间提交同文件改动 → status conflicts（rebase 冲突态）', async () => {
+    const repo = makeRepo();
+    await makeCommit(repo, 'a.txt', 'v1\n', 'c1');
+    await makeCommit(repo, 'a.txt', 'v2\n', 'c2');
+    await makeCommit(repo, 'a.txt', 'v3\n', 'c3');
+    const c1 = (await runGit(['log', '--format=%H', '--reverse'], { cwd: repo })).stdout.trim().split('\n')[0];
+    // 暂存 v3→v4：fixup 提交 diff（v3 上下文）折入目标（v1）→ context 不匹配冲突
+    await writeFile(join(repo, 'a.txt'), 'v4\n');
+    await runGit(['add', 'a.txt'], { cwd: repo });
+
+    const result = await autosquashCommit(repo, { hash: c1, action: 'fixup' });
+
+    expect(result.status).toBe('conflicts');
+    expect((await getOperationState(repo)).kind).toBe('rebase');
+  });
+
+  it('无暂存内容：git commit 报错透出（GitExitError）', async () => {
+    const repo = makeRepo();
+    const { base } = await makeRepo3(repo);
+
+    await expect(autosquashCommit(repo, { hash: base, action: 'fixup' })).rejects.toMatchObject({
+      name: 'GitExitError',
+    });
   });
 });

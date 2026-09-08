@@ -56,7 +56,7 @@ export {
   parseGitlabRemoteUrl,
   submitGitlabMrReview,
 } from './gitlab';
-export { getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
+export { applyAutosquash, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
 export { cherryPick, revert } from './pick';
 export { applyTagAction, getTags } from './tag';
 export { updateProject } from './update';
