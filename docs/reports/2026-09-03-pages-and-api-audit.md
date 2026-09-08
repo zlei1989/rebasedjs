@@ -20,7 +20,7 @@
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 108 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 63、领域类型/别名 88、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（104 条） | 66 ✅（含等价边）+ 8 🟡 + 7 ➖ + 23 ❌ |
+| 导航边（104 条） | 71 ✅（含等价边）+ 8 🟡 + 7 ➖ + 18 ❌ |
 
 ### 1.2 口径与图例
 
@@ -143,7 +143,7 @@
 | browse | `repos/:id/browse`、`repos/:id/browse/content` | GET ×2 | 指定版本文件树 / 单文件内容（二进制标记） | BrowsePanel | ✅ |
 | committed | `repos/:id/committed` | GET | 已提交变更分页浏览 | CommittedChangesPanel | ✅ |
 | search | `repos/:id/search` | GET | 提交搜索（grep/pickaxe） | SearchPanel | ✅ |
-| patch | `repos/:id/patches`、`patches/create`、`patches/apply`、`patches/delete`、`patches/:name/import-shelf` | GET + 4×POST | 补丁列表 / 创建（三态）/ 应用（check 先行）/ 删除 / 导入搁置 | PatchPanel | ✅ |
+| patch | `repos/:id/patches`、`patches/create`、`patches/apply`、`patches/delete`、`patches/:name/import-shelf` | GET + 4×POST | 补丁列表 / 创建（四态：工作区/暂存/提交区间/**勾选文件**）/ 应用（check 先行）/ 删除 / 导入搁置 | PatchPanel、StatusPage（创建补丁入口） | ✅ |
 | shelf | `repos/:id/shelves` | GET/POST | 搁置列表 / save/restore/drop | ShelfPanel | ✅ |
 | console | `repos/:id/console` | GET | 命令执行记录（token 剥离） | ConsolePanel | ✅ |
 | ignore | `repos/:id/ignore`、`ignore/add`、`ignore/templates` | GET/PUT + 2 项 | .gitignore/exclude 读写 / 一键忽略 / 内建模板 | IgnoreDialog、StatusPage | ✅ |
@@ -245,7 +245,7 @@
 
 Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存、提交；对应平台 Local Changes（`ChangeListManager`）+ `GitStage*` 暂存区 UI。
 
-- **落点**：路由 `/repos/:id/status`；组件 `composite/status-page.tsx`；服务 `api/{staging,commit,changelist}.ts`；端点 `staging`、`staging/hunks`、`commit`、`diff/patch`、`changelists`；本页自订阅 events。
+- **落点**：路由 `/repos/:id/status`；组件 `composite/status-page.tsx`；服务 `api/{staging,commit,changelist,patch,shelf,stash}.ts`；端点 `staging`、`staging/hunks`、`commit`、`diff/patch`、`changelists`、`patches/create`（paths 载荷）、`shelves`（save）、`stashes`（save）；本页自订阅 events。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
@@ -258,6 +258,10 @@ Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存
 | 跳 DiffPage | ✅ | `onOpenDiff` → `/diff?file=`（staged 切换在 diff 页内） |
 | 未跟踪行「忽略」一键入口 | ✅ | Modal.confirm → `ignore/add` → status 补刷 |
 | 三版本对比（本地/暂存/HEAD） | ✅ | 行「三版本」按钮 → `/diff?file=&three=1`（`GET /diff/three-way` 三侧全文 + ui ThreeWayView 两段对比） |
+| Create Patch from changes（#44） | ✅ | 组级「创建补丁」（勾选≥1 可用，Modal 收集名）→ `createPatch` paths 载荷（工作区/暂存 diff 按组）→ 跳 `/patches` |
+| Shelve Changes（#45） | ✅ | 页头「搁置」（Modal 收集名）→ `shelf save` 全量工作区+暂存 → 跳 `/shelves` |
+| Stash Files（#49） | ✅ | 页头「存入贮藏」（Modal 收集可选信息）→ `stash save` → 跳 `/stashes` |
+| Annotate / Show History（#47） | ✅ | 行内「注解」→ `/blame?file=`；行内「历史」→ `/history?file=` |
 
 ### 4.5 CommitDialog 🟡（等效非模态形态）
 
@@ -691,13 +695,13 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 40 | 工具窗口 → StatusPage | Local Changes tab | VcsActions.xml:635 | ✅ 顶栏「变更」按钮 |
 | 41 | StatusPage → CommitDialog | 提交按钮 / Ctrl+K | `CheckinActionUtil.kt:94-108` + `CommitModeManager`（默认 modal） | 🟡 等效非模态内嵌提交框 |
 | 42 | StatusPage → DiffPage | 双击变更条目 | `ShowDiffAction.java:114` | ✅ `onOpenDiff` → `/diff?file=` |
-| 43 | StatusPage → ConflictsPanel | 冲突文件右键 Merge | backend.xml:422-429 | ❌（等价入口：操作条链接 #58、冲突跳转 #56） |
-| 44 | StatusPage → PatchPanel | 右键 Create Patch | `CreatePatchFromChangesAction.java:44` | ❌（入口在「更多」菜单） |
-| 45 | StatusPage → ShelfPanel | Shelve Changes | `ShelveChangesAction.kt:9` | ❌（入口在「更多」菜单） |
+| 43 | StatusPage → ConflictsPanel | 冲突文件右键 Merge | backend.xml:422-429 | ✅（等价入口：操作条链接 #58、冲突跳转 #56——Web 无 StatusPage 内联冲突列表，冲突发生在 ConflictsPanel 主页） |
+| 44 | StatusPage → PatchPanel | 右键 Create Patch | `CreatePatchFromChangesAction.java:44` | ✅ 组级「创建补丁」（勾选集 → paths 载荷）→ 成功跳 `/patches` |
+| 45 | StatusPage → ShelfPanel | Shelve Changes | `ShelveChangesAction.kt:9` | ✅ 页头「搁置」（全量 save）→ 成功跳 `/shelves` |
 | 46 | StatusPage → IgnoreDialog | 右键 Add to .gitignore / Exclude | backend.xml:380-384 | ✅ 未跟踪行「忽略」→ Modal.confirm → `ignore/add` |
-| 47 | StatusPage → HistoryPanel/BlameView | 右键 Annotate / Show History | backend.xml:106-117 | ❌ |
+| 47 | StatusPage → HistoryPanel/BlameView | 右键 Annotate / Show History | backend.xml:106-117 | ✅ 行内「注解」→ `/blame?file=`；行内「历史」→ `/history?file=` |
 | 48 | StatusPage → 三版本对比 DiffPage | 右键 Compare Three Versions | `GitStageCompareThreeVersionsAction.kt:41-50` | ✅ 行「三版本」按钮 → `/diff?file=&three=1` |
-| 49 | StatusPage → StashPanel | Stash Files | backend.xml:420 | ❌ |
+| 49 | StatusPage → StashPanel | Stash Files | backend.xml:420 | ✅ 页头「存入贮藏」（message 可空）→ 成功跳 `/stashes` |
 | 50 | CommitDialog → PushDialog | Commit and Push… 执行器 | `GitCommitAndPushExecutor.kt:19` | ❌（PushDialog 独立落地，组合执行器未做） |
 | 51 | Git 菜单 → PatchPanel（应用） | Apply Patch | backend.xml:182 | ✅ 「更多」→ 页内应用（check 先行） |
 | 52 | PatchPanel → ShelfPanel | Import Patches into Shelf | `ImportIntoShelfAction.java:74` | ✅ 行内「导入搁置」→ 成功跳 `/shelves`（activateView 语义） |
@@ -771,10 +775,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **66 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 4（#48 三版本）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54） |
+| ✅ 已复刻（含等价边） | **71 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **23 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
+| ❌ 未复刻 | **18 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
 
 ### 5.5 关键联动流程
 

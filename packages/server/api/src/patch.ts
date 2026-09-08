@@ -56,7 +56,8 @@ function listPatches(dir: string): PatchEntry[] {
  * 创建数据源（控制器裁定）：
  * - from/to 均缺省 → 工作区模式：staged=false → `git diff HEAD`（HEAD→工作树全量，含暂存）；staged=true → `git diff --cached`；
  * - 单侧给出 → 缺侧默认为 HEAD（`git diff HEAD <to>` / `git diff <from> HEAD`）；
- * - 两侧给出 → `git diff <from> <to>`。
+ * - 两侧给出 → `git diff <from> <to>`；
+ * - paths 给出（无 from/to，契约 refine 保证）→ 在对应模式后追加文件集路径（`-- <paths>`）。
  */
 function buildCreateDiffArgs(body: PatchCreateBody): string[] {
   const args = ['diff', '--no-ext-diff'];
@@ -69,6 +70,7 @@ function buildCreateDiffArgs(body: PatchCreateBody): string[] {
   } else {
     args.push(body.from, body.to);
   }
+  if (body.paths !== undefined) args.push('--', ...body.paths);
   return args;
 }
 

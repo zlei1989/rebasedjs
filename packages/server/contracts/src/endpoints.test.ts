@@ -581,6 +581,17 @@ describe('patchCreateBodySchema（patch 创建请求体）', () => {
     expect(patchCreateBodySchema.parse({ name: 'p1', from: 'HEAD~1', to: 'HEAD', staged: true }))
       .toEqual({ name: 'p1', from: 'HEAD~1', to: 'HEAD', staged: true });
   });
+  it('接受 paths（≥1 非空字符串数组，可配 staged）', () => {
+    expect(patchCreateBodySchema.parse({ name: 'p1', paths: ['a.txt'] }))
+      .toEqual({ name: 'p1', paths: ['a.txt'] });
+    expect(patchCreateBodySchema.parse({ name: 'p1', paths: ['a.txt', 'b/c.txt'], staged: true }))
+      .toEqual({ name: 'p1', paths: ['a.txt', 'b/c.txt'], staged: true });
+  });
+  it('拒绝 paths 与 from/to 并存（refine）与空 paths 数组', () => {
+    expect(() => patchCreateBodySchema.parse({ name: 'p1', paths: ['a.txt'], from: 'HEAD~1' })).toThrow();
+    expect(() => patchCreateBodySchema.parse({ name: 'p1', paths: [] })).toThrow();
+    expect(() => patchCreateBodySchema.parse({ name: 'p1', paths: [''] })).toThrow();
+  });
   it('拒绝空 name、缺 name 与非法字符 name（a/b、a b）', () => {
     expect(() => patchCreateBodySchema.parse({ name: '' })).toThrow();
     expect(() => patchCreateBodySchema.parse({})).toThrow();

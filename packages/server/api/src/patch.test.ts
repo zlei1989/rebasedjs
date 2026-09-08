@@ -122,6 +122,31 @@ describe('patch 功能', () => {
     expect(diff).toContain('+b2');
   });
 
+  it('paths：只含选中文件 diff（Create Patch from changes 语义）；staged=true 取暂存区', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'a.txt'), 'a1');
+    writeFileSync(join(repo, 'b.txt'), 'b1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    await openRepo(repo);
+    writeFileSync(join(repo, 'a.txt'), 'a2');
+    writeFileSync(join(repo, 'b.txt'), 'b2');
+
+    await createPatch(repo, { name: 'only-a', paths: ['a.txt'] });
+    const diff = readFileSync(join(await patchesDir(repo), 'only-a.patch'), 'utf8');
+    expect(diff).toContain('diff --git a/a.txt b/a.txt');
+    expect(diff).not.toContain('b.txt');
+
+    // staged=true + paths：先暂存 a 再改 a（工作区 v3）→ 补丁含 v2（暂存区），不含 v3
+    execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+    writeFileSync(join(repo, 'a.txt'), 'a3');
+    await createPatch(repo, { name: 'staged-a', paths: ['a.txt'], staged: true });
+    const stagedDiff = readFileSync(join(await patchesDir(repo), 'staged-a.patch'), 'utf8');
+    expect(stagedDiff).toContain('+a2');
+    expect(stagedDiff).not.toContain('a3');
+  });
+
   it('apply 成功：文件回工作区，返回刷新状态', async () => {
     const repo = await repoWithCommit('a.txt', 'v1');
     writeFileSync(join(repo, 'a.txt'), 'v2');

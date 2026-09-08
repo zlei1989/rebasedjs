@@ -12,11 +12,14 @@ import {
   useChangelistAction,
   useChangelists,
   useCommit,
+  useCreatePatch,
   useDiffPatch,
   useHunkStaging,
   useRepoEvents,
   useRepoStatus,
+  useShelfAction,
   useStaging,
+  useStashAction,
 } from '@rebased/client';
 import type { HunkStagingBody, StagingBody } from '@rebased/contracts';
 import { StatusPage } from '@rebased/ui';
@@ -31,6 +34,11 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { trigger: applyStaging } = useStaging(repoId);
   const { trigger: applyHunkStaging, isMutating: hunkActing } = useHunkStaging(repoId);
   const { trigger: commit, isMutating: committing } = useCommit(repoId);
+  // 页级动作（Create Patch from changes / Shelve Changes / Stash Files 语义）：
+  // createPatch 响应回写 patches 键；shelf/stash 响应回写 shelves/stashes 键（容器只负责成功提示与跳转）
+  const { trigger: createPatch } = useCreatePatch(repoId);
+  const { trigger: shelfAction } = useShelfAction(repoId);
+  const { trigger: stashAction } = useStashAction(repoId);
   // 变更列表：查询驱动 StatusPage 分组展示；action 响应由 hook 显式回写 changelists 缓存（约定同 staging）
   const { data: changelists, mutate: mutateChangelists } = useChangelists(repoId);
   const { trigger: applyChangelistAction } = useChangelistAction(repoId);
@@ -131,6 +139,37 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
                 .catch(onError),
           });
         }}
+        // Create Patch from changes（#44）：组级勾选路径 → 创建工作区/暂存范围补丁（hooks 回写 patches 键）→ 跳补丁页
+        onCreatePatch={(body) => {
+          createPatch(body)
+            .then(() => {
+              void message.success(`已创建补丁：${body.name}`);
+              router.push(`/repos/${repoId}/patches`);
+            })
+            .catch(onError);
+        }}
+        // Shelve Changes（#45）：全量工作区+暂存搁置（hooks 回写 shelves 键）→ 跳搁置页
+        onShelve={(name) => {
+          shelfAction({ action: 'save', name })
+            .then(() => {
+              void message.success(`已搁置：${name}`);
+              router.push(`/repos/${repoId}/shelves`);
+            })
+            .catch(onError);
+        }}
+        // Stash Files（#49）：全量贮藏（hooks 回写 stashes 键）→ 跳贮藏页
+        onStash={(msg) => {
+          stashAction({ action: 'save', ...(msg === undefined ? {} : { message: msg }) })
+            .then(() => {
+              void message.success('已存入贮藏');
+              router.push(`/repos/${repoId}/stashes`);
+            })
+            .catch(onError);
+        }}
+        // Annotate（#47）：行内「注解」→ /blame?file=（HEAD 工作区版本溯源）
+        onOpenAnnotate={(path) => router.push(`/repos/${repoId}/blame?file=${encodeURIComponent(path)}`)}
+        // Show History（#47）：行内「历史」→ /history?file=
+        onOpenHistory={(path) => router.push(`/repos/${repoId}/history?file=${encodeURIComponent(path)}`)}
       />
     </Flex>
   );

@@ -568,3 +568,110 @@ describe('StatusPage 忽略入口', () => {
     expect(screen.queryByTestId('ignore-unstaged-b.ts')).not.toBeInTheDocument();
   });
 });
+
+describe('StatusPage 页级动作（Create Patch / Shelve / Stash / Annotate / History）', () => {
+  it('行内「注解」：各组件行渲染，点击回调带路径且不触发行选中', () => {
+    const onSelectPatch = vi.fn();
+    const onOpenAnnotate = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([
+          { path: 'a.ts', code: 'M.' },
+          { path: 'b.ts', code: '??' },
+        ])}
+        {...makeHandlers()}
+        onSelectPatch={onSelectPatch}
+        onOpenAnnotate={onOpenAnnotate}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('annotate-staged-a.ts'));
+    expect(onOpenAnnotate).toHaveBeenCalledWith('a.ts');
+    fireEvent.click(screen.getByTestId('annotate-untracked-b.ts'));
+    expect(onOpenAnnotate).toHaveBeenCalledWith('b.ts');
+    expect(onSelectPatch).not.toHaveBeenCalled();
+  });
+
+  it('行内「历史」：点击回调带路径；缺省不渲染', () => {
+    const onOpenHistory = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([{ path: 'a.ts', code: '.M' }])}
+        {...makeHandlers()}
+        onOpenHistory={onOpenHistory}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('history-unstaged-a.ts'));
+    expect(onOpenHistory).toHaveBeenCalledWith('a.ts');
+    render(<StatusPage status={makeStatus([{ path: 'b.ts', code: '.M' }])} {...makeHandlers()} />);
+    expect(screen.queryByTestId('history-unstaged-b.ts')).not.toBeInTheDocument();
+  });
+
+  it('组级「创建补丁」：未勾选禁用；勾选工作区文件 → Modal 输入名 → {name, paths, staged:false} 回调', async () => {
+    const onCreatePatch = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([{ path: 'a.ts', code: '.M' }])}
+        {...makeHandlers()}
+        onCreatePatch={onCreatePatch}
+      />,
+    );
+    const button = screen.getByTestId('create-patch-unstaged');
+    expect(button).toBeDisabled();
+    clickCheckbox('check-unstaged-a.ts');
+    fireEvent.click(screen.getByTestId('create-patch-unstaged'));
+    fireEvent.change(await screen.findByTestId('page-action-patch-input'), { target: { value: 'wip' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onCreatePatch).toHaveBeenCalledTimes(1);
+    // 工作区模式省略 staged（缺省 false → git diff HEAD），与 PatchPanel 省略约定一致
+    expect(onCreatePatch).toHaveBeenCalledWith({ name: 'wip', paths: ['a.ts'] });
+  });
+
+  it('组级「创建补丁」（已暂存组）：载荷 staged:true', async () => {
+    const onCreatePatch = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([{ path: 'a.ts', code: 'M.' }])}
+        {...makeHandlers()}
+        onCreatePatch={onCreatePatch}
+      />,
+    );
+    clickCheckbox('check-staged-a.ts');
+    fireEvent.click(screen.getByTestId('create-patch-staged'));
+    fireEvent.change(await screen.findByTestId('page-action-patch-input'), { target: { value: 'wip' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onCreatePatch).toHaveBeenCalledWith({ name: 'wip', paths: ['a.ts'], staged: true });
+  });
+
+  it('页头「搁置」：Modal 输入名（必填，空禁用）→ 以 { name } 调 onShelve', async () => {
+    const onShelve = vi.fn();
+    render(<StatusPage status={makeStatus([])} {...makeHandlers()} onShelve={onShelve} />);
+    fireEvent.click(screen.getByTestId('action-shelve'));
+    const input = await screen.findByTestId('page-action-shelf-input');
+    // 空名禁用
+    expect(screen.getByRole('button', { name: /确\s*定/ })).toBeDisabled();
+    fireEvent.change(input, { target: { value: 'wip-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onShelve).toHaveBeenCalledTimes(1);
+    expect(onShelve).toHaveBeenCalledWith('wip-1');
+  });
+
+  it('页头「存入贮藏」：message 可空（空白提交 undefined 语义）→ onStash 回调', async () => {
+    const onStash = vi.fn();
+    render(<StatusPage status={makeStatus([{ path: 'a.ts', code: '.M' }])} {...makeHandlers()} onStash={onStash} />);
+    fireEvent.click(screen.getByTestId('action-stash'));
+    fireEvent.change(await screen.findByTestId('page-action-stash-input'), { target: { value: '保存点' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onStash).toHaveBeenCalledWith('保存点');
+    // 再开一次：不输入直接确定 → undefined（省略 message）
+    fireEvent.click(screen.getByTestId('action-stash'));
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
+    expect(onStash).toHaveBeenCalledWith(undefined);
+  });
+
+  it('未传 onCreatePatch/onShelve/onStash 时对应按钮不渲染', () => {
+    render(<StatusPage status={makeStatus([{ path: 'a.ts', code: '.M' }])} {...makeHandlers()} />);
+    expect(screen.queryByTestId('create-patch-unstaged')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-shelve')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-stash')).not.toBeInTheDocument();
+  });
+});

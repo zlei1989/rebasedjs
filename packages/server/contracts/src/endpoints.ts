@@ -252,10 +252,16 @@ export const searchQuerySchema = z.object({
 });
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
 
-export const patchCreateBodySchema = z.object({
-  name: z.string().min(1).regex(/^[\w.-]+$/),
-  from: z.string().optional(), to: z.string().optional(), staged: z.boolean().optional(),
-});
+export const patchCreateBodySchema = z
+  .object({
+    name: z.string().min(1).regex(/^[\w.-]+$/),
+    from: z.string().optional(), to: z.string().optional(), staged: z.boolean().optional(),
+    /** 指定文件集（StatusPage「Create Patch from changes」语义）：仅工作区/staged 模式生效，与 from/to 互斥 */
+    paths: z.array(z.string().min(1)).min(1).optional(),
+  })
+  .refine((b) => b.paths === undefined || (b.from === undefined && b.to === undefined), {
+    message: 'paths 与 from/to 互斥',
+  });
 export type PatchCreateBody = z.infer<typeof patchCreateBodySchema>;
 export const patchApplyBodySchema = z.object({ name: z.string().min(1) });
 export type PatchApplyBody = z.infer<typeof patchApplyBodySchema>;

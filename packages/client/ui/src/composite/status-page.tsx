@@ -32,6 +32,7 @@ import type {
   CommitBody,
   DiffFile,
   HunkStagingBody,
+  PatchCreateBody,
   RepoStatus,
 } from '@rebased/contracts';
 
@@ -62,6 +63,17 @@ export interface StatusPageProps {
   onIgnore?: (path: string) => void;
   /** 行内「三版本」入口（已暂存/工作区组；HEAD/暂存/工作区三侧对比）：未传时不渲染该按钮 */
   onOpenThreeWay?: (path: string) => void;
+  /** 组级「创建补丁」（Create Patch from changes 语义）：传入后已暂存/工作区组渲染按钮（勾选≥1 可用），
+   *  Modal 收集 name，载荷含 paths + staged 模式（服务端契约 refine 保证 paths 与 from/to 互斥） */
+  onCreatePatch?: (body: PatchCreateBody) => void;
+  /** 组级「搁置」（Shelve Changes 语义）：传入后页头渲染「搁置」按钮（全量工作区+暂存，Modal 收集 name） */
+  onShelve?: (name: string) => void;
+  /** 组级「存入贮藏」（Stash Files 语义）：传入后页头渲染「存入贮藏」按钮（Modal 收集可选 message） */
+  onStash?: (message: string | undefined) => void;
+  /** 行内「注解」（Show in Annotate 语义）：传入后各组件行渲染按钮 → /blame?file= */
+  onOpenAnnotate?: (path: string) => void;
+  /** 行内「历史」（Show History 语义）：传入后各组件行渲染按钮 → /history?file= */
+  onOpenHistory?: (path: string) => void;
 }
 
 /** porcelain X 码（暂存区列）：M/A/D/R/C 视为已暂存 */
@@ -147,6 +159,8 @@ function ChangeGroup({
   onChangelistAction,
   onIgnore,
   onOpenThreeWay,
+  onOpenAnnotate,
+  onOpenHistory,
 }: {
   title: string;
   group: ChangeGroupKind;
@@ -161,6 +175,10 @@ function ChangeGroup({
   onIgnore?: (path: string) => void;
   /** 行内「三版本」入口：已暂存/工作区组渲染（缺省不渲染） */
   onOpenThreeWay?: (path: string) => void;
+  /** 行内「注解」入口：渲染（缺省不渲染） */
+  onOpenAnnotate?: (path: string) => void;
+  /** 行内「历史」入口：渲染（缺省不渲染） */
+  onOpenHistory?: (path: string) => void;
 }): React.ReactNode {
   const [selected, setSelected] = useState<string[]>([]);
   const paths = useMemo(() => entries.map((e) => e.path), [entries]);
@@ -248,6 +266,32 @@ function ChangeGroup({
               onClick={() => onOpenThreeWay(entry.path)}
             >
               三版本
+            </Button>
+          </Flex>
+        )}
+        {/* 「注解」行操作（Annotate 语义）；点击不触发行选中 */}
+        {onOpenAnnotate !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="small"
+              type="text"
+              data-testid={`annotate-${group}-${entry.path}`}
+              onClick={() => onOpenAnnotate(entry.path)}
+            >
+              注解
+            </Button>
+          </Flex>
+        )}
+        {/* 「历史」行操作（Show History 语义）；点击不触发行选中 */}
+        {onOpenHistory !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="small"
+              type="text"
+              data-testid={`history-${group}-${entry.path}`}
+              onClick={() => onOpenHistory(entry.path)}
+            >
+              历史
             </Button>
           </Flex>
         )}
@@ -351,6 +395,83 @@ function ChangelistNameModal({
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
+    </Modal>
+  );
+}
+
+/** 状态页动作输入 Modal 状：创建补丁 / 搁置 / 存入贮藏 共用（title/占位/必填性可配） */
+type PageActionModalKind = 'patch' | 'shelf' | 'stash';
+
+/**
+ * 三动作 Modal（单选互斥——StatusPage 同刻只开一个）：
+ * - patch：name 必填（占位「补丁名（必填）」），提交以 { name, paths, staged? } 调 onCreatePatch；
+ * - shelf：name 必填（占位「搁置名（必填）」），提交以 { name } 调 onShelve；
+ * - stash：message 可空（占位「贮藏信息（可空）」），提交以 { message | undefined } 调 onStash。
+ */
+function PageActionModal({
+  kind,
+  patchStaged,
+  patchPaths,
+  onCreatePatch,
+  onShelve,
+  onStash,
+  onClose,
+}: {
+  kind: PageActionModalKind;
+  patchStaged: boolean;
+  patchPaths: string[];
+  onCreatePatch?: (body: PatchCreateBody) => void;
+  onShelve?: (name: string) => void;
+  onStash?: (message: string | undefined) => void;
+  onClose: () => void;
+}): React.ReactNode {
+  const [text, setText] = useState('');
+
+  /** 关闭时清空输入：Modal 默认不卸载子树，取消后重开不能残留上次输入 */
+  const close = (): void => {
+    setText('');
+    onClose();
+  };
+
+  const patch = kind === 'patch';
+  const shelf = kind === 'shelf';
+  const required = patch || shelf;
+
+  const submit = (): void => {
+    const trimmed = text.trim();
+    if (patch) {
+      onCreatePatch?.({ name: trimmed, paths: patchPaths, ...(patchStaged ? { staged: true } : {}) });
+    } else if (shelf) {
+      onShelve?.(trimmed);
+    } else {
+      onStash?.(trimmed === '' ? undefined : trimmed);
+    }
+    close();
+  };
+
+  return (
+    <Modal
+      title={patch ? '创建补丁' : shelf ? '搁置变更' : '存入贮藏'}
+      open
+      okText="确定"
+      cancelText="取消"
+      okButtonProps={{ disabled: required && text.trim() === '' }}
+      onOk={submit}
+      onCancel={close}
+    >
+      <Flex vertical gap={8}>
+        <Input
+          data-testid={`page-action-${patch ? 'patch' : shelf ? 'shelf' : 'stash'}-input`}
+          placeholder={patch ? '补丁名（必填）' : shelf ? '搁置名（必填）' : '贮藏信息（可空）'}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        {patch ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            对勾选的 {patchPaths.length} 个文件创建补丁（{patchStaged ? '暂存区 diff' : '工作区 diff'}）
+          </Typography.Text>
+        ) : null}
+      </Flex>
     </Modal>
   );
 }
@@ -580,11 +701,20 @@ export function StatusPage({
   onChangelistAction,
   onIgnore,
   onOpenThreeWay,
+  onCreatePatch,
+  onShelve,
+  onStash,
+  onOpenAnnotate,
+  onOpenHistory,
 }: StatusPageProps): React.ReactNode {
   const grouped = useMemo(() => groupChanges(status.entries), [status.entries]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
+  /** 页头动作 Modal 状态（创建补丁/搁置/存入贮藏三选一，同刻只开一个） */
+  const [pageAction, setPageAction] = useState<
+    { kind: 'patch'; paths: string[]; staged: boolean } | { kind: 'shelf' } | { kind: 'stash' } | null
+  >(null);
 
   /** 变更列表模式仅在视图与回调同时具备时开启（向后兼容：缺省维持现状三分组） */
   const changelistMode = changelists !== undefined && onChangelistAction !== undefined;
@@ -627,14 +757,24 @@ export function StatusPage({
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
-      {/* 页头工具条：变更列表管理入口（仅 changelists 模式渲染） */}
-      {changelistMode && (
-        <Flex>
+      {/* 页头工具条：变更列表管理入口（仅 changelists 模式渲染）+ 页级动作（搁置/存入贮藏——全量工作区+暂存，不依赖勾选） */}
+      <Flex gap={8} align="center">
+        {changelistMode && (
           <Dropdown trigger={['click']} menu={{ items: manageItems, onClick: handleManageClick }}>
             <Button data-testid="manage-changelists">管理列表</Button>
           </Dropdown>
-        </Flex>
-      )}
+        )}
+        {onShelve !== undefined && (
+          <Button data-testid="action-shelve" onClick={() => setPageAction({ kind: 'shelf' })}>
+            搁置
+          </Button>
+        )}
+        {onStash !== undefined && (
+          <Button data-testid="action-stash" onClick={() => setPageAction({ kind: 'stash' })}>
+            存入贮藏
+          </Button>
+        )}
+      </Flex>
       {/* 左列三组变更列表 + 右列补丁预览（窄屏自然折行为上下布局） */}
       <Flex gap={16} align="stretch" wrap="wrap">
         <Flex vertical gap={16} style={{ flex: 1, minWidth: 320 }}>
@@ -645,17 +785,31 @@ export function StatusPage({
             onSelectPatch={onSelectPatch}
             onOpenDiff={onOpenDiff}
             onOpenThreeWay={onOpenThreeWay}
+            onOpenAnnotate={onOpenAnnotate}
+            onOpenHistory={onOpenHistory}
             changelists={changelistMode ? changelists : undefined}
             onChangelistAction={onChangelistAction}
             actions={(selected) => (
-              <Button
-                size="small"
-                data-testid="unstage-staged"
-                disabled={selected.length === 0}
-                onClick={() => onUnstage(selected)}
-              >
-                取消暂存
-              </Button>
+              <>
+                <Button
+                  size="small"
+                  data-testid="unstage-staged"
+                  disabled={selected.length === 0}
+                  onClick={() => onUnstage(selected)}
+                >
+                  取消暂存
+                </Button>
+                {onCreatePatch !== undefined && (
+                  <Button
+                    size="small"
+                    data-testid="create-patch-staged"
+                    disabled={selected.length === 0}
+                    onClick={() => setPageAction({ kind: 'patch', paths: selected, staged: true })}
+                  >
+                    创建补丁
+                  </Button>
+                )}
+              </>
             )}
           />
           <ChangeGroup
@@ -665,6 +819,8 @@ export function StatusPage({
             onSelectPatch={onSelectPatch}
             onOpenDiff={onOpenDiff}
             onOpenThreeWay={onOpenThreeWay}
+            onOpenAnnotate={onOpenAnnotate}
+            onOpenHistory={onOpenHistory}
             changelists={changelistMode ? changelists : undefined}
             onChangelistAction={onChangelistAction}
             actions={(selected) => (
@@ -687,6 +843,16 @@ export function StatusPage({
                     放弃
                   </Button>
                 </Popconfirm>
+                {onCreatePatch !== undefined && (
+                  <Button
+                    size="small"
+                    data-testid="create-patch-unstaged"
+                    disabled={selected.length === 0}
+                    onClick={() => setPageAction({ kind: 'patch', paths: selected, staged: false })}
+                  >
+                    创建补丁
+                  </Button>
+                )}
               </>
             )}
           />
@@ -696,6 +862,8 @@ export function StatusPage({
             entries={grouped.untracked}
             onSelectPatch={onSelectPatch}
             onOpenDiff={onOpenDiff}
+            onOpenAnnotate={onOpenAnnotate}
+            onOpenHistory={onOpenHistory}
             changelists={changelistMode ? changelists : undefined}
             onChangelistAction={onChangelistAction}
             onIgnore={onIgnore}
@@ -735,6 +903,19 @@ export function StatusPage({
         </Flex>
       </Flex>
       <CommitCard committing={committing} onCommit={onCommit} />
+
+      {/* 页头/组级动作 Modal：创建补丁（组级勾选路径）/ 搁置 / 存入贮藏（三选一，同刻只开一个） */}
+      {pageAction !== null && (
+        <PageActionModal
+          kind={pageAction.kind}
+          patchStaged={pageAction.kind === 'patch' ? pageAction.staged : false}
+          patchPaths={pageAction.kind === 'patch' ? pageAction.paths : []}
+          onCreatePatch={onCreatePatch}
+          onShelve={onShelve}
+          onStash={onStash}
+          onClose={() => setPageAction(null)}
+        />
+      )}
 
       {/* 列表名 Modal：新建/重命名互斥（renameTarget 非空才开重命名），提交后清空输入并关闭 */}
       <ChangelistNameModal
