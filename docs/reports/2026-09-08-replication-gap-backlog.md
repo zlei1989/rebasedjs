@@ -121,7 +121,7 @@
 | LogPage | #63 | 主工具栏式分支下拉（等价物可选） |
 | DiffPage | #27 | 多文件 Prev/Next 切换（依赖单文件模型改造） |
 | BranchPanel | #10 | ✅ 已落地（行内「比较」→ 日志页 ?compare= 对比视图——双 range 双向提交差异） |
-| BranchPanel | #67/#69 | 弹窗 fetch 按钮；Show Diff with Working Tree |
+| BranchPanel | #67/#69 | #67 ✅ 已落地（页头「Fetch」按钮——fetch 全部远程，成功后复用事件流验证分支列表）；#69 Show Diff with Working Tree 待办 |
 | BranchPanel | #70 外 | （New Working Tree 明确不做） |
 | HistoryPanel | #30/#31 | ✅ 已落地（双击 → DiffPage；Annotate Revision → /blame?rev=，见 §2.3 完成记录） |
 | BlameView | #29/#33/#34 | #29/#33 ✅ 已落地（行内「历史」「差异」）；#34 Show All Affected 待办（见 §2.3） |

@@ -4,7 +4,7 @@
  * （成功响应由各 hook 显式回写缓存）；本页自订阅 events：外部 CLI 检出/重命名当前分支时重验证分支列表刷新
  * current 标记（纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
-import { useBranchAction, useBranches, useCheckout, useRepoEvents } from '@rebased/client';
+import { useBranchAction, useBranches, useCheckout, useFetch, useRepoEvents } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
 import { Button, Flex, message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -15,6 +15,8 @@ export function RepoBranchesPage(): React.ReactNode {
   const { data: branches, mutate: mutateBranches } = useBranches(repoId);
   const { trigger: branchAction, isMutating: actingBranch } = useBranchAction(repoId);
   const { trigger: checkout, isMutating: checkingOut } = useCheckout(repoId);
+  // 弹窗 Fetch（GitBranchPopupFetchAction 语义）：fetch 全部远程 → 成功后重验证分支列表（远程行/merged 态变化）
+  const { trigger: fetch, isMutating: fetching } = useFetch(repoId);
   // 外部 CLI 检出/重命名当前分支 → repo.state-changed（branch/headHash 变化）→ 重验证分支列表刷新 current 标记；
   // 注：纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件（watcher 架构的已知局限，已登记 P3 缺口）
   useRepoEvents(repoId, { onStatus: () => void mutateBranches() });
@@ -56,6 +58,16 @@ export function RepoBranchesPage(): React.ReactNode {
         }}
         // 与当前分支比较（GitCompareWithBranchAction 语义 #10）：跳日志页 ?compare=<branch>（对比视图）
         onCompare={(branch) => navigate(`/repos/${repoId}?compare=${encodeURIComponent(branch)}`)}
+        // 弹窗 Fetch（#67）：fetch 全部远程 → 重验证分支列表（远程行/merged 态随 refs 更新）
+        onFetch={() => {
+          fetch({})
+            .then(() => {
+              void message.success('已拉取远程引用');
+              void mutateBranches();
+            })
+            .catch(onError);
+        }}
+        fetching={fetching}
         acting={actingBranch || checkingOut}
       />
     </Flex>

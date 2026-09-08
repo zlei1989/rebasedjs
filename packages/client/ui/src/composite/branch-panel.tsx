@@ -32,6 +32,10 @@ export interface BranchPanelProps {
   onCleanupMerged?: () => void;
   /** 与当前分支比较（GitCompareWithBranchAction 语义）：本地行渲染「比较」按钮（当前分支禁用）；缺省不渲染 */
   onCompare?: (branch: string) => void;
+  /** 弹窗 Fetch（GitBranchPopupFetchAction 语义）：fetch 全部远程；缺省不渲染按钮 */
+  onFetch?: () => void;
+  /** fetch 请求进行中：按钮 loading 态 */
+  fetching?: boolean;
   acting?: boolean;
 }
 
@@ -276,7 +280,16 @@ function BranchGroupCard({
   );
 }
 
-export function BranchPanel({ branches, onAction, onCheckout, onCleanupMerged, onCompare, acting }: BranchPanelProps): React.ReactNode {
+export function BranchPanel({
+  branches,
+  onAction,
+  onCheckout,
+  onCleanupMerged,
+  onCompare,
+  onFetch,
+  fetching,
+  acting,
+}: BranchPanelProps): React.ReactNode {
   // 过滤态：文本（名称大小写不敏感子串）+「仅看已合并」（本地/远程两组同筛选——Java 查找已合并语义）
   const [filterText, setFilterText] = useState('');
   const [mergedOnly, setMergedOnly] = useState(false);
@@ -357,6 +370,12 @@ export function BranchPanel({ branches, onAction, onCheckout, onCleanupMerged, o
               清理已合并（{mergedLocals.length}）
             </Button>
           </Popconfirm>
+        ) : null}
+        {/* 弹窗 Fetch（GitBranchPopupFetchAction 语义）：fetch 全部远程 → 容器重验证分支列表 */}
+        {onFetch !== undefined ? (
+          <Button data-testid="branch-fetch" loading={fetching ?? acting} onClick={onFetch}>
+            Fetch
+          </Button>
         ) : null}
       </Flex>
 

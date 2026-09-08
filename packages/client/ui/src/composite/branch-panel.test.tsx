@@ -177,6 +177,25 @@ describe('BranchPanel 行操作', () => {
     expect(screen.queryByTestId('compare-local-dev')).not.toBeInTheDocument();
   });
 
+  it('onFetch 提供时渲染「Fetch」按钮，点击调 onFetch；fetching 时 loading', () => {
+    const onFetch = vi.fn();
+    const { unmount } = render(
+      <BranchPanel branches={makeList([makeBranch({ name: 'dev' })])} {...makeHandlers()} onFetch={onFetch} />,
+    );
+    fireEvent.click(screen.getByTestId('branch-fetch'));
+    expect(onFetch).toHaveBeenCalledTimes(1);
+    unmount();
+    render(
+      <BranchPanel branches={makeList([makeBranch({ name: 'dev' })])} {...makeHandlers()} onFetch={() => {}} fetching />,
+    );
+    expect(screen.getByTestId('branch-fetch')).toHaveClass('ant-btn-loading');
+  });
+
+  it('未传 onFetch 时不渲染「Fetch」（向后兼容）', () => {
+    render(<BranchPanel branches={makeList([makeBranch({ name: 'dev' })])} {...makeHandlers()} />);
+    expect(screen.queryByTestId('branch-fetch')).not.toBeInTheDocument();
+  });
+
   it('删除未合并分支：Popconfirm 提示强制删除，确认后传 force:true', async () => {
     const onAction = vi.fn();
     render(

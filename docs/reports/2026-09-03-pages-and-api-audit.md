@@ -20,7 +20,7 @@
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 110 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 64、领域类型/别名 89、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（104 条） | 75 ✅（含等价边）+ 8 🟡 + 7 ➖ + 14 ❌ |
+| 导航边（104 条） | 76 ✅（含等价边）+ 8 🟡 + 7 ➖ + 13 ❌ |
 
 ### 1.2 口径与图例
 
@@ -305,6 +305,7 @@ Reset 与 Undo Commit；对应 `GitResetAction` / `GitNewResetDialog` / `GitUnco
 | 检出：既有分支 / 新建并检出 / detached（标签/提交） | ✅ | 三态；检出文件未做 |
 | 查找已合并 / 清理已合并与过时分支 | ✅ | 「仅看已合并」开关 +「清理已合并（N）」批量删除（已合并且非当前本地分支，Popconfirm → 逐条 delete，完成重验证列表） |
 | 与当前分支比较 | ✅ | 行内「比较」→ 日志页 `?compare=<branch>` 对比视图（双 range 双向提交差异；「当前」分支禁用） |
+| 弹窗 Fetch | ✅ | 页头「Fetch」按钮（fetch 全部远程引用；成功后复用事件流触发分支列表验证） |
 | 保护分支 / force-push 后修复 / checkout with rebase | ❌ | 未做 |
 
 ### 4.8 MergeDialog ✅（页面化对话框）
@@ -726,7 +727,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 64 | QuickActionsMenu → BranchPanel | Branches… 菜单项 | `GitQuickListContentProvider.java:24` | 🟡 等效：顶栏「分支」；独立组件不做 |
 | 65 | BranchPanel → New Branch 对话框 | 弹窗顶部 New Branch… | backend.xml:245-249 | ✅ 新建 Modal（起始点 + 创建后检出） |
 | 66 | BranchPanel → GitRefDialog | Checkout Branch or Revision… | `GitCheckoutFromInputAction.kt:38` | ✅ 行内三态检出 |
-| 67 | BranchPanel → fetch | 弹窗 Fetch 按钮 | `GitBranchPopupFetchAction.kt:21-24` | ❌（远程页承载） |
+| 67 | BranchPanel → fetch | 弹窗 Fetch 按钮 | `GitBranchPopupFetchAction.kt:21-24` | ✅ 分支页顶部「Fetch」按钮（fetch 全部远程 → 成功后重验证分支列表） |
 | 68 | BranchPanel → PushDialog | 分支菜单 Push… | backend.xml:272 | ✅ 「更多」→ 内嵌 PushDialog |
 | 69 | BranchPanel → DiffPage | Show Diff with Working Tree | `GitShowDiffWithRefAction.kt:25` | ❌ |
 | 70 | BranchPanel → WorktreePanel | 分支菜单 New Working Tree | backend.xml:269 | ❌ 明确不做 |
@@ -777,10 +778,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **75 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 4（#10 比较 + #61/#62/#65 既有）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
+| ✅ 已复刻（含等价边） | **76 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 5（#10 比较 + #61/#62/#65 既有 + #67 fetch）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **14 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
+| ❌ 未复刻 | **13 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
 
 ### 5.5 关键联动流程
 
