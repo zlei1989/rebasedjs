@@ -223,11 +223,13 @@ export type InteractiveRebaseBody = z.infer<typeof interactiveRebaseBodySchema>;
 export const pickBodySchema = z.object({ hashes: z.array(z.string().min(1)).min(1) });
 export type PickBody = z.infer<typeof pickBodySchema>; // cherry-pick 与 revert 共用
 
-/** 标签写操作（判别联合）：create 可带 ref（默认 HEAD）与 message（附注标签）；delete 删除；push 推送（remote 缺省取当前上游） */
+/** 标签写操作（判别联合）：create 可带 ref（默认 HEAD）与 message（附注标签）；delete 删除本地；push 推送单个；pushAll 推送全部；deleteRemote 删除远程 */
 export const tagActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create'), name: z.string().min(1), ref: z.string().optional(), message: z.string().optional() }),
   z.object({ action: z.literal('delete'), name: z.string().min(1) }),
   z.object({ action: z.literal('push'), name: z.string().min(1), remote: z.string().optional() }),
+  z.object({ action: z.literal('pushAll'), remote: z.string().optional() }),
+  z.object({ action: z.literal('deleteRemote'), name: z.string().min(1), remote: z.string().optional() }),
 ]);
 export type TagAction = z.infer<typeof tagActionSchema>;
 

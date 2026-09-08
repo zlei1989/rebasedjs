@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError, runGit } from './exec';
-import { createTag, deleteTag, listTags, pushTag } from './tag';
+import { createTag, deleteRemoteTag, deleteTag, listTags, pushAllTags, pushTag } from './tag';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -103,6 +103,41 @@ describe('pushTag', () => {
       await createTag(repo, { name: 'v1', ref: branch, message: '发布 1.0（改指向）' });
       const r3 = await pushTag(repo, { name: 'v1', remote: 'origin' });
       expect(r3.status).toBe('rejected');
+    },
+  );
+
+  it(
+    'pushAllTags 推送全部：两标签均达对端；重复推送 → up-to-date',
+    { timeout: 60000 },
+    async () => {
+      const { repo, bare, branch } = await makeRemoteRig();
+      await createTag(repo, { name: 't1', ref: branch });
+      await createTag(repo, { name: 't2', ref: branch });
+
+      const r1 = await pushAllTags(repo, { remote: 'origin' });
+      expect(r1.status).toBe('pushed');
+      const head = (await runGit(['rev-parse', 'HEAD'], { cwd: repo })).stdout.trim();
+      expect((await runGit(['rev-parse', 'refs/tags/t1'], { cwd: bare })).stdout.trim()).toBe(head);
+      expect((await runGit(['rev-parse', 'refs/tags/t2'], { cwd: bare })).stdout.trim()).toBe(head);
+
+      const r2 = await pushAllTags(repo, { remote: 'origin' });
+      expect(r2.status).toBe('up-to-date');
+    },
+  );
+
+  it(
+    'deleteRemoteTag 删除对端标签：裸仓库 refs/tags 消失；本地标签不受影响',
+    { timeout: 60000 },
+    async () => {
+      const { repo, bare, branch } = await makeRemoteRig();
+      await createTag(repo, { name: 'v1', ref: branch });
+      await pushTag(repo, { name: 'v1', remote: 'origin' });
+      expect((await runGit(['rev-parse', '--verify', 'refs/tags/v1'], { cwd: bare })).stdout.trim()).toMatch(/^[0-9a-f]{40}$/);
+
+      await deleteRemoteTag(repo, { name: 'v1', remote: 'origin' });
+      expect(() => runGit(['rev-parse', '--verify', 'refs/tags/v1'], { cwd: bare })).rejects.toBeInstanceOf(GitExitError);
+      // 本地标签仍在
+      expect((await listTags(repo)).map((t) => t.name)).toEqual(['v1']);
     },
   );
 });

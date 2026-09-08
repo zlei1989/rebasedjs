@@ -117,4 +117,35 @@ describe('applyTagAction', () => {
       });
     },
   );
+
+  it('pushAll 推送全部标签到裸仓库：对端两标签均可见', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, branch } = makeRemoteRig();
+    const head = git(repo, ['rev-parse', 'HEAD']).trim();
+    await applyTagAction(repo, { action: 'create', name: 't1', ref: branch });
+    await applyTagAction(repo, { action: 'create', name: 't2', ref: branch });
+
+    const after = await applyTagAction(repo, { action: 'pushAll', remote: 'origin' });
+    expect(after.tags.map((t) => t.name)).toEqual(['t1', 't2']);
+    expect(git(bare, ['rev-parse', 'refs/tags/t1']).trim()).toBe(head);
+    expect(git(bare, ['rev-parse', 'refs/tags/t2']).trim()).toBe(head);
+  });
+
+  it('deleteRemote 删除对端标签：裸仓库 refs/tags 消失且本地列表不变', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, branch } = makeRemoteRig();
+    await applyTagAction(repo, { action: 'create', name: 'v1', ref: branch });
+    await applyTagAction(repo, { action: 'push', name: 'v1', remote: 'origin' });
+    expect(git(bare, ['rev-parse', '--verify', 'refs/tags/v1']).trim()).toMatch(/^[0-9a-f]{40}$/);
+
+    const after = await applyTagAction(repo, { action: 'deleteRemote', name: 'v1', remote: 'origin' });
+    // 本地标签仍在（push 空 ref 只删对端）；对端标签消失
+    expect(after.tags.map((t) => t.name)).toEqual(['v1']);
+    expect(() => git(bare, ['rev-parse', '--verify', 'refs/tags/v1'])).toThrow();
+  });
+
+  it('deleteRemote 无远程：git 报错透出（GIT_ERROR 折叠）', { timeout: RIG_TIMEOUT }, async () => {
+    const repo = makeRepo();
+    makeBaseCommit(repo);
+    await applyTagAction(repo, { action: 'create', name: 'v1' });
+    await expect(applyTagAction(repo, { action: 'deleteRemote', name: 'v1' })).rejects.toBeInstanceOf(Error);
+  });
 });

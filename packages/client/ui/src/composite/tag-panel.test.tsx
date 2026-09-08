@@ -118,4 +118,24 @@ describe('TagPanel 行操作', () => {
     expect(onAction).toHaveBeenCalledTimes(1);
     expect(onAction).toHaveBeenCalledWith({ action: 'push', name: 'v1.0' });
   });
+
+  it('删除远程经 Popconfirm 确认后传 {action:"deleteRemote", name}', async () => {
+    const onAction = vi.fn();
+    render(<TagPanel tags={makeList([makeTag({ name: 'v1.0' })] )} onAction={onAction} />);
+    fireEvent.click(screen.getByTestId('tag-delete-remote-v1.0'));
+    expect(await screen.findByText(/确定从远程删除标签 v1.0/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith({ action: 'deleteRemote', name: 'v1.0' });
+  });
+
+  it('「推送全部」经 Popconfirm 确认后传 {action:"pushAll"}', async () => {
+    const onAction = vi.fn();
+    render(<TagPanel tags={makeList([makeTag({ name: 'v1.0' })] )} onAction={onAction} />);
+    fireEvent.click(screen.getByTestId('tag-push-all'));
+    expect(await screen.findByText(/推送全部标签到远程仓库/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith({ action: 'pushAll' });
+  });
 });

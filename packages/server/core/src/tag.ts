@@ -79,3 +79,43 @@ export async function pushTag(
     throw err;
   }
 }
+
+/**
+ * 推送全部标签：git push [remote] --tags。
+ * 状态分类与 pushTag 同源（'Everything up-to-date' 双流探测；rejected 特征含 'already exists'）。
+ */
+export async function pushAllTags(
+  cwd: string,
+  opts: { remote?: string; extraConfig?: string[] },
+): Promise<{ status: 'pushed' | 'rejected' | 'up-to-date' }> {
+  const args = ['push'];
+  if (opts.remote !== undefined) args.push(opts.remote);
+  args.push('--tags');
+  try {
+    const { stdout, stderr } = await runGit(args, {
+      cwd,
+      extraConfig: opts.extraConfig,
+      timeoutMs: TRANSFER_TIMEOUT_MS,
+    });
+    return { status: stdout.includes('Everything up-to-date') || stderr.includes('Everything up-to-date') ? 'up-to-date' : 'pushed' };
+  } catch (err) {
+    if (err instanceof GitExitError && err.stderr.includes('rejected') && err.stderr.includes('already exists')) {
+      return { status: 'rejected' };
+    }
+    throw err;
+  }
+}
+
+/**
+ * 删除远程标签：git push <remote> :refs/tags/<name>（push 空 ref 即删除对端标签）。
+ * 远程不存在/认证失败原样抛 GitExitError（api 层 withAuth 认证回路处理）。
+ */
+export async function deleteRemoteTag(
+  cwd: string,
+  opts: { name: string; remote?: string; extraConfig?: string[] },
+): Promise<void> {
+  const args = ['push'];
+  if (opts.remote !== undefined) args.push(opts.remote);
+  args.push(`:refs/tags/${opts.name}`);
+  await runGit(args, { cwd, extraConfig: opts.extraConfig, timeoutMs: TRANSFER_TIMEOUT_MS });
+}

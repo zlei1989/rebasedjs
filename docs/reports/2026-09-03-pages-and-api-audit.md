@@ -137,7 +137,7 @@
 | remote | `repos/:id/remotes`、`fetch`、`pull`、`push`、`update` | GET/POST + 4×POST | 远程 CRUD（含 fetch spec/unshallow）/ 拉取 / 推送（forceWithLease/setUpstream）/ 策略化更新 | RemotePanel、Pull/Push/Update 对话框 | ✅ |
 | rebase | `repos/:id/rebase`、`rebase/todo`、`rebase/interactive` | POST/GET/POST | 变基 onto / todo 读取 / 交互式执行 | RebaseDialog（内嵌 LogPage） | ✅ |
 | pick | `repos/:id/cherry-pick`、`revert` | POST | 摘樱桃 / 还原 | LogPage 详情面板按钮 | ✅ |
-| tag | `repos/:id/tags` | GET/POST | 标签列表 / create(含附注)/delete/push | TagPanel | ✅ |
+| tag | `repos/:id/tags` | GET/POST | 标签列表 / create(含附注)/delete/push/pushAll/deleteRemote | TagPanel | ✅ |
 | blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`） | BlameView | ✅ |
 | history | `repos/:id/history` | GET | 文件历史（`--follow`） | HistoryPanel | ✅ |
 | browse | `repos/:id/browse`、`repos/:id/browse/content` | GET ×2 | 指定版本文件树 / 单文件内容（二进制标记） | BrowsePanel | ✅ |
@@ -355,8 +355,8 @@ rebase 对话框 + 交互式 rebase 编辑器；对照 `GitRebaseCommitsTableVie
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | 创建标签（含附注） | ✅ | name 必填 + ref 默认 HEAD + message 非空即附注 |
-| 删除标签 | ✅ | 行内 Popconfirm（本地标签；删除远程未做） |
-| 推送标签 | ✅ | 行内推送；推送全部未做 |
+| 删除标签 | ✅ | 行内 Popconfirm（本地标签；「删除远程」= push 空 ref，同样 Popconfirm） |
+| 推送标签 | ✅ | 行内推送单个 + 页头「推送全部」（`push --tags`，Popconfirm 确认）；均经认证回路 |
 
 ### 4.12 RemotePanel ✅
 

@@ -50,7 +50,7 @@ export { continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase } fro
 export type { CoreRebaseResult } from './rebase';
 export { cherryPickCommits, continuePick, isAncestor, revertCommits } from './pick';
 export type { CorePickResult } from './pick';
-export { createTag, deleteTag, listTags, pushTag } from './tag';
+export { createTag, deleteRemoteTag, deleteTag, listTags, pushAllTags, pushTag } from './tag';
 export type { CoreTag } from './tag';
 export { addWorktree, listWorktrees, pruneWorktrees, removeWorktree } from './worktree';
 export type { WorktreeEntry } from './worktree';

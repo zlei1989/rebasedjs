@@ -17,7 +17,7 @@ export interface TagPanelProps {
   acting?: boolean;
 }
 
-/** 标签行：name + annotated 徽标 + subject（轻量标签 subject 为 null 时不渲染）+ 推送/删除 */
+/** 标签行：name + annotated 徽标 + subject（轻量标签 subject 为 null 时不渲染）+ 推送/删除远程/删除 */
 function TagRow({ tag, onAction }: { tag: TagEntry; onAction: (action: TagAction) => void }): React.ReactNode {
   return (
     <Flex data-testid={`tag-row-${tag.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
@@ -34,7 +34,7 @@ function TagRow({ tag, onAction }: { tag: TagEntry; onAction: (action: TagAction
         // 轻量标签占位：与附注行保持对齐
         <Typography.Text style={{ flex: 1, minWidth: 0 }} />
       )}
-      {/* 推送/删除均走 Popconfirm：两者都是对外部状态的一步操作，误触成本高（对照 stash 的 pop/drop 确认约定） */}
+      {/* 推送/删除远程/删除均走 Popconfirm：三者都是对外部状态的一步操作，误触成本高（对照 stash 的 pop/drop 确认约定） */}
       <Popconfirm
         title={`推送标签 ${tag.name} 到远程仓库？`}
         okText="确定"
@@ -43,6 +43,16 @@ function TagRow({ tag, onAction }: { tag: TagEntry; onAction: (action: TagAction
       >
         <Button size="small" data-testid={`tag-push-${tag.name}`}>
           推送
+        </Button>
+      </Popconfirm>
+      <Popconfirm
+        title={`确定从远程删除标签 ${tag.name}？`}
+        okText="确定"
+        cancelText="取消"
+        onConfirm={() => onAction({ action: 'deleteRemote', name: tag.name })}
+      >
+        <Button size="small" danger data-testid={`tag-delete-remote-${tag.name}`}>
+          删除远程
         </Button>
       </Popconfirm>
       <Popconfirm
@@ -137,7 +147,7 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
-      <Flex>
+      <Flex gap={8} align="center">
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -147,6 +157,17 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
         >
           新建标签
         </Button>
+        {/* 推送全部标签（GitPushTagsActionGroup 语义）：Popconfirm 确认后一键推全部本地标签 */}
+        <Popconfirm
+          title="推送全部标签到远程仓库？"
+          okText="确定"
+          cancelText="取消"
+          onConfirm={() => onAction({ action: 'pushAll' })}
+        >
+          <Button data-testid="tag-push-all" loading={acting}>
+            推送全部
+          </Button>
+        </Popconfirm>
       </Flex>
       <Card size="small" title={`标签列表（${tags.tags.length}）`}>
         {tags.tags.length === 0 ? (

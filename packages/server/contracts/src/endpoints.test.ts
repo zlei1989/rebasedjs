@@ -518,18 +518,30 @@ describe('tagActionSchema（标签写操作判别联合）', () => {
     expect(tagActionSchema.parse({ action: 'push', name: 'v1.0.0', remote: 'origin' }))
       .toEqual({ action: 'push', name: 'v1.0.0', remote: 'origin' });
   });
+  it('接受 pushAll 与 deleteRemote（可带 remote）', () => {
+    expect(tagActionSchema.parse({ action: 'pushAll' })).toEqual({ action: 'pushAll' });
+    expect(tagActionSchema.parse({ action: 'pushAll', remote: 'origin' }))
+      .toEqual({ action: 'pushAll', remote: 'origin' });
+    expect(tagActionSchema.parse({ action: 'deleteRemote', name: 'v1.0.0' }))
+      .toEqual({ action: 'deleteRemote', name: 'v1.0.0' });
+    expect(tagActionSchema.parse({ action: 'deleteRemote', name: 'v1.0.0', remote: 'origin' }))
+      .toEqual({ action: 'deleteRemote', name: 'v1.0.0', remote: 'origin' });
+  });
   it('拒绝枚举外 action 与缺 name', () => {
     expect(() => tagActionSchema.parse({ action: 'rename', name: 'x' })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'create' })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'delete' })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'push' })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'deleteRemote' })).toThrow();
   });
   it('拒绝空 name 与非字符串 message/ref', () => {
     expect(() => tagActionSchema.parse({ action: 'create', name: '' })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'delete', name: '' })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'push', name: '' })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'deleteRemote', name: '' })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'create', name: 'v1', message: 1 })).toThrow();
     expect(() => tagActionSchema.parse({ action: 'push', name: 'v1', remote: 1 })).toThrow();
+    expect(() => tagActionSchema.parse({ action: 'pushAll', remote: 1 })).toThrow();
   });
 });
 
