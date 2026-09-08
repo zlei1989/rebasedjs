@@ -1,11 +1,13 @@
 /**
  * 提交搜索面板：搜索框（关键词 q）+ 模式选择（Segmented：信息 grep / 内容 pickaxe）+ 结果列表。
  *  提交 → onSearch(q, mode)（容器持 SWR 数据）；结果行点击 → onSelectCommit 完整哈希。
+ *  分支快速搜索（Search Everywhere Git tab 语义）：分支输入即滤（文本即滤约定同 LogPage），
+ *  行点击 → onSelectBranch（容器做检出/导航）。
  *  q 与 mode 为组件内简单状态（接口无对应受控 prop）；results/searching/error 与全部回调由容器注入。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Segmented, Spin, Typography } from 'antd';
-import type { SearchMode, SearchResult } from '@rebased/contracts';
+import { Button, Card, Flex, Input, Segmented, Spin, Tag, Typography } from 'antd';
+import type { BranchRef, SearchMode, SearchResult } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { formatCommitDate } from '../domain/format';
 
@@ -15,6 +17,10 @@ export interface SearchPanelProps {
   searching?: boolean;
   error?: string;
   onSelectCommit?: (hash: string) => void;
+  /** 分支快速搜索数据源（本地分支列表）；与 onSelectBranch 同传时渲染「分支快速搜索」卡片 */
+  branches?: BranchRef[];
+  /** 分支行选择回调（容器负责检出/导航） */
+  onSelectBranch?: (branch: string) => void;
 }
 
 /** 模式选项：信息 grep = 提交信息全文（--grep）；内容 pickaxe = 内容增量（-S） */
@@ -57,7 +63,62 @@ function ResultRow({
   );
 }
 
-export function SearchPanel({ onSearch, results, searching, error, onSelectCommit }: SearchPanelProps): React.ReactNode {
+/** 分支快速搜索卡片：输入即滤（本地分支名子串），行 = 分支名 + current 徽标；点击 → onSelectBranch */
+function BranchQuickSearch({
+  branches,
+  onSelectBranch,
+}: {
+  branches: BranchRef[];
+  onSelectBranch: (branch: string) => void;
+}): React.ReactNode {
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
+  const matched = needle === '' ? branches : branches.filter((b) => b.name.toLowerCase().includes(needle));
+
+  return (
+    <Card size="small" title="分支快速搜索">
+      <Flex vertical gap={8}>
+        <Input
+          data-testid="branch-quick-input"
+          placeholder="输入分支名（文本即滤）"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {matched.length === 0 ? (
+          <Typography.Text type="secondary">无匹配分支</Typography.Text>
+        ) : (
+          <Flex vertical>
+            {matched.map((b) => (
+              <Flex
+                key={b.name}
+                data-testid={`branch-quick-${b.name}`}
+                align="center"
+                gap={8}
+                style={{ cursor: 'pointer', padding: '4px 0' }}
+                onClick={() => onSelectBranch(b.name)}
+              >
+                <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+                  {b.name}
+                </Typography.Text>
+                {b.current && <Tag color="green">当前</Tag>}
+              </Flex>
+            ))}
+          </Flex>
+        )}
+      </Flex>
+    </Card>
+  );
+}
+
+export function SearchPanel({
+  onSearch,
+  results,
+  searching,
+  error,
+  onSelectCommit,
+  branches,
+  onSelectBranch,
+}: SearchPanelProps): React.ReactNode {
   const [q, setQ] = useState('');
   const [mode, setMode] = useState<SearchMode>('grep');
 
@@ -69,6 +130,10 @@ export function SearchPanel({ onSearch, results, searching, error, onSelectCommi
 
   return (
     <Flex vertical gap={8} style={{ padding: 16 }}>
+      {/* 分支快速搜索（Search Everywhere Git tab 语义）：branches + onSelectBranch 同传时渲染 */}
+      {branches !== undefined && onSelectBranch !== undefined && (
+        <BranchQuickSearch branches={branches} onSelectBranch={onSelectBranch} />
+      )}
       <Flex gap={8}>
         <Input
           data-testid="search-input"

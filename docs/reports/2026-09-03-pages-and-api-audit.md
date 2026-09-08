@@ -452,7 +452,8 @@ Committed Changes 浏览器——按提交浏览已提交变更；对应 `Commit
 |--------|------|------|
 | 提交搜索（grep / pickaxe） | ✅ | 双模式 Segmented（信息 grep / 内容 pickaxe）；非法正则 → 400 |
 | 结果 → 日志页 | ✅ | 行点击 → `?select=<hash>` |
-| Search Everywhere 式全局搜索 | ➖ | Web 无全局宿主；分支快速搜索未做 |
+| 分支快速搜索 | ✅ | Search Everywhere Git tab 语义：输入即滤（本地分支），行点击 → 检出并回日志页（quickswitch；当前分支仅导航） |
+| Search Everywhere 式全局搜索 | ➖ | Web 无全局宿主（分支快速搜索已页内等价） |
 
 ### 4.20 ConflictsPanel ✅
 

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { SearchResult } from '@rebased/contracts';
+import type { BranchRef, SearchResult } from '@rebased/contracts';
 import { SearchPanel } from './search-panel';
 
 /** 测试搜索结果工厂：补全 SearchResult 必填字段 */
@@ -10,6 +10,21 @@ function makeResult(partial: Partial<SearchResult> & { hash: string }): SearchRe
     subject: `subject ${partial.hash}`,
     author: `author ${partial.hash}`,
     dateIso: '2026-01-02T03:04:00Z',
+    ...partial,
+  };
+}
+
+/** 测试分支工厂：补全 BranchRef 必填字段 */
+function makeBranch(partial: Partial<BranchRef> & { name: string }): BranchRef {
+  return {
+    remote: false,
+    current: false,
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    hash: 'abc',
+    mergedIntoHead: false,
+    lastCommitIso: '2026-01-01T00:00:00Z',
     ...partial,
   };
 }
@@ -86,5 +101,40 @@ describe('SearchPanel 交互', () => {
 
     expect(onSelectCommit).toHaveBeenCalledTimes(1);
     expect(onSelectCommit).toHaveBeenCalledWith('fullhash123');
+  });
+});
+
+describe('SearchPanel 分支快速搜索（Search Everywhere Git tab 语义）', () => {
+  const BRANCHES = [makeBranch({ name: 'main', current: true }), makeBranch({ name: 'feature-x' })];
+
+  it('branches + onSelectBranch 同传：渲染卡片与分支行（current 徽标），点击以分支名回调', () => {
+    const onSelectBranch = vi.fn();
+    render(
+      <SearchPanel
+        onSearch={vi.fn()}
+        branches={BRANCHES}
+        onSelectBranch={onSelectBranch}
+      />,
+    );
+    const row = screen.getByTestId('branch-quick-main');
+    expect(row).toHaveTextContent('main');
+    expect(row).toHaveTextContent('当前');
+    fireEvent.click(row);
+    expect(onSelectBranch).toHaveBeenCalledTimes(1);
+    expect(onSelectBranch).toHaveBeenCalledWith('main');
+  });
+
+  it('文本即滤：输入子串只留匹配分支；无匹配显示空态', () => {
+    render(<SearchPanel onSearch={vi.fn()} branches={BRANCHES} onSelectBranch={vi.fn()} />);
+    fireEvent.change(screen.getByTestId('branch-quick-input'), { target: { value: 'feature' } });
+    expect(screen.getByTestId('branch-quick-feature-x')).toBeInTheDocument();
+    expect(screen.queryByTestId('branch-quick-main')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('branch-quick-input'), { target: { value: 'zzz' } });
+    expect(screen.getByText('无匹配分支')).toBeInTheDocument();
+  });
+
+  it('缺省 branches/onSelectBranch：不渲染分支快速搜索卡片（向后兼容）', () => {
+    render(<SearchPanel onSearch={vi.fn()} />);
+    expect(screen.queryByTestId('branch-quick-input')).not.toBeInTheDocument();
   });
 });

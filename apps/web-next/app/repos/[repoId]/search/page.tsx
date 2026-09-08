@@ -5,10 +5,10 @@
  * 容器只持「已提交的搜索载荷」（null=尚未搜索），q 为空串时 useSearch 挂 null key 不发请求；
  * 结果点击（onSelectCommit）→ 跳日志页 ?select=<hash>（LogPage 以该参数初始化选中提交）。
  */
-import { useSearch } from '@rebased/client';
+import { useBranches, useCheckout, useSearch } from '@rebased/client';
 import type { SearchMode } from '@rebased/contracts';
 import { SearchPanel } from '@rebased/ui';
-import { Button, Flex } from 'antd';
+import { Button, Flex, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 
@@ -20,6 +20,12 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // 仓库切换（两端 SPA 同挂载实例复用）时清空搜索载荷（面板已随 key=repoId 重挂载，查询随之归零）
   useEffect(() => setSearch(null), [repoId]);
   const { data: results, isLoading, error } = useSearch(repoId, search?.q ?? '', search?.mode ?? 'grep');
+  // 分支快速搜索（Search Everywhere Git tab 语义）：本地分支列表 + 选中检出（quickswitch）
+  const { data: branches } = useBranches(repoId);
+  const { trigger: checkout } = useCheckout(repoId);
+  const onError = (err: unknown): void => {
+    void message.error(err instanceof Error ? err.message : String(err));
+  };
   return (
     <Flex vertical align="flex-start" gap={8}>
       {/* 返回日志页 */}
@@ -33,6 +39,16 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         searching={isLoading}
         error={error?.message}
         onSelectCommit={(hash) => router.push(`/repos/${repoId}?select=${hash}`)}
+        // 分支快速搜索：选中 → 检出该分支并回日志页（当前分支仅导航）
+        branches={branches?.branches.filter((b) => !b.remote) ?? []}
+        onSelectBranch={(branch) => {
+          checkout({ action: 'branch', name: branch })
+            .then(() => {
+              void message.success(`已检出 ${branch}`);
+              router.push(`/repos/${repoId}`);
+            })
+            .catch(onError);
+        }}
       />
     </Flex>
   );
