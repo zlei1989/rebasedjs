@@ -13,9 +13,11 @@ export interface UpdateProjectDialogProps {
   onCancel: () => void;
   /** 更新请求进行中：确定按钮 loading 态 */
   confirming?: boolean;
+  /** 推送被拒后的更新流程（GitRejectedPushUpdateDialog 语义）：标题与说明文案提示该场景 */
+  pushRejected?: boolean;
 }
 
-export function UpdateProjectDialog({ open, onOk, onCancel, confirming }: UpdateProjectDialogProps): React.ReactNode {
+export function UpdateProjectDialog({ open, onOk, onCancel, confirming, pushRejected }: UpdateProjectDialogProps): React.ReactNode {
   const [strategy, setStrategy] = useState<'merge' | 'rebase'>('merge');
 
   /** 复位为默认策略：Modal 默认不卸载子树，取消/提交后重开不能残留上次选择 */
@@ -36,7 +38,7 @@ export function UpdateProjectDialog({ open, onOk, onCancel, confirming }: Update
 
   return (
     <Modal
-      title="更新项目"
+      title={pushRejected ? '推送被拒 — 更新项目' : '更新项目'}
       open={open}
       okText="确定"
       cancelText="取消"
@@ -45,7 +47,11 @@ export function UpdateProjectDialog({ open, onOk, onCancel, confirming }: Update
       onCancel={close}
     >
       <Flex vertical gap={12}>
-        <Typography.Text type="secondary">更新方式（fetch 全部远程后合入当前分支）：</Typography.Text>
+        <Typography.Text type="secondary">
+          {pushRejected
+            ? '远端有更新，请先拉取最新提交（更新完成后将自动重新推送）：'
+            : '更新方式（fetch 全部远程后合入当前分支）：'}
+        </Typography.Text>
         <Radio.Group
           value={strategy}
           onChange={(e) => setStrategy(e.target.value as 'merge' | 'rebase')}

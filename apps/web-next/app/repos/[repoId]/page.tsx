@@ -55,7 +55,7 @@ import {
 import { AuthDialog, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
 import { Modal, message } from 'antd';
 import { useRouter } from 'next/navigation';
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useSWRConfig } from 'swr';
 import { mergeLogCommits } from '../../../src/log-merge';
 
@@ -258,27 +258,59 @@ export default function Page({
       },
     );
   };
-  // PushDialog 确定：rejected 为 200 业务结果（非错误），以 hint 中文引导提示
+  // PushDialog 确定：rejected 为 200 业务结果（非错误）——#91 联动：记录待重新推的推送体，自动打开 Update 对话框；
+  // 其余状态直接分派提示。ref 保存 pendingPush（无需触发重渲染，回调闭包内读取）。
+  const pendingPushRef = useRef<PushBody | null>(null);
   const onPushOk = (body: PushBody): void => {
     runRemoteOp(
       () => push(body),
       (outcome) => {
-        setOpenDialog(null);
-        if (outcome.status === 'rejected') void message.warning(outcome.hint ?? '推送被拒绝');
-        else if (outcome.status === 'up-to-date') void message.info('已是最新');
-        else void message.success('推送完成');
+        if (outcome.status === 'rejected') {
+          pendingPushRef.current = body;
+          setOpenDialog('update');
+          void message.warning(outcome.hint ?? '推送被拒绝，请先更新');
+        } else {
+          setOpenDialog(null);
+          if (outcome.status === 'up-to-date') void message.info('已是最新');
+          else void message.success('推送完成');
+        }
       },
     );
   };
-  // UpdateProjectDialog 确定：结果 = fetch 引用数 + pull 状态的组合视图
+  // UpdateProjectDialog 确定：结果 = fetch 引用数 + pull 状态的组合视图；
+  // 若为推送被拒后的更新（pendingPushRef 非空）→ 更新成功（up-to-date/updated）后自动续推原推送体
   const onUpdateOk = (body: UpdateBody): void => {
+    const pendingPush = pendingPushRef.current;
     runRemoteOp(
       () => updateProject(body),
       (outcome) => {
-        setOpenDialog(null);
-        if (outcome.pull.status === 'up-to-date') void message.info('已是最新');
-        else if (outcome.pull.status === 'updated') void message.success(`更新完成（fetch 更新 ${outcome.fetched.length} 个引用）`);
-        else void message.warning('更新存在冲突，请解决后完成');
+        if (outcome.pull.status === 'conflicts') {
+          pendingPushRef.current = null;
+          setOpenDialog(null);
+          void message.warning('更新存在冲突，请解决后完成');
+          return;
+        }
+        if (pendingPush === null) {
+          setOpenDialog(null);
+          if (outcome.pull.status === 'up-to-date') void message.info('已是最新');
+          else void message.success(`更新完成（fetch 更新 ${outcome.fetched.length} 个引用）`);
+          return;
+        }
+        // 推送被拒后的续推：update 成功 → 重推 pendingPush；rejected 再次出现则回到 update （用户改策略再试）
+        runRemoteOp(
+          () => push(pendingPush),
+          (pushOutcome) => {
+            if (pushOutcome.status === 'rejected') {
+              setOpenDialog('update');
+              void message.warning(pushOutcome.hint ?? '推送仍被拒绝，请再次更新');
+            } else {
+              pendingPushRef.current = null;
+              setOpenDialog(null);
+              if (pushOutcome.status === 'up-to-date') void message.info('已是最新');
+              else void message.success('更新并推送完成');
+            }
+          },
+        );
       },
     );
   };
@@ -439,8 +471,12 @@ export default function Page({
       <UpdateProjectDialog
         open={openDialog === 'update'}
         confirming={updating}
+        pushRejected={pendingPushRef.current !== null}
         onOk={onUpdateOk}
-        onCancel={() => setOpenDialog(null)}
+        onCancel={() => {
+          pendingPushRef.current = null;
+          setOpenDialog(null);
+        }}
       />
       {/* 认证重试回路出口：host 只读展示；取消即放弃原操作。confirming 覆盖保存与重试全程 */}
       <AuthDialog

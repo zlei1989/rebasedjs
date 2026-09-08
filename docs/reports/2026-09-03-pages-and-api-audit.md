@@ -20,7 +20,7 @@
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 109 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 64、领域类型/别名 89、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（104 条） | 72 ✅（含等价边）+ 8 🟡 + 7 ➖ + 17 ❌ |
+| 导航边（104 条） | 73 ✅（含等价边）+ 8 🟡 + 7 ➖ + 16 ❌ |
 
 ### 1.2 口径与图例
 
@@ -379,7 +379,7 @@ rebase 对话框 + 交互式 rebase 编辑器；对照 `GitRebaseCommitsTableVie
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | push（远程/分支选择、当前分支推送） | ✅ | 远程 Select + 分支输入 + setUpstream（默认勾）+ forceWithLease（安全强推） |
-| rejected push → 自动 Update 联动 | ❌ | `PushOutcome.rejected` 带 hint 呈现，自动弹更新对话框未做 |
+| rejected push → 自动 Update 联动 | ✅ | rejected → 自动弹 Update 对话框（标题「推送被拒 — 更新项目」，merge/rebase 二选）→ 更新成功自动续推原推送体；再 rejected 循环回 Update；conflicts → 引导解决 |
 | push tags / force-push 后修复 | 🟡 | push tags 由 TagPanel 行内；修复联动未做 |
 
 ### 4.14 PullDialog ✅（内嵌模态）
@@ -748,7 +748,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 88 | Git 菜单 → WorktreePanel | New Worktree / Show Worktrees | backend.xml:178-179 | ✅ 「更多」→ `/worktrees`（创建 Modal） |
 | 89 | Git 菜单 → Shelf/Patch/Log/QuickList | Local Changes/Patch 子菜单等 | backend.xml:144、:182、:181、:189 | ✅ 等价：「更多」菜单承载 |
 | 90 | Git 菜单 → GitHub/GitLabPanel | View Pull Requests / Show Merge Requests | `GithubViewPullRequestsAction.kt:24` | ✅ 「更多」双面板项（各自检测远程） |
-| 91 | PushDialog → 被拒后 Update 联动 | push 被拒弹 Update required | `GitPushOperation.java:485-512` | ❌（rejected 带 hint 呈现，自动联动未做） |
+| 91 | PushDialog → 被拒后 Update 联动 | push 被拒弹 Update required | `GitPushOperation.java:485-512` | ✅ rejected → 自动弹 Update（merge/rebase 二选）→ 成功自动续推（再 rejected 循环回 Update；conflicts 引导解决） |
 | 92 | UpdateProjectDialog → SubmodulePanel | 更新流程内 submodule update | `GitUpdateProcess.java:327-335` | ➖ 明确不做（独立面板承载） |
 | 93 | UpdateProjectDialog → reset to tracked | 对话框左下 Reset to tracked | `GitUpdateOptionsDialog.kt:24-28` | ❌ |
 | 94 | 操作 → continue/abort/skip | 进行中操作继续/中止 | backend.xml:131-140、:228-236 | ✅ abort=操作条；continue=`operation/continue` 泛化；skip 未做 |
@@ -775,15 +775,15 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **72 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push） |
+| ✅ 已复刻（含等价边） | **73 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 3、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **17 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
+| ❌ 未复刻 | **16 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
 
 ### 5.5 关键联动流程
 
 1. **打开 → 工作流**：RepoPage → LogPage → 顶栏/更多菜单 → 各域页面（Web 单仓库模型，无 Java 的多项目会话）。
-2. **提交 → 推送**：StatusPage 提交框 →（推送独立于「更多」菜单 PushDialog）；commit&push 组合执行器未做。
+2. **提交 → 推送**：StatusPage 提交框 →（推送独立于「更多」菜单 PushDialog）；commit&push 组合执行器已落地（提交框「提交并推送」→ `POST /commit/push`）；push 被拒 → 自动 Update 联动（#91）。
 3. **合并/变基/摘樱桃/还原 → 冲突 → 解决 → 继续**：四操作冲突统一跳 ConflictsPanel → MergeView 逐文件（ours/theirs/manual/delete）→ 「完成合并」`operation/continue` 泛化 → 回日志页；abort 在操作条。
 4. **溯源链路**：BlameView / HistoryPanel / SearchPanel / CommittedChangesPanel 结果 → 日志页 `?select=<hash>` 深链；Committed 文件 → DiffPage from/to。
 5. **变更暂存架**：StatusPage → 补丁（PatchPanel 三态创建）/ 搁置（ShelfPanel save/restore）/ 忽略（一键 add）；Patch→Shelf（导入搁置 → 跳 ShelfPanel）、Shelve from Status 未做。
