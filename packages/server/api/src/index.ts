@@ -12,7 +12,7 @@ export { getBrowseContent, getBrowseTree } from './browse';
 export { getCommittedPage } from './committed';
 export { searchCommitsService } from './search';
 export { applyHunkStaging, applyStaging } from './staging';
-export { createCommit } from './commit';
+export { commitAndPush, createCommit } from './commit';
 export { applyBranchAction, getBranches } from './branch';
 export { applyCheckout } from './checkout';
 export { applyReset, undoCommit } from './reset';

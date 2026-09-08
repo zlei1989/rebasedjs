@@ -12,6 +12,7 @@ import {
   useChangelistAction,
   useChangelists,
   useCommit,
+  useCommitAndPush,
   useCreatePatch,
   useDiffPatch,
   useHunkStaging,
@@ -34,6 +35,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { trigger: applyStaging } = useStaging(repoId);
   const { trigger: applyHunkStaging, isMutating: hunkActing } = useHunkStaging(repoId);
   const { trigger: commit, isMutating: committing } = useCommit(repoId);
+  // commit & push 组合执行器（GitCommitAndPushExecutor 语义，#50）：提交后推送当前分支上游
+  const { trigger: commitAndPush, isMutating: committingPush } = useCommitAndPush(repoId);
   // 页级动作（Create Patch from changes / Shelve Changes / Stash Files 语义）：
   // createPatch 响应回写 patches 键；shelf/stash 响应回写 shelves/stashes 键（容器只负责成功提示与跳转）
   const { trigger: createPatch } = useCreatePatch(repoId);
@@ -109,7 +112,24 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             })
             .catch(onError);
         }}
-        committing={committing}
+        // 提交并推送：commit 先落盘，push 结果按三态提示（pushed 成功 / up-to-date 已最新 / rejected 引导拉取）
+        onCommitAndPush={(body) => {
+          commitAndPush(body)
+            .then((outcome) => {
+              setCommitSeq((n) => n + 1);
+              void mutate();
+              invalidatePatch();
+              if (outcome.push.status === 'pushed') {
+                void message.success('已提交并推送');
+              } else if (outcome.push.status === 'up-to-date') {
+                void message.info('已提交（远端已是最新）');
+              } else {
+                void message.warning(outcome.push.hint ?? '推送被拒绝，请先拉取');
+              }
+            })
+            .catch(onError);
+        }}
+        committing={committing || committingPush}
         changelists={changelists}
         // 变更列表操作失败同样走统一 message.error
         onChangelistAction={(action) => {

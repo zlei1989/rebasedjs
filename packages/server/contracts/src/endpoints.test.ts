@@ -4,6 +4,7 @@ import {
   branchActionSchema,
   checkoutActionSchema,
   commitBodySchema,
+  commitAndPushBodySchema,
   committedQuerySchema,
   configPutBodySchema,
   diffQuerySchema,
@@ -144,6 +145,19 @@ describe('commitBodySchema（提交请求体）', () => {
     expect(() => commitBodySchema.parse({ message: '' })).toThrow();
     expect(() => commitBodySchema.parse({})).toThrow();
     expect(() => commitBodySchema.parse({ message: 'x', amend: 'yes' })).toThrow();
+  });
+});
+
+describe('commitAndPushBodySchema（commit & push 组合执行器）', () => {
+  it('接受 commit 体 + 可选 push 体（push 缺省=当前分支上游）', () => {
+    expect(commitAndPushBodySchema.parse({ message: 'x' })).toEqual({ message: 'x' });
+    expect(
+      commitAndPushBodySchema.parse({ message: 'x', push: { remote: 'origin', setUpstream: true } }),
+    ).toEqual({ message: 'x', push: { remote: 'origin', setUpstream: true } });
+  });
+  it('拒绝空 message 与 push 内非法字段', () => {
+    expect(() => commitAndPushBodySchema.parse({ message: '' })).toThrow();
+    expect(() => commitAndPushBodySchema.parse({ message: 'x', push: { forceWithLease: 'yes' } })).toThrow();
   });
 });
 

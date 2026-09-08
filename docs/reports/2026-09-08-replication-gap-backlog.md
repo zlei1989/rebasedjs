@@ -17,8 +17,8 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 36 项（分布于 18 个页面） | §2.2 / §2.3 |
-| 导航边缺口 | 14 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
+| 页面功能点缺口 | 35 项（分布于 18 个页面） | §2.2 / §2.3 |
+| 导航边缺口 | 13 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
 
@@ -59,7 +59,7 @@
 
 ### 2.3 P2：各域功能点补齐（按域 48 项）
 
-**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）；BlameView/HistoryPanel 溯源联动（§#29/#30/#31/#33）；PatchPanel Import into Shelf 与 ShelfPanel Unshelve 回边（#52/#54：行内「导入搁置」→ 同样名搁置存补丁全文，成功跳 `/shelves`；restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新）；StatusPage 动作入口五连（#43/#44/#45/#47/#49：组级「创建补丁」→ `patchCreateBodySchema` 新增 paths（工作区/暂存 diff，与 from/to refine 互斥）+ api `buildCreateDiffArgs` 尾部 `-- <paths>`；页头「搁置」「存入贮藏」→ shelf save / stash save；行内「注解」「历史」→ `/blame?file=`、`/history?file=`；ui status-page +7 单测、contracts +3、api +1）。
+**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）；BlameView/HistoryPanel 溯源联动（§#29/#30/#31/#33）；PatchPanel Import into Shelf 与 ShelfPanel Unshelve 回边（#52/#54：行内「导入搁置」→ 同样名搁置存补丁全文，成功跳 `/shelves`；restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新）；StatusPage 动作入口五连（#43/#44/#45/#47/#49）；commit & push 组合执行器（#50：`commitAndPushBodySchema`（提交体 + 可选 push 体）+ api `commitAndPush`（commit 先落盘 → push 缺省当前分支上游，非原子同 Java）+ `POST /commit/push` 双端 + client `useCommitAndPush` + ui 提交框「提交并推送」按钮；api 3 单测 + contracts 2 + client 1 + ui 2）。
 
 **LogPage（2）**：行右键余项（Push up to Commit、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
 
@@ -67,7 +67,7 @@
 
 **StatusPage（0）**：三版本对比与页级动作五入口（Create Patch from changes / Shelve / Stash Files / Annotate / History）已落地（见完成记录）。
 
-**CommitDialog 等效面（4）**：amend 历史提交/reword 直通按钮；GPG 签名/commit template 提交链路消费（白名单键已可读写）；CRLF 提示（`GitCrlfDialog`）；commit & push / push up to commit 组合执行器。
+**CommitDialog 等效面（3）**：amend 历史提交/reword 直通按钮；GPG 签名/commit template 提交链路消费（白名单键已可读写）；CRLF 提示（`GitCrlfDialog`）。（commit & push 组合执行器已落地——提交框「提交并推送」→ `POST /commit/push` commit 先落盘再推当前分支上游，三态提示。）
 
 **BranchPanel（5）**：最近检出/标签分组与过滤的剩余分组维度（文本过滤与「仅看已合并」已落地）；保护分支设置联动；force-push 后修复（`GitForcePushedBranchUpdateAction`）；checkout with rebase；检出文件（查找已合并/清理已合并已落地——「仅看已合并」开关 +「清理已合并（N）」批量删除）。
 
@@ -105,7 +105,7 @@
 
 **GitHubPanel / GitLabPanel（0）**：行级评论锚点与提交已落地（§2.7 完成记录）。
 
-### 2.4 P3：导航边缺口（14 条可做 + 2 条 🟡 直达，按目标页分组）
+### 2.4 P3：导航边缺口（13 条可做 + 2 条 🟡 直达，按目标页分组）
 
 > 边号对应盘点报告 §5.3；等效边、明确不做边（#70/#92/#96/#101/#104）不列。
 
@@ -126,7 +126,7 @@
 | HistoryPanel | #30/#31 | ✅ 已落地（双击 → DiffPage；Annotate Revision → /blame?rev=，见 §2.3 完成记录） |
 | BlameView | #29/#33/#34 | #29/#33 ✅ 已落地（行内「历史」「差异」）；#34 Show All Affected 待办（见 §2.3） |
 | StatusPage | #43/#44/#45/#47/#48/#49 | #43/#44/#45/#47/#48/#49 ✅ 全部已落地（#43 冲突入口等价=操作条链接+冲突跳转；#44 组级「创建补丁」→ patches paths；#45 页头「搁置」；#47 行内「注解」「历史」→ /blame、/history；#48 行「三版本」；#49 页头「存入贮藏」） |
-| CommitDialog 等效面 | #50 | commit & push 组合执行器 |
+| CommitDialog 等效面 | #50 | ✅ 已落地（提交框「提交并推送」→ POST /commit/push：commit 先落盘 → push 缺省当前分支上游；Push up to Commit 余项见 #17） |
 | PatchPanel | #52 | ✅ 已落地（行内「导入搁置」→ 成功跳 /shelves，见 §2.3 完成记录） |
 | ShelfPanel | #54 | ✅ 已落地（restore 后 status 键回写联动；平台 Unshelve 无自动切 tab 证据） |
 | StashPanel | #83/#84 | ✅ 已落地（Unstash As Modal + 查看差异 Modal，见 §2.3 完成记录） |

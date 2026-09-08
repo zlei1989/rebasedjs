@@ -74,6 +74,8 @@ export interface StatusPageProps {
   onOpenAnnotate?: (path: string) => void;
   /** 行内「历史」（Show History 语义）：传入后各组件行渲染按钮 → /history?file= */
   onOpenHistory?: (path: string) => void;
+  /** 组合执行器（GitCommitAndPushExecutor 语义）：提交后推送当前分支上游；缺省不渲染「提交并推送」按钮（向后兼容） */
+  onCommitAndPush?: (body: CommitBody) => void;
 }
 
 /** porcelain X 码（暂存区列）：M/A/D/R/C 视为已暂存 */
@@ -476,13 +478,16 @@ function PageActionModal({
   );
 }
 
-/** 提交框卡片：TextArea（自适应行数）+ amend/signOff/noVerify + primary 提交按钮 */
+/** 提交框卡片：TextArea（自适应行数）+ amend/signOff/noVerify + primary 提交按钮 + 提交并推送（组合执行器 #50） */
 function CommitCard({
   committing,
   onCommit,
+  onCommitAndPush,
 }: {
   committing?: boolean;
   onCommit: (body: CommitBody) => void;
+  /** 组合执行器（GitCommitAndPushExecutor 语义）：提交后推送到当前分支上游；缺省不渲染按钮（向后兼容） */
+  onCommitAndPush?: (body: CommitBody) => void;
 }): React.ReactNode {
   const [message, setMessage] = useState('');
   const [amend, setAmend] = useState(false);
@@ -498,6 +503,15 @@ function CommitCard({
     onCommit(body);
   };
 
+  /** 提交并推送：组装体同提交（组合执行器在容器内追加 push 载荷并分派结果提示） */
+  const submitAndPush = (): void => {
+    const body: CommitBody = { message: message.trim() };
+    if (amend) body.amend = true;
+    if (signOff) body.signOff = true;
+    if (noVerify) body.noVerify = true;
+    onCommitAndPush?.(body);
+  };
+
   return (
     <Card size="small" title="提交">
       <Flex vertical gap={8}>
@@ -509,7 +523,7 @@ function CommitCard({
           // amend 必须给新 message（服务端 git commit --amend -m），留空不沿用原 message
           placeholder={amend ? '修改上一次提交的提交信息' : '提交信息'}
         />
-        <Flex align="center" gap={16}>
+        <Flex align="center" gap={16} wrap="wrap">
           <Checkbox checked={amend} onChange={(e) => setAmend(e.target.checked)}>
             amend
           </Checkbox>
@@ -519,15 +533,27 @@ function CommitCard({
           <Checkbox checked={noVerify} onChange={(e) => setNoVerify(e.target.checked)}>
             noVerify
           </Checkbox>
-          <Button
-            type="primary"
-            data-testid="commit-button"
-            loading={committing}
-            disabled={message.trim() === ''}
-            onClick={submit}
-          >
-            提交
-          </Button>
+          <Flex gap={8}>
+            <Button
+              type="primary"
+              data-testid="commit-button"
+              loading={committing}
+              disabled={message.trim() === ''}
+              onClick={submit}
+            >
+              提交
+            </Button>
+            {onCommitAndPush !== undefined && (
+              <Button
+                data-testid="commit-and-push-button"
+                loading={committing}
+                disabled={message.trim() === ''}
+                onClick={submitAndPush}
+              >
+                提交并推送
+              </Button>
+            )}
+          </Flex>
         </Flex>
       </Flex>
     </Card>
@@ -706,6 +732,7 @@ export function StatusPage({
   onStash,
   onOpenAnnotate,
   onOpenHistory,
+  onCommitAndPush,
 }: StatusPageProps): React.ReactNode {
   const grouped = useMemo(() => groupChanges(status.entries), [status.entries]);
 
@@ -902,7 +929,7 @@ export function StatusPage({
           />
         </Flex>
       </Flex>
-      <CommitCard committing={committing} onCommit={onCommit} />
+      <CommitCard committing={committing} onCommit={onCommit} onCommitAndPush={onCommitAndPush} />
 
       {/* 页头/组级动作 Modal：创建补丁（组级勾选路径）/ 搁置 / 存入贮藏（三选一，同刻只开一个） */}
       {pageAction !== null && (

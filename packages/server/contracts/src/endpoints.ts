@@ -190,6 +190,12 @@ export const pushBodySchema = z.object({
 });
 export type PushBody = z.infer<typeof pushBodySchema>;
 
+/** commit & push 组合执行器载荷：提交体 + 可选推送体（push 缺省=当前分支上游——GitCommitAndPushExecutor 语义） */
+export const commitAndPushBodySchema = commitBodySchema.extend({
+  push: pushBodySchema.optional(),
+});
+export type CommitAndPushBody = z.infer<typeof commitAndPushBodySchema>;
+
 /** Update Project 请求体：strategy 决定 fetch 后的合并方式（merge | rebase） */
 export const updateBodySchema = z.object({ strategy: z.enum(['merge', 'rebase']) });
 export type UpdateBody = z.infer<typeof updateBodySchema>;

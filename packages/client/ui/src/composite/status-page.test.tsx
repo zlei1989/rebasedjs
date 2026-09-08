@@ -207,6 +207,24 @@ describe('StatusPage', () => {
     expect(onCommit).toHaveBeenCalledWith({ message: 'feat: 新增状态页' });
   });
 
+  it('提交框：onCommitAndPush 提供时渲染「提交并推送」，message 空禁用，输入后点按以 { message } 调回调（含可选标志）', () => {
+    const onCommitAndPush = vi.fn();
+    render(<StatusPage status={makeStatus([])} {...makeHandlers()} onCommitAndPush={onCommitAndPush} />);
+    const button = screen.getByTestId('commit-and-push-button');
+    expect(button).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: /amend/ }));
+    fireEvent.change(screen.getByTestId('commit-message'), { target: { value: 'feat: 组合' } });
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    expect(onCommitAndPush).toHaveBeenCalledTimes(1);
+    expect(onCommitAndPush).toHaveBeenCalledWith({ message: 'feat: 组合', amend: true });
+  });
+
+  it('onCommitAndPush 缺省时不渲染「提交并推送」（向后兼容）', () => {
+    render(<StatusPage status={makeStatus([])} {...makeHandlers()} />);
+    expect(screen.queryByTestId('commit-and-push-button')).not.toBeInTheDocument();
+  });
+
   it('勾选 amend 后占位提示变为"修改上一次提交的提交信息"', () => {
     render(<StatusPage status={makeStatus([])} {...makeHandlers()} />);
     fireEvent.click(screen.getByRole('checkbox', { name: /amend/ }));

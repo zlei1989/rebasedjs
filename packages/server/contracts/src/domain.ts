@@ -233,6 +233,8 @@ export interface PullOutcome { status: 'up-to-date' | 'updated' | 'conflicts'; }
 export interface PushOutcome { status: 'pushed' | 'rejected' | 'up-to-date'; hint?: string; }
 /** Update Project 结果 = fetch + pull 的组合视图 */
 export interface UpdateOutcome { fetched: string[]; pull: PullOutcome; }
+/** commit & push 组合执行器结果：commit 已落盘 + push 业务结果（pushed/rejected/up-to-date） */
+export interface CommitAndPushOutcome { commit: { hash: string }; push: PushOutcome; }
 
 /** 溯源行（line-porcelain 逐字段）：lineno 为最终文件行号（1-based） */
 export interface BlameLine {
