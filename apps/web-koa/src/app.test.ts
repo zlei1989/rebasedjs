@@ -406,6 +406,40 @@ describe('web-koa REST 端点', () => {
     expect(body.hash).toMatch(/^[0-9a-f]{40}$/);
   });
 
+  it('amend 端点：amend-targets 候选列表 200；amend-specific 重写历史提交 200（提交数不变）', async () => {
+    const { repoId, repoPath } = registerRepo();
+    makeLocalCommit(repoPath, 'b.txt', 'two\n', 'second');
+    const target = execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD~1'], { encoding: 'utf8' }).trim();
+
+    const listRes = await fetch(`${base}/api/repos/${repoId}/commit/amend-targets`);
+    expect(listRes.status).toBe(200);
+    const targets = (await listRes.json()) as Array<{ hash: string; subject: string }>;
+    // init（HEAD 排除）+ second → 只剩 init 一条候选（新→旧）
+    expect(targets.map((t) => t.subject)).toEqual(['init']);
+
+    const amendRes = await fetch(`${base}/api/repos/${repoId}/commit/amend-specific`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetHash: target, message: 'init（重写）' }),
+    });
+    expect(amendRes.status).toBe(200);
+    const body = (await amendRes.json()) as { status: string; hash?: string };
+    expect(body.status).toBe('success');
+    expect(body.hash).toMatch(/^[0-9a-f]{40}$/);
+    const subjects = execFileSync('git', ['-C', repoPath, 'log', '--format=%s'], { encoding: 'utf8' }).trim().split('\n').reverse();
+    expect(subjects).toEqual(['init（重写）', 'second']);
+    expect(execFileSync('git', ['-C', repoPath, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).trim()).toBe('2');
+
+    // 无效目标 → 400 INVALID_REF
+    const badRes = await fetch(`${base}/api/repos/${repoId}/commit/amend-specific`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetHash: 'deadbeef'.repeat(5), message: 'x' }),
+    });
+    expect(badRes.status).toBe(400);
+    expect(await badRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
   it('commit 端点：空 message 返回 400 INVALID_QUERY', async () => {
     const { repoId } = registerRepo();
     const res = await fetch(`${base}/api/repos/${repoId}/commit`, {

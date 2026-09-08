@@ -1,11 +1,27 @@
-/** 提交功能：提交暂存区内容，前置校验 git 身份配置；commit & push 组合执行器（GitCommitAndPushExecutor 语义）。 */
-import { commitStaged, getGitConfigEntries, type CoreConfigEntry, pushBranch } from '@rebased/core';
+/**
+ * 提交功能：提交暂存区内容，前置校验 git 身份配置；commit & push 组合执行器（GitCommitAndPushExecutor 语义）；
+ * amend 指定历史提交（GitCommitDialog「Amend <subject>」下拉语义）——amend! 提交 + fixup -C 交互式变基折入目标。
+ */
+import {
+  amendSpecificCommit as coreAmendSpecificCommit,
+  commitStaged,
+  getGitConfigEntries,
+  headCommit,
+  isAncestorCommit,
+  listAmendTargets,
+  verifyCommitish,
+  type CoreConfigEntry,
+  pushBranch,
+} from '@rebased/core';
 import {
   ServiceError,
+  type AmendSpecificBody,
+  type AmendTarget,
   type CommitAndPushBody,
   type CommitAndPushOutcome,
   type CommitBody,
 } from '@rebased/contracts';
+import { assertNoOperationInProgress } from './operation';
 import { withAuth } from './remote';
 
 /** 提交身份前置检查（纯函数，导出供单测覆盖缺失分支）：
@@ -28,6 +44,39 @@ export async function createCommit(repoPath: string, body: CommitBody): Promise<
     noVerify: body.noVerify,
   });
   return { hash };
+}
+
+/**
+ * amend 目标候选（GitAmendCommitService 语义）：未发布的非合并非 HEAD 提交，旧→新，上限 20。
+ * 供提交框「Amend <subject>」下拉（列表为空 → 无特定目标，仅常规 amend）。
+ */
+export async function getAmendTargets(repoPath: string): Promise<AmendTarget[]> {
+  return listAmendTargets(repoPath);
+}
+
+/**
+ * amend 指定历史提交：预检无进行中操作 + 目标有效性（verifyCommitish → INVALID_REF）+
+ * 目标 ≠ HEAD（INVALID_QUERY）+ 目标为 HEAD 祖先（INVALID_QUERY）+ 身份配置；
+ * core 以 amend! 提交 + fixup -C 交互式变基折入目标（冲突 → 冲突态交冲突页）。
+ */
+export async function amendSpecificCommit(
+  repoPath: string,
+  body: AmendSpecificBody,
+): Promise<{ status: 'success' | 'conflicts'; hash?: string }> {
+  await assertNoOperationInProgress(repoPath);
+  if (!(await verifyCommitish(repoPath, body.targetHash))) {
+    throw new ServiceError('INVALID_REF', `引用不存在或不是提交：${body.targetHash}`);
+  }
+  const head = await headCommit(repoPath);
+  if (head === body.targetHash) {
+    throw new ServiceError('INVALID_QUERY', '目标不能是当前 HEAD（改上次提交请勾选 amend）');
+  }
+  if (head === null || !(await isAncestorCommit(repoPath, body.targetHash, head))) {
+    throw new ServiceError('INVALID_QUERY', '目标提交不在当前分支历史中');
+  }
+  const entries = await getGitConfigEntries(repoPath, ['user.name', 'user.email']);
+  assertCommitIdentity(entries);
+  return coreAmendSpecificCommit(repoPath, body);
 }
 
 /**

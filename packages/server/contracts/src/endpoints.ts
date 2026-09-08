@@ -77,6 +77,13 @@ export const commitBodySchema = z.object({
 });
 export type CommitBody = z.infer<typeof commitBodySchema>;
 
+/** amend 指定历史提交（GitCommitDialog「Amend <subject>」下拉语义 #41 功能点）：targetHash 目标提交；message 为重写后的提交信息（reword） */
+export const amendSpecificBodySchema = z.object({
+  targetHash: z.string().min(1),
+  message: z.string().min(1),
+});
+export type AmendSpecificBody = z.infer<typeof amendSpecificBodySchema>;
+
 /** 分支写操作（判别联合）：create 可带 startPoint；delete 的 force 对应 git branch -D；rename 改名；setUpstream 设置上游 */
 export const branchActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create'), name: z.string().min(1), startPoint: z.string().optional() }),

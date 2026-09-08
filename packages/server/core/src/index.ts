@@ -24,7 +24,8 @@ export type { CoreConfigEntry } from './config';
 export { getOperationState, abortGitOperation } from './operation';
 export type { CoreOperation } from './operation';
 export { applyPatch, checkApplyPatch, cleanUntracked, discardPaths, stagePaths, unstagePaths } from './staging';
-export { commitStaged } from './commit';
+export { amendSpecificCommit, commitStaged, headCommit, isAncestorCommit, listAmendTargets } from './commit';
+export type { CoreAmendSpecificResult } from './commit';
 export {
   createBranch,
   deleteBranch,

@@ -4,6 +4,7 @@ import {
   branchActionSchema,
   checkoutActionSchema,
   commitBodySchema,
+  amendSpecificBodySchema,
   commitAndPushBodySchema,
   committedQuerySchema,
   configPutBodySchema,
@@ -145,6 +146,18 @@ describe('commitBodySchema（提交请求体）', () => {
     expect(() => commitBodySchema.parse({ message: '' })).toThrow();
     expect(() => commitBodySchema.parse({})).toThrow();
     expect(() => commitBodySchema.parse({ message: 'x', amend: 'yes' })).toThrow();
+  });
+});
+
+describe('amendSpecificBodySchema（amend 指定历史提交）', () => {
+  it('targetHash + message 齐备 → 原样解析', () => {
+    expect(amendSpecificBodySchema.parse({ targetHash: 'aaaaaa', message: '重写提交信息' }))
+      .toEqual({ targetHash: 'aaaaaa', message: '重写提交信息' });
+  });
+  it('targetHash/message 空串或缺失 → 抛错', () => {
+    expect(() => amendSpecificBodySchema.parse({ targetHash: '', message: 'x' })).toThrow();
+    expect(() => amendSpecificBodySchema.parse({ targetHash: 'aaaaaa', message: '' })).toThrow();
+    expect(() => amendSpecificBodySchema.parse({ targetHash: 'aaaaaa' })).toThrow();
   });
 });
 

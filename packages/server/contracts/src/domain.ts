@@ -196,6 +196,9 @@ export interface TodoEntry {
   subject: string;
 }
 
+/** amend 目标候选（GitCommitDialog「Amend <subject>」下拉语义）：未发布（任一远程不可达）的非合并非 HEAD 提交；与 TodoEntry 同形 */
+export type AmendTarget = TodoEntry;
+
 /** 交互式变基 todo 动作：对应 git rebase -i 的可用命令 */
 export type RebaseTodoAction = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop';
 

@@ -18,6 +18,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Select,
   Skeleton,
   Tag,
   Typography,
@@ -25,6 +26,8 @@ import {
 import type { MenuProps } from 'antd';
 import { patchHunkHeading, splitPatchHunks } from '@rebased/contracts';
 import type {
+  AmendSpecificBody,
+  AmendTarget,
   Changelist,
   ChangelistAction,
   ChangelistView,
@@ -76,6 +79,10 @@ export interface StatusPageProps {
   onOpenHistory?: (path: string) => void;
   /** 组合执行器（GitCommitAndPushExecutor 语义）：提交后推送当前分支上游；缺省不渲染「提交并推送」按钮（向后兼容） */
   onCommitAndPush?: (body: CommitBody) => void;
+  /** amend 目标候选（GitCommitDialog「Amend <subject>」语义）：提供时提交框渲染「amend 到…」下拉；null=未加载 */
+  amendTargets?: AmendTarget[] | null;
+  /** amend 指定历史提交：选中具体目标后提交走此回调（AmendSpecificBody：targetHash + 重写后的 message） */
+  onAmendSpecific?: (body: AmendSpecificBody) => void;
 }
 
 /** porcelain X 码（暂存区列）：M/A/D/R/C 视为已暂存 */
@@ -478,24 +485,36 @@ function PageActionModal({
   );
 }
 
-/** 提交框卡片：TextArea（自适应行数）+ amend/signOff/noVerify + primary 提交按钮 + 提交并推送（组合执行器 #50） */
+/** 提交框卡片：TextArea（自适应行数）+ amend/signOff/noVerify + 「amend 到…」下拉（指定历史提交）+ primary 提交按钮 + 提交并推送（组合执行器 #50） */
 function CommitCard({
   committing,
   onCommit,
   onCommitAndPush,
+  amendTargets,
+  onAmendSpecific,
 }: {
   committing?: boolean;
   onCommit: (body: CommitBody) => void;
   /** 组合执行器（GitCommitAndPushExecutor 语义）：提交后推送到当前分支上游；缺省不渲染按钮（向后兼容） */
   onCommitAndPush?: (body: CommitBody) => void;
+  /** amend 目标候选（Amend <subject> 下拉语义）；null/undefined = 未加载 */
+  amendTargets?: AmendTarget[] | null;
+  /** amend 指定历史提交（选中具体目标后提交走此回调）；缺省不渲染下拉 */
+  onAmendSpecific?: (body: AmendSpecificBody) => void;
 }): React.ReactNode {
   const [message, setMessage] = useState('');
   const [amend, setAmend] = useState(false);
   const [signOff, setSignOff] = useState(false);
   const [noVerify, setNoVerify] = useState(false);
+  // 「amend 到…」：选中具体目标提交（非空 = 指定历史提交模式）
+  const [amendTargetHash, setAmendTargetHash] = useState('');
 
-  /** 组装提交体：仅在为 true 时带可选标志（契约 CommitBody 均为 optional，避免传冗余 false） */
+  /** 组装提交体：仅在为 true 时带可选标志（契约 CommitBody 均为 optional，避免传冗余 false）；指定目标时走 amend-specific */
   const submit = (): void => {
+    if (amendTargetHash !== '') {
+      onAmendSpecific?.({ targetHash: amendTargetHash, message: message.trim() });
+      return;
+    }
     const body: CommitBody = { message: message.trim() };
     if (amend) body.amend = true;
     if (signOff) body.signOff = true;
@@ -503,8 +522,12 @@ function CommitCard({
     onCommit(body);
   };
 
-  /** 提交并推送：组装体同提交（组合执行器在容器内追加 push 载荷并分派结果提示） */
+  /** 提交并推送：组装体同提交（组合执行器在容器内追加 push 载荷并分派结果提示；指定目标不支持组合——仅提交） */
   const submitAndPush = (): void => {
+    if (amendTargetHash !== '') {
+      onAmendSpecific?.({ targetHash: amendTargetHash, message: message.trim() });
+      return;
+    }
     const body: CommitBody = { message: message.trim() };
     if (amend) body.amend = true;
     if (signOff) body.signOff = true;
@@ -521,12 +544,31 @@ function CommitCard({
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           // amend 必须给新 message（服务端 git commit --amend -m），留空不沿用原 message
-          placeholder={amend ? '修改上一次提交的提交信息' : '提交信息'}
+          placeholder={amendTargetHash !== '' ? '修改目标提交的提交信息' : amend ? '修改上一次提交的提交信息' : '提交信息'}
         />
         <Flex align="center" gap={16} wrap="wrap">
-          <Checkbox checked={amend} onChange={(e) => setAmend(e.target.checked)}>
+          <Checkbox
+            checked={amend}
+            disabled={amendTargetHash !== ''}
+            onChange={(e) => setAmend(e.target.checked)}
+          >
             amend
           </Checkbox>
+          {onAmendSpecific !== undefined ? (
+            <Select
+              data-testid="amend-target-select"
+              style={{ minWidth: 220 }}
+              placeholder="amend 到…（指定历史提交）"
+              allowClear
+              loading={amendTargets === undefined || amendTargets === null}
+              options={(amendTargets ?? []).map((t) => ({ value: t.hash, label: `Amend ${t.subject}` }))}
+              value={amendTargetHash === '' ? undefined : amendTargetHash}
+              onChange={(v) => {
+                setAmendTargetHash(v ?? '');
+                if (v !== undefined) setAmend(false);
+              }}
+            />
+          ) : null}
           <Checkbox checked={signOff} onChange={(e) => setSignOff(e.target.checked)}>
             signOff
           </Checkbox>
@@ -547,7 +589,7 @@ function CommitCard({
               <Button
                 data-testid="commit-and-push-button"
                 loading={committing}
-                disabled={message.trim() === ''}
+                disabled={message.trim() === '' || amendTargetHash !== ''}
                 onClick={submitAndPush}
               >
                 提交并推送
@@ -733,6 +775,8 @@ export function StatusPage({
   onOpenAnnotate,
   onOpenHistory,
   onCommitAndPush,
+  amendTargets,
+  onAmendSpecific,
 }: StatusPageProps): React.ReactNode {
   const grouped = useMemo(() => groupChanges(status.entries), [status.entries]);
 
@@ -929,7 +973,13 @@ export function StatusPage({
           />
         </Flex>
       </Flex>
-      <CommitCard committing={committing} onCommit={onCommit} onCommitAndPush={onCommitAndPush} />
+      <CommitCard
+        committing={committing}
+        onCommit={onCommit}
+        onCommitAndPush={onCommitAndPush}
+        amendTargets={amendTargets}
+        onAmendSpecific={onAmendSpecific}
+      />
 
       {/* 页头/组级动作 Modal：创建补丁（组级勾选路径）/ 搁置 / 存入贮藏（三选一，同刻只开一个） */}
       {pageAction !== null && (

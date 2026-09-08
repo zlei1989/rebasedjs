@@ -231,6 +231,67 @@ describe('StatusPage', () => {
     expect(screen.getByPlaceholderText('修改上一次提交的提交信息')).toBeInTheDocument();
   });
 
+  it('提交框：「amend 到…」下拉列目标；选中后以 {targetHash,message} 调 onAmendSpecific 且 amend 复选框禁用', async () => {
+    const onAmendSpecific = vi.fn();
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        amendTargets={[
+          { hash: 'a'.repeat(40), subject: 'c2' },
+          { hash: 'b'.repeat(40), subject: 'c1' },
+        ]}
+        onAmendSpecific={onAmendSpecific}
+      />,
+    );
+    fireEvent.mouseDown(screen.getByTestId('amend-target-select'));
+    const options = await screen.findAllByText(/Amend c2/);
+    fireEvent.click(options[options.length - 1]);
+    // 指定目标后 amend 复选框禁用（与「改上次提交」互斥）
+    expect(screen.getByRole('checkbox', { name: /amend/ })).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId('commit-message'), { target: { value: 'c2（重写）' } });
+    fireEvent.click(screen.getByTestId('commit-button'));
+    expect(onAmendSpecific).toHaveBeenCalledTimes(1);
+    expect(onAmendSpecific).toHaveBeenCalledWith({ targetHash: 'a'.repeat(40), message: 'c2（重写）' });
+  });
+
+  it('提交框：未选目标时提交仍走 onCommit；未传 onAmendSpecific 不渲染下拉（向后兼容）', () => {
+    const onCommit = vi.fn();
+    const { rerender } = render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        onCommit={onCommit}
+        amendTargets={[]}
+        onAmendSpecific={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByTestId('commit-message'), { target: { value: '普通提交' } });
+    fireEvent.click(screen.getByTestId('commit-button'));
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith({ message: '普通提交' });
+
+    rerender(<StatusPage status={makeStatus([])} {...makeHandlers()} onCommit={onCommit} />);
+    expect(screen.queryByTestId('amend-target-select')).not.toBeInTheDocument();
+  });
+
+  it('提交框：指定目标后「提交并推送」禁用（组合执行器不支持指定目标）', async () => {
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        onCommitAndPush={vi.fn()}
+        amendTargets={[{ hash: 'a'.repeat(40), subject: 'c2' }]}
+        onAmendSpecific={vi.fn()}
+      />,
+    );
+    fireEvent.mouseDown(screen.getByTestId('amend-target-select'));
+    const options = await screen.findAllByText(/Amend c2/);
+    fireEvent.click(options[options.length - 1]);
+    expect(screen.getByTestId('commit-and-push-button')).toBeDisabled();
+  });
+
   it('patchLoading 时补丁预览区显示骨架', () => {
     const { container } = render(
       <StatusPage status={makeStatus([])} {...makeHandlers()} patchLoading />,

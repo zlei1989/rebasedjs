@@ -9,6 +9,8 @@
  */
 import {
   useAddIgnore,
+  useAmendSpecificCommit,
+  useAmendTargets,
   useChangelistAction,
   useChangelists,
   useCommit,
@@ -37,6 +39,9 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { trigger: commit, isMutating: committing } = useCommit(repoId);
   // commit & push 组合执行器（GitCommitAndPushExecutor 语义，#50）：提交后推送当前分支上游
   const { trigger: commitAndPush, isMutating: committingPush } = useCommitAndPush(repoId);
+  // amend 指定历史提交（GitCommitDialog「Amend <subject>」下拉语义）：候选列表 + 指定目标重写
+  const { data: amendTargets } = useAmendTargets(repoId);
+  const { trigger: amendSpecific, isMutating: amendingSpecific } = useAmendSpecificCommit(repoId);
   // 页级动作（Create Patch from changes / Shelve Changes / Stash Files 语义）：
   // createPatch 响应回写 patches 键；shelf/stash 响应回写 shelves/stashes 键（容器只负责成功提示与跳转）
   const { trigger: createPatch } = useCreatePatch(repoId);
@@ -129,7 +134,24 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             })
             .catch(onError);
         }}
-        committing={committing || committingPush}
+        // amend 指定历史提交：success → 清空提交框重验证（历史重写）；conflicts → 跳冲突页（continue/abort 流）
+        onAmendSpecific={(body) => {
+          amendSpecific(body)
+            .then((r) => {
+              if (r.status === 'conflicts') {
+                void message.warning('重写遇到冲突，请在冲突页解决');
+                router.push(`/repos/${repoId}/conflicts`);
+                return;
+              }
+              setCommitSeq((n) => n + 1);
+              void mutate();
+              invalidatePatch();
+              void message.success('已重写指定提交');
+            })
+            .catch(onError);
+        }}
+        amendTargets={amendTargets}
+        committing={committing || committingPush || amendingSpecific}
         changelists={changelists}
         // 变更列表操作失败同样走统一 message.error
         onChangelistAction={(action) => {

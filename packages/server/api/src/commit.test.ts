@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { assertCommitIdentity, commitAndPush, createCommit } from './commit';
+import { amendSpecificCommit, assertCommitIdentity, commitAndPush, createCommit, getAmendTargets } from './commit';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -129,5 +129,60 @@ describe('commitAndPush 组合执行器（GitCommitAndPushExecutor 语义）', (
     // 提交已落盘（拒绝推送不撤销 commit）
     const subject = execFileSync('git', ['-C', repo, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim();
     expect(subject).toBe('分叉提交');
+  });
+});
+
+describe('amend 指定历史提交（GitCommitDialog「Amend <subject>」语义）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('getAmendTargets：返回未发布的非合并非 HEAD 提交（HEAD=c2 排除，仅 init 候选）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    makeBaseCommit(repo);
+    git(repo, ['commit', '--allow-empty', '-q', '-m', 'c2']);
+
+    const targets = await getAmendTargets(repo);
+
+    expect(targets.map((t) => t.subject)).toEqual(['init']);
+    expect(targets[0].hash).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  it('amendSpecificCommit：reword 目标提交成功（提交数不变、信息重写）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    makeBaseCommit(repo);
+    git(repo, ['commit', '--allow-empty', '-q', '-m', 'c2']);
+    const target = git(repo, ['rev-parse', 'HEAD~1']);
+
+    const result = await amendSpecificCommit(repo, { targetHash: target, message: 'init（重写）' });
+
+    expect(result.status).toBe('success');
+    expect(result.hash).toMatch(/^[0-9a-f]{40}$/);
+    expect(git(repo, ['rev-list', '--count', 'HEAD'])).toBe('2');
+    expect(git(repo, ['log', '--format=%s']).split('\n').reverse()).toEqual(['init（重写）', 'c2']);
+  });
+
+  it('amendSpecificCommit：目标为 HEAD → INVALID_QUERY；无效哈希 → INVALID_REF；非祖先 → INVALID_QUERY', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    makeBaseCommit(repo);
+    const head = git(repo, ['rev-parse', 'HEAD']);
+
+    const headErr = await amendSpecificCommit(repo, { targetHash: head, message: 'x' }).catch((e: unknown) => e);
+    expect(headErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('当前 HEAD') });
+
+    const refErr = await amendSpecificCommit(repo, { targetHash: 'deadbeef'.repeat(5), message: 'x' }).catch((e: unknown) => e);
+    expect(refErr).toMatchObject({ code: 'INVALID_REF' });
+
+    // 非祖先：同一个仓库中侧分支上创建的提交（引用有效但不在 HEAD 历史）
+    const main = git(repo, ['symbolic-ref', '--short', 'HEAD']);
+    git(repo, ['checkout', '-q', '-b', 'side']);
+    writeFileSync(join(repo, 's.txt'), 'side');
+    git(repo, ['add', 's.txt']);
+    git(repo, ['commit', '-q', '-m', 'side1']);
+    const sideHead = git(repo, ['rev-parse', 'HEAD']);
+    git(repo, ['checkout', '-q', main]);
+    const ancErr = await amendSpecificCommit(repo, { targetHash: sideHead, message: 'x' }).catch((e: unknown) => e);
+    expect(ancErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('不在当前分支历史中') });
   });
 });
