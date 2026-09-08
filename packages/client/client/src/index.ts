@@ -16,7 +16,7 @@ export { useFileDiff, useDiffStream, useDiffPatch, useFileThreeWay } from './dif
 export { useBlame } from './blame';
 export { useHistory } from './history';
 export { useBrowseTree, useBrowseContent } from './browse';
-export { useCommittedPage } from './committed';
+export { useCommitFiles, useCommittedPage } from './committed';
 export { useSearch } from './search';
 export { useSettings } from './settings';
 export { useRepoConfig, useSetConfig } from './config';

@@ -1429,6 +1429,27 @@ describe('web-koa blame/history/browse/committed/search 端点', () => {
     expect(await noneRes.json()).toEqual([]);
   });
 
+  it('commits/:hash 端点：单提交全量变更文件 200；无效 hash 400 INVALID_REF；未注册 repoId 404', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    makeLocalCommit(repoPath, 'b.txt', 'two\n', 'second');
+    const hash = execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+
+    const res = await fetch(`${base}/api/repos/${repoId}/commits/${hash}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hash: string; shortHash: string; subject: string; parents: string[]; files: Array<{ path: string; status: string }> };
+    expect(body).toMatchObject({ hash, shortHash: hash.slice(0, 7), subject: 'second' });
+    expect(body.parents).toHaveLength(1);
+    expect(body.files).toEqual([{ path: 'b.txt', status: 'A' }]);
+
+    const badRes = await fetch(`${base}/api/repos/${repoId}/commits/${'deadbeef'.repeat(5)}`);
+    expect(badRes.status).toBe(400);
+    expect(await badRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+
+    const notFoundRes = await fetch(`${base}/api/repos/nope/commits/${hash}`);
+    expect(notFoundRes.status).toBe(404);
+    expect(await notFoundRes.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
   it('blame/history/search 端点：缺必填查询参数（file/q）返回 400 INVALID_QUERY', async () => {
     const { repoId } = registerRepo();
     const blameRes = await fetch(`${base}/api/repos/${repoId}/blame`);

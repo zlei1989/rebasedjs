@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { committedPage } from './committed';
+import { commitFiles, committedPage } from './committed';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -123,5 +123,49 @@ describe('committed 原语', () => {
 
     expect(page.entries[0].files).toEqual([{ path: '文件.txt', status: 'A' }]);
     expect(page.entries[1].files).toEqual([{ path: 'with space.txt', status: 'A' }]);
+  });
+
+  // commitFiles：单提交全量文件清单（Show All Affected 语义）——与同一提交的分页条目同源同形
+  it('commitFiles：返回指定提交的单条目（含多文件与 renameFrom）', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commitFile(repo, 'a.txt', 'alpha', 'create');
+    commitFile(repo, 'b.txt', 'beta', 'beta');
+    execFileSync('git', ['-C', repo, 'mv', 'b.txt', 'c.txt']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'rename']);
+    const h = git(repo, 'rev-parse', 'HEAD');
+
+    const entry = await commitFiles(repo, h);
+
+    expect(entry.hash).toBe(h);
+    expect(entry.subject).toBe('rename');
+    // git mv + 无内容修改 → name-status 单条 R；多文件提交参考分页同源语义
+    expect(entry.files).toEqual([{ path: 'c.txt', status: 'R', renameFrom: 'b.txt' }]);
+  });
+
+  // commitFiles 多文件提交：A/M 并存与分页条目一致
+  it('commitFiles：多文件提交按路径排序输出（A/M 并存）', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commitFile(repo, 'a.txt', 'alpha', 'create');
+    writeFileSync(join(repo, 'a.txt'), 'changed');
+    commitFile(repo, 'n.txt', 'new', 'add n');
+    const h = git(repo, 'rev-parse', 'HEAD');
+
+    const entry = await commitFiles(repo, h);
+
+    expect(entry.files).toEqual([
+      { path: 'a.txt', status: 'M' },
+      { path: 'n.txt', status: 'A' },
+    ]);
+  });
+
+  // 无效哈希：git exit 128 透出 GitExitError（api 层以 verifyCommitish 预检挡在 400 之前）
+  it('commitFiles：无效哈希 → GitExitError', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commitFile(repo, 'a.txt', 'alpha', 'create');
+
+    await expect(commitFiles(repo, 'deadbeef'.repeat(5))).rejects.toMatchObject({ name: 'GitExitError', exitCode: 128 });
   });
 });

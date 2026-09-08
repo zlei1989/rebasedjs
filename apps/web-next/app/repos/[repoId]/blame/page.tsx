@@ -5,9 +5,10 @@
  * → useBlame → ui BlameView（与 web-koa 容器同构；repoId 取 Next params、返回导航用 router）。
  * 查询串只作输入初始值，提交后不回写 URL（v1 简化，页内状态即来源）；
  * file 为空串时 useBlame 挂 null key 不发请求，页面渲染空态引导。
- * 行内联动：差异 → /diff?file&from=parents[0]&to=hash（根提交 → root=1）；历史 → /history?file。
+ * 行内联动：差异 → /diff?file&from=parents[0]&to=hash（根提交 → root=1）；历史 → /history?file；
+ * 受影响（Show All Affected #34）→ useCommitFiles 条件拉取该提交全量变更文件 Modal（文件点击 → 该文件 diff）。
  */
-import { useBlame } from '@rebased/client';
+import { useBlame, useCommitFiles } from '@rebased/client';
 import { BlameView, EmptyState } from '@rebased/ui';
 import { Button, Flex, Input } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -33,12 +34,16 @@ export default function Page({
     setRev(initialRev);
   }, [repoId, initialFile, initialRev]);
   const { data: lines, isLoading, error } = useBlame(repoId, file, rev);
-  /** 提交输入：空白不触发（与 hook null-key 不发请求的语义一致）；换文件后清除 rev（回到工作区溯源） */
+  // 受影响文件 Modal（Show All Affected #34）：affectedHash 非空 → 条件拉取该提交全量变更文件；空串挂 null key 不发请求
+  const [affectedHash, setAffectedHash] = useState('');
+  const { data: affectedEntry, isLoading: affectedLoading, error: affectedError } = useCommitFiles(repoId, affectedHash);
+  /** 提交输入：空白不触发（与 hook null-key 不发请求的语义一致）；换文件后清除 rev（回到工作区溯源）且关闭受影响 Modal */
   const submit = (): void => {
     const trimmed = draft.trim();
     if (trimmed !== '') {
       setFile(trimmed);
       setRev('');
+      setAffectedHash('');
     }
   };
   return (
@@ -84,6 +89,23 @@ export default function Page({
             }
           }}
           onShowInHistory={(path) => router.push(`/repos/${repoId}/history?file=${encodeURIComponent(path)}`)}
+          onShowAffected={setAffectedHash}
+          affectedHash={affectedHash}
+          affectedEntry={affectedEntry}
+          affectedLoading={affectedLoading}
+          affectedError={affectedError?.message}
+          onCloseAffected={() => setAffectedHash('')}
+          onOpenAffectedFile={(path) => {
+            // 受影响提交内该文件 diff：from=父哈希、to=该提交（根提交 → root=1；与行内「差异」同语义）
+            const entry = affectedEntry;
+            if (entry !== undefined && entry !== null) {
+              if (entry.parents.length === 0) {
+                router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&root=1`);
+              } else {
+                router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&from=${entry.parents[0]}&to=${entry.hash}`);
+              }
+            }
+          }}
         />
       )}
     </Flex>

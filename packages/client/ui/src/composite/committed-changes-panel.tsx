@@ -5,9 +5,10 @@
  *  「加载更多」为组件内简单交互：page 数据由容器注入，本组件只显示与回调（onLoadMore/loadingMore）。
  *  纯受控（page/selectedHash + 各回调）；ui 不调接口，数据与回调由调用方容器注入。
  */
-import { Button, Card, Flex, Tag, Typography } from 'antd';
-import type { CommittedEntry, CommittedFileStatus, CommittedPage } from '@rebased/contracts';
+import { Button, Card, Flex, Typography } from 'antd';
+import type { CommittedEntry, CommittedPage } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { CommittedStatusTag } from '../domain/committed-status';
 import { formatCommitDate } from '../domain/format';
 
 export interface CommittedChangesPanelProps {
@@ -19,16 +20,6 @@ export interface CommittedChangesPanelProps {
   /** 文件点击载荷：路径 + 所属提交完整哈希（容器接 diff 端点；from/to 由容器解析 `${hash}~1`） */
   onOpenFile?: (path: string, hash: string) => void;
 }
-
-/** name-status 状态码 → 徽标配色：A 新增绿 / M 修改蓝 / D 删除红 / R 重命名紫 / C 复制青 / T 类型变更橙 */
-const STATUS_COLORS: Record<CommittedFileStatus, string> = {
-  A: 'green',
-  M: 'blue',
-  D: 'red',
-  R: 'purple',
-  C: 'cyan',
-  T: 'orange',
-};
 
 /** 提交行：短哈希 + subject（弹性）+ 作者 + 日期；整行点击 → onSelectCommit 完整哈希；命中 selectedHash 时底色高亮 */
 function CommitRow({
@@ -90,9 +81,7 @@ function FileRow({
       style={{ padding: '4px 0', cursor: onOpenFile ? 'pointer' : undefined }}
       onClick={() => onOpenFile?.(file.path, hash)}
     >
-      <Tag color={STATUS_COLORS[file.status]} style={{ flexShrink: 0, marginInlineEnd: 8 }}>
-        {file.status}
-      </Tag>
+      <CommittedStatusTag status={file.status} />
       {file.renameFrom ? (
         <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
           {file.renameFrom} →

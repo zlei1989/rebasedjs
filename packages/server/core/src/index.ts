@@ -10,7 +10,7 @@ export { fileBlame, parentHashesOf, parseBlamePorcelain } from './blame';
 export type { CoreBlameLine } from './blame';
 export { fileHistory, parseHistoryRecords } from './history';
 export type { CoreFileHistoryEntry } from './history';
-export { committedPage } from './committed';
+export { commitFiles, committedPage } from './committed';
 export type { CoreCommittedEntry } from './committed';
 export { searchCommits } from './search';
 export type { CoreSearchResult } from './search';

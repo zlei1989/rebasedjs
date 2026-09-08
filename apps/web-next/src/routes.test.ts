@@ -49,6 +49,7 @@ import { GET as getTags, POST as postTags } from '../app/api/repos/[repoId]/tags
 import { GET as getBlame } from '../app/api/repos/[repoId]/blame/route';
 import { GET as getHistory } from '../app/api/repos/[repoId]/history/route';
 import { GET as getCommitted } from '../app/api/repos/[repoId]/committed/route';
+import { GET as getCommitFilesRoute } from '../app/api/repos/[repoId]/commits/[hash]/route';
 import { GET as getSearch } from '../app/api/repos/[repoId]/search/route';
 import { GET as getPatches } from '../app/api/repos/[repoId]/patches/route';
 import { POST as postPatchCreate } from '../app/api/repos/[repoId]/patches/create/route';
@@ -1379,6 +1380,36 @@ describe('web-next blame/history/committed/search 路由', () => {
     const beyond = await beyondRes.json();
     expect(beyond.entries).toHaveLength(0);
     expect(beyond.hasMore).toBe(false);
+  });
+
+  it('commits/:hash 端点：单提交全量变更文件 200；无效 hash 400 INVALID_REF；未注册 repoId 404', { timeout: RIG_TIMEOUT }, async () => {
+    const repoId = registerRepo();
+    makeLocalCommit('b.txt', 'two\n', 'second');
+    const hash = execFileSync('git', ['-C', lastRepoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const hashCtx = (id: string, h: string): { params: Promise<{ repoId: string; hash: string }> } => ({
+      params: Promise.resolve({ repoId: id, hash: h }),
+    });
+
+    const res = await getCommitFilesRoute(new Request(`http://localhost/api/repos/${repoId}/commits/${hash}`), hashCtx(repoId, hash));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ hash, shortHash: hash.slice(0, 7), subject: 'second' });
+    expect(body.parents).toHaveLength(1);
+    expect(body.files).toEqual([{ path: 'b.txt', status: 'A' }]);
+
+    const badRes = await getCommitFilesRoute(
+      new Request(`http://localhost/api/repos/${repoId}/commits/${'deadbeef'.repeat(5)}`),
+      hashCtx(repoId, 'deadbeef'.repeat(5)),
+    );
+    expect(badRes.status).toBe(400);
+    expect(await badRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+
+    const notFoundRes = await getCommitFilesRoute(
+      new Request(`http://localhost/api/repos/nope/commits/${hash}`),
+      hashCtx('nope', hash),
+    );
+    expect(notFoundRes.status).toBe(404);
+    expect(await notFoundRes.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
   });
 
   it('search 端点：grep 命中提交信息、pickaxe 命中内容增量、无命中空数组，均 200', { timeout: RIG_TIMEOUT }, async () => {

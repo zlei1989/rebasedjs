@@ -1,9 +1,9 @@
-/** committed.ts 测试：useCommittedPage 查询串（CommittedPage，limit/skip 仅在有值时拼接） */
+/** committed.ts 测试：useCommittedPage 查询串（CommittedPage，limit/skip 仅在有值时拼接）+ useCommitFiles（单提交变更文件，hash 空挂 null key） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CommittedPage } from '@rebased/contracts';
-import { useCommittedPage } from './committed';
+import type { CommittedEntry, CommittedPage } from '@rebased/contracts';
+import { useCommitFiles, useCommittedPage } from './committed';
 import { freshCache } from './testing/fresh-cache';
 
 const PAGE: CommittedPage = {
@@ -11,6 +11,19 @@ const PAGE: CommittedPage = {
     { hash: 'cccccc', shortHash: 'cccccc', subject: 'extend', author: 'Cara', dateIso: '2024-01-03T00:00:00Z', parents: ['bbbbbb'], files: [{ path: 'a.txt', status: 'M' }] },
   ],
   hasMore: true,
+};
+
+const ENTRY: CommittedEntry = {
+  hash: 'aaaaaa',
+  shortHash: 'aaaaaa',
+  subject: 'add b',
+  author: 'Bob',
+  dateIso: '2024-01-01T00:00:00Z',
+  parents: [],
+  files: [
+    { path: 'a.txt', status: 'M' },
+    { path: 'b.txt', status: 'A' },
+  ],
 };
 
 afterEach(() => {
@@ -85,6 +98,54 @@ describe('useCommittedPage', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-committed-3/committed');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useCommitFiles', () => {
+  it('请求单提交端点并返回 CommittedEntry（hash 拼入路径）', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(ENTRY), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: CommittedEntry; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useCommitFiles('r-commit-files-1', 'aaaaaa');
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result?.data).toEqual(ENTRY));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-commit-files-1/commits/aaaaaa');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('hash 空串挂 null key 不发请求（条件拉取）', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(ENTRY), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: CommittedEntry; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useCommitFiles('r-commit-files-2', '');
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result?.data).toBeUndefined();
     await act(async () => {
       renderer.unmount();
     });

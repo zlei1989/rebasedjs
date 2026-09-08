@@ -6,8 +6,8 @@
  * parents 为 %P 解析的父哈希数组（根提交 []），容器打开 diff 据此定 from（终审 Must-fix 2）。
  * 日期透传：dateIso 为 %aI 原样透传（带作者时区偏移的 ISO；ui 消费方 formatCommitDate 直取字符串字段）。
  */
-import { committedPage, type CoreCommittedEntry } from '@rebased/core';
-import type { CommittedEntry, CommittedFileStatus, CommittedPage, CommittedPageQuery } from '@rebased/contracts';
+import { commitFiles, committedPage, verifyCommitish, type CoreCommittedEntry } from '@rebased/core';
+import { ServiceError, type CommittedEntry, type CommittedFileStatus, type CommittedPage, type CommittedPageQuery } from '@rebased/contracts';
 
 /** core 提交条目 → contracts CommittedEntry（status string 窄化到联合，renameFrom 缺省时不下发 undefined 键） */
 function toCommittedEntry(entry: CoreCommittedEntry): CommittedEntry {
@@ -31,4 +31,15 @@ function toCommittedEntry(entry: CoreCommittedEntry): CommittedEntry {
 export async function getCommittedPage(repoPath: string, query: CommittedPageQuery): Promise<CommittedPage> {
   const page = await committedPage(repoPath, { limit: query.limit, skip: query.skip });
   return { entries: page.entries.map(toCommittedEntry), hasMore: page.hasMore };
+}
+
+/**
+ * 单提交变更文件（Show All Affected 语义 #34）：hash 有效性预检（verifyCommitish →
+ * INVALID_REF 引用不存在或不是提交），再取全量文件清单。
+ */
+export async function getCommitFiles(repoPath: string, hash: string): Promise<CommittedEntry> {
+  if (!(await verifyCommitish(repoPath, hash))) {
+    throw new ServiceError('INVALID_REF', `引用不存在或不是提交：${hash}`);
+  }
+  return toCommittedEntry(await commitFiles(repoPath, hash));
 }

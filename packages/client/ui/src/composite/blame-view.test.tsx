@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { BlameLine } from '@rebased/contracts';
+import type { BlameLine, CommittedEntry } from '@rebased/contracts';
 import { BlameView } from './blame-view';
 
 /** 测试溯源行工厂：补全 BlameLine 必填字段 */
@@ -14,6 +14,19 @@ function makeBlameLine(partial: Partial<BlameLine> & { lineno: number }): BlameL
     content: `content ${partial.lineno}`,
     previousLineno: null,
     parents: [],
+    ...partial,
+  };
+}
+
+/** 测试提交条目工厂：补全 CommittedEntry 必填字段 */
+function makeEntry(partial: Partial<CommittedEntry> & { hash: string }): CommittedEntry {
+  return {
+    shortHash: partial.hash.slice(0, 7),
+    subject: 'a commit',
+    author: 'Sam',
+    dateIso: '2026-01-02T00:00:00Z',
+    parents: [],
+    files: [{ path: 'src/app.ts', status: 'M' }],
     ...partial,
   };
 }
@@ -93,5 +106,111 @@ describe('BlameView 行交互', () => {
     render(<BlameView file="src/app.ts" lines={[makeBlameLine({ lineno: 1 })]} />);
     expect(screen.queryByTestId('blame-diff-1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('blame-history-1')).not.toBeInTheDocument();
+  });
+});
+
+describe('BlameView 受影响（Show All Affected #34）', () => {
+  it('点击「受影响」以 hash 调 onShowAffected；affectedHash 受控打开 Modal（loading 态）', () => {
+    const onShowAffected = vi.fn();
+    const { rerender } = render(
+      <BlameView
+        file="src/app.ts"
+        lines={[makeBlameLine({ lineno: 1 })]}
+        onShowAffected={onShowAffected}
+        affectedHash=""
+        affectedLoading={false}
+        affectedEntry={null}
+      />,
+    );
+
+    // 关闭态（hash 空）不渲染 Modal 内容
+    expect(screen.queryByTestId('affected-loading')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('blame-affected-1'));
+
+    expect(onShowAffected).toHaveBeenCalledTimes(1);
+    expect(onShowAffected).toHaveBeenCalledWith('hash1');
+
+    // 容器回写 hash（条件拉取进行中）→ Modal 打开且 loading 态
+    rerender(
+      <BlameView
+        file="src/app.ts"
+        lines={[makeBlameLine({ lineno: 1 })]}
+        onShowAffected={onShowAffected}
+        affectedHash="hash1"
+        affectedLoading
+        affectedEntry={null}
+      />,
+    );
+    expect(screen.getByTestId('affected-loading')).toBeInTheDocument();
+  });
+
+  it('数据就绪：Modal 渲染提交元信息与全量文件（含状态徽标与重命名原名）', () => {
+    render(
+      <BlameView
+        file="src/app.ts"
+        lines={[makeBlameLine({ lineno: 1 })]}
+        onShowAffected={vi.fn()}
+        affectedHash="aaaaaa1"
+        affectedLoading={false}
+        affectedEntry={makeEntry({
+          hash: 'aaaaaa1',
+          subject: 'rename and touch',
+          parents: ['p1'],
+          files: [
+            { path: 'b.ts', status: 'R', renameFrom: 'a.ts' },
+            { path: 'c.ts', status: 'A' },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/受影响文件（aaaaaa1）/)).toBeInTheDocument();
+    expect(screen.getByText('rename and touch · Sam · 2026-01-02 00:00')).toBeInTheDocument();
+    const row0 = screen.getByTestId('affected-file-0');
+    expect(row0).toHaveTextContent('R');
+    expect(row0).toHaveTextContent('a.ts →');
+    expect(row0).toHaveTextContent('b.ts');
+    expect(screen.getByTestId('affected-file-1')).toHaveTextContent('c.ts');
+  });
+
+  it('文件点击以路径调 onOpenAffectedFile；关闭触发 onCloseAffected', () => {
+    const onOpenAffectedFile = vi.fn();
+    const onCloseAffected = vi.fn();
+    render(
+      <BlameView
+        file="src/app.ts"
+        lines={[makeBlameLine({ lineno: 1 })]}
+        onShowAffected={vi.fn()}
+        onCloseAffected={onCloseAffected}
+        onOpenAffectedFile={onOpenAffectedFile}
+        affectedHash="aaaaaa1"
+        affectedLoading={false}
+        affectedEntry={makeEntry({ hash: 'aaaaaa1' })}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('affected-file-0'));
+
+    expect(onOpenAffectedFile).toHaveBeenCalledWith('src/app.ts');
+
+    // 关闭 Modal（右上角 X：antd 默认 aria-label="Close"）：关闭回调通知容器清空 hash（停止条件拉取）
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onCloseAffected).toHaveBeenCalledTimes(1);
+  });
+
+  it('error 态渲染错误文案；未传 onShowAffected 不渲染按钮', () => {
+    const { rerender } = render(
+      <BlameView
+        file="src/app.ts"
+        lines={[makeBlameLine({ lineno: 1 })]}
+        onShowAffected={vi.fn()}
+        affectedHash="deadbeef"
+        affectedLoading={false}
+        affectedError="引用不存在或不是提交：deadbeef"
+      />,
+    );
+    expect(screen.getByTestId('affected-error')).toHaveTextContent('引用不存在或不是提交：deadbeef');
+
+    rerender(<BlameView file="src/app.ts" lines={[makeBlameLine({ lineno: 1 })]} />);
+    expect(screen.queryByTestId('blame-affected-1')).not.toBeInTheDocument();
   });
 });

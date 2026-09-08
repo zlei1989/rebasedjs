@@ -9,7 +9,7 @@ export { getFileDiff, getFileThreeVersions, getFileVersions, streamDiffEvents } 
 export { getFileBlame } from './blame';
 export { getFileHistory } from './history';
 export { getBrowseContent, getBrowseTree } from './browse';
-export { getCommittedPage } from './committed';
+export { getCommitFiles, getCommittedPage } from './committed';
 export { searchCommitsService } from './search';
 export { applyHunkStaging, applyStaging } from './staging';
 export { commitAndPush, createCommit } from './commit';

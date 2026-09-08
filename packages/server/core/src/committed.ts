@@ -132,3 +132,16 @@ export async function committedPage(
   const all = parseCommitted(stdout);
   return { entries: all.slice(0, opts.limit), hasMore: all.length > opts.limit };
 }
+
+/**
+ * 单提交文件清单（Show All Affected 语义：git log -1 --name-status <hash>）。
+ * 复用 COMMITTED_FORMAT/parseCommitted（与分页同源解析）；merge 提交与分页同语义
+ * （git 对 --name-status 的 merge 提交默认不展开变更，空文件列表由消费方提示）。
+ * hash 有效性由调用方预检（api 层 verifyCommitish）；无效 hash 的 git exit 128 原样透出。
+ */
+export async function commitFiles(cwd: string, hash: string): Promise<CoreCommittedEntry> {
+  const { stdout } = await runGit(['log', '-1', '--name-status', `--format=${COMMITTED_FORMAT}`, hash], { cwd });
+  const entries = parseCommitted(stdout);
+  if (entries.length === 0) throw new Error(`未找到提交 ${hash}`);
+  return entries[0];
+}

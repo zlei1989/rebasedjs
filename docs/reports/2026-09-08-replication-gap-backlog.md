@@ -18,7 +18,7 @@
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
 | 页面功能点缺口 | 23 项（分布于 13 个页面） | §2.2 / §2.3 |
-| 导航边缺口 | 10 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
+| 导航边缺口 | 9 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
 
@@ -61,7 +61,7 @@
 
 **已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）；BlameView/HistoryPanel 溯源联动（§#29/#30/#31/#33）；PatchPanel Import into Shelf 与 ShelfPanel Unshelve 回边（#52/#54：行内「导入搁置」→ 同样名搁置存补丁全文，成功跳 `/shelves`；restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新）；StatusPage 动作入口五连（#43/#44/#45/#47/#49）；commit & push 组合执行器（#50）；PushDialog rejected→Update 联动（#91）；与分支比较（#10：core `streamLog` 增 `range`（`git log <range>` 语义）+ contracts `logQuerySchema` 增 `range` + client `useLogPage` 增 range 参数与空 repoId→null key 条件拉取；ui `BranchCompareView`（GitCompareBranchesUi 语义——分支独有/当前独有双组卡片，行点击 → ?select=）+ BranchPanel 行内「比较」（当前分支禁用）；两端容器与分支页 onCompare 接线（`?compare=<branch>` → 双 range 查询）；UpdateProjectDialog Reset to tracked（#93：左下「Reset to tracked」（本地分支 → 上游文案）→ Modal.confirm → `reset --hard <upstream>`；无上游不渲染；ui +3 单测）；TagPanel 删除远程标签/推送全部（core `deleteRemoteTag`（push 空 ref）/`pushAllTags`（push --tags）原语 + 契约 `tagActionSchema` 增 `pushAll`/`deleteRemote` 分支 + api 分派（withAuth 认证回路）+ ui 行内「删除远程」与页头「推送全部」（Popconfirm）；core +2、contracts +3、api +3、ui +2 单测）；StashPanel keep index（契约 `stashActionSchema` save 增 `keepIndex` + core `saveStash` 传 `--keep-index` + api 透传 + ui 保存表单「保持暂存区（keep-index）」勾选；api +1、contracts +2、ui +1 单测，实测 --keep-index 暂存区保持）；MergeDialog 远程分支直接合并（ui 分支 Select 两组——本地非当前 / 远程 origin/xxx（远程引用名直接作 merge 参数）；api +1 单测（裸仓库 fetch 后 merge origin/side → success）、ui +1 单测）；SearchPanel 分支快速搜索（Search Everywhere Git tab 语义——ui search-panel「分支快速搜索」卡片（输入即滤本地分支，行点击 → onSelectBranch）+ 两端容器接线（检出并回日志页，quickswitch）；ui +3 单测）；RemotePanel shallow 识别徽标（契约 `RemoteList`/`FetchResult` 增 `shallow`（core `isShallowRepo` 挂 getRemotes/fetch 响应）+ ui 远程卡片顶部「浅克隆（历史截断）」徽标；api +2、ui +1 单测）；GitConsole 输出折叠（`foldArgs` 纯函数——`-c key=value` 对折叠为 `-c …` 占位（GitConsoleFoldingImpl 语义）；ui +2 单测）；ConflictsPanel 冲突文件按目录分组（`groupConflictsByDir` 纯函数——单层子标题分组：根目录/子目录带计数，键排序、组内路径排序；ui +2 单测）；ConflictsPanel skip（core `skipRebase`（git rebase --skip）/`skipPick`（git <kind> --skip）+ api `skipOperation`（merge 无 skip 概念 → INVALID_QUERY）+ `POST /operation/skip` 双端 + client `useSkipOperation` + ui 冲突页底部「跳过」（Popconfirm;仅 rebase/cherry-pick/revert 渲染）；core +1、api +3、client +1、ui +3 单测）。
 
-**LogPage（2）**：行右键余项（Push up to Commit、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
+**LogPage（2）**：行右键余项（Push up to Commit、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。Show All Affected 已落地——BlameView 行内「受影响」→ 提交全量变更文件 Modal（见 §2.3 完成记录）。
 
 **DiffPage（1）**：与分支比较已落地（分支页行内「比较」→ 日志页 `?compare=` 对比视图——双 range 双向提交差异，对齐 GitCompareBranchesUi 双侧日志；hunk 级应用/回退经 StatusPage 补丁预览 hunk 行内选择为等效通道）。（word diff/同步滚动/折叠/上下文行数与三版本对比已落地——Monaco 内建 + folding/renderWhitespace/hideUnchangedRegions 开关 + 三版本视图）。
 
@@ -73,7 +73,7 @@
 
 **MergeDialog（0）**：远程分支直接合并已落地——分支 Select 两组（本地非当前 / 远程 origin/xxx），远程引用名作 merge 参数（服务端核心 git merge 直接解析远程跟踪引用；api +1、ui +1 单测，实测裸仓库 fetch 后 merge origin/side 成功）。
 
-**RebaseDialog（2）**：auto-squash/fixup、squash by subject（`GitAutoSquashCommitAction` 等）；skip（continue/abort 已通，skip 未做）。
+**RebaseDialog（2）**：auto-squash/fixup、squash by subject（`GitAutoSquashCommitAction` 等）。（skip 已落地——冲突页「跳过」走 `operation/skip`，见 §2.3 完成记录。）
 
 **StashPanel（0）**：keep index 已落地（保存表单「保持暂存区（keep-index）」勾选 → `saveStash --keep-index`）——Unstash As 与贮藏 Show Diff 已落地（行「Unstash As…」Modal（目标本地分支 Select → 检出+apply 不 drop）+「查看差异」Modal（`git stash show -p` 补丁））。
 
@@ -105,7 +105,7 @@
 
 **GitHubPanel / GitLabPanel（0）**：行级评论锚点与提交已落地（§2.7 完成记录）。
 
-### 2.4 P3：导航边缺口（10 条可做 + 2 条 🟡 直达，按目标页分组）
+### 2.4 P3：导航边缺口（9 条可做 + 2 条 🟡 直达，按目标页分组）
 
 > 边号对应盘点报告 §5.3；等效边、明确不做边（#70/#92/#96/#101/#104）不列。
 
@@ -124,7 +124,7 @@
 | BranchPanel | #67/#69 | #67 ✅ 已落地（页头「Fetch」按钮——fetch 全部远程，成功后复用事件流验证分支列表）；#69 Show Diff with Working Tree 待办 |
 | BranchPanel | #70 外 | （New Working Tree 明确不做） |
 | HistoryPanel | #30/#31 | ✅ 已落地（双击 → DiffPage；Annotate Revision → /blame?rev=，见 §2.3 完成记录） |
-| BlameView | #29/#33/#34 | #29/#33 ✅ 已落地（行内「历史」「差异」）；#34 Show All Affected 待办（见 §2.3） |
+| BlameView | #29/#33/#34 | #29/#33 ✅ 已落地（行内「历史」「差异」）；#34 ✅ 已落地（Show All Affected：BlameView 行内「受影响」→ 提交全量变更文件 Modal——`GET /commits/:hash` 单提交清单，文件点击 → 该文件 diff（from=父哈希、to=该提交，根提交 root=1）；core `commitFiles` + api `getCommitFiles`（verifyCommitish 预检）+ client `useCommitFiles`（hash 空串 null key）+ ui 受影响 Modal（loading/error/空态/合并提示分派）+ 两端容器接线；core +3、api +2、client +2、ui +4 单测） |
 | StatusPage | #43/#44/#45/#47/#48/#49 | #43/#44/#45/#47/#48/#49 ✅ 全部已落地（#43 冲突入口等价=操作条链接+冲突跳转；#44 组级「创建补丁」→ patches paths；#45 页头「搁置」；#47 行内「注解」「历史」→ /blame、/history；#48 行「三版本」；#49 页头「存入贮藏」） |
 | CommitDialog 等效面 | #50 | ✅ 已落地（提交框「提交并推送」→ POST /commit/push：commit 先落盘 → push 缺省当前分支上游；Push up to Commit 余项见 #17） |
 | PatchPanel | #52 | ✅ 已落地（行内「导入搁置」→ 成功跳 /shelves，见 §2.3 完成记录） |

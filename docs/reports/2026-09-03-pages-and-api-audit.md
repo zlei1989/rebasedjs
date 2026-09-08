@@ -16,11 +16,11 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **91 / 105**（web-next 91 个 route.ts ↔ web-koa repos.ts 105 注册，14 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **92 / 106**（web-next 92 个 route.ts ↔ web-koa repos.ts 106 注册，14 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 110 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| `@rebased/api` 公共出口 | 111 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 64、领域类型/别名 89、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（104 条） | 76 ✅（含等价边）+ 8 🟡 + 7 ➖ + 13 ❌ |
+| 导航边（104 条） | 77 ✅（含等价边）+ 8 🟡 + 7 ➖ + 12 ❌ |
 
 ### 1.2 口径与图例
 
@@ -96,13 +96,13 @@
 ### 2.3 汇总
 
 - ✅ 已复刻 29 个；🟡 等效 2 个（CommitDialog、QuickActionsMenu）。
-- 功能点级 🟡 遗留（不影响页面级结论）：LogPage 过滤/分页 UI、BranchPanel 最近检出/标签分组与过滤、MergeDialog 远程分支合并、BlameView/HistoryPanel 的 diff 联动等——逐一见 §四各页功能点表。
+- 功能点级 🟡 遗留（不影响页面级结论）：LogPage 右键动作余项（Push up to Commit、reword/fixup/squash/drop 直通）、BranchPanel 最近检出/标签分组与过滤、CommitDialog 等效面（amend/reword 直通、GPG/commit template、CRLF 提示）、SettingsPage 面项等——逐一见 §四各页功能点表。
 
 ---
 
 ## 三、接口盘点
 
-### 3.1 端点总表（91 路径 / 105 方法，两端完全对称）
+### 3.1 端点总表（92 路径 / 106 方法，两端完全对称）
 
 > 路径前缀 `/api`；`id` 即 `repoId`。SSE 3 个：`log/stream`、`diff/stream`、`events`。每个路由只做三件事：zod 校验 → 调 `@rebased/api` → 错误映射。
 
@@ -142,6 +142,7 @@
 | history | `repos/:id/history` | GET | 文件历史（`--follow`） | HistoryPanel | ✅ |
 | browse | `repos/:id/browse`、`repos/:id/browse/content` | GET ×2 | 指定版本文件树 / 单文件内容（二进制标记） | BrowsePanel | ✅ |
 | committed | `repos/:id/committed` | GET | 已提交变更分页浏览 | CommittedChangesPanel | ✅ |
+| commits | `repos/:id/commits/:hash` | GET | 单提交全量变更文件（Show All Affected） | BlameView | ✅ |
 | search | `repos/:id/search` | GET | 提交搜索（grep/pickaxe） | SearchPanel | ✅ |
 | patch | `repos/:id/patches`、`patches/create`、`patches/apply`、`patches/delete`、`patches/:name/import-shelf` | GET + 4×POST | 补丁列表 / 创建（四态：工作区/暂存/提交区间/**勾选文件**）/ 应用（check 先行）/ 删除 / 导入搁置 | PatchPanel、StatusPage（创建补丁入口） | ✅ |
 | shelf | `repos/:id/shelves` | GET/POST | 搁置列表 / save/restore/drop | ShelfPanel | ✅ |
@@ -152,7 +153,7 @@
 | worktree | `repos/:id/worktrees`、`worktrees/remove`、`worktrees/prune` | GET/POST + 2×POST | 工作树列表 / 创建 / 移除 / 清理 | WorktreePanel | ✅ |
 | submodule | `repos/:id/submodules`、`submodules/update` | GET/POST | 子模块列表（四态）/ 更新（init/recursive） | SubmodulePanel | ✅ |
 
-**小结**：91 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
+**小结**：92 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
 
 ### 3.2 契约层（`@rebased/contracts`）
 
@@ -163,7 +164,7 @@
 
 ### 3.3 服务层与使用状态
 
-- `@rebased/api` 公共出口 110 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
+- `@rebased/api` 公共出口 111 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
 - **未挂端点 0**：`initRepo`/`cloneRepo` 已随 repo 域收尾挂 `/repos/init`、`/repos/clone`（见任务清单 §2.2 完成记录）。
 - **半使用接口 2 个**：`streamDiffEvents`（diff/stream 已订阅未渲染）、`applyHunkStaging`（无 UI 入口）。
 
@@ -218,7 +219,7 @@
 | 远程操作认证重试回路 | ✅ | `AUTH_FAILED` → 关对话框开 AuthDialog（host 自 context，不含 token）→ retry 重放 |
 | 分页（limit ≤500 / skip 游标） | ✅ | 「加载更多」limit 阶梯放大（50→100→…→500 封顶）；过滤或翻页时切快照模式（流仅默认视图接入，Ruling 6 同查询约束） |
 | 过滤（author / path） | ✅ | 「文本即滤」双输入（作者/路径，Enter/失焦提交，去首尾空白；清空即恢复）；与服务端 `--author`/`-- path` 过滤一致 |
-| 行右键菜单形态 | ✅ | 行右键菜单（对齐 Java `Vcs.Log.ContextMenu` 组）：检出（游离 HEAD）/ 从此处新建分支（创建后检出）/ 从此处新建标签（附注可选）/ 在浏览器中打开（GitHub/GitLab 提交页链接）+ 摘樱桃·还原·Reset·浏览快照复用面板按钮；Push up to Commit、Show All Affected、reword/fixup/squash/drop 直通为余项（见任务清单 §2.3） |
+| 行右键菜单形态 | ✅ | 行右键菜单（对齐 Java `Vcs.Log.ContextMenu` 组）：检出（游离 HEAD）/ 从此处新建分支（创建后检出）/ 从此处新建标签（附注可选）/ 在浏览器中打开（GitHub/GitLab 提交页链接）+ 摘樱桃·还原·Reset·浏览快照复用面板按钮；Push up to Commit、reword/fixup/squash/drop 直通为余项（见任务清单 §2.3） |
 | 分支折叠 / PermanentGraph 高级视图 | ❌ | 2026-09-08 重新裁定：由「明确不做」改为**可选任务**（依赖过滤 UI 与 PermanentGraph 类缓存结构先行，见任务清单 §2.8） |
 | 新标签页打开 log、为命令过滤的 log | ❌ | internal 动作未做 |
 
@@ -417,6 +418,7 @@ Update Project——策略化更新入口；对应 `GitUpdateOptionsDialog` / `G
 |--------|------|------|
 | 注解展示 | ✅（等效形态） | 行列表（行号/作者/日期/内容 + hash 短名徽标）承载注解语义（Web 无编辑器 gutter） |
 | 注解点击联动 | ✅ | hash 徽标 → LogPage `?select=`；行内「差异」→ DiffPage from/to（父哈希出 blame `parents` 批量解析，根提交 → `root=1`）；行内「历史」→ HistoryPanel（边 #29/#33） |
+| Show All Affected（受影响文件） | ✅ | 行内「受影响」→ 提交全量变更文件 Modal（对照「Paths affected in <revision>」对话框；`GET /commits/:hash`，文件点击 → 该文件 diff——边 #34） |
 | previousLineno 边界 | ✅ | orig 近似边界注释在案 |
 
 ### 4.17 HistoryPanel ✅
@@ -684,7 +686,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 31 | HistoryPanel → BlameView | Annotate Revision | `AnnotateRevisionFromHistoryAction` | ✅ 行内「Annotate Revision」→ `/blame?rev=` |
 | 32 | 编辑器 → BlameView | 右键 Annotate | `AnnotateToggleAction`（VcsActions.xml:20） | ➖（无编辑器宿主；等价=「更多」+ 页内输入） |
 | 33 | BlameView → DiffPage | gutter 右键 Show Diff | `ShowDiffFromAnnotation.java:85` | ✅ 行内「差异」→ DiffPage from/to（根提交 `root=1`） |
-| 34 | BlameView → 受影响提交对话框 | 点击 Show All Affected | `AbstractVcsHelperImpl.java:551-564` | ❌ |
+| 34 | BlameView → 受影响提交对话框 | 点击 Show All Affected | `AbstractVcsHelperImpl.java:551-564` | ✅ 行内「受影响」→ 提交全量变更文件 Modal（`GET /commits/:hash`；文件点击 → 该文件 diff；无效 hash → 400 INVALID_REF） |
 | 35 | BlameView 关闭 | 右键 Close Annotations | `EditorGutterComponentImpl:2719` | ➖（页面离开即关闭） |
 | 36 | 任意处 → SearchPanel | Search Everywhere Git tab | `GitSearchEverywhereContributor` | ✅ 「更多」→ `/search` |
 | 37 | 工具窗口 → CommittedChangesPanel | Repository tab | `CommittedChangesViewManager.kt:39` | ✅ 「更多」→ `/committed` |
@@ -778,10 +780,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **76 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 5（#10 比较 + #61/#62/#65 既有 + #67 fetch）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 4（#29/#30/#31/#33）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
+| ✅ 已复刻（含等价边） | **77 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 5（#10 比较 + #61/#62/#65 既有 + #67 fetch）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **13 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
+| ❌ 未复刻 | **12 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
 
 ### 5.5 关键联动流程
 
@@ -818,8 +820,8 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
 | 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 110 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（91 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（105 注册）+ `src/middleware/error.ts` |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（92 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（106 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |
