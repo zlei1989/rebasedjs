@@ -1,6 +1,7 @@
 /** merge 功能测试：三态合并结果、冲突列表附带、进行中操作预检、继续合并。 */
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError } from '@rebased/core';
@@ -73,6 +74,28 @@ describe('merge 功能', () => {
 
     const outcome = await mergeBranchIntoCurrent(repo, { branch: 'side' });
     expect(outcome.status).toBe('up-to-date');
+    expect(outcome.conflicts).toEqual([]);
+  });
+
+  it('远程分支直接合并：fetch 后合并 origin/<branch>（远程跟踪引用）→ success', async () => {
+    const repo = makeRepo();
+    const main = makeBaseCommit(repo);
+    // 裸仓库装置：side 提交推成远程分支，本地 fetch 更新 origin/side 跟踪引用
+    const bare = mkdtempSync(join(tmpdir(), 'rebased-api-bare-'));
+    dirs.push(bare);
+    execFileSync('git', ['init', '-q', '--bare', bare]);
+    git(repo, ['remote', 'add', 'origin', bare]);
+    git(repo, ['checkout', '-q', '-b', 'side']);
+    writeFileSync(join(repo, 'b.txt'), 'side\n');
+    git(repo, ['add', '.']);
+    git(repo, ['commit', '-q', '-m', 'side']);
+    git(repo, ['push', '-q', '-u', 'origin', 'side']);
+    // 回主分支拉取远程引用
+    git(repo, ['checkout', '-q', main]);
+    git(repo, ['fetch', '-q', 'origin']);
+
+    const outcome = await mergeBranchIntoCurrent(repo, { branch: 'origin/side' });
+    expect(outcome.status).toBe('success');
     expect(outcome.conflicts).toEqual([]);
   });
 

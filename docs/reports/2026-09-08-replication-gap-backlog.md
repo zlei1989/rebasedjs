@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 29 项（分布于 17 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 28 项（分布于 16 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 10 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -59,7 +59,7 @@
 
 ### 2.3 P2：各域功能点补齐（按域 48 项）
 
-**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）；BlameView/HistoryPanel 溯源联动（§#29/#30/#31/#33）；PatchPanel Import into Shelf 与 ShelfPanel Unshelve 回边（#52/#54：行内「导入搁置」→ 同样名搁置存补丁全文，成功跳 `/shelves`；restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新）；StatusPage 动作入口五连（#43/#44/#45/#47/#49）；commit & push 组合执行器（#50）；PushDialog rejected→Update 联动（#91）；与分支比较（#10：core `streamLog` 增 `range`（`git log <range>` 语义）+ contracts `logQuerySchema` 增 `range` + client `useLogPage` 增 range 参数与空 repoId→null key 条件拉取；ui `BranchCompareView`（GitCompareBranchesUi 语义——分支独有/当前独有双组卡片，行点击 → ?select=）+ BranchPanel 行内「比较」（当前分支禁用）；两端容器与分支页 onCompare 接线（`?compare=<branch>` → 双 range 查询）；UpdateProjectDialog Reset to tracked（#93：左下「Reset to tracked」（本地分支 → 上游文案）→ Modal.confirm → `reset --hard <upstream>`；无上游不渲染；ui +3 单测）；TagPanel 删除远程标签/推送全部（core `deleteRemoteTag`（push 空 ref）/`pushAllTags`（push --tags）原语 + 契约 `tagActionSchema` 增 `pushAll`/`deleteRemote` 分支 + api 分派（withAuth 认证回路）+ ui 行内「删除远程」与页头「推送全部」（Popconfirm）；core +2、contracts +3、api +3、ui +2 单测）；StashPanel keep index（契约 `stashActionSchema` save 增 `keepIndex` + core `saveStash` 传 `--keep-index` + api 透传 + ui 保存表单「保持暂存区（keep-index）」勾选；api +1、contracts +2、ui +1 单测，实测 --keep-index 暂存区保持）。
+**已落地（完成记录）**：LogPage 分页「加载更多」（limit 阶梯放大 50→500 封顶；过滤/翻页切快照模式——流仅默认视图接入，Ruling 6 同查询约束）与过滤 UI（作者/路径「文本即滤」，Enter/失焦提交；ui log-page 过滤行 +5 单测；两端容器接 useLogPage 查询参数）；行右键菜单形态（检出游离 HEAD / 从此处新建分支·创建后检出 / 从此处新建标签·附注可选 / 在浏览器中打开·GitHub/GitLab 提交页链接 / 摘樱桃·还原·Reset·浏览快照复用面板按钮；ui log-page +5 单测，e2e 实测 detach/newBranch/tag 端点）；BlameView/HistoryPanel 溯源联动（§#29/#30/#31/#33）；PatchPanel Import into Shelf 与 ShelfPanel Unshelve 回边（#52/#54：行内「导入搁置」→ 同样名搁置存补丁全文，成功跳 `/shelves`；restore 后 status 键回写联动——平台 Unshelve 无自动切 tab 证据，Web 等价为 events 刷新）；StatusPage 动作入口五连（#43/#44/#45/#47/#49）；commit & push 组合执行器（#50）；PushDialog rejected→Update 联动（#91）；与分支比较（#10：core `streamLog` 增 `range`（`git log <range>` 语义）+ contracts `logQuerySchema` 增 `range` + client `useLogPage` 增 range 参数与空 repoId→null key 条件拉取；ui `BranchCompareView`（GitCompareBranchesUi 语义——分支独有/当前独有双组卡片，行点击 → ?select=）+ BranchPanel 行内「比较」（当前分支禁用）；两端容器与分支页 onCompare 接线（`?compare=<branch>` → 双 range 查询）；UpdateProjectDialog Reset to tracked（#93：左下「Reset to tracked」（本地分支 → 上游文案）→ Modal.confirm → `reset --hard <upstream>`；无上游不渲染；ui +3 单测）；TagPanel 删除远程标签/推送全部（core `deleteRemoteTag`（push 空 ref）/`pushAllTags`（push --tags）原语 + 契约 `tagActionSchema` 增 `pushAll`/`deleteRemote` 分支 + api 分派（withAuth 认证回路）+ ui 行内「删除远程」与页头「推送全部」（Popconfirm）；core +2、contracts +3、api +3、ui +2 单测）；StashPanel keep index（契约 `stashActionSchema` save 增 `keepIndex` + core `saveStash` 传 `--keep-index` + api 透传 + ui 保存表单「保持暂存区（keep-index）」勾选；api +1、contracts +2、ui +1 单测，实测 --keep-index 暂存区保持）；MergeDialog 远程分支直接合并（ui 分支 Select 两组——本地非当前 / 远程 origin/xxx（远程引用名直接作 merge 参数）；api +1 单测（裸仓库 fetch 后 merge origin/side → success）、ui +1 单测）。
 
 **LogPage（2）**：行右键余项（Push up to Commit、Show All Affected、reword/fixup/squash/drop 直通）；Show Git Log for Command；（分支折叠见 §2.9 可选任务）。
 
@@ -71,7 +71,7 @@
 
 **BranchPanel（5）**：最近检出/标签分组与过滤的剩余分组维度（文本过滤与「仅看已合并」已落地）；保护分支设置联动；force-push 后修复（`GitForcePushedBranchUpdateAction`）；checkout with rebase；检出文件（查找已合并/清理已合并已落地——「仅看已合并」开关 +「清理已合并（N）」批量删除）。
 
-**MergeDialog（1）**：远程分支直接合并（当前仅本地分支 Select）。
+**MergeDialog（0）**：远程分支直接合并已落地——分支 Select 两组（本地非当前 / 远程 origin/xxx），远程引用名作 merge 参数（服务端核心 git merge 直接解析远程跟踪引用；api +1、ui +1 单测，实测裸仓库 fetch 后 merge origin/side 成功）。
 
 **RebaseDialog（2）**：auto-squash/fixup、squash by subject（`GitAutoSquashCommitAction` 等）；skip（continue/abort 已通，skip 未做）。
 

@@ -44,7 +44,7 @@ describe('MergeDialog', () => {
     expect(screen.queryByText('合并分支')).not.toBeInTheDocument();
   });
 
-  it('分支下拉只含本地非当前分支（排除 current 与 remote）', async () => {
+  it('分支下拉分组：本地非当前 + 远程两组（排除 current；远程 origin/* 可选）', async () => {
     render(<MergeDialog open branches={BRANCHES} {...makeHandlers()} />);
     fireEvent.mouseDown(screen.getByTestId('merge-branch-select').querySelector('.ant-select-content')!);
     expect(
@@ -52,9 +52,19 @@ describe('MergeDialog', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('dev', { selector: '.ant-select-item-option-content' })).toBeInTheDocument();
     expect(screen.queryByText('main', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument();
+    // 远程分支可合并（git merge origin/xxx 直接合并远程跟踪引用）
     expect(
-      screen.queryByText('origin/main', { selector: '.ant-select-item-option-content' }),
-    ).not.toBeInTheDocument();
+      screen.getByText('origin/main', { selector: '.ant-select-item-option-content' }),
+    ).toBeInTheDocument();
+  });
+
+  it('选远程分支点确定：传出 {branch:"origin/main"}（远程直接合并）', async () => {
+    const { onOk } = makeHandlers();
+    render(<MergeDialog open branches={BRANCHES} onOk={onOk} onCancel={() => {}} />);
+    await selectBranch('origin/main');
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onOk).toHaveBeenCalledTimes(1);
+    expect(onOk).toHaveBeenCalledWith({ branch: 'origin/main' });
   });
 
   it('未选分支时确定禁用，onOk 不可触发', () => {

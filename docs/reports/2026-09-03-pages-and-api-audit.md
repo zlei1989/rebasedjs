@@ -315,7 +315,7 @@ Reset 与 Undo Commit；对应 `GitResetAction` / `GitNewResetDialog` / `GitUnco
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 合并方向选择 | 🟡 | 固定"本地分支 → 当前分支"；远程分支 v1 不支持直接合并 |
+| 合并方向选择 | ✅ | 本地分支（排除当前）+ 远程分支两组——远程引用名（origin/xxx）直接作 merge 参数（git merge 解析远程跟踪引用） |
 | merge 策略/commit 选项 | ✅ | no-ff / squash / no-commit + 合并信息 |
 | 进行中状态联动（中止入口、冲突跳转） | ✅ | `OperationState`（kind: 'merge'）+ `OPERATION_IN_PROGRESS` 互斥 |
 

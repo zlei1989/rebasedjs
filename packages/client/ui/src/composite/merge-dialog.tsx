@@ -1,7 +1,7 @@
 /**
  * 合并对话框（对照 Java GitMergeDialog + GitOptionsPanel）：
- *  分支 Select（本地分支，排除当前分支）+ 选项 Checkbox 组（no-ff「禁用快进」/squash「压缩为单提交」/
- *  no-commit「不自动提交」）+ 合并信息 Input（可选）。
+ *  分支 Select（两组：本地分支（排除当前）/ 远程分支——`origin/*` 引用名直接作 merge 参数，服务端 git 解析远程跟踪引用）
+ *  + 选项 Checkbox 组（no-ff「禁用快进」/squash「压缩为单提交」/no-commit「不自动提交」）+ 合并信息 Input（可选）。
  *  纯受控：open 由父级持有；分支/选项/信息为内部状态，关闭时复位。
  */
 import { useMemo, useState } from 'react';
@@ -24,12 +24,22 @@ export function MergeDialog({ open, branches, onOk, onCancel, confirming }: Merg
   const [noCommit, setNoCommit] = useState(false);
   const [message, setMessage] = useState('');
 
-  /** 可选分支：仅本地且排除当前分支（git merge 自身无意义）；远程分支 v1 不支持直接合并 */
+  /** 可选分支：本地（排除当前——git merge 自身无意义）与远程两组；远程引用名（origin/xxx）直接可合并 */
   const options = useMemo(
-    () =>
-      branches.branches
-        .filter((b) => !b.remote && !b.current)
-        .map((b) => ({ value: b.name, label: b.name })),
+    () => [
+      {
+        label: '本地分支',
+        options: branches.branches
+          .filter((b) => !b.remote && !b.current)
+          .map((b) => ({ value: b.name, label: b.name })),
+      },
+      {
+        label: '远程分支',
+        options: branches.branches
+          .filter((b) => b.remote)
+          .map((b) => ({ value: b.name, label: b.name })),
+      },
+    ],
     [branches],
   );
 
