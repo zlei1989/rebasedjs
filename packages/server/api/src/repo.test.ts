@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cloneRepo, getAppHomeDir, getRepoById, initRepo, listRecentRepos, openRepo, RECENT_LIMIT, removeRepo } from './repo';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 let configDir: string;
 const dirs: string[] = [];
@@ -33,14 +33,14 @@ describe('repo 功能', () => {
 
   // 本机 git 慢（杀软扫描）+ clone 的 msys2 传输 helper 并发初始化偶发挂起——90s 超时 + 失败重试
   it('initRepo 与 cloneRepo 落库注册', { timeout: 90000, retry: 2 }, async () => {
-    const t1 = join(tmpdir(), `rebased-api-init-${Date.now()}`);
+    const t1 = createTmpDir('rebased-api-init-');
     dirs.push(t1);
     const i1 = await initRepo(t1);
     expect(getRepoById(i1.id).path).toBe(t1);
 
     const src = createTmpRepo();
     dirs.push(src);
-    const t2 = join(tmpdir(), `rebased-api-clone-${Date.now()}`);
+    const t2 = createTmpDir('rebased-api-clone-');
     dirs.push(t2);
     const i2 = await cloneRepo(src, t2);
     expect(getRepoById(i2.id).path).toBe(t2);

@@ -1,7 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GitExitError } from './exec';
 import {
@@ -12,7 +11,7 @@ import {
   renameBranch,
   setBranchUpstream,
 } from './branch';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
@@ -127,7 +126,7 @@ describe('branch 原语', () => {
     const defaultBranch = makeBaseCommit(repo);
 
     // 裸仓库充当 origin；另 clone 一份制造远端新提交
-    const bare = mkdtempSync(join(tmpdir(), 'rebased-core-bare-'));
+    const bare = createTmpDir('rebased-core-bare-');
     dirs.push(bare);
     execFileSync('git', ['init', '-q', '--bare', bare]);
     git(repo, ['remote', 'add', 'origin', bare]);
@@ -135,7 +134,7 @@ describe('branch 原语', () => {
     // 显式建立 refs/remotes/origin/HEAD 符号引用，验证列表会跳过它
     git(repo, ['remote', 'set-head', 'origin', defaultBranch]);
 
-    const other = mkdtempSync(join(tmpdir(), 'rebased-core-other-'));
+    const other = createTmpDir('rebased-core-other-');
     dirs.push(other);
     execFileSync('git', ['clone', '-q', bare, other]);
     git(other, ['config', 'user.email', 'test@example.com']);
@@ -171,7 +170,7 @@ describe('branch 原语', () => {
     dirs.push(repo);
     const defaultBranch = makeBaseCommit(repo);
 
-    const bare = mkdtempSync(join(tmpdir(), 'rebased-core-bare-'));
+    const bare = createTmpDir('rebased-core-bare-');
     dirs.push(bare);
     execFileSync('git', ['init', '-q', '--bare', bare]);
     git(repo, ['remote', 'add', 'origin', bare]);

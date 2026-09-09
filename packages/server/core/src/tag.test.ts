@@ -1,12 +1,10 @@
 /** tag 原语测试：轻量/附注创建与列表解析、删除、推送三态（裸仓库对端装置）。 */
 import { writeFile } from 'node:fs/promises';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError, runGit } from './exec';
 import { createTag, deleteRemoteTag, deleteTag, listTags, pushAllTags, pushTag } from './tag';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
@@ -31,7 +29,7 @@ async function makeBaseCommit(repo: string): Promise<string> {
 async function makeRemoteRig(): Promise<{ repo: string; bare: string; branch: string }> {
   const repo = makeRepo();
   const branch = await makeBaseCommit(repo);
-  const bare = mkdtempSync(join(tmpdir(), 'rebased-core-bare-'));
+  const bare = createTmpDir('rebased-core-bare-');
   dirs.push(bare);
   await runGit(['init', '--bare', bare], { cwd: repo });
   await runGit(['remote', 'add', 'origin', bare], { cwd: repo });

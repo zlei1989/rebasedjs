@@ -1,11 +1,10 @@
 /** tag 功能测试：列表映射、create/delete/push 分派与预检（重名/不存在）、推送后返回刷新列表。 */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { applyTagAction, getTags } from './tag';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
@@ -37,7 +36,7 @@ function makeBaseCommit(repo: string): string {
 function makeRemoteRig(): { repo: string; bare: string; branch: string } {
   const repo = makeRepo();
   const branch = makeBaseCommit(repo);
-  const bare = mkdtempSync(join(tmpdir(), 'rebased-api-bare-'));
+  const bare = createTmpDir('rebased-api-bare-');
   dirs.push(bare);
   execFileSync('git', ['init', '-q', '--bare', bare]);
   git(repo, ['remote', 'add', 'origin', bare]);

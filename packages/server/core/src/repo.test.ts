@@ -1,9 +1,8 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cloneGitRepo, findRepoRoot, initGitRepo } from './repo';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
@@ -19,14 +18,13 @@ describe('repo 原语', () => {
   });
 
   it('findRepoRoot 对非仓库目录返回 null', async () => {
-    const plain = join(tmpdir(), `rebased-plain-${Date.now()}`);
-    mkdirSync(plain, { recursive: true });
+    const plain = createTmpDir('rebased-plain-');
     dirs.push(plain);
     expect(await findRepoRoot(plain)).toBeNull();
   });
 
   it('initGitRepo 初始化新仓库', async () => {
-    const target = join(tmpdir(), `rebased-init-${Date.now()}`);
+    const target = createTmpDir('rebased-init-');
     dirs.push(target);
     await initGitRepo(target);
     expect(existsSync(join(target, '.git'))).toBe(true);
@@ -37,7 +35,7 @@ describe('repo 原语', () => {
   it('cloneGitRepo 克隆仓库', { timeout: 90000, retry: 2 }, async () => {
     const src = createTmpRepo();
     dirs.push(src);
-    const target = join(tmpdir(), `rebased-clone-${Date.now()}`);
+    const target = createTmpDir('rebased-clone-');
     dirs.push(target);
     await cloneGitRepo(src, target);
     expect(await findRepoRoot(target)).toBe(target);

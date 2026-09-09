@@ -5,7 +5,7 @@
  * 末尾附 LogPage 容器流式合并语义（Ruling 6）的纯函数用例。
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -21,10 +21,27 @@ function ctx(repoId: string): { params: Promise<{ repoId: string }> } {
 
 let dirs: string[] = [];
 
+/** 建临时目录并归一长路径：Windows %TEMP% 可能为 8.3 短形式（C:\Users\ZHANGL~1\...），msys2 git 并发 chdir 竞态——入口归一，短路径不再流向 git */
 function tmpDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
+  const dir = realpathSync.native(mkdtempSync(join(tmpdir(), prefix)));
   dirs.push(dir);
   return dir;
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Windows 上句柄未释放时 rmSync 抛 EPERM/EBUSY（force:true 只忽略 ENOENT）：指数退避重试，耗尽后才抛出（配方同 web-koa app.test.ts） */
+async function rmRetry(dir: string, attempts = 6): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if ((code !== 'EPERM' && code !== 'EBUSY' && code !== 'ENOTEMPTY') || i === attempts - 1) throw err;
+      await sleep(100 * (i + 1));
+    }
+  }
 }
 
 /** 建临时 git 仓库（一次提交）并写入配置注册表，返回 { repoId, repoPath }；modify 时追加工作区改动（供 diff 流产帧） */
@@ -51,10 +68,11 @@ beforeEach(() => {
   process.env.REBASED_CONFIG_DIR = tmpDir('rebased-web-next-config-');
 });
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.REBASED_CONFIG_DIR;
-  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+  const current = dirs;
   dirs = [];
+  for (const dir of current) await rmRetry(dir);
 });
 
 describe('web-next SSE 路由', () => {

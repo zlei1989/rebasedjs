@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 import { forcePushedUpdate, updateProject } from './update';
 
 const dirs: string[] = [];
@@ -33,7 +33,7 @@ function makeBaseCommit(repo: string): string {
 function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
   const repo = track(createTmpRepo());
   const defaultBranch = makeBaseCommit(repo);
-  const bare = track(mkdtempSync(join(tmpdir(), 'rebased-api-bare-')));
+  const bare = track(createTmpDir('rebased-api-bare-'));
   execFileSync('git', ['init', '-q', '--bare', bare]);
   git(repo, ['remote', 'add', 'origin', bare]);
   git(repo, ['push', '-q', '-u', 'origin', defaultBranch]);
@@ -43,7 +43,7 @@ function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } 
 
 /** 第二 clone 对端：改动指定文件并推到裸仓库默认分支（制造远端新提交） */
 function pushRemoteCommit(bare: string, defaultBranch: string, filename: string, content: string): void {
-  const other = track(mkdtempSync(join(tmpdir(), 'rebased-api-other-')));
+  const other = track(createTmpDir('rebased-api-other-'));
   execFileSync('git', ['clone', '-q', bare, other]);
   git(other, ['config', 'user.email', 'test@example.com']);
   git(other, ['config', 'user.name', 'Test User']);
@@ -111,7 +111,7 @@ describe('forcePushedUpdate（GitForcePushedBranchUpdateAction 语义）', () =>
     git(repo, ['commit', '-q', '-m', 'local2']);
     const localOnly = [git(repo, ['rev-parse', 'HEAD~1']), git(repo, ['rev-parse', 'HEAD'])];
     // 对端强推：另一 clone 从 base 起新增提交
-    const other = track(mkdtempSync(join(tmpdir(), 'rebased-api-other-')));
+    const other = track(createTmpDir('rebased-api-other-'));
     execFileSync('git', ['clone', '-q', bare, other]);
     git(other, ['config', 'user.email', 'test@example.com']);
     git(other, ['config', 'user.name', 'Test User']);

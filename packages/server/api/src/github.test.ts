@@ -19,7 +19,7 @@ import {
 } from './github';
 import { upsertAccount } from './auth';
 import { loadConfig, saveConfig } from './lib/config-store';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 /** 测试令牌：用于断言请求头注入与「错误消息/响应绝不含 token」 */
@@ -145,7 +145,7 @@ describe('getGithubStatus（不抛错）', () => {
   });
 
   it('非 git 目录 → detected false（不抛错）', async () => {
-    const status = await getGithubStatus(mkdtempSync(join(tmpdir(), 'rebased-github-plain-')));
+    const status = await getGithubStatus(createTmpDir('rebased-github-plain-'));
     expect(status).toEqual({ detected: false });
   });
 
@@ -548,12 +548,12 @@ describe('checkoutGithubPr（真实临时仓库 + 裸仓库装置）', () => {
     writeFileSync(join(repo, 'a.txt'), 'base');
     git(repo, ['add', 'a.txt']);
     git(repo, ['commit', '-q', '-m', 'init']);
-    const bare = mkdtempSync(join(tmpdir(), 'rebased-github-bare-'));
+    const bare = createTmpDir('rebased-github-bare-');
     dirs.push(bare);
     execFileSync('git', ['init', '-q', '--bare', bare]);
     git(repo, ['remote', 'add', remoteName, bare]);
     git(repo, ['push', '-q', '-u', remoteName, defaultBranch]);
-    const other = mkdtempSync(join(tmpdir(), 'rebased-github-other-'));
+    const other = createTmpDir('rebased-github-other-');
     dirs.push(other);
     execFileSync('git', ['clone', '-q', bare, other]);
     git(other, ['config', 'user.email', 'test@example.com']);

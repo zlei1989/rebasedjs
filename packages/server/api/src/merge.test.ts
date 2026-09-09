@@ -1,13 +1,12 @@
 /** merge 功能测试：三态合并结果、冲突列表附带、进行中操作预检、继续合并。 */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError } from '@rebased/core';
 import { resolveConflict } from './conflict';
 import { continueMergeOperation, mergeBranchIntoCurrent } from './merge';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
@@ -81,7 +80,7 @@ describe('merge 功能', () => {
     const repo = makeRepo();
     const main = makeBaseCommit(repo);
     // 裸仓库装置：side 提交推成远程分支，本地 fetch 更新 origin/side 跟踪引用
-    const bare = mkdtempSync(join(tmpdir(), 'rebased-api-bare-'));
+    const bare = createTmpDir('rebased-api-bare-');
     dirs.push(bare);
     execFileSync('git', ['init', '-q', '--bare', bare]);
     git(repo, ['remote', 'add', 'origin', bare]);

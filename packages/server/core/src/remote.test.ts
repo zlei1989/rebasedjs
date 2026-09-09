@@ -1,15 +1,14 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { abortGitOperation, getOperationState } from './operation';
 import { addRemote, fetchRemote, isShallowRepo, listLocalOnlyCommits, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
 import { getStatus } from './status';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
@@ -42,7 +41,7 @@ function makeBaseCommit(repo: string): string {
 function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
   const repo = track(createTmpRepo());
   const defaultBranch = makeBaseCommit(repo);
-  const bare = track(mkdtempSync(join(tmpdir(), 'rebased-core-bare-')));
+  const bare = track(createTmpDir('rebased-core-bare-'));
   execFileSync('git', ['init', '-q', '--bare', bare]);
   git(repo, ['remote', 'add', 'origin', bare]);
   git(repo, ['push', '-q', '-u', 'origin', defaultBranch]);
@@ -52,7 +51,7 @@ function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } 
 
 /** 第二 clone 对端：改动指定文件并推到裸仓库的默认分支（制造远端新提交） */
 function pushRemoteCommit(bare: string, defaultBranch: string, filename: string, content: string): void {
-  const other = track(mkdtempSync(join(tmpdir(), 'rebased-core-other-')));
+  const other = track(createTmpDir('rebased-core-other-'));
   execFileSync('git', ['clone', '-q', bare, other]);
   git(other, ['config', 'user.email', 'test@example.com']);
   git(other, ['config', 'user.name', 'Test User']);
@@ -118,7 +117,7 @@ describe('fetchRemote', () => {
     async () => {
       const { repo, bare, defaultBranch } = makeRemoteRig();
       // refs/pull/7/head 指向与默认分支尖不同的提交（同头则缺省 fetch 也会把 FETCH_HEAD 指过去，无法区分）
-      const other = track(mkdtempSync(join(tmpdir(), 'rebased-core-other-')));
+      const other = track(createTmpDir('rebased-core-other-'));
       execFileSync('git', ['clone', '-q', bare, other]);
       git(other, ['config', 'user.email', 'test@example.com']);
       git(other, ['config', 'user.name', 'Test User']);
@@ -361,7 +360,7 @@ describe('isShallowRepo', () => {
       expect(await isShallowRepo(repo)).toBe(false);
 
       // --depth 仅对非本地传输生效，故用 file:// URL 克隆
-      const shallow = track(mkdtempSync(join(tmpdir(), 'rebased-core-shallow-')));
+      const shallow = track(createTmpDir('rebased-core-shallow-'));
       execFileSync('git', ['clone', '-q', '--depth', '1', pathToFileURL(bare).href, shallow]);
       expect(await isShallowRepo(shallow)).toBe(true);
     },

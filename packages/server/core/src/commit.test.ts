@@ -1,12 +1,11 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { amendSpecificCommit, commitStaged, listAmendTargets } from './commit';
 import { runGit } from './exec';
 import { stagePaths } from './staging';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
@@ -87,7 +86,7 @@ describe('listAmendTargets（amend 目标候选）', () => {
     commitFile(repo, 'c.txt', 'c1', 'c3');
     commitFile(repo, 'd.txt', 'd1', 'c4');
     // 发布 c1..c2：push 到裸仓库 → 远程跟踪引用 origin/main
-    const bare = mkdtempSync(join(tmpdir(), 'rebased-remote-'));
+    const bare = createTmpDir('rebased-remote-');
     dirs.push(bare);
     execFileSync('git', ['init', '-q', '--bare', bare]);
     git(repo, 'remote', 'add', 'origin', bare);
