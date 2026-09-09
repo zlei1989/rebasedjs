@@ -16,10 +16,10 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **97 / 111**（web-next 97 个 route.ts ↔ web-koa repos.ts 111 注册，14 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **98 / 112**（web-next 98 个 route.ts ↔ web-koa repos.ts 112 注册，14 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 116 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 66、领域类型/别名 92、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| `@rebased/api` 公共出口 | 117 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 66、领域类型/别名 93、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
 | 导航边（104 条） | 78 ✅（含等价边）+ 8 🟡 + 7 ➖ + 11 ❌ |
 
 ### 1.2 口径与图例
@@ -102,7 +102,7 @@
 
 ## 三、接口盘点
 
-### 3.1 端点总表（97 路径 / 111 方法，两端完全对称）
+### 3.1 端点总表（98 路径 / 112 方法，两端完全对称）
 
 > 路径前缀 `/api`；`id` 即 `repoId`。SSE 3 个：`log/stream`、`diff/stream`、`events`。每个路由只做三件事：zod 校验 → 调 `@rebased/api` → 错误映射。
 
@@ -119,7 +119,7 @@
 | diff | `repos/:id/diff/stream` | GET | 大 diff SSE 分块流 | DiffStreamView 渐进渲染（全文未就绪期间呈现当前进度） | ✅ |
 | diff | `repos/:id/diff/patch` | GET | unified patch 全文 | StatusPage 补丁预览、PatchPanel | ✅ |
 | events | `repos/:id/events` | GET | SSE 仓库状态/操作推送（首帧双事件） | LogPage、StatusPage 等自订阅 | ✅ |
-| settings | `settings` | GET/PUT | 应用设置读写 | SettingsPage | ✅ |
+| settings | `settings`、`settings/git-executable` | GET/PUT + GET | 应用设置读写 / git 可执行文件检测（PATH + 版本，GitExecutableSelectorPanel 语义） | SettingsPage | ✅ |
 | auth | `auth/accounts`、`auth/accounts/delete` | GET/POST/POST | 账户/令牌存储（应用级） | SettingsPage 账户卡片、远程认证 | ✅ |
 | config | `repos/:id/config` | GET/PUT | git 配置白名单 8 键读写 | SettingsPage | ✅ |
 | operation | `repos/:id/operation`、`operation/abort`、`operation/continue`、`operation/skip` | GET + 3×POST | 进行中操作查询/中止/继续（continue 泛化四操作共用）/跳过（rebase/cherry-pick/revert） | LogPage 操作条、ConflictsPanel「完成合并/跳过」 | ✅ |
@@ -153,7 +153,7 @@
 | worktree | `repos/:id/worktrees`、`worktrees/remove`、`worktrees/prune` | GET/POST + 2×POST | 工作树列表 / 创建 / 移除 / 清理 | WorktreePanel | ✅ |
 | submodule | `repos/:id/submodules`、`submodules/update` | GET/POST | 子模块列表（四态）/ 更新（init/recursive） | SubmodulePanel | ✅ |
 
-**小结**：97 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
+**小结**：98 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
 
 ### 3.2 契约层（`@rebased/contracts`）
 
@@ -164,7 +164,7 @@
 
 ### 3.3 服务层与使用状态
 
-- `@rebased/api` 公共出口 116 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
+- `@rebased/api` 公共出口 117 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
 - **未挂端点 0**：`initRepo`/`cloneRepo` 已随 repo 域收尾挂 `/repos/init`、`/repos/clone`（见任务清单 §2.2 完成记录）。
 - **半使用接口 2 个**：`streamDiffEvents`（diff/stream 已订阅未渲染）、`applyHunkStaging`（无 UI 入口）。
 
@@ -597,7 +597,7 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 | git 配置白名单 8 键读写 | ✅ | ConfigRow 逐行（生效值展示 + local 覆盖输入 + 保存） |
 | 账户/令牌管理 | ✅ | host/account/token 添加覆盖、Popconfirm 删除；token 不下行仅掩码；配置文件 0600 |
 | 集中存储（Rebased 独家"禁用 .idea"的 TS 映射） | ✅ | 应用配置集中于 `api/lib/config-store` |
-| git 可执行文件检测/引导 | ❌ | 未做 |
+| git 可执行文件检测/引导 | ✅ | 设置页「Git 可执行文件」卡片（`GET /settings/git-executable`：PATH 查找 `git` + `git --version` 输出 + 已检测徽标；未检出 → 引导文案（安装 Git / 确保服务进程 PATH 可执行）——对照 `GitExecutableSelectorPanel`） |
 | GPG/SSH 专属配置对话框 | 🟡 | 白名单键 `commit.gpgsign`/`user.signingkey` 可读写；专属对话框未做 |
 | 保护分支设置 / 自动 fetch 设置 | ❌ | 未做（Web 以事件推送替代定时 fetch） |
 
@@ -821,8 +821,8 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
 | 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 110 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（97 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（111 注册）+ `src/middleware/error.ts` |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（98 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（112 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |

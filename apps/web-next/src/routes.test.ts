@@ -19,6 +19,7 @@ import { POST as postAbort } from '../app/api/repos/[repoId]/operation/abort/rou
 import { POST as postStaging } from '../app/api/repos/[repoId]/staging/route';
 import { POST as postHunkStaging } from '../app/api/repos/[repoId]/staging/hunks/route';
 import { POST as postCommit } from '../app/api/repos/[repoId]/commit/route';
+import { GET as getCrlfWarningRoute } from '../app/api/repos/[repoId]/commit/crlf-warning/route';
 import { GET as getAmendTargetsRoute } from '../app/api/repos/[repoId]/commit/amend-targets/route';
 import { POST as postAmendSpecific } from '../app/api/repos/[repoId]/commit/amend-specific/route';
 import { GET as getBranches, POST as postBranches } from '../app/api/repos/[repoId]/branches/route';
@@ -40,6 +41,7 @@ import { GET as getConflicts } from '../app/api/repos/[repoId]/conflicts/route';
 import { GET as getConflictContentsRoute } from '../app/api/repos/[repoId]/conflicts/contents/route';
 import { POST as postResolveConflict } from '../app/api/repos/[repoId]/conflicts/resolve/route';
 import { GET as getSettings, PUT as putSettings } from '../app/api/settings/route';
+import { GET as getGitExecutableInfo } from '../app/api/settings/git-executable/route';
 import { GET as getAccounts, POST as postAccounts } from '../app/api/auth/accounts/route';
 import { POST as postAccountDelete } from '../app/api/auth/accounts/delete/route';
 import { POST as postRebase } from '../app/api/repos/[repoId]/rebase/route';
@@ -314,6 +316,15 @@ describe('web-next REST 路由', () => {
     expect(await afterRes.json()).toMatchObject({ logInEditor: false });
   });
 
+  it('settings/git-executable 端点：200 GitExecutableInfo（本机 PATH git 可执行 → ok 且版本可解析）', async () => {
+    const res = await getGitExecutableInfo(new Request('http://localhost/api/settings/git-executable'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { exec: string; version: string | null; ok: boolean };
+    expect(body.exec).toBe('git');
+    expect(body.ok).toBe(true);
+    expect(body.version).toMatch(/^git version \S+/);
+  });
+
   it('settings 端点：PUT 非法字段类型返回 400 INVALID_QUERY', async () => {
     const res = await putSettings(
       new Request('http://localhost/api/settings', {
@@ -557,6 +568,32 @@ describe('web-next REST 路由', () => {
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('commit/crlf-warning 端点：暂存 CRLF 文件（无属性覆盖）→ 200 {warning:true,files}；暂存区空 → 200 {warning:false}', async () => {
+    const repoId = registerRepo();
+    const url = (id: string) => new Request(`http://localhost/api/repos/${id}/commit/crlf-warning`);
+
+    // 空暂存 → false
+    const cleanRes = await getCrlfWarningRoute(url(repoId), ctx(repoId));
+    expect(cleanRes.status).toBe(200);
+    const clean = (await cleanRes.json()) as { warning: boolean; files: string[] };
+    expect(clean.warning).toBe(false);
+
+    // 暂存 CRLF 内容文件 → Windows 平台 true 且列涉事文件（GitCrlfProblemsDetector 语义）
+    // 本机系统 gitconfig 可能默认 core.autocrlf=true（Git for Windows），本地覆盖为 false 以走检测主路径
+    execFileSync('git', ['-C', lastRepoPath, 'config', 'core.autocrlf', 'false']);
+    writeFileSync(join(lastRepoPath, 'crlf.txt'), 'line1\r\n');
+    execFileSync('git', ['-C', lastRepoPath, 'add', 'crlf.txt']);
+    const warnRes = await getCrlfWarningRoute(url(repoId), ctx(repoId));
+    expect(warnRes.status).toBe(200);
+    const warn = (await warnRes.json()) as { warning: boolean; files: string[] };
+    if (process.platform === 'win32') {
+      expect(warn.warning).toBe(true);
+      expect(warn.files).toContain('crlf.txt');
+    } else {
+      expect(warn.warning).toBe(false);
+    }
   });
 
   it('branches 端点：GET 返回 200 且列表含当前分支（current=true）', async () => {

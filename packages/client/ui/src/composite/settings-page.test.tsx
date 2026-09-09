@@ -239,4 +239,35 @@ describe('SettingsPage 账户卡片', () => {
     expect(onDeleteAccount).toHaveBeenCalledTimes(1);
     expect(onDeleteAccount).toHaveBeenCalledWith({ host: 'github.com', account: 'alice' });
   });
+
+  it('git 可执行文件：ok 渲染检测徽标与版本；未检出渲染引导；缺省不渲染卡片', () => {
+    const { rerender } = render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+        gitExecutable={{ exec: 'git', version: 'git version 2.47.0', ok: true }}
+      />,
+    );
+    expect(screen.getByText('Git 可执行文件')).toBeInTheDocument();
+    expect(screen.getByTestId('git-executable-ok')).toBeInTheDocument();
+    expect(screen.getByTestId('git-executable-version')).toHaveTextContent('git version 2.47.0');
+
+    rerender(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+        gitExecutable={{ exec: 'git', version: null, ok: false }}
+      />,
+    );
+    expect(screen.getByTestId('git-executable-error')).toHaveTextContent('未检测到可用的 git 可执行文件');
+
+    rerender(
+      <SettingsPage settings={makeSettings()} onPatchSettings={vi.fn()} config={makeConfig()} onSetConfig={vi.fn()} />,
+    );
+    expect(screen.queryByText('Git 可执行文件')).not.toBeInTheDocument();
+  });
 });

@@ -244,6 +244,9 @@ export interface CommitAndPushOutcome { commit: { hash: string }; push: PushOutc
 /** CRLF 提示（GitCrlfDialog 语义）：warning=true 时即将提交的暂存文件含 CRLF 且 core.autocrlf 未建议配置、相关文件无 text/crlf gitattribute 覆盖；
  *  files 为涉事文件相对路径列表（提示语展示用） */
 export interface CrlfWarning { warning: boolean; files: string[]; }
+/** git 可执行文件信息（GitExecutableSelectorPanel 语义）：exec=查找途径（Web 服务进程统一 'git'——PATH 查找）；
+ *  version=git --version 输出（失败 null）；ok 标识可执行（检测到且版本可解析） */
+export interface GitExecutableInfo { exec: string; version: string | null; ok: boolean; }
 
 /** 溯源行（line-porcelain 逐字段）：lineno 为最终文件行号（1-based） */
 export interface BlameLine {

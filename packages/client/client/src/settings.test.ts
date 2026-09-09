@@ -1,9 +1,9 @@
-/** settings.ts 测试：useSettings 拉取 + update 突变（PUT 并回写缓存） */
+/** settings.ts 测试：useSettings 拉取 + update 突变（PUT 并回写缓存）+ useGitExecutableInfo 检测 */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SettingsState } from '@rebased/contracts';
-import { useSettings } from './settings';
+import type { GitExecutableInfo, SettingsState } from '@rebased/contracts';
+import { useGitExecutableInfo, useSettings } from './settings';
 import { freshCache } from './testing/fresh-cache';
 
 const INITIAL: SettingsState = { logInEditor: false, recentRepoIds: [] };
@@ -49,6 +49,33 @@ describe('useSettings', () => {
     await act(async () => {
       await vi.waitFor(() => expect(result.settings).toEqual(UPDATED));
     });
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useGitExecutableInfo', () => {
+  it('GET /api/settings/git-executable 返回 GitExecutableInfo', async () => {
+    const INFO: GitExecutableInfo = { exec: 'git', version: 'git version 2.47.0', ok: true };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(INFO), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: GitExecutableInfo; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useGitExecutableInfo();
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result?.data).toEqual(INFO));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/settings/git-executable');
     await act(async () => {
       renderer.unmount();
     });

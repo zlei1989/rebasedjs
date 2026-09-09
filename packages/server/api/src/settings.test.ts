@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getSettings, updateSettings } from './settings';
+import { getGitExecutableInfo, getSettings, updateSettings } from './settings';
 
 let configDir: string;
 
@@ -21,5 +21,13 @@ describe('settings', () => {
     expect(getSettings().logInEditor).toBe(false);
     updateSettings({ recentRepoIds: ['r1'] });
     expect(getSettings()).toEqual({ logInEditor: false, recentRepoIds: ['r1'] });
+  });
+
+  it('getGitExecutableInfo：本机 PATH git 可执行 → ok 且版本可解析', async () => {
+    const info = await getGitExecutableInfo();
+
+    expect(info.exec).toBe('git');
+    expect(info.ok).toBe(true);
+    expect(info.version).toMatch(/^git version \S+/);
   });
 });

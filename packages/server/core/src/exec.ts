@@ -28,6 +28,18 @@ export interface ExecLogEntry {
   atIso: string;
 }
 
+/** git 可执行文件检测（GitExecutableSelectorPanel 语义）：Web 服务进程统一经 PATH 查找 'git'——
+ *  version 为 git --version 输出；不可执行 → { exec:'git', version:null, ok:false }（引导到 PATH 配置） */
+export async function resolveGitExecutableInfo(): Promise<{ exec: string; version: string | null; ok: boolean }> {
+  try {
+    const { stdout } = await runGit(['--version'], { cwd: process.cwd() });
+    const version = stdout.trim();
+    return { exec: 'git', version, ok: version.startsWith('git version') };
+  } catch {
+    return { exec: 'git', version: null, ok: false };
+  }
+}
+
 /** 环形缓冲容量：每个仓库（按 cwd 键控）最多保留最近 200 条 */
 const EXEC_LOG_CAP = 200;
 const execLogByCwd = new Map<string, ExecLogEntry[]>();

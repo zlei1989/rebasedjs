@@ -1,5 +1,5 @@
 /** core 公共出口：git CLI 引擎原语。testing 夹具与内部实现不进本出口。 */
-export { GitExitError, getExecLog, runGit, streamGit } from './exec';
+export { GitExitError, getExecLog, resolveGitExecutableInfo, runGit, streamGit } from './exec';
 export type { ExecLogEntry } from './exec';
 export { cloneGitRepo, findRepoRoot, initGitRepo } from './repo';
 export { getStatus, parsePorcelainV2 } from './status';

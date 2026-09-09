@@ -1,9 +1,9 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { amendSpecificCommit, assertCommitIdentity, commitAndPush, createCommit, getAmendTargets } from './commit';
+import { amendSpecificCommit, assertCommitIdentity, commitAndPush, createCommit, getAmendTargets, getCrlfWarning } from './commit';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -73,6 +73,48 @@ describe('commit 功能', () => {
       { key: 'user.email', value: 'a@b.c', localValue: null },
     ];
     expect(() => assertCommitIdentity(ok)).not.toThrow();
+  });
+});
+
+describe('CRLF 提示（GitCrlfDialog 语义）', () => {
+  const crlfDirs: string[] = [];
+
+  beforeAll(() => {
+    // 隔离：crlfFix 写 core.autocrlf --global → GIT_CONFIG_GLOBAL 指向临时文件（绝不触碰真实全局配置）；
+    // 本组自管清理数组（顶部 dirs 会被文件内其它 describe 的作用域 afterAll 提前清空——模块内数组被共享）
+    const globalConfig = mkdtempSync(join(tmpdir(), 'rebased-api-crlf-'));
+    process.env.GIT_CONFIG_GLOBAL = join(globalConfig, '.gitconfig');
+    crlfDirs.push(globalConfig);
+  });
+
+  afterAll(() => crlfDirs.forEach(cleanupTmpRepo));
+
+  it('getCrlfWarning：暂存 CRLF 文件无属性覆盖 → warning true + 文件列表（Windows 平台；autocrlf 本地置 false 绕过系统默认 true）', async () => {
+    const repo = createTmpRepo();
+    crlfDirs.push(repo);
+    makeBaseCommit(repo); // a.txt 入库（LF）
+    execFileSync('git', ['-C', repo, 'config', 'core.autocrlf', 'false']);
+    writeFileSync(join(repo, 'crlf.txt'), 'line1\r\n');
+    execFileSync('git', ['-C', repo, 'add', 'crlf.txt']);
+
+    const w = await getCrlfWarning(repo);
+
+    expect(w.warning).toBe(true);
+    expect(w.files).toEqual(['crlf.txt']);
+  });
+
+  it('createCommit crlfFix：先写 global core.autocrlf 建议值再提交（GIT_CONFIG_GLOBAL 隔离）', async () => {
+    const repo = createTmpRepo();
+    crlfDirs.push(repo);
+    makeBaseCommit(repo);
+    writeFileSync(join(repo, 'b.txt'), 'v2\n');
+    execFileSync('git', ['-C', repo, 'add', 'b.txt']);
+
+    const { hash } = await createCommit(repo, { message: '带 crlf 修复提交', crlfFix: true });
+
+    expect(hash).toMatch(/^[0-9a-f]{40}$/);
+    const global = execFileSync('git', ['config', '--global', '--get', 'core.autocrlf'], { encoding: 'utf8' }).trim();
+    expect(global).toBe(process.platform === 'win32' ? 'true' : 'input');
   });
 });
 

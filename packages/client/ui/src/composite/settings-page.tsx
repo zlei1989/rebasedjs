@@ -4,7 +4,7 @@
  * 纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Skeleton, Switch, Typography } from 'antd';
+import { Alert, Button, Card, Flex, Input, Modal, Popconfirm, Skeleton, Switch, Tag, Typography } from 'antd';
 import type {
   AccountBody,
   AccountDeleteBody,
@@ -13,6 +13,7 @@ import type {
   ConfigKey,
   GitConfigEntry,
   GitConfigView,
+  GitExecutableInfo,
   SettingsPatch,
   SettingsState,
 } from '@rebased/contracts';
@@ -32,6 +33,8 @@ export interface SettingsPageProps {
   onAddAccount?: (body: AccountBody) => void;
   /** 删除账户回调 */
   onDeleteAccount?: (body: AccountDeleteBody) => void;
+  /** git 可执行文件信息（GitExecutableSelectorPanel 语义）：提供时渲染「Git 可执行文件」卡片（检测 + 版本 + 失败引导） */
+  gitExecutable?: GitExecutableInfo;
 }
 
 /** 单个配置键行：生效值副文本 + local 覆盖输入 + 保存（值非空且与 localValue 不同才可点） */
@@ -166,7 +169,7 @@ function AddAccountModal({
   );
 }
 
-export function SettingsPage({ settings, onPatchSettings, config, onSetConfig, accounts, onAddAccount, onDeleteAccount }: SettingsPageProps): React.ReactNode {
+export function SettingsPage({ settings, onPatchSettings, config, onSetConfig, accounts, onAddAccount, onDeleteAccount, gitExecutable }: SettingsPageProps): React.ReactNode {
   const [addOpen, setAddOpen] = useState(false);
   return (
     <Flex vertical gap={16} style={{ padding: 16, maxWidth: 720 }}>
@@ -194,6 +197,28 @@ export function SettingsPage({ settings, onPatchSettings, config, onSetConfig, a
           <Skeleton active />
         )}
       </Card>
+      {/* git 可执行文件检测（GitExecutableSelectorPanel 语义）：检测 + 版本徽标；未检出 → 引导到 PATH 修复 */}
+      {gitExecutable !== undefined ? (
+        <Card title="Git 可执行文件" data-testid="git-executable-card">
+          {gitExecutable.ok ? (
+            <Flex align="center" gap={8}>
+              <Tag color="green" data-testid="git-executable-ok">已检测</Tag>
+              <Typography.Text type="secondary">{gitExecutable.exec}（PATH 查找）</Typography.Text>
+              <Typography.Text code data-testid="git-executable-version">
+                {gitExecutable.version ?? ''}
+              </Typography.Text>
+            </Flex>
+          ) : (
+            <Alert
+              type="warning"
+              showIcon
+              data-testid="git-executable-error"
+              message="未检测到可用的 git 可执行文件"
+              description="请安装 Git 并确保 git 命令在服务进程的 PATH 环境中可执行（git --version 可正常运行）"
+            />
+          )}
+        </Card>
+      ) : null}
       {/* 账户卡片：仅在 accounts 与两个回调齐备时渲染（旧容器缺省即不出现，向后兼容） */}
       {accounts && onAddAccount && onDeleteAccount && (
         <Card
