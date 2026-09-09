@@ -39,6 +39,9 @@ export interface BranchPanelProps {
   /** force-push 后修复（GitForcePushedBranchUpdateAction 语义）：当前分支与上游分叉（ahead>0 且 behind>0）
    *  时当前行渲染「force-push 修复」按钮；缺省不渲染 */
   onForcePushedUpdate?: () => void;
+  /** 检出并变基到当前（GitCheckoutWithRebaseAction 语义）：目标分支检出后 rebase onto 变基前所在分支；
+   *  本地行菜单项直发 {branch}，远程行经本地名 Modal（prefill 剥 origin/ 前缀）后回传 {branch, localName}；缺省不渲染 */
+  onCheckoutRebase?: (request: { branch: string; localName?: string }) => void;
   acting?: boolean;
 }
 
@@ -135,13 +138,15 @@ function CreateBranchModal({
   );
 }
 
-/** 单输入 Modal 通用件：重命名/设上游复用（标题与占位文案不同，提交回调由调用方组装 action） */
+/** 单输入 Modal 通用件：重命名/设上游/远程分支本地名复用（标题与占位文案不同，提交回调由调用方组装 action）；
+ *  initialValue 仅初始化（需要重开时由调用方以 key 重挂载重置） */
 function SingleInputModal({
   title,
   open,
   acting,
   placeholder,
   inputTestId,
+  initialValue = '',
   onSubmit,
   onClose,
 }: {
@@ -150,10 +155,11 @@ function SingleInputModal({
   acting?: boolean;
   placeholder: string;
   inputTestId: string;
+  initialValue?: string;
   onSubmit: (value: string) => void;
   onClose: () => void;
 }): React.ReactNode {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(initialValue);
 
   /** 关闭时清空输入：Modal 默认不卸载子树，取消后重开不能残留上次输入 */
   const close = (): void => {
@@ -187,7 +193,7 @@ function SingleInputModal({
   );
 }
 
-/** 本地分支行：名称 + current Tag + 上游徽标 + 合并图标 + 行尾 Dropdown（检出/重命名/设上游/删除）+ 比较按钮 + force-push 修复 */
+/** 本地分支行：名称 + current Tag + 上游徽标 + 合并图标 + 行尾 Dropdown（检出/检出并变基/重命名/设上游/删除）+ 比较按钮 + force-push 修复 */
 function LocalBranchRow({
   branch,
   pendingDelete,
@@ -196,13 +202,16 @@ function LocalBranchRow({
   onDeleteCancel,
   onCompare,
   onForcePushedUpdate,
+  hasCheckoutRebase,
 }: {
   branch: BranchRef;
   /** 当前等待删除确认的分支名（受控 Popconfirm 锚定本行菜单按钮） */
   pendingDelete: string | null;
-  onMenuAction: (key: 'checkout' | 'rename' | 'setUpstream' | 'delete', branch: BranchRef) => void;
+  onMenuAction: (key: 'checkout' | 'checkoutRebase' | 'rename' | 'setUpstream' | 'delete', branch: BranchRef) => void;
   onDelete: (branch: BranchRef) => void;
   onDeleteCancel: () => void;
+  /** 是否渲染「检出并变基到当前」菜单项（容器已接 onCheckoutRebase 时 true） */
+  hasCheckoutRebase: boolean;
   /** 与当前分支比较（GitCompareWithBranchAction 语义）；当前分支无意义（A..A 空循环），禁用 */
   onCompare?: (branch: string) => void;
   /** force-push 后修复（GitForcePushedBranchUpdateAction 语义）：当前分支与上游分叉（ahead>0 且 behind>0）时渲染 */
@@ -255,13 +264,17 @@ function LocalBranchRow({
           menu={{
             items: [
               { key: 'checkout', label: '检出' },
+              // 检出并变基到当前（GitCheckoutWithRebaseAction 语义）：检出本行分支后 rebase onto 当前分支；当前分支无意义，禁用
+              ...(hasCheckoutRebase
+                ? [{ key: 'checkoutRebase', label: '检出并变基到当前', disabled: branch.current }]
+                : []),
               { key: 'rename', label: '重命名' },
               { key: 'setUpstream', label: '设上游' },
               // 当前分支禁止删除（git branch -d 当前头分支无意义，服务端也会拒绝）
               { key: 'delete', label: '删除', danger: true, disabled: branch.current },
             ],
             onClick: ({ key }) =>
-              onMenuAction(key as 'checkout' | 'rename' | 'setUpstream' | 'delete', branch),
+              onMenuAction(key as 'checkout' | 'checkoutRebase' | 'rename' | 'setUpstream' | 'delete', branch),
           }}
         >
           <Button size="small" type="text" icon={<MoreOutlined />} data-testid={`menu-local-${branch.name}`} />
@@ -271,8 +284,17 @@ function LocalBranchRow({
   );
 }
 
-/** 远程分支行：v1 只读展示（无操作菜单；检出为本地分支等后续支持） */
-function RemoteBranchRow({ branch }: { branch: BranchRef }): React.ReactNode {
+/** 远程分支行：名称 + 上游徽标 + 合并图标 + 行尾 Dropdown（检出并变基到当前——远程分支新本地名缺省剥 origin/ 前缀，
+ *  同名本地分支冲突由容器/服务端拒绝；无该操作时 v1 只读展示） */
+function RemoteBranchRow({
+  branch,
+  hasCheckoutRebase,
+  onMenuAction,
+}: {
+  branch: BranchRef;
+  hasCheckoutRebase: boolean;
+  onMenuAction: (key: 'checkoutRebase', branch: BranchRef) => void;
+}): React.ReactNode {
   return (
     <Flex data-testid={`row-remote-${branch.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
@@ -280,6 +302,19 @@ function RemoteBranchRow({ branch }: { branch: BranchRef }): React.ReactNode {
       </Typography.Text>
       <UpstreamInfo branch={branch} />
       <MergedIcon branch={branch} />
+      {hasCheckoutRebase && (
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [{ key: 'checkoutRebase', label: '检出并变基到当前' }],
+            onClick: ({ key }) => {
+              if (key === 'checkoutRebase') onMenuAction('checkoutRebase', branch);
+            },
+          }}
+        >
+          <Button size="small" type="text" icon={<MoreOutlined />} data-testid={`menu-remote-${branch.name}`} />
+        </Dropdown>
+      )}
     </Flex>
   );
 }
@@ -308,6 +343,7 @@ export function BranchPanel({
   onFetch,
   fetching,
   onForcePushedUpdate,
+  onCheckoutRebase,
   acting,
 }: BranchPanelProps): React.ReactNode {
   // 过滤态：文本（名称大小写不敏感子串）+「仅看已合并」（本地/远程两组同筛选——Java 查找已合并语义）
@@ -329,10 +365,18 @@ export function BranchPanel({
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [upstreamTarget, setUpstreamTarget] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [remoteRebaseTarget, setRemoteRebaseTarget] = useState<string | null>(null);
 
-  /** 行菜单分派：检出直发回调；重命名/设上游开对应 Modal；删除开受控 Popconfirm */
-  const handleMenuAction = (key: 'checkout' | 'rename' | 'setUpstream' | 'delete', branch: BranchRef): void => {
+  /** 行菜单分派：检出直发回调；检出并变基本地行直发、远程行开本地名 Modal；重命名/设上游开对应 Modal；删除开受控 Popconfirm */
+  const handleMenuAction = (
+    key: 'checkout' | 'checkoutRebase' | 'rename' | 'setUpstream' | 'delete',
+    branch: BranchRef,
+  ): void => {
     if (key === 'checkout') onCheckout({ action: 'branch', name: branch.name });
+    if (key === 'checkoutRebase') {
+      if (branch.remote) setRemoteRebaseTarget(branch.name);
+      else onCheckoutRebase?.({ branch: branch.name });
+    }
     if (key === 'rename') setRenameTarget(branch.name);
     if (key === 'setUpstream') setUpstreamTarget(branch.name);
     if (key === 'delete') setPendingDelete(branch.name);
@@ -417,6 +461,7 @@ export function BranchPanel({
                 onDeleteCancel={() => setPendingDelete(null)}
                 onCompare={onCompare}
                 onForcePushedUpdate={onForcePushedUpdate}
+                hasCheckoutRebase={onCheckoutRebase !== undefined}
               />
             ))
           )
@@ -430,7 +475,14 @@ export function BranchPanel({
               {filterText.trim() !== '' || mergedOnly ? '无匹配的远程分支' : '无远程分支'}
             </Typography.Text>
           ) : (
-            visibleRemotes.map((branch) => <RemoteBranchRow key={branch.name} branch={branch} />)
+            visibleRemotes.map((branch) => (
+              <RemoteBranchRow
+                key={branch.name}
+                branch={branch}
+                hasCheckoutRebase={onCheckoutRebase !== undefined}
+                onMenuAction={handleMenuAction}
+              />
+            ))
           )
         }
       />
@@ -465,6 +517,24 @@ export function BranchPanel({
         }}
         onClose={() => setUpstreamTarget(null)}
       />
+      {/* 远程分支检出并变基：本地名 Modal（关闭即卸载复位；建议名 = 剥远程名前缀，改名预检由服务端兜底） */}
+      {remoteRebaseTarget !== null && (
+        <SingleInputModal
+          key={remoteRebaseTarget}
+          title={`检出并变基到当前：${remoteRebaseTarget}`}
+          open
+          acting={acting}
+          placeholder="本地分支名"
+          inputTestId="remote-rebase-input"
+          initialValue={
+            remoteRebaseTarget.includes('/') ? remoteRebaseTarget.replace(/^[^/]+\//, '') : remoteRebaseTarget
+          }
+          onSubmit={(localName) => {
+            onCheckoutRebase?.({ branch: remoteRebaseTarget, localName });
+          }}
+          onClose={() => setRemoteRebaseTarget(null)}
+        />
+      )}
     </Flex>
   );
 }

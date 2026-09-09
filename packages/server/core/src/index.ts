@@ -50,7 +50,7 @@ export { addRemote, fetchRemote, isShallowRepo, listLocalOnlyCommits, listRemote
 export type { CorePushOutcome, CoreRemote } from './remote';
 export { diffRefsSnapshots, takeRefsSnapshot } from './refs';
 export type { RefsSnapshot } from './refs';
-export { autosquashCommit, continueRebase, editCommitAction, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
+export { autosquashCommit, checkoutWithRebase, continueRebase, editCommitAction, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
 export type { CoreRebaseResult } from './rebase';
 export { cherryPickCommits, continuePick, isAncestor, revertCommits, skipPick } from './pick';
 export type { CorePickResult } from './pick';

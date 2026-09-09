@@ -4,7 +4,7 @@
  * （成功响应由各 hook 显式回写缓存）；本页自订阅 events：外部 CLI 检出/重命名当前分支时重验证分支列表刷新
  * current 标记（纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
-import { useBranchAction, useBranches, useCheckout, useFetch, useForcePushedUpdate, useRepoEvents } from '@rebased/client';
+import { useBranchAction, useBranches, useCheckout, useCheckoutRebase, useFetch, useForcePushedUpdate, useRepoEvents } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
 import { Button, Flex, Modal, message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -20,6 +20,20 @@ export function RepoBranchesPage(): React.ReactNode {
   // force-push 后修复（GitForcePushedBranchUpdateAction 语义）：当前分支与上游分叉时行内入口——
   // fetch → 本地重置到上游 → 本地独有提交重放（冲突 → 冲突页）
   const { trigger: forcePushedUpdate, isMutating: fixingForcePushed } = useForcePushedUpdate(repoId);
+  // 检出并变基到当前（GitCheckoutWithRebaseAction 语义）：目标分支检出后 rebase onto 当前分支；hook 成功后失效 status/branches 缓存
+  const { trigger: checkoutRebase, isMutating: rebaseCheckingOut } = useCheckoutRebase(repoId);
+  const onCheckoutRebase = (request: { branch: string; localName?: string }): void => {
+    checkoutRebase(request)
+      .then((outcome) => {
+        if (outcome.status === 'conflicts') {
+          void message.warning('检出并变基存在冲突，请在冲突页解决');
+          navigate(`/repos/${repoId}/conflicts`);
+          return;
+        }
+        void message.success(`已检出 ${request.branch} 并变基到当前分支`);
+      })
+      .catch(onError);
+  };
   const onForcePushedUpdate = (): void => {
     Modal.confirm({
       title: 'force-push 修复',
@@ -96,7 +110,8 @@ export function RepoBranchesPage(): React.ReactNode {
         }}
         fetching={fetching}
         onForcePushedUpdate={onForcePushedUpdate}
-        acting={actingBranch || checkingOut || fixingForcePushed}
+        onCheckoutRebase={onCheckoutRebase}
+        acting={actingBranch || checkingOut || fixingForcePushed || rebaseCheckingOut}
       />
     </Flex>
   );

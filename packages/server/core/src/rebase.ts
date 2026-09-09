@@ -12,6 +12,8 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { currentBranchName } from './branch';
+import { checkoutBranch, checkoutNewBranch } from './checkout';
 import { listConflictedPaths } from './conflict';
 import { GitExitError, runGit } from './exec';
 import { getOperationState } from './operation';
@@ -206,8 +208,7 @@ async function historyOldToNew(cwd: string): Promise<{ hash: string; subject: st
 }
 
 /**
- * 单提交编辑直通（GitSingleCommitEditingAction 语义：Reword/Squash/Fixup/Drop 提交）：
- * - reword：base=<hash>^，todo 首行 reword + GIT_EDITOR 消息 shim 写入新信息（message 必填）；
+ * 单提交编辑直通（GitSingleCommitEditingAction 语义：Reword/Squash/Fixup/Drop 提交）： * - reword：base=<hash>^，todo 首行 reword + GIT_EDITOR 消息 shim 写入新信息（message 必填）；
  * - drop：base=<hash>^，todo 该行 drop；
  * - squash/fixup（并入父提交）：base=<父>^（父为根提交时 --root），todo = [pick 父, squash|fixup hash, pick 其余...]；
  *   squash 的消息编辑器走 git 默认（合并信息；未注入 message 保持默认交互语义的确定性落盘）。
@@ -291,4 +292,29 @@ async function isRootTarget(cwd: string, hash: string): Promise<boolean> {
     if (e instanceof GitExitError && e.exitCode === 1) return true;
     throw e;
   }
+}
+
+/**
+ * 检出并变基（GitCheckoutWithRebaseAction 语义：branches.checkout.and.rebase.onto.current）：
+ * 记录当前分支 → 检出目标分支（本地分支直接检出；isRemote 时 [localName 缺省剥 origin/ 前缀] 新建本地分支检出）→
+ * 变基到变基前所在分支（rebase onto current）。
+ * 冲突 → rebase 冲突态（交冲突页 continue/abort/skip 流）；无进行中操作由调用方预检；
+ * 目标为当前分支由调用方拒绝（本条原语不做判定，git rebase 自查会空转）。
+ */
+export async function checkoutWithRebase(
+  cwd: string,
+  opts: { branch: string; isRemote: boolean; localName?: string },
+): Promise<{ status: 'success' | 'conflicts' }> {
+  const current = await currentBranchName(cwd);
+  if (current === null) {
+    throw new Error('分离头指针状态下不可检出并变基（请先检出分支）');
+  }
+  if (opts.isRemote) {
+    // 远程分支：新建本地分支（缺省剥远程名前缀，如 origin/main → main）并检出（起点 = 远程跟踪引用；git 同时设上游）
+    await checkoutNewBranch(cwd, opts.localName ?? opts.branch.replace(/^[^/]+\//, ''), opts.branch);
+  } else {
+    await checkoutBranch(cwd, opts.branch);
+  }
+  const result = await rebaseWithStatus(cwd, ['rebase', current], {});
+  return { status: result.status === 'conflicts' ? 'conflicts' : 'success' };
 }

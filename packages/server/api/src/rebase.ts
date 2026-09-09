@@ -5,17 +5,19 @@
  */
 import {
   autosquashCommit,
+  checkoutWithRebase,
   editCommitAction,
   GitExitError,
   headCommit,
   isAncestorCommit,
+  listBranches,
   listTodoCommits,
   rebaseOnto,
   runInteractiveRebase,
   verifyCommitish,
 } from '@rebased/core';
 import { ServiceError } from '@rebased/contracts';
-import type { AutosquashBody, CommitEditBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, TodoEntry } from '@rebased/contracts';
+import type { AutosquashBody, CheckoutRebaseBody, CommitEditBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, TodoEntry } from '@rebased/contracts';
 import { assertNoOperationInProgress } from './operation';
 
 /** rebase onto：预检无进行中操作 + onto 有效性（verifyCommitish → INVALID_REF）；core 三分支状态透传 */
@@ -103,4 +105,45 @@ export async function commitEdit(repoPath: string, body: CommitEditBody): Promis
     }
   }
   return editCommitAction(repoPath, body);
+}
+
+/**
+ * 检出并变基（GitCheckoutWithRebaseAction 语义）：预检无进行中操作 + 分支存在（本地名精确 / remotes/ 前缀远程名，INVALID_REF）
+ * + 目标 ≠ 当前分支（INVALID_QUERY，分离头同样拒绝——变基需在当前分支上执行）+ 远程分支的本地名冲突分流：
+ * 本地已有同名分支且跟踪同一远程 → 检出既有分支再变基（Java reset=false 语义，新建跳过）；跟踪不同/无跟踪 → INVALID_QUERY
+ * （对齐 Java 的 tracking conflict 重命名提示）。核心执行：检出（远程 → 新建本地分支）→ rebase onto 原当前分支。
+ */
+export async function checkoutRebase(repoPath: string, body: CheckoutRebaseBody): Promise<RebaseOutcome> {
+  await assertNoOperationInProgress(repoPath);
+  const branches = await listBranches(repoPath);
+  const target = branches.find((b) => b.name === body.branch);
+  if (target === undefined) {
+    throw new ServiceError('INVALID_REF', `分支不存在：${body.branch}`);
+  }
+  const current = branches.find((b) => b.current);
+  if (current === undefined) {
+    throw new ServiceError('INVALID_QUERY', '分离头指针状态不可检出并变基（请先检出分支）');
+  }
+  if (!target.remote) {
+    if (current.name === target.name) {
+      throw new ServiceError('INVALID_QUERY', '不能检出并变基当前分支（可先检其他分支）');
+    }
+    const result = await checkoutWithRebase(repoPath, { branch: target.name, isRemote: false });
+    return { status: result.status };
+  }
+  // 远程分支：新本地名缺省剥远程名前缀（origin/main → main）；与本地已有分支同名时按跟踪关系分流
+  const localName = body.localName ?? target.name.replace(/^[^/]+\//, '');
+  const existingLocal = branches.find((b) => !b.remote && b.name === localName);
+  if (existingLocal !== undefined) {
+    if (existingLocal.current) {
+      throw new ServiceError('INVALID_QUERY', `本地当前分支与新建名相同（${localName}），请选择其他本地分支名`);
+    }
+    if (existingLocal.upstream !== target.name) {
+      throw new ServiceError('INVALID_QUERY', `本地已存在同名分支 ${localName} 且未跟踪 ${target.name}，请选择其他本地分支名`);
+    }
+    const result = await checkoutWithRebase(repoPath, { branch: existingLocal.name, isRemote: false });
+    return { status: result.status };
+  }
+  const result = await checkoutWithRebase(repoPath, { branch: target.name, isRemote: true, localName });
+  return { status: result.status };
 }

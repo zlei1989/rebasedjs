@@ -32,6 +32,7 @@ import { POST as postUpdate } from '../app/api/repos/[repoId]/update/route';
 import { POST as postForcePushedUpdate } from '../app/api/repos/[repoId]/update/force-pushed/route';
 import { GET as getChangelists, POST as postChangelists } from '../app/api/repos/[repoId]/changelists/route';
 import { POST as postCheckout } from '../app/api/repos/[repoId]/checkout/route';
+import { POST as postCheckoutRebase } from '../app/api/repos/[repoId]/checkout-rebase/route';
 import { POST as postReset } from '../app/api/repos/[repoId]/reset/route';
 import { POST as postUndoCommit } from '../app/api/repos/[repoId]/reset/undo-commit/route';
 import { GET as getDiffPatch } from '../app/api/repos/[repoId]/diff/patch/route';
@@ -678,6 +679,43 @@ describe('web-next REST 路由', () => {
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
+  it('checkout-rebase 端点：目标分支检出并变基到当前 → 200 success 且当前分支切换；当前分支/不存在 → 400', { timeout: 120000 }, async () => {
+    const repoId = registerRepo();
+    const main = execFileSync('git', ['-C', lastRepoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    execFileSync('git', ['-C', lastRepoPath, 'checkout', '-q', '-b', 'dev']);
+    writeFileSync(join(lastRepoPath, 'dev.txt'), 'dev\n');
+    execFileSync('git', ['-C', lastRepoPath, 'add', 'dev.txt']);
+    execFileSync('git', ['-C', lastRepoPath, 'commit', '-q', '-m', 'dev']);
+    execFileSync('git', ['-C', lastRepoPath, 'checkout', '-q', main]);
+    writeFileSync(join(lastRepoPath, 'main.txt'), 'main\n');
+    execFileSync('git', ['-C', lastRepoPath, 'add', 'main.txt']);
+    execFileSync('git', ['-C', lastRepoPath, 'commit', '-q', '-m', 'main']);
+    const post = (path: string, body: unknown) =>
+      postCheckoutRebase(
+        new Request(`http://localhost${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+        ctx(repoId),
+      );
+
+    const res = await post(`/api/repos/${repoId}/checkout-rebase`, { branch: 'dev' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(execFileSync('git', ['-C', lastRepoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()).toBe('dev');
+    expect(execFileSync('git', ['-C', lastRepoPath, 'show', 'HEAD:main.txt'], { encoding: 'utf8' })).toBe('main\n');
+
+    // 目标为当前分支 → INVALID_QUERY；分支不存在 → INVALID_REF
+    const curRes = await post(`/api/repos/${repoId}/checkout-rebase`, { branch: 'dev' });
+    expect(curRes.status).toBe(400);
+    expect(await curRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+
+    const refRes = await post(`/api/repos/${repoId}/checkout-rebase`, { branch: 'ghost' });
+    expect(refRes.status).toBe(400);
+    expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });
 
   it('reset 端点：soft 重置到 HEAD~1 返回 200 且 headHash 回退', async () => {

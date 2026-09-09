@@ -3,6 +3,7 @@ import {
   blameQuerySchema,
   branchActionSchema,
   checkoutActionSchema,
+  checkoutRebaseBodySchema,
   commitBodySchema,
   amendSpecificBodySchema,
   autosquashBodySchema,
@@ -190,6 +191,19 @@ describe('commitEditBodySchema（单提交编辑直通）', () => {
     expect(() => commitEditBodySchema.parse({ hash: '', action: 'drop' })).toThrow();
     expect(() => commitEditBodySchema.parse({ action: 'drop' })).toThrow();
     expect(() => commitEditBodySchema.parse({ hash: 'aaaaaa', action: 'amend' })).toThrow();
+  });
+});
+
+describe('checkoutRebaseBodySchema（检出并变基到当前：GitCheckoutWithRebaseAction 语义）', () => {
+  it('branch 必填；localName 可选（远程分支新本地名）', () => {
+    expect(checkoutRebaseBodySchema.parse({ branch: 'origin/main' })).toEqual({ branch: 'origin/main' });
+    expect(checkoutRebaseBodySchema.parse({ branch: 'side', localName: 'side-local' }))
+      .toEqual({ branch: 'side', localName: 'side-local' });
+  });
+  it('branch 空串/缺失或 localName 空串 → 抛错', () => {
+    expect(() => checkoutRebaseBodySchema.parse({ branch: '' })).toThrow();
+    expect(() => checkoutRebaseBodySchema.parse({})).toThrow();
+    expect(() => checkoutRebaseBodySchema.parse({ branch: 'main', localName: '' })).toThrow();
   });
 });
 

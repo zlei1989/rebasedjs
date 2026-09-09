@@ -576,6 +576,32 @@ describe('web-koa REST 端点', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });
 
+  it('checkout-rebase 端点：目标分支检出并变基到当前 → 200 success 且当前分支切换；当前分支/不存在 → 400', { timeout: 120000 }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    const main = execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    execFileSync('git', ['-C', repoPath, 'checkout', '-q', '-b', 'dev']);
+    makeLocalCommit(repoPath, 'dev.txt', 'dev\n', 'dev');
+    execFileSync('git', ['-C', repoPath, 'checkout', '-q', main]);
+    makeLocalCommit(repoPath, 'main.txt', 'main\n', 'main');
+    const jsonPost = (path: string, body: unknown) =>
+      fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    const res = await jsonPost(`/api/repos/${repoId}/checkout-rebase`, { branch: 'dev' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()).toBe('dev');
+    expect(execFileSync('git', ['-C', repoPath, 'show', 'HEAD:main.txt'], { encoding: 'utf8' })).toBe('main\n');
+
+    // 目标为当前分支 → INVALID_QUERY；分支不存在 → INVALID_REF
+    const curRes = await jsonPost(`/api/repos/${repoId}/checkout-rebase`, { branch: 'dev' });
+    expect(curRes.status).toBe(400);
+    expect(await curRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+
+    const refRes = await jsonPost(`/api/repos/${repoId}/checkout-rebase`, { branch: 'ghost' });
+    expect(refRes.status).toBe(400);
+    expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
   it('reset 端点：soft 重置到 HEAD~1 返回 200 且 headHash 回退', async () => {
     const { repoId, repoPath } = registerRepo();
     const baseHash = execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();

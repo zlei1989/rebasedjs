@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError } from '@rebased/core';
-import { applyAutosquash, commitEdit, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
+import { applyAutosquash, checkoutRebase, commitEdit, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -290,5 +290,128 @@ describe('commitEdit（单提交编辑直通：reword/drop）', () => {
 
     const rootErr = await commitEdit(repo, { hash: root, action: 'squash' }).catch((e: unknown) => e);
     expect(rootErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('父提交') });
+  });
+});
+
+describe('checkoutRebase（检出并变基到当前分支，GitCheckoutWithRebaseAction 语义）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  /** 制造远程跟踪引用 + dummy remote（checkout -b 自动设上游依赖 remote.origin 已配置） */
+  function makeRemoteRef(repo: string, name: string, target: string): void {
+    git(repo, ['update-ref', `refs/remotes/origin/${name}`, target]);
+    git(repo, ['remote', 'add', 'origin', 'https://example.invalid/rebased.git']);
+  }
+
+  /** 侧分支装置：base → side 提交（侧文件）→ 回 main → main 提交（主文件），返回 {main, sideHash}；当前在 main */
+  function makeDivergentSide(repo: string): { main: string; sideHash: string } {
+    const main = makeBaseCommit(repo);
+    git(repo, ['checkout', '-q', '-b', 'side']);
+    const sideHash = makeCommit(repo, 'side.txt', 'side\n', 'side');
+    git(repo, ['checkout', '-q', main]);
+    makeCommit(repo, 'main.txt', 'main\n', 'main');
+    return { main, sideHash };
+  }
+
+  it('本地分支成功：检出 side 并变基到 main → success，当前分支切到 side', async () => {
+    const repo = makeRepo();
+    makeDivergentSide(repo);
+
+    const outcome = await checkoutRebase(repo, { branch: 'side' });
+
+    expect(outcome.status).toBe('success');
+    expect(git(repo, ['symbolic-ref', 'HEAD', '--short']).trim()).toBe('side');
+    expect(git(repo, ['show', 'HEAD:main.txt'])).toBe('main\n');
+    expect(git(repo, ['show', 'HEAD:side.txt'])).toBe('side\n');
+  });
+
+  it('远程分支成功：缺省剥前缀新建本地分支并变基（origin/side → side）', async () => {
+    const repo = makeRepo();
+    const { sideHash } = makeDivergentSide(repo);
+    makeRemoteRef(repo, 'side', sideHash);
+    git(repo, ['branch', '-D', 'side']);
+
+    const outcome = await checkoutRebase(repo, { branch: 'origin/side' });
+
+    expect(outcome.status).toBe('success');
+    expect(git(repo, ['symbolic-ref', 'HEAD', '--short']).trim()).toBe('side');
+    expect(git(repo, ['rev-parse', '--abbrev-ref', 'side@{upstream}']).trim()).toBe('origin/side');
+  });
+
+  it('远程分支：localName 指定新本地名（origin/side → side-local）', async () => {
+    const repo = makeRepo();
+    const { sideHash } = makeDivergentSide(repo);
+    makeRemoteRef(repo, 'side', sideHash);
+    git(repo, ['branch', '-D', 'side']);
+
+    const outcome = await checkoutRebase(repo, { branch: 'origin/side', localName: 'side-local' });
+
+    expect(outcome.status).toBe('success');
+    expect(git(repo, ['symbolic-ref', 'HEAD', '--short']).trim()).toBe('side-local');
+  });
+
+  it('远程分支 + 既有同名本地分支且跟踪同一远程 → 检出既有分支（不新建）并变基', async () => {
+    const repo = makeRepo();
+    const { sideHash } = makeDivergentSide(repo);
+    makeRemoteRef(repo, 'side', sideHash);
+    // 既有本地 side 已跟踪 origin/side（场景：之前从远程检出的分支）
+    git(repo, ['branch', '--set-upstream-to=origin/side', 'side']);
+
+    const outcome = await checkoutRebase(repo, { branch: 'origin/side' });
+
+    expect(outcome.status).toBe('success');
+    expect(git(repo, ['symbolic-ref', 'HEAD', '--short']).trim()).toBe('side');
+  });
+
+  it('远程分支 + 既有同名本地分支但未跟踪 → INVALID_QUERY（对齐 Java tracking conflict 重命名）', async () => {
+    const repo = makeRepo();
+    const { sideHash } = makeDivergentSide(repo);
+    makeRemoteRef(repo, 'side', sideHash);
+    git(repo, ['branch', '-D', 'side']);
+    git(repo, ['branch', 'side', sideHash]); // 无上游的本地分支
+
+    await expect(checkoutRebase(repo, { branch: 'origin/side' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '本地已存在同名分支 side 且未跟踪 origin/side，请选择其他本地分支名',
+    });
+  });
+
+  it('目标为当前分支 → INVALID_QUERY；远程建议名与当前分支同名 → INVALID_QUERY', async () => {
+    const repo = makeRepo();
+    const main = makeBaseCommit(repo);
+    // 当前分支 self
+    git(repo, ['checkout', '-q', '-b', 'self']);
+    const selfErr = await checkoutRebase(repo, { branch: 'self' }).catch((e: unknown) => e);
+    expect(selfErr).toMatchObject({ code: 'INVALID_QUERY', message: '不能检出并变基当前分支（可先检其他分支）' });
+
+    // 远程 origin/self 剥前缀 == 当前分支名
+    git(repo, ['update-ref', 'refs/remotes/origin/self', git(repo, ['rev-parse', 'HEAD']).trim()]);
+    git(repo, ['remote', 'add', 'origin', 'https://example.invalid/rebased.git']);
+    const currentErr = await checkoutRebase(repo, { branch: 'origin/self' }).catch((e: unknown) => e);
+    expect(currentErr).toMatchObject({ code: 'INVALID_QUERY', message: '本地当前分支与新建名相同（self），请选择其他本地分支名' });
+    void main;
+  });
+
+  it('分支不存在 → INVALID_REF；分离头指针 → INVALID_QUERY', async () => {
+    const repo = makeRepo();
+    const main = makeBaseCommit(repo);
+
+    const refErr = await checkoutRebase(repo, { branch: 'ghost' }).catch((e: unknown) => e);
+    expect(refErr).toMatchObject({ code: 'INVALID_REF', message: '分支不存在：ghost' });
+
+    git(repo, ['checkout', '-q', '--detach', main]);
+    const detachedErr = await checkoutRebase(repo, { branch: main }).catch((e: unknown) => e);
+    expect(detachedErr).toMatchObject({ code: 'INVALID_QUERY', message: '分离头指针状态不可检出并变基（请先检出分支）' });
+  });
+
+  it('已有进行中操作 → OPERATION_IN_PROGRESS', async () => {
+    const repo = makeRepo();
+    const { side, main } = makeRebaseConflict(repo);
+    await rebaseBranch(repo, { onto: side }); // 进入 rebase 冲突态
+
+    await expect(checkoutRebase(repo, { branch: 'side' })).rejects.toMatchObject({
+      code: 'OPERATION_IN_PROGRESS',
+      message: '已有进行中的操作，请先完成或中止',
+    });
+    void main;
   });
 });

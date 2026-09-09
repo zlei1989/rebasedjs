@@ -348,3 +348,68 @@ describe('BranchPanel 过滤/查找已合并', () => {
     expect(screen.queryByTestId('force-push-fix-main')).not.toBeInTheDocument();
   });
 });
+
+describe('BranchPanel 检出并变基到当前（GitCheckoutWithRebaseAction 语义）', () => {
+  it('本地行菜单项：点击以 {branch} 调 onCheckoutRebase', async () => {
+    const onCheckoutRebase = vi.fn();
+    render(
+      <BranchPanel
+        branches={makeList([
+          makeBranch({ name: 'dev' }),
+          makeBranch({ name: 'main', current: true }),
+        ])}
+        {...makeHandlers()}
+        onCheckoutRebase={onCheckoutRebase}
+      />,
+    );
+    await openLocalMenu('dev');
+    fireEvent.click(screen.getByText('检出并变基到当前'));
+    expect(onCheckoutRebase).toHaveBeenCalledTimes(1);
+    expect(onCheckoutRebase).toHaveBeenCalledWith({ branch: 'dev' });
+  });
+
+  it('当前分支行菜单项「检出并变基到当前」禁用（检出并变基到自身无意义）', async () => {
+    render(
+      <BranchPanel
+        branches={makeList([makeBranch({ name: 'main', current: true })])}
+        {...makeHandlers()}
+        onCheckoutRebase={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('menu-local-main'));
+    const item = await screen.findByText('检出并变基到当前');
+    expect(item.closest('li')).toHaveClass('ant-dropdown-menu-item-disabled');
+  });
+
+  it('远程行下拉：本地名 Modal 建议名缺省剥 origin/ 前缀，提交以 {branch,localName} 回调', async () => {
+    const onCheckoutRebase = vi.fn();
+    render(
+      <BranchPanel
+        branches={makeList([makeBranch({ name: 'origin/dev', remote: true })])}
+        {...makeHandlers()}
+        onCheckoutRebase={onCheckoutRebase}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('menu-remote-origin/dev'));
+    fireEvent.click(await screen.findByText('检出并变基到当前'));
+    const input = await screen.findByTestId('remote-rebase-input');
+    expect(input).toHaveValue('dev');
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onCheckoutRebase).toHaveBeenCalledTimes(1);
+    expect(onCheckoutRebase).toHaveBeenCalledWith({ branch: 'origin/dev', localName: 'dev' });
+  });
+
+  it('未传 onCheckoutRebase：本地菜单不渲染该项、远程行无操作按钮（向后兼容）', () => {
+    render(
+      <BranchPanel
+        branches={makeList([
+          makeBranch({ name: 'dev' }),
+          makeBranch({ name: 'origin/dev', remote: true }),
+        ])}
+        {...makeHandlers()}
+      />,
+    );
+    expect(screen.queryByText('检出并变基到当前')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('menu-remote-origin/dev')).not.toBeInTheDocument();
+  });
+});

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError, runGit } from './exec';
 import { getOperationState } from './operation';
-import { autosquashCommit, continueRebase, editCommitAction, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
+import { autosquashCommit, checkoutWithRebase, continueRebase, editCommitAction, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -380,5 +380,97 @@ describe('editCommitAction（GitSingleCommitEditingAction 语义：reword/drop/s
     expect((await runGit(['rev-list', '--count', 'HEAD'], { cwd: repo })).stdout.trim()).toBe('1');
     expect((await runGit(['ls-tree', '-r', '--name-only', 'HEAD'], { cwd: repo })).stdout).toContain('b.txt');
     void c1;
+  });
+});
+
+describe('checkoutWithRebase（GitCheckoutWithRebaseAction 语义：检出并变基到当前分支）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  /** 制造远程跟踪引用 refs/remotes/origin/<name>（无真实远程；core 原语只依赖跟踪引用）。
+   *  另补一条 dummy remote：checkout -b 从远程跟踪引用新建时的自动设上游依赖 remote.origin 已配置（真实环境必有） */
+  async function makeRemoteRef(repo: string, name: string, target: string): Promise<void> {
+    await runGit(['update-ref', `refs/remotes/origin/${name}`, target], { cwd: repo });
+    await runGit(['remote', 'add', 'origin', 'https://example.invalid/rebased.git'], { cwd: repo });
+  }
+
+  it('本地分支：检出 side 并 rebase onto 当前 main → success，当前分支切到 side 且 main 新提交重放其历史', async () => {
+    const repo = makeRepo();
+    const main = await makeBaseCommit(repo);
+    await runGit(['checkout', '-b', 'side'], { cwd: repo });
+    await makeCommit(repo, 'side.txt', 'side\n', 'side');
+    await runGit(['checkout', main], { cwd: repo });
+    const mainHead = await makeCommit(repo, 'main.txt', 'main\n', 'main');
+
+    const result = await checkoutWithRebase(repo, { branch: 'side', isRemote: false });
+
+    expect(result.status).toBe('success');
+    expect((await runGit(['symbolic-ref', 'HEAD', '--short'], { cwd: repo })).stdout.trim()).toBe('side');
+    // side 重放到 main 之上：两个新文件都在 HEAD 树中
+    expect((await runGit(['show', 'HEAD:side.txt'], { cwd: repo })).stdout).toBe('side\n');
+    expect((await runGit(['show', 'HEAD:main.txt'], { cwd: repo })).stdout).toBe('main\n');
+    // 变基只动 side：main 尖保持原样
+    expect((await runGit(['rev-parse', main], { cwd: repo })).stdout.trim()).toBe(mainHead);
+  });
+
+  it('远程分支：缺省剥前缀新建本地分支（origin/side → side）检出并变基，成功后新分支自动跟踪远程', async () => {
+    const repo = makeRepo();
+    const main = await makeBaseCommit(repo);
+    await runGit(['checkout', '-b', 'side'], { cwd: repo });
+    const side = await makeCommit(repo, 'side.txt', 'side\n', 'side');
+    await makeRemoteRef(repo, 'side', side);
+    await runGit(['checkout', main], { cwd: repo });
+    await runGit(['branch', '-D', 'side'], { cwd: repo });
+    await makeCommit(repo, 'main.txt', 'main\n', 'main');
+
+    const result = await checkoutWithRebase(repo, { branch: 'origin/side', isRemote: true });
+
+    expect(result.status).toBe('success');
+    expect((await runGit(['symbolic-ref', 'HEAD', '--short'], { cwd: repo })).stdout.trim()).toBe('side');
+    // 从远程跟踪引用新建 → 自动设上游（branch.autoSetupMerge 默认行为）
+    expect((await runGit(['rev-parse', '--abbrev-ref', 'side@{upstream}'], { cwd: repo })).stdout.trim()).toBe('origin/side');
+    expect((await runGit(['show', 'HEAD:main.txt'], { cwd: repo })).stdout).toBe('main\n');
+    expect((await runGit(['show', 'HEAD:side.txt'], { cwd: repo })).stdout).toBe('side\n');
+  });
+
+  it('远程分支：localName 指定新本地名 → 检出并变基到当前', async () => {
+    const repo = makeRepo();
+    const main = await makeBaseCommit(repo);
+    await runGit(['checkout', '-b', 'side'], { cwd: repo });
+    const side = await makeCommit(repo, 'side.txt', 'side\n', 'side');
+    await makeRemoteRef(repo, 'side', side);
+    await runGit(['checkout', main], { cwd: repo });
+    await runGit(['branch', '-D', 'side'], { cwd: repo });
+    await makeCommit(repo, 'main.txt', 'main\n', 'main');
+
+    const result = await checkoutWithRebase(repo, { branch: 'origin/side', isRemote: true, localName: 'side-local' });
+
+    expect(result.status).toBe('success');
+    expect((await runGit(['symbolic-ref', 'HEAD', '--short'], { cwd: repo })).stdout.trim()).toBe('side-local');
+    expect((await runGit(['rev-parse', '--abbrev-ref', 'side-local@{upstream}'], { cwd: repo })).stdout.trim()).toBe('origin/side');
+  });
+
+  it('冲突：双向改同一行 → conflicts 且进入 rebase 操作态（交冲突页 continue/abort）', async () => {
+    const repo = makeRepo();
+    await makeRebaseConflict(repo);
+
+    const result = await checkoutWithRebase(repo, { branch: 'side', isRemote: false });
+
+    expect(result.status).toBe('conflicts');
+    expect((await getOperationState(repo)).kind).toBe('rebase');
+  });
+
+  it('分离头指针 → 直接拒绝（无当前分支不可 rebase onto current）', async () => {
+    const repo = makeRepo();
+    const main = await makeBaseCommit(repo);
+    await runGit(['checkout', '-b', 'side'], { cwd: repo });
+    const side = await makeCommit(repo, 'side.txt', 'side\n', 'side');
+    await makeRemoteRef(repo, 'side', side);
+    await runGit(['checkout', main], { cwd: repo });
+    await runGit(['branch', '-D', 'side'], { cwd: repo });
+    await runGit(['checkout', '--detach', main], { cwd: repo });
+
+    await expect(checkoutWithRebase(repo, { branch: 'origin/side', isRemote: true })).rejects.toMatchObject({
+      message: '分离头指针状态下不可检出并变基（请先检出分支）',
+    });
   });
 });
