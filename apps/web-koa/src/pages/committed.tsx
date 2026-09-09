@@ -61,6 +61,9 @@ export function RepoCommittedPage(): React.ReactNode {
       params.set('root', '1');
     }
     if (renameFrom) params.set('renameFrom', renameFrom);
+    // #27 多文件 Prev/Next：同组文件列表（一提交的变更集）——DiffPage 页头切换
+    const filePaths = entry?.files.map((f) => f.path) ?? [];
+    if (filePaths.length > 1) params.set('files', JSON.stringify(filePaths));
     void navigate(`/repos/${repoId}/diff?${params.toString()}`);
   };
   return (

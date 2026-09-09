@@ -1,6 +1,6 @@
 /**
  * 差异页容器：useFileDiff（全文 FileVersions，主渲染路径）+ useDiffStream（同查询分块流，渐进渲染）+ useSettings 注入 ui
- * （与 web-next 容器同构；repoId 取 useParams、file/from/to/renameFrom/root 取 useSearchParams，而非 Next params/searchParams）。
+ * （与 web-next 容器同构；repoId 取 useParams、file/from/to/renameFrom/root/files 取 useSearchParams，而非 Next params/searchParams）。
  * 三版本模式（?three=1，StatusPage 行「三版本」入口）：改用 useFileThreeWay（HEAD/暂存/工作区三侧）→ DiffPage threeWayVersions。
  * 服务端 diff 端点返回 FileVersions（Monaco 两侧全文），与 client useFileDiff 类型一致。
  * 分块流与全文同参（staged/from/to 透传）：全文未就绪且流已有文本时渲染 DiffStreamView（分块文本接入 Monaco，
@@ -9,15 +9,29 @@
  * from/to 存在时覆盖「worktree 对比」语义（staged 开关仅 worktree 模式有意义，此时隐藏切换——终审 Must-fix 3）。
  * renameFrom 为可选重命名原名（committed 页 R 状态文件附加）：透传 ui DiffPage 显示提示行（不做伪 diff）。
  * root=1（根提交无父版本）：透传 ui DiffPage 显示提示行；不传 from/to（to-only 会被端点 XOR 校验拒绝）。
+ * files 为可选 JSON 数组（#27 多文件 Prev/Next）：同组文件列表经 JSON.stringify 编码进查询串；切换文件保留
+ * from/to/staged/three 等参数（renameFrom/root 为条目级属性，切换时清除）。
  */
 import { useDiffStream, useFileDiff, useFileThreeWay, useSettings } from '@rebased/client';
 import { DiffPage, DiffStreamView } from '@rebased/ui';
 import { Typography } from 'antd';
-import { useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+
+/** files 查询参数解析：JSON.stringify(string[]) 编码（逗号/管道在 git 文件名合法，JSON 免分隔冲突）；非法 → undefined */
+function parseFilesParam(raw: string | null): string[] | undefined {
+  if (raw === null) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.every((f) => typeof f === 'string') ? (parsed as string[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function RepoDiffPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const file = searchParams.get('file') ?? '';
   const from = searchParams.get('from') ?? undefined;
@@ -25,6 +39,7 @@ export function RepoDiffPage(): React.ReactNode {
   const renameFrom = searchParams.get('renameFrom') ?? undefined;
   const isRoot = searchParams.get('root') === '1';
   const isThreeWay = searchParams.get('three') === '1';
+  const files = useMemo(() => parseFilesParam(searchParams.get('files')), [searchParams]);
   const [staged, setStaged] = useState(false);
   const { data: versions, error } = useFileDiff(repoId, file, staged, isRoot ? undefined : from, isRoot ? undefined : to);
   // 三版本数据（?three=1 时启用；与 useFileDiff 并存——SWR 键不同互不干扰）
@@ -44,7 +59,6 @@ export function RepoDiffPage(): React.ReactNode {
   // 加载失败显式呈现（如 committed 打开路径损坏等端点 GIT_ERROR）；根提交提示行不依赖数据，跳过错误分支
   const loadError = isThreeWay ? threeWayError : error;
   if (!isRoot && loadError) return <Typography.Text type="danger" data-testid="diff-error">{loadError.message}</Typography.Text>;
-  // 三版本模式：数据就绪即渲染三版本视图；未就绪静默等待（无分块流语义）
   if (isThreeWay) {
     if (!threeWayVersions) return null;
     return <DiffPage versions={{ before: '', after: '' }} threeWayVersions={threeWayVersions} file={file} staged={staged} />;
@@ -64,6 +78,15 @@ export function RepoDiffPage(): React.ReactNode {
       renameFrom={renameFrom}
       rootCommit={isRoot}
       fromTo={from !== undefined && to !== undefined}
+      files={files}
+      onNavigateFile={(next) => {
+        // #27 多文件切换：换 file 保留组参数（from/to/staged/three/files）；renameFrom/root 为条目级属性，切换即清除
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('file', next);
+        params.delete('renameFrom');
+        params.delete('root');
+        void navigate(`/repos/${repoId}/diff?${params.toString()}`);
+      }}
     />
   );
 }

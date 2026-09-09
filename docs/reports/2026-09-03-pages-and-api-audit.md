@@ -20,7 +20,7 @@
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 122 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 69、领域类型/别名 95、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（106 条） | 87 ✅（含等价边）+ 6 🟡 + 8 ➖ + 5 ❌ |
+| 导航边（106 条） | 88 ✅（含等价边）+ 6 🟡 + 8 ➖ + 4 ❌ |
 
 ### 1.2 口径与图例
 
@@ -689,7 +689,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 24 | LogPage → GitConsole | tab 下拉 Console | vcs-log.xml:321-322 | ✅ 「更多」→ `/console` |
 | 25 | LogPage → HistoryPanel | tab 下拉 Show History | vcs-log.xml:321 | ✅ 「更多」→ `/history`（页内输入路径） |
 | 26 | LogPage → Open in Browser | 右键托管平台链接 | backend.xml:555-561 | ✅ 行右键「在浏览器中打开」（GitHub/GitLab 提交页链接，域检测驱动） |
-| 27 | DiffPage 页内 | 多文件 Prev/Next | `DiffNextFileAction`/`DiffPreviousFileAction` | ❌（单文件模型） |
+| 27 | DiffPage 页内 | 多文件 Prev/Next | `DiffNextFileAction`/`DiffPreviousFileAction` | ✅ 页头 Prev/Next（`?files=<JSON 数组>` 同组文件列表——committed 提交变更集/日志变更集/分支与工作树差异三入口注入；当前文件不在组内不渲染；组参数切换保留 from/to/staged） |
 | 28 | 编辑器/项目树 → HistoryPanel | 右键 Show History | backend.xml:115 | ➖（无编辑器宿主；等价=「更多」+ 页内输入） |
 | 29 | BlameView → HistoryPanel | gutter 右键 Show in History | `ShowInFileHistoryAnnotationActionProvider.kt:55` | ✅ 行内「历史」按钮 → `/history?file=` |
 | 30 | HistoryPanel → DiffPage | 双击版本/变更 | `ChangesBrowserBase.onDoubleClick:211` | ✅ 双击条目 → `/diff?file&from=父哈希&to=该提交`（根提交 `root=1`） |
@@ -792,10 +792,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 106 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **87 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 8（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基 + #106 检出并更新 + #69 与工作树差异）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 5（#18/#19/#21/#22/#26）、设置域链 4（#3 欢迎屏设置 + #4 回首页 + #6 顶栏设置 + #8 面板设置）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked）、#13 变更集直达 DiffPage、#63 分支入口等效 |
+| ✅ 已复刻（含等价边） | **88 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 8（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基 + #106 检出并更新 + #69 与工作树差异）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 5（#18/#19/#21/#22/#26）、设置域链 4（#3 欢迎屏设置 + #4 回首页 + #6 顶栏设置 + #8 面板设置）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked）、#13 变更集直达 DiffPage、#27 多文件 Prev/Next、#63 分支入口等效 |
 | 🟡 半通/降级 | **6 条**：#20 右键分支操作子菜单（Push up to Commit 已落地见 #17）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **8 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新、#39 命令日志 tab（internal） |
-| ❌ 未复刻 | **5 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet；可做余项：#27 多文件 Prev/Next） |
+| ❌ 未复刻 | **4 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
 
 ### 5.5 关键联动流程
 

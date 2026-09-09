@@ -82,3 +82,37 @@ describe('DiffPage', () => {
     expect(await screen.findByText('stub-diff-editor')).toBeInTheDocument();
   });
 });
+
+describe('DiffPage 多文件 Prev/Next（#27）', () => {
+  it('files 组渲染导航：末位禁用 Next、首位禁用 Prev；点击以相邻文件回调', async () => {
+    const onNavigateFile = vi.fn();
+    const files = ['a.txt', 'b/c.txt', 'd.txt'];
+    const { rerender } = render(
+      <DiffPage versions={versions} file="b/c.txt" staged={false} files={files} onNavigateFile={onNavigateFile} loader={stubLoader} />,
+    );
+    expect(screen.getByText('2/3')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('diff-prev-file'));
+    expect(onNavigateFile).toHaveBeenCalledWith('a.txt');
+    fireEvent.click(screen.getByTestId('diff-next-file'));
+    expect(onNavigateFile).toHaveBeenCalledWith('d.txt');
+
+    rerender(<DiffPage versions={versions} file="a.txt" staged={false} files={files} onNavigateFile={onNavigateFile} loader={stubLoader} />);
+    expect(screen.getByTestId('diff-prev-file')).toBeDisabled();
+    rerender(<DiffPage versions={versions} file="d.txt" staged={false} files={files} onNavigateFile={onNavigateFile} loader={stubLoader} />);
+    expect(screen.getByTestId('diff-next-file')).toBeDisabled();
+  });
+
+  it('files < 2 或未注入：导航不渲染（含当前文件不在组内）', async () => {
+    const onNavigateFile = vi.fn();
+    const { rerender } = render(
+      <DiffPage versions={versions} file="a.txt" staged={false} files={['a.txt']} onNavigateFile={onNavigateFile} loader={stubLoader} />,
+    );
+    expect(screen.queryByTestId('diff-file-nav')).not.toBeInTheDocument();
+    rerender(
+      <DiffPage versions={versions} file="a.txt" staged={false} files={['x.txt', 'y.txt']} onNavigateFile={onNavigateFile} loader={stubLoader} />,
+    );
+    expect(screen.queryByTestId('diff-file-nav')).not.toBeInTheDocument();
+    rerender(<DiffPage versions={versions} file="a.txt" staged={false} loader={stubLoader} />);
+    expect(screen.queryByTestId('diff-file-nav')).not.toBeInTheDocument();
+  });
+});

@@ -10,21 +10,36 @@
  * from/to 存在时覆盖「worktree 对比」语义（staged 开关仅 worktree 模式有意义，此时隐藏切换——终审 Must-fix 3）。
  * renameFrom 为可选重命名原名（committed 页 R 状态文件附加）：透传 ui DiffPage 显示提示行（不做伪 diff）。
  * root=1（根提交无父版本）：透传 ui DiffPage 显示提示行；不传 from/to（to-only 会被端点 XOR 校验拒绝）。
+ * files 为可选 JSON 数组（#27 多文件 Prev/Next）：切换文件保留组参数；renameFrom/root 为条目级属性，切换即清除。
  */
 import { useDiffStream, useFileDiff, useFileThreeWay, useSettings } from '@rebased/client';
 import { DiffPage, DiffStreamView } from '@rebased/ui';
 import { Typography } from 'antd';
-import { use, useState } from 'react';
+import { use, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+/** files 查询参数解析：JSON.stringify(string[]) 编码；非法 → undefined */
+function parseFilesParam(raw: string | undefined): string[] | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.every((f) => typeof f === 'string') ? (parsed as string[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export default function Page({
   params,
   searchParams,
 }: {
   params: Promise<{ repoId: string }>;
-  searchParams: Promise<{ file?: string; from?: string; to?: string; renameFrom?: string; root?: string; three?: string }>;
+  searchParams: Promise<{ file?: string; from?: string; to?: string; renameFrom?: string; root?: string; three?: string; files?: string }>;
 }): React.ReactNode {
   const { repoId } = use(params);
-  const { file = '', from, to, renameFrom, root, three } = use(searchParams);
+  const { file = '', from, to, renameFrom, root, three, files: filesRaw } = use(searchParams);
+  const files = useMemo(() => parseFilesParam(filesRaw), [filesRaw]);
+  const router = useRouter();
   const isRoot = root === '1';
   const isThreeWay = three === '1';
   const [staged, setStaged] = useState(false);
@@ -66,6 +81,16 @@ export default function Page({
       renameFrom={renameFrom}
       rootCommit={isRoot}
       fromTo={from !== undefined && to !== undefined}
+      files={files}
+      onNavigateFile={(next) => {
+        // #27 多文件切换：换 file 保留组参数（from/to/three/files）；renameFrom/root 为条目级属性，切换即清除
+        const params = new URLSearchParams();
+        for (const [k, v] of Object.entries({ from, to, three, files: filesRaw })) {
+          if (v !== undefined && v !== null) params.set(k, v);
+        }
+        params.set('file', next);
+        void router.push(`/repos/${repoId}/diff?${params.toString()}`);
+      }}
     />
   );
 }

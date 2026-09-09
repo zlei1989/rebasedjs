@@ -11,7 +11,7 @@
  */
 import { useState } from 'react';
 import type { FileThreeVersions, FileVersions } from '@rebased/contracts';
-import { Typography } from 'antd';
+import { Button, Flex, Typography } from 'antd';
 import { DiffViewer } from '../domain/diff-viewer';
 import { ThreeWayView } from './three-way-view';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
@@ -34,6 +34,40 @@ export interface DiffPageProps {
   fromTo?: boolean;
   /** 测试注入点：替换 monaco 加载器（默认懒加载真实 monaco） */
   loader?: MonacoDiffLoader;
+  /** 同组文件列表（多文件 Prev/Next——#27 语义：StatusPage/committed 等入口注入文件组）；缺省不渲染切换按钮 */
+  files?: string[];
+  /** 切换文件回调（Prev/Next 按钮；容器据此换 URL file 并保持其他查询参数） */
+  onNavigateFile?: (file: string) => void;
+}
+
+/** 多文件 Prev/Next 按钮（#27）：当前索引由 file 定位；到头/尾禁用；<2 个不渲染 */
+function FileNavButtons({
+  files,
+  file,
+  onNavigateFile,
+}: {
+  files: string[];
+  file: string;
+  onNavigateFile?: (file: string) => void;
+}): React.ReactNode {
+  if (files.length < 2 || onNavigateFile === undefined) return null;
+  const index = files.indexOf(file);
+  if (index < 0) return null; // 当前文件不在组内（如过期 URL）→ 不渲染导航
+  const prev = index > 0 ? files[index - 1] : undefined;
+  const next = index < files.length - 1 ? files[index + 1] : undefined;
+  return (
+    <Flex gap={8} align="center" data-testid="diff-file-nav">
+      <Button size="small" disabled={prev === undefined} data-testid="diff-prev-file" onClick={() => prev !== undefined && onNavigateFile(prev)}>
+        ‹ Prev
+      </Button>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {index + 1}/{files.length}
+      </Typography.Text>
+      <Button size="small" disabled={next === undefined} data-testid="diff-next-file" onClick={() => next !== undefined && onNavigateFile(next)}>
+        Next ›
+      </Button>
+    </Flex>
+  );
 }
 
 export function DiffPage({
@@ -48,12 +82,17 @@ export function DiffPage({
   rootCommit,
   fromTo,
   loader,
+  files,
+  onNavigateFile,
 }: DiffPageProps): React.ReactNode {
   // 忽略空白默认关（UX 对齐 #4：对齐 Java TextDiffSettingsHolder 默认不忽略）
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%', padding: 8 }}>
-      <div style={{ fontWeight: 600 }}>{file}</div>
+      <Flex align="center" gap={16}>
+        <div style={{ fontWeight: 600 }}>{file}</div>
+        <FileNavButtons files={files ?? []} file={file} onNavigateFile={onNavigateFile} />
+      </Flex>
       {threeWayVersions !== undefined ? (
         <div style={{ flex: 1, minHeight: 0 }}>
           <ThreeWayView versions={threeWayVersions} file={file} loader={loader} />

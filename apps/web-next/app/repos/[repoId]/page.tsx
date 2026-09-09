@@ -431,14 +431,20 @@ export default function Page({
         changesError={changesError?.message}
         onCloseChanges={() => setChangesHash('')}
         onOpenChangedFile={(path) => {
-          // #13：变更集内该文件 diff——from=父哈希、to=该提交（根提交 → root=1；与 BlameView「受影响」同语义）
+          // #13：变更集内该文件 diff——from=父哈希、to=该提交（根提交 → root=1；与 BlameView「受影响」同语义）；
+          // #27：同组文件列表（该提交变更集）供 DiffPage 页头 Prev/Next
           const entry = changesEntry;
           if (entry !== undefined && entry !== null) {
+            const params = new URLSearchParams({ file: path });
             if (entry.parents.length === 0) {
-              router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&root=1`);
+              params.set('root', '1');
             } else {
-              router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&from=${entry.parents[0]}&to=${entry.hash}`);
+              params.set('from', entry.parents[0]);
+              params.set('to', entry.hash);
             }
+            const filePaths = entry.files.map((f) => f.path);
+            if (filePaths.length > 1) params.set('files', JSON.stringify(filePaths));
+            router.push(`/repos/${repoId}/diff?${params.toString()}`);
           }
         }}
         onOpenSettings={() => router.push(`/repos/${repoId}/settings`)}

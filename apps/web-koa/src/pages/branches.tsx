@@ -142,9 +142,13 @@ export function RepoBranchesPage(): React.ReactNode {
         workingDiffLoading={workingDiffLoading}
         workingDiffError={workingDiffError?.message}
         onCloseWorkingDiff={() => setWorkingDiffBranch('')}
-        onOpenWorkingDiffFile={(branch, path) =>
-          navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&from=${encodeURIComponent(branch)}`)
-        }
+        onOpenWorkingDiffFile={(branch, path) => {
+          // #69 + #27：文件行 → DiffPage（?file=&from=<branch>）；同组文件清单供页头 Prev/Next
+          const filePaths = workingDiffData?.files.map((f) => f.path) ?? [];
+          const params = new URLSearchParams({ file: path, from: branch });
+          if (filePaths.length > 1) params.set('files', JSON.stringify(filePaths));
+          navigate(`/repos/${repoId}/diff?${params.toString()}`);
+        }}
         tags={tags}
         acting={actingBranch || checkingOut || fixingForcePushed || rebaseCheckingOut || updatingCheckout}
       />
