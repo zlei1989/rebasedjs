@@ -107,6 +107,7 @@ describe('configPutBodySchema', () => {
   it('接受白名单键与字符串值', () => {
     const body = configPutBodySchema.parse({ key: 'user.name', value: '张三' });
     expect(body).toEqual({ key: 'user.name', value: '张三' });
+    expect(configPutBodySchema.parse({ key: 'commit.template', value: '/tpl.txt' })).toEqual({ key: 'commit.template', value: '/tpl.txt' });
   });
   it('拒绝白名单外的键与空值', () => {
     expect(() => configPutBodySchema.parse({ key: 'core.hooksPath', value: '/x' })).toThrow();

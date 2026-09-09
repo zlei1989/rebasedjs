@@ -121,7 +121,7 @@
 | events | `repos/:id/events` | GET | SSE 仓库状态/操作推送（首帧双事件） | LogPage、StatusPage 等自订阅 | ✅ |
 | settings | `settings`、`settings/git-executable` | GET/PUT + GET | 应用设置读写 / git 可执行文件检测（PATH + 版本，GitExecutableSelectorPanel 语义） | SettingsPage | ✅ |
 | auth | `auth/accounts`、`auth/accounts/delete` | GET/POST/POST | 账户/令牌存储（应用级） | SettingsPage 账户卡片、远程认证 | ✅ |
-| config | `repos/:id/config` | GET/PUT | git 配置白名单 8 键读写 | SettingsPage | ✅ |
+| config | `repos/:id/config` | GET/PUT | git 配置白名单 9 键读写（含 GPG/commit template） | SettingsPage | ✅ |
 | operation | `repos/:id/operation`、`operation/abort`、`operation/continue`、`operation/skip` | GET + 3×POST | 进行中操作查询/中止/继续（continue 泛化四操作共用）/跳过（rebase/cherry-pick/revert） | LogPage 操作条、ConflictsPanel「完成合并/跳过」 | ✅ |
 | staging | `repos/:id/staging` | POST | 文件级 stage/unstage/discard | StatusPage | ✅ |
 | staging | `repos/:id/staging/hunks` | POST | hunk 级暂存（按 diff/patch hunk 索引） | StatusPage 补丁预览行内 hunk 选择 | ✅ |
@@ -276,7 +276,7 @@ Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存
 | amend（改上次提交） | ✅ | 须给新 message（`git commit --amend -m`） |
 | sign-off / 跳过 hooks | ✅ | signOff / noVerify 复选框 |
 | amend 历史提交 / reword | ✅ | 提交框「amend 到…」下拉（GitCommitDialog「Amend <subject>」语义：未发布/非合并非 HEAD 提交，上限 20；`GET /commit/amend-targets`）；选中目标 → `POST /commit/amend-specific`（amend! 提交 + fixup -C 折入目标——目标提交信息重写、中间提交重放；冲突 → 冲突页 continue/abort 流） |
-| GPG 签名 / commit template | ❌ | 白名单键可在设置页读写，提交链路未消费 |
+| GPG 签名 / commit template | ✅ | 白名单键 `commit.gpgsign`/`user.signingkey`/`commit.template`（9 键）设置页读写；提交链路原生消费（git commit 自动读取——实测 commit.gpgsign=true + 无效 signingkey → 签名失败拒绝、false → 正常提交、template 键置位后 -m 提交不受扰） |
 | CRLF 提示 | ✅ | 提交框内联警告 + 三选 Modal（GitCrlfDialog 语义：Windows + core.autocrlf 未建议 + 暂存文件 CRLF 无 text/crlf 属性覆盖；`GET /commit/crlf-warning` 检测——提交点击先重验证；「修复并提交」= `git config --global core.autocrlf <建议值>` + 提交（`commitBodySchema.crlfFix`），「原样提交」= 直接提交，取消返回） |
 | commit & push / push up to commit | ✅ | 提交框「提交并推送」（`POST /commit/push` 组合执行器：commit 先落盘 → push 缺省当前分支上游；三态提示 pushed/up-to-date/rejected）；Push up to Commit 经日志行右键（#17：`POST /push` 哈希模式，refspec `<hash>:<当前分支>`） |
 
@@ -595,7 +595,7 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | 应用设置读写 | ✅ | logInEditor 开关 + recentRepoIds（RepoPage 列表承载） |
-| git 配置白名单 8 键读写 | ✅ | ConfigRow 逐行（生效值展示 + local 覆盖输入 + 保存） |
+| git 配置白名单 9 键读写 | ✅ | ConfigRow 逐行（生效值展示 + local 覆盖输入 + 保存；含 commit.gpgsign/user.signingkey/commit.template——签名/模板链路原生消费） |
 | 账户/令牌管理 | ✅ | host/account/token 添加覆盖、Popconfirm 删除；token 不下行仅掩码；配置文件 0600 |
 | 集中存储（Rebased 独家"禁用 .idea"的 TS 映射） | ✅ | 应用配置集中于 `api/lib/config-store` |
 | git 可执行文件检测/引导 | ✅ | 设置页「Git 可执行文件」卡片（`GET /settings/git-executable`：PATH 查找 `git` + `git --version` 输出 + 已检测徽标；未检出 → 引导文案（安装 Git / 确保服务进程 PATH 可执行）——对照 `GitExecutableSelectorPanel`） |

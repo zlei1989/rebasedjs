@@ -76,7 +76,8 @@ export interface DiffEvent {
   payload: { text: string };
 }
 
-/** git 配置白名单键：读写在契约层收敛，避免任意配置写风险 */
+/** git 配置白名单键：读写在契约层收敛，避免任意配置写风险
+ *  （commit.gpgsign/user.signingkey/commit.template 由 git commit 原生消费——签名/模板链路随键配置生效） */
 export const CONFIG_KEYS = [
   'user.name',
   'user.email',
@@ -84,6 +85,7 @@ export const CONFIG_KEYS = [
   'pull.rebase',
   'commit.gpgsign',
   'user.signingkey',
+  'commit.template',
   'fetch.prune',
   'init.defaultBranch',
 ] as const;

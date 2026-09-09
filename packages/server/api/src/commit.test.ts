@@ -228,3 +228,60 @@ describe('amend 指定历史提交（GitCommitDialog「Amend <subject>」语义�
     expect(ancErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('不在当前分支历史中') });
   });
 });
+
+describe('GPG / commit template 提交链路消费', () => {
+  const gpgDirs: string[] = [];
+
+  beforeAll(() => {
+    // 隔离：签名尝试读全局 key 与 gpg 环境——GIT_CONFIG_GLOBAL 指临时文件，绝不触碰真实全局配置
+    const globalConfig = mkdtempSync(join(tmpdir(), 'rebased-api-gpg-'));
+    process.env.GIT_CONFIG_GLOBAL = join(globalConfig, '.gitconfig');
+    gpgDirs.push(globalConfig);
+  });
+
+  afterAll(() => gpgDirs.forEach(cleanupTmpRepo));
+
+  it('commit.gpgsign=true + user.signingkey 无效：提交被签名失败拒绝（配置被消费的实证）', async () => {
+    const repo = createTmpRepo();
+    gpgDirs.push(repo);
+    makeBaseCommit(repo);
+    writeFileSync(join(repo, 'b.txt'), 'v2\n');
+    execFileSync('git', ['-C', repo, 'add', 'b.txt']);
+    execFileSync('git', ['-C', repo, 'config', 'commit.gpgsign', 'true']);
+    execFileSync('git', ['-C', repo, 'config', 'user.signingkey', 'DEADBEEF-NOT-A-KEY']);
+
+    const err = await createCommit(repo, { message: '签名提交' }).catch((e: unknown) => e);
+
+    // git commit 原生消费 commit.gpgsign/user.signingkey——签名失败（无 gpg/gle key）→ 非零退出透出
+    expect(err).toMatchObject({ name: 'GitExitError' });
+    const subjects = execFileSync('git', ['-C', repo, 'log', '--format=%s'], { encoding: 'utf8' }).trim().split('\n');
+    expect(subjects).toEqual(['init']); // 提交未产生
+  });
+
+  it('commit.gpgsign=false：签名关闭 → 提交成功（关闭态消费验证）', async () => {
+    const repo = createTmpRepo();
+    gpgDirs.push(repo);
+    makeBaseCommit(repo);
+    writeFileSync(join(repo, 'b.txt'), 'v2\n');
+    execFileSync('git', ['-C', repo, 'add', 'b.txt']);
+    execFileSync('git', ['-C', repo, 'config', 'commit.gpgsign', 'false']);
+
+    const { hash } = await createCommit(repo, { message: '未签名提交' });
+
+    expect(hash).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  it('commit.template：git commit -m 优先于模板——设置模板键后提交仍成功', async () => {
+    const repo = createTmpRepo();
+    gpgDirs.push(repo);
+    makeBaseCommit(repo);
+    writeFileSync(join(repo, 'tpl.txt'), '模板内容\n');
+    execFileSync('git', ['-C', repo, 'config', 'commit.template', join(repo, 'tpl.txt')]);
+    writeFileSync(join(repo, 'b.txt'), 'v2\n');
+    execFileSync('git', ['-C', repo, 'add', 'b.txt']);
+
+    const { hash } = await createCommit(repo, { message: '带模板键的提交' });
+
+    expect(hash).toMatch(/^[0-9a-f]{40}$/);
+  });
+});

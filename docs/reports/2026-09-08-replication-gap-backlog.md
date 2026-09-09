@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 18 项（分布于 13 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 17 项（分布于 13 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 8 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -67,7 +67,7 @@
 
 **StatusPage（0）**：三版本对比与页级动作五入口（Create Patch from changes / Shelve / Stash Files / Annotate / History）已落地（见完成记录）。
 
-**CommitDialog 等效面（1）**：GPG 签名/commit template 提交链路消费（白名单键已可读写）。（commit & push 组合执行器已落地——提交框「提交并推送」→ `POST /commit/push` commit 先落盘再推当前分支上游，三态提示；amend 历史提交/reword 已落地——提交框「amend 到…」下拉（未发布/非合并非 HEAD 提交，上限 20）→ `POST /commit/amend-specific`：amend! 提交 + `fixup -C` 交互式变基折入目标（目标信息重写/reword、中间提交重放、冲突 → 冲突页流）；CRLF 提示已落地——`GET /commit/crlf-warning`（GitCrlfProblemsDetector 语义：Windows + core.autocrlf 未建议 + 暂存文件 CRLF 无 text/crlf 属性覆盖）→ 提交框内联警告 + 三选 Modal（「修复并提交」`commitBodySchema.crlfFix` 先写 `git config --global core.autocrlf <建议值>` 再提交；「原样提交」/取消）。）
+**CommitDialog 等效面（0）**：GPG 签名/commit template 已落地——白名单键 9 键（`commit.gpgsign`/`user.signingkey`/`commit.template`）设置页读写，提交链路原生消费（`git commit` 自动读取：实测 gpgsign=true + 无效 key → 签名失败拒绝、false → 正常提交、template 键置位后 -m 提交不受扰）。（commit & push 组合执行器已落地——提交框「提交并推送」→ `POST /commit/push` commit 先落盘再推当前分支上游，三态提示；amend 历史提交/reword 已落地——提交框「amend 到…」下拉（未发布/非合并非 HEAD 提交，上限 20）→ `POST /commit/amend-specific`：amend! 提交 + `fixup -C` 交互式变基折入目标（目标信息重写/reword、中间提交重放、冲突 → 冲突页流）；CRLF 提示已落地——`GET /commit/crlf-warning`（GitCrlfProblemsDetector 语义：Windows + core.autocrlf 未建议 + 暂存文件 CRLF 无 text/crlf 属性覆盖）→ 提交框内联警告 + 三选 Modal（「修复并提交」`commitBodySchema.crlfFix` 先写 `git config --global core.autocrlf <建议值>` 再提交；「原样提交」/取消）。）
 
 **BranchPanel（4）**：最近检出/标签分组与过滤的剩余分组维度（文本过滤与「仅看已合并」已落地）；保护分支设置联动；checkout with rebase；检出文件（查找已合并/清理已合并已落地——「仅看已合并」开关 +「清理已合并（N）」批量删除；force-push 后修复已落地——当前分支与上游分叉时行内「force-push 修复」：`POST /update/force-pushed` fetch → 本地重置到上游 → @{u}..HEAD 本地独有提交逐一 cherry-pick 重放，冲突 → 冲突页流）。
 
