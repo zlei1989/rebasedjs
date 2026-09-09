@@ -8,6 +8,7 @@ import { GitExitError, runGit } from './exec';
 import { getOperationState } from './operation';
 import { listConflictedPaths } from './conflict';
 import { diffRefsSnapshots, takeRefsSnapshot } from './refs';
+import { checkoutBranch } from './checkout';
 
 export interface CoreRemote {
   name: string;
@@ -119,6 +120,19 @@ export async function pullRemote(
   }
   const after = await headHash(cwd);
   return { status: before === after ? 'up-to-date' : 'updated' };
+}
+
+/**
+ * 检出并更新（GitCheckoutWithUpdateAction 语义：Checkout and Update）：检出本地分支 →
+ * 依策略 pull（fetch 跟踪分支 + merge/`--rebase`；策略缺省 merge，对齐 GitVcsOptions.updateMethod 默认）。
+ * 目标为当前分支/无上游由调用方预检；冲突 → 'conflicts'（merge/rebase 态交冲突页 continue/abort/skip 流）。
+ */
+export async function checkoutWithUpdate(
+  cwd: string,
+  opts: { branch: string; rebase: boolean },
+): Promise<{ status: 'up-to-date' | 'updated' | 'conflicts' }> {
+  await checkoutBranch(cwd, opts.branch);
+  return pullRemote(cwd, { rebase: opts.rebase });
 }
 
 /**

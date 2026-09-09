@@ -26,6 +26,7 @@ import { POST as postAmendSpecific } from '../app/api/repos/[repoId]/commit/amen
 import { GET as getBranches, POST as postBranches } from '../app/api/repos/[repoId]/branches/route';
 import { POST as postCheckout } from '../app/api/repos/[repoId]/checkout/route';
 import { POST as postCheckoutRebase } from '../app/api/repos/[repoId]/checkout-rebase/route';
+import { POST as postCheckoutUpdate } from '../app/api/repos/[repoId]/checkout-update/route';
 import { POST as postReset } from '../app/api/repos/[repoId]/reset/route';
 import { POST as postUndoCommit } from '../app/api/repos/[repoId]/reset/undo-commit/route';
 import { GET as getDiffPatch } from '../app/api/repos/[repoId]/diff/patch/route';
@@ -593,6 +594,49 @@ describe('web-next REST 路由', () => {
     expect(await curRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
 
     const refRes = await post(`/api/repos/${repoId}/checkout-rebase`, { branch: 'ghost' });
+    expect(refRes.status).toBe(400);
+    expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
+  it('checkout-update 端点：本地分支（已设上游）检出并更新 → 200 success 且分支切换；无上游/当前 → 400', { timeout: 120000 }, async () => {
+    const repoId = registerRepo();
+    const main = execFileSync('git', ['-C', lastRepoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    const bare = tmpDir('rebased-web-next-bare-');
+    execFileSync('git', ['init', '-q', '--bare', bare]);
+    execFileSync('git', ['-C', lastRepoPath, 'remote', 'add', 'origin', bare]);
+    execFileSync('git', ['-C', lastRepoPath, 'push', '-q', '-u', 'origin', main]);
+    execFileSync('git', ['-C', lastRepoPath, 'checkout', '-q', '-b', 'dev']);
+    execFileSync('git', ['-C', lastRepoPath, 'push', '-q', '-u', 'origin', 'dev']);
+    execFileSync('git', ['-C', lastRepoPath, 'checkout', '-q', main]);
+    const other = tmpDir('rebased-web-next-other-');
+    execFileSync('git', ['clone', '-q', bare, other]);
+    execFileSync('git', ['-C', other, 'config', 'user.email', 't@t.com']);
+    execFileSync('git', ['-C', other, 'config', 'user.name', 't']);
+    writeFileSync(join(other, 'remote.txt'), 'remote\n');
+    execFileSync('git', ['-C', other, 'add', 'remote.txt']);
+    execFileSync('git', ['-C', other, 'commit', '-q', '-m', 'remote dev']);
+    execFileSync('git', ['-C', other, 'push', '-q', 'origin', 'HEAD:dev']);
+    const post = (path: string, body: unknown) =>
+      postCheckoutUpdate(
+        new Request(`http://localhost${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+        ctx(repoId),
+      );
+
+    const res = await post(`/api/repos/${repoId}/checkout-update`, { branch: 'dev' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(execFileSync('git', ['-C', lastRepoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()).toBe('dev');
+    expect(execFileSync('git', ['-C', lastRepoPath, 'show', 'HEAD:remote.txt'], { encoding: 'utf8' })).toBe('remote\n');
+
+    const curRes = await post(`/api/repos/${repoId}/checkout-update`, { branch: 'dev' });
+    expect(curRes.status).toBe(400);
+    expect(await curRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+
+    const refRes = await post(`/api/repos/${repoId}/checkout-update`, { branch: 'ghost' });
     expect(refRes.status).toBe(400);
     expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });

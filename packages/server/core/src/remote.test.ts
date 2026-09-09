@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { abortGitOperation, getOperationState } from './operation';
-import { addRemote, fetchRemote, isShallowRepo, listLocalOnlyCommits, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
+import { addRemote, checkoutWithUpdate, fetchRemote, isShallowRepo, listLocalOnlyCommits, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
 import { getStatus } from './status';
 import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
@@ -217,6 +217,54 @@ describe('pullRemote', () => {
       await abortGitOperation(repo, 'merge');
     },
   );
+});
+
+describe('checkoutWithUpdate（GitCheckoutWithUpdateAction 语义：检出并更新）', () => {
+  /** 在默认分支外造一个已推送上游的 devel 分支，返回后留在默认分支 */
+  function makeTrackedDevel(repo: string, bare: string, defaultBranch: string): void {
+    git(repo, ['checkout', '-q', '-b', 'devel']);
+    git(repo, ['push', '-q', '-u', 'origin', 'devel']);
+    git(repo, ['checkout', '-q', defaultBranch]);
+  }
+
+  it(
+    '对端新提交 → updated：分支已切换且工作区同步（跟随分支自身上游）',
+    { timeout: RIG_TIMEOUT },
+    async () => {
+      const { repo, bare, defaultBranch } = instantiateRig();
+      makeTrackedDevel(repo, bare, defaultBranch);
+      pushRemoteCommit(bare, 'devel', 'd.txt', 'remote-devel');
+
+      const r = await checkoutWithUpdate(repo, { branch: 'devel', rebase: false });
+      expect(r.status).toBe('updated');
+      expect(git(repo, ['symbolic-ref', '--short', 'HEAD'])).toBe('devel');
+      expect(readFileSync(join(repo, 'd.txt'), 'utf8')).toBe('remote-devel');
+    },
+  );
+
+  it('对端无新提交 → up-to-date 且分支已切换', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, defaultBranch } = instantiateRig();
+    makeTrackedDevel(repo, bare, defaultBranch);
+
+    const r = await checkoutWithUpdate(repo, { branch: 'devel', rebase: false });
+    expect(r.status).toBe('up-to-date');
+    expect(git(repo, ['symbolic-ref', '--short', 'HEAD'])).toBe('devel');
+  });
+
+  it('同改一行 → conflicts 且进入 merge 态（交冲突页 continue/abort）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, defaultBranch } = instantiateRig();
+    makeTrackedDevel(repo, bare, defaultBranch);
+    git(repo, ['checkout', '-q', 'devel']);
+    writeFileSync(join(repo, 'a.txt'), 'local-line');
+    git(repo, ['commit', '-q', '-am', 'local change']);
+    git(repo, ['checkout', '-q', defaultBranch]);
+    pushRemoteCommit(bare, 'devel', 'a.txt', 'remote-line');
+
+    const r = await checkoutWithUpdate(repo, { branch: 'devel', rebase: false });
+    expect(r.status).toBe('conflicts');
+    expect((await getOperationState(repo)).kind).toBe('merge');
+    await abortGitOperation(repo, 'merge');
+  });
 });
 
 describe('pushBranch', () => {

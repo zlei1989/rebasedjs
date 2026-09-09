@@ -48,7 +48,7 @@ export { checkoutConflictSide, deleteConflictFile, listConflictedPaths, markReso
 export type { CoreConflict } from './conflict';
 export { applyStash, dropStash, listStashes, popStash, saveStash, stashPatch, stashToBranch } from './stash';
 export type { CoreStash } from './stash';
-export { addRemote, fetchRemote, isShallowRepo, listLocalOnlyCommits, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
+export { addRemote, checkoutWithUpdate, fetchRemote, isShallowRepo, listLocalOnlyCommits, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
 export type { CorePushOutcome, CoreRemote } from './remote';
 export { diffRefsSnapshots, takeRefsSnapshot } from './refs';
 export type { RefsSnapshot } from './refs';

@@ -16,11 +16,11 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **101 / 116**（web-next 101 个 route.ts ↔ web-koa repos.ts 116 注册，15 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **102 / 117**（web-next 102 个 route.ts ↔ web-koa repos.ts 117 注册，15 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 121 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 68、领域类型/别名 95、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（105 条） | 79 ✅（含等价边）+ 8 🟡 + 8 ➖ + 10 ❌ |
+| `@rebased/api` 公共出口 | 122 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 69、领域类型/别名 95、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| 导航边（106 条） | 80 ✅（含等价边）+ 8 🟡 + 8 ➖ + 10 ❌ |
 
 ### 1.2 口径与图例
 
@@ -130,6 +130,7 @@
 | branch | `repos/:id/branches` | GET/POST | 分支列表 / create/delete/rename/setUpstream | BranchPanel、MergeDialog | ✅ |
 | checkout | `repos/:id/checkout` | POST | 检出 branch/newBranch/detach | BranchPanel | ✅ |
 | checkout-rebase | `repos/:id/checkout-rebase` | POST | 检出并变基到当前（远程分支带新本地名 localName） | BranchPanel | ✅ |
+| checkout-update | `repos/:id/checkout-update` | POST | 检出并更新（本地分支：检出后 fetch 跟踪分支 + 策略化 merge/rebase） | BranchPanel | ✅ |
 | reset | `repos/:id/reset`、`reset/undo-commit` | POST | 三模式 reset / 撤销最近提交 | LogPage ResetDialog / 顶栏 | ✅ |
 | merge | `repos/:id/merge`、`merge/continue` | POST | 合并（四选项）/ 完成合并 | MergeDialog / ConflictsPanel | ✅ |
 | conflicts | `repos/:id/conflicts`、`conflicts/contents`、`conflicts/resolve` | GET/GET/POST | 冲突列表 / 三阶段内容 / 四策略解决 | ConflictsPanel、MergeView | ✅ |
@@ -305,12 +306,13 @@ Reset 与 Undo Commit；对应 `GitResetAction` / `GitNewResetDialog` / `GitUnco
 | 分组（本地/远程 + 最近检出 + 标签）与过滤 | ✅ | 最近检出组（core `listRecentCheckoutBranches`：reflog `--grep-reflog=checkout:` 记录解析 " to \<分支\>"，最近优先/去重/仅存活本地分支，limit 50 对齐 `git.recent.checkout.branches.reflog.entries.count`——`GitRecentCheckoutBranches` 语义）+ 标签组（`BranchesTreeSingleRepoModel` tags 组语义：行内「检出」= detached）；文本过滤四组共用 +「仅看已合并」开关；「显示最近检出/标签」页面级开关默认开（对齐 `showRecentBranches`/`showTags` 默认 true）；多仓库/目录前缀分组 ➖（Web 单仓库模型） |
 | 行内信息：current 标记 / 上游 + ahead/behind 徽标 / 已合并图标 | ✅ | `mergedIntoHead` 绿色对勾 |
 | 创建（起始点可选 + 创建后检出开关）/删除（未合并提示 force）/重命名/设上游 | ✅ | 删除走 Popconfirm |
-| 检出：既有分支 / 新建并检出 / detached（标签/提交） | ✅ | 三态；检出文件未做 |
+| 检出：既有分支 / 新建并检出 / detached（标签/提交） | ✅ | 三态（检出文件 ➖——当前 Java 版本无 CheckoutFiles 类动作（git4idea 无证据）；Changes 视图「回滚/丢弃」语义由 StatusPage「丢弃改动」（staging discard）承载） |
 | 查找已合并 / 清理已合并与过时分支 | ✅ | 「仅看已合并」开关 +「清理已合并（N）」批量删除（已合并且非当前本地分支，Popconfirm → 逐条 delete，完成重验证列表） |
 | 与当前分支比较 | ✅ | 行内「比较」→ 日志页 `?compare=<branch>` 对比视图（双 range 双向提交差异；「当前」分支禁用） |
 | 弹窗 Fetch | ✅ | 页头「Fetch」按钮（fetch 全部远程引用；成功后复用事件流触发分支列表验证） |
 | force-push 后修复 | ✅ | 当前分支与上游分叉（ahead>0 且 behind>0）时行内「force-push 修复」（`GitForcePushedBranchUpdateAction` 语义）：`POST /update/force-pushed`——fetch → 本地重置到上游 → 本地独有提交（@{u}..HEAD）逐一 cherry-pick 重放；冲突 → 冲突页流；无本地独有提交 → 重置即快进等价 |
 | 检出并变基到当前 | ✅ | 本地行菜单项 + 远程行下拉（`GitCheckoutWithRebaseAction` 语义）：`POST /checkout-rebase`——检出目标分支（远程 → 新建本地分支，缺省剥 `origin/` 前缀，远程行进本地名 Modal 可改）→ `rebase onto 原当前分支`；目标为当前分支/分离头/本地名冲突（既有同名分支未跟踪该远程 → 对齐 Java tracking conflict 重命名提示）→ INVALID_QUERY；冲突 → 冲突页流 |
+| 检出并更新 | ✅ | 本地行菜单项（`GitCheckoutWithUpdateAction` 语义，shared.xml:33）：`POST /checkout-update`——检出本地分支 → fetch 跟踪分支 + 策略化更新（strategy 缺省 merge，对齐更新策略默认）；无上游/当前分支 → INVALID_QUERY；up-to-date →「已是最新」口径；冲突 → 冲突页流 |
 | 保护分支 | ➖ | 面板侧无保护分支 UI（Java 亦无——保护只影响重写拦截与 push 对话框过滤，Web 以设置 + 编辑拦截承载，见 §4.30） |
 
 ### 4.8 MergeDialog ✅（页面化对话框）
@@ -742,6 +744,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 70 | BranchPanel → WorktreePanel | 分支菜单 New Working Tree | backend.xml:269 | ❌ 明确不做 |
 | 71 | BranchPanel → 直接执行动作集 | Checkout/Merge/Rebase/Pull/Update/Rename/Delete/Push Tags（弹窗内无 Reset） | backend.xml:251-283 | ✅ 等价集齐：行内四动作 + 各域对话框/页面 |
 | 105 | BranchPanel → 直接执行动作集 | Checkout and rebase onto current（分支菜单检出族） | `GitCheckoutWithRebaseAction.kt:23-74` + backend.xml:251-256 | ✅ 行菜单「检出并变基到当前」（远程行进本地名 Modal，prefill 建议名；检出后 rebase onto 原当前分支；冲突 → 冲突页流） |
+| 106 | BranchPanel → 直接执行动作集 | Checkout and Update（分支菜单检出族） | `GitCheckoutWithUpdateAction.kt:22-97` + shared.xml:31-34 | ✅ 行菜单「检出并更新」（本地分支须已设上游；检出后 fetch 跟踪分支 + 策略化更新；冲突 → 冲突页流） |
 | 72 | 任意处 → QuickActionsMenu | Alt+` | keymaps `$default.xml:1125-1127` | 🟡 等效：顶栏+更多菜单；快捷键不做 |
 | 73 | 主工具栏「…」→ QuickActionsMenu | Show More Actions | backend.xml:318-319 | 🟡 等效：「更多」下拉 |
 | 74 | QuickActionsMenu → 各面板 | Branches/Push/Stash/Resolve Conflicts/Working Trees/Unshallow | `GitQuickListContentProvider.java:24-37` | 🟡 等效覆盖（Unshallow 经 fetch 端点既有） |
@@ -787,8 +790,8 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 
 | 口径 | 数量 |
 |------|------|
-| Java 版导航边（收录 105 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **79 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 6（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
+| Java 版导航边（收录 106 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
+| ✅ 已复刻（含等价边） | **80 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 7（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基 + #106 检出并更新）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（Push up to Commit 已落地见 #17）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **8 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新、#39 命令日志 tab（internal） |
 | ❌ 未复刻 | **10 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet；#39 已归 ➖） |
@@ -827,9 +830,9 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 层 | 位置 |
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
-| 服务层 | `packages/server/api/src/*.ts`（39 模块，`index.ts` 121 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（101 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（116 注册）+ `src/middleware/error.ts` |
+| 服务层 | `packages/server/api/src/*.ts`（40 模块，`index.ts` 122 出口） |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（102 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（117 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |

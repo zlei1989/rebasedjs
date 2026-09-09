@@ -1,11 +1,12 @@
 /**
  * Update Project 功能：一次「更新项目」= fetch 全远程 + 按 strategy 的 pull；
  * force-push 后修复（GitForcePushedBranchUpdateAction 语义）：fetch → 本地分支硬重置到远端上游 →
- * 把本地独有提交（@{u}..HEAD）逐一 cherry-pick 回来（冲突 → 冲突页流）。
+ * 把本地独有提交（@{u}..HEAD）逐一 cherry-pick 回来（冲突 → 冲突页流）；
+ * 检出并更新（GitCheckoutWithUpdateAction 语义）：检出本地分支 → 策略化更新（merge/rebase）。
  * fetch/pull 均经 remote.ts 的 withAuth 认证回路（token 注入 + AUTH_FAILED 识别）。
  */
-import type { ForcePushedUpdateOutcome, UpdateBody, UpdateOutcome } from '@rebased/contracts';
-import { getStatus, listLocalOnlyCommits, resetToRef } from '@rebased/core';
+import type { CheckoutUpdateBody, ForcePushedUpdateOutcome, RebaseOutcome, UpdateBody, UpdateOutcome } from '@rebased/contracts';
+import { checkoutWithUpdate, getStatus, listBranches, listLocalOnlyCommits, resetToRef } from '@rebased/core';
 import { ServiceError } from '@rebased/contracts';
 import { assertNoOperationInProgress } from './operation';
 import { cherryPick } from './pick';
@@ -43,4 +44,27 @@ export async function forcePushedUpdate(repoPath: string): Promise<ForcePushedUp
   }
   const pick = await cherryPick(repoPath, { hashes: localOnly });
   return { status: pick.status === 'conflicts' ? 'conflicts' : 'success', applied: localOnly };
+}
+
+/**
+ * 检出并更新（GitCheckoutWithUpdateAction 语义：Checkout and Update）：预检无进行中操作 + 本地分支存在
+ * （INVALID_REF，远程引用名不适用——动作仅面向本地分支）+ 非当前分支（INVALID_QUERY）+ 已配置上游
+ * （INVALID_QUERY）；core 检出 → 策略化 pull（fetch 跟踪分支 + merge/`--rebase`）；updated → 'success'
+ * （与变基/更新成功口径一致）；conflicts → 冲突页流。
+ */
+export async function checkoutUpdate(repoPath: string, body: CheckoutUpdateBody): Promise<RebaseOutcome> {
+  await assertNoOperationInProgress(repoPath);
+  const branches = await listBranches(repoPath);
+  const target = branches.find((b) => !b.remote && b.name === body.branch);
+  if (target === undefined) {
+    throw new ServiceError('INVALID_REF', `分支不存在：${body.branch}`);
+  }
+  if (target.current) {
+    throw new ServiceError('INVALID_QUERY', '目标已是当前分支，无需检出并更新');
+  }
+  if (target.upstream === null) {
+    throw new ServiceError('INVALID_QUERY', '分支未配置上游，无法检出并更新');
+  }
+  const result = await checkoutWithUpdate(repoPath, { branch: target.name, rebase: body.strategy === 'rebase' });
+  return { status: result.status === 'updated' ? 'success' : result.status };
 }

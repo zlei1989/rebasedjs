@@ -547,6 +547,44 @@ describe('web-koa REST 端点', () => {
     expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });
 
+  it('checkout-update 端点：本地分支（已设上游）检出并更新 → 200 success 且分支切换；无上游/当前 → 400', { timeout: 120000 }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    // 裸远程 rig：为 dev 建立远程跟踪上游，再回到默认分支；对端先推进 dev（制造更新内容）
+    const main = execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    const bare = tmpDir('rebased-web-koa-checkout-update-bare-');
+    execFileSync('git', ['init', '-q', '--bare', bare]);
+    execFileSync('git', ['-C', repoPath, 'remote', 'add', 'origin', bare]);
+    execFileSync('git', ['-C', repoPath, 'push', '-q', '-u', 'origin', main]);
+    execFileSync('git', ['-C', repoPath, 'checkout', '-q', '-b', 'dev']);
+    execFileSync('git', ['-C', repoPath, 'push', '-q', '-u', 'origin', 'dev']);
+    execFileSync('git', ['-C', repoPath, 'checkout', '-q', main]);
+    const other = tmpDir('rebased-web-koa-other-');
+    execFileSync('git', ['clone', '-q', bare, other]);
+    execFileSync('git', ['-C', other, 'config', 'user.email', 't@t.com']);
+    execFileSync('git', ['-C', other, 'config', 'user.name', 't']);
+    writeFileSync(join(other, 'remote.txt'), 'remote\n');
+    execFileSync('git', ['-C', other, 'add', 'remote.txt']);
+    execFileSync('git', ['-C', other, 'commit', '-q', '-m', 'remote dev']);
+    execFileSync('git', ['-C', other, 'push', '-q', 'origin', 'HEAD:dev']);
+    const jsonPost = (path: string, body: unknown) =>
+      fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    const res = await jsonPost(`/api/repos/${repoId}/checkout-update`, { branch: 'dev' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()).toBe('dev');
+    expect(execFileSync('git', ['-C', repoPath, 'show', 'HEAD:remote.txt'], { encoding: 'utf8' })).toBe('remote\n');
+
+    // 当前分支 → INVALID_QUERY；不存在 → INVALID_REF
+    const curRes = await jsonPost(`/api/repos/${repoId}/checkout-update`, { branch: 'dev' });
+    expect(curRes.status).toBe(400);
+    expect(await curRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+
+    const refRes = await jsonPost(`/api/repos/${repoId}/checkout-update`, { branch: 'ghost' });
+    expect(refRes.status).toBe(400);
+    expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
   it('reset 端点：soft 重置到 HEAD~1 返回 200 且 headHash 回退', async () => {
     const { repoId, repoPath } = registerRepo();
     const baseHash = execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();

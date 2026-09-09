@@ -112,6 +112,13 @@ export const checkoutRebaseBodySchema = z.object({
 });
 export type CheckoutRebaseBody = z.infer<typeof checkoutRebaseBodySchema>;
 
+/** 检出并更新（GitCheckoutWithUpdateAction 语义）：branch 目标本地分支（须已配置上游）；strategy 缺省 merge（对齐更新策略默认） */
+export const checkoutUpdateBodySchema = z.object({
+  branch: z.string().min(1),
+  strategy: z.enum(['merge', 'rebase']).optional(),
+});
+export type CheckoutUpdateBody = z.infer<typeof checkoutUpdateBodySchema>;
+
 /** GPG 提交签名配置（GitGpgConfigDialog 语义）：enabled=true 时 key 必选；enabled=false 仅写 commit.gpgsign=false（不清 user.signingkey） */
 export const gpgConfigBodySchema = z
   .object({

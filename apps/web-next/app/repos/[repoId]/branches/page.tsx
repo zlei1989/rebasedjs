@@ -6,7 +6,7 @@
  * 本页自订阅 events：外部 CLI 检出/重命名当前分支时重验证分支列表刷新 current 标记
  * （纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
-import { useBranchAction, useBranches, useCheckout, useCheckoutRebase, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
+import { useBranchAction, useBranches, useCheckout, useCheckoutRebase, useCheckoutUpdate, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
 import { Button, Flex, Modal, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -36,6 +36,24 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
           return;
         }
         void message.success(`已检出 ${request.branch} 并变基到当前分支`);
+      })
+      .catch(onError);
+  };
+  // 检出并更新（GitCheckoutWithUpdateAction 语义）：检出本地分支后 fetch 跟踪分支 + 策略化更新；hook 成功后失效双缓存键
+  const { trigger: checkoutUpdate, isMutating: updatingCheckout } = useCheckoutUpdate(repoId);
+  const onCheckoutUpdate = (request: { branch: string; strategy?: 'merge' | 'rebase' }): void => {
+    checkoutUpdate(request)
+      .then((outcome) => {
+        if (outcome.status === 'conflicts') {
+          void message.warning('检出并更新存在冲突，请在冲突页解决');
+          router.push(`/repos/${repoId}/conflicts`);
+          return;
+        }
+        void message.success(
+          outcome.status === 'up-to-date'
+            ? `已检出 ${request.branch}（已是最新）`
+            : `已检出并更新 ${request.branch}`,
+        );
       })
       .catch(onError);
   };
@@ -116,8 +134,9 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         fetching={fetching}
         onForcePushedUpdate={onForcePushedUpdate}
         onCheckoutRebase={onCheckoutRebase}
+        onCheckoutUpdate={onCheckoutUpdate}
         tags={tags}
-        acting={actingBranch || checkingOut || fixingForcePushed || rebaseCheckingOut}
+        acting={actingBranch || checkingOut || fixingForcePushed || rebaseCheckingOut || updatingCheckout}
       />
     </Flex>
   );

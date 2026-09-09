@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AutosquashBody, BranchList, CheckoutRebaseBody, CommitEditBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, RepoStatus, TodoEntry } from '@rebased/contracts';
-import { useAutosquash, useCheckoutRebase, useCommitEdit, useInteractiveRebase, useRebase, useRebaseTodo } from './rebase';
+import type { AutosquashBody, BranchList, CheckoutRebaseBody, CheckoutUpdateBody, CommitEditBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, RepoStatus, TodoEntry } from '@rebased/contracts';
+import { useAutosquash, useCheckoutRebase, useCheckoutUpdate, useCommitEdit, useInteractiveRebase, useRebase, useRebaseTodo } from './rebase';
 import { useBranches } from './branches';
 import { useRepoStatus } from './repos';
 import { freshCache } from './testing/fresh-cache';
@@ -304,6 +304,80 @@ describe('useCheckoutRebase', () => {
     await act(async () => {
       await vi.waitFor(() => expect(result.status).toEqual(ON_SIDE));
       await vi.waitFor(() => expect(result.branches).toEqual(BRANCHES_SIDE));
+    });
+    expect(statusGets).toBe(2);
+    expect(branchesGets).toBe(2);
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useCheckoutUpdate', () => {
+  it('trigger 发起 POST checkout-update，成功后重验证 status 与 branches 双缓存键', async () => {
+    const ON_MAIN: RepoStatus = { branch: 'main', upstream: null, headHash: 'a'.repeat(40), ahead: 0, behind: 0, entries: [] };
+    const ON_DEVEL: RepoStatus = { ...ON_MAIN, branch: 'devel', headHash: 'b'.repeat(40) };
+    const makeBranchList = (current: string, branchName: string): BranchList => ({
+      branches: [
+        { name: 'main', remote: false, current: current === 'main', upstream: 'origin/main', ahead: 0, behind: 0, hash: 'a'.repeat(40), mergedIntoHead: false, lastCommitIso: '2025-01-01T00:00:00Z' },
+        { name: 'devel', remote: false, current: current === 'devel', upstream: 'origin/devel', ahead: 0, behind: 0, hash: 'b'.repeat(40), mergedIntoHead: false, lastCommitIso: '2025-01-01T00:00:00Z' },
+      ],
+      recent: ['main', 'devel'],
+    });
+    const BRANCHES_MAIN = makeBranchList('main', 'main');
+    const BRANCHES_DEVEL = makeBranchList('devel', 'devel');
+    let statusGets = 0;
+    let branchesGets = 0;
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify(OUTCOME), { status: 200 });
+      if (input === '/api/repos/r-rb-8/status') {
+        statusGets += 1;
+        return new Response(JSON.stringify(statusGets === 1 ? ON_MAIN : ON_DEVEL), { status: 200 });
+      }
+      if (input === '/api/repos/r-rb-8/branches') {
+        branchesGets += 1;
+        return new Response(JSON.stringify(branchesGets === 1 ? BRANCHES_MAIN : BRANCHES_DEVEL), { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const BODY: CheckoutUpdateBody = { branch: 'devel' };
+
+    let result: {
+      status?: RepoStatus | undefined;
+      branches?: BranchList | undefined;
+      trigger?: (body: CheckoutUpdateBody) => Promise<RebaseOutcome>;
+    } = {};
+    function Probe() {
+      const { data: status } = useRepoStatus('r-rb-8');
+      const { data: branches } = useBranches('r-rb-8');
+      const { trigger } = useCheckoutUpdate('r-rb-8');
+      result = { status, branches, trigger };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result.status).toEqual(ON_MAIN));
+      await vi.waitFor(() => expect(result.branches).toEqual(BRANCHES_MAIN));
+    });
+
+    let outcome: RebaseOutcome | undefined;
+    await act(async () => {
+      outcome = await result.trigger!(BODY);
+    });
+
+    expect(outcome).toEqual(OUTCOME);
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-rb-8/checkout-update', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(BODY),
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result.status).toEqual(ON_DEVEL));
+      await vi.waitFor(() => expect(result.branches).toEqual(BRANCHES_DEVEL));
     });
     expect(statusGets).toBe(2);
     expect(branchesGets).toBe(2);

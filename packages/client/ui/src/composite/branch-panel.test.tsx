@@ -418,6 +418,35 @@ describe('BranchPanel 检出并变基到当前（GitCheckoutWithRebaseAction 语
     expect(screen.queryByTestId('menu-remote-origin/dev')).not.toBeInTheDocument();
   });
 
+  it('「检出并更新」：有上游非当前分支点击以 {branch} 调 onCheckoutUpdate；无上游/当前分支禁用', async () => {
+    const onCheckoutUpdate = vi.fn();
+    const { rerender } = render(
+      <BranchPanel
+        branches={makeList([
+          makeBranch({ name: 'dev', upstream: 'origin/dev' }),
+          makeBranch({ name: 'main', current: true }),
+        ])}
+        {...makeHandlers()}
+        onCheckoutUpdate={onCheckoutUpdate}
+      />,
+    );
+    await openLocalMenu('dev');
+    fireEvent.click(screen.getByText('检出并更新'));
+    expect(onCheckoutUpdate).toHaveBeenCalledTimes(1);
+    expect(onCheckoutUpdate).toHaveBeenCalledWith({ branch: 'dev' });
+
+    // 无上游 → 禁用；当前分支 → 禁用
+    rerender(
+      <BranchPanel
+        branches={makeList([makeBranch({ name: 'noup', upstream: null })])}
+        {...makeHandlers()}
+        onCheckoutUpdate={onCheckoutUpdate}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('menu-local-noup'));
+    expect((await screen.findByText('检出并更新')).closest('li')).toHaveClass('ant-dropdown-menu-item-disabled');
+  });
+
   it('recent 非空且默认开：最近检出卡片渲染，行内「检出」以 branch action 回调', () => {
     const onCheckout = vi.fn();
     render(

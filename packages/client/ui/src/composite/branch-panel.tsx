@@ -43,6 +43,9 @@ export interface BranchPanelProps {
   /** 检出并变基到当前（GitCheckoutWithRebaseAction 语义）：目标分支检出后 rebase onto 变基前所在分支；
    *  本地行菜单项直发 {branch}，远程行经本地名 Modal（prefill 剥 origin/ 前缀）后回传 {branch, localName}；缺省不渲染 */
   onCheckoutRebase?: (request: { branch: string; localName?: string }) => void;
+  /** 检出并更新（GitCheckoutWithUpdateAction 语义）：本地行菜单直发 {branch}——检出后 fetch 跟踪分支 + 策略化更新
+   *  （strategy 缺省 merge，对齐更新策略默认）；无上游分支行该项禁用；缺省不渲染 */
+  onCheckoutUpdate?: (request: { branch: string; strategy?: 'merge' | 'rebase' }) => void;
   /** 标签列表（GitBranchesTreeSingleRepoModel tags 组语义）：注入时渲染「标签」组卡片（行内「检出」→ detached）；
    *  缺省不渲染（向后兼容） */
   tags?: TagList;
@@ -207,15 +210,18 @@ function LocalBranchRow({
   onCompare,
   onForcePushedUpdate,
   hasCheckoutRebase,
+  hasCheckoutUpdate,
 }: {
   branch: BranchRef;
   /** 当前等待删除确认的分支名（受控 Popconfirm 锚定本行菜单按钮） */
   pendingDelete: string | null;
-  onMenuAction: (key: 'checkout' | 'checkoutRebase' | 'rename' | 'setUpstream' | 'delete', branch: BranchRef) => void;
+  onMenuAction: (key: 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'rename' | 'setUpstream' | 'delete', branch: BranchRef) => void;
   onDelete: (branch: BranchRef) => void;
   onDeleteCancel: () => void;
   /** 是否渲染「检出并变基到当前」菜单项（容器已接 onCheckoutRebase 时 true） */
   hasCheckoutRebase: boolean;
+  /** 是否渲染「检出并更新」菜单项（容器已接 onCheckoutUpdate 时 true） */
+  hasCheckoutUpdate: boolean;
   /** 与当前分支比较（GitCompareWithBranchAction 语义）；当前分支无意义（A..A 空循环），禁用 */
   onCompare?: (branch: string) => void;
   /** force-push 后修复（GitForcePushedBranchUpdateAction 语义）：当前分支与上游分叉（ahead>0 且 behind>0）时渲染 */
@@ -272,13 +278,20 @@ function LocalBranchRow({
               ...(hasCheckoutRebase
                 ? [{ key: 'checkoutRebase', label: '检出并变基到当前', disabled: branch.current }]
                 : []),
+              // 检出并更新（GitCheckoutWithUpdateAction 语义）：检出后 fetch 跟踪分支 + 策略化更新；当前分支/无上游无意义，禁用
+              ...(hasCheckoutUpdate
+                ? [{ key: 'checkoutUpdate', label: '检出并更新', disabled: branch.current || branch.upstream === null }]
+                : []),
               { key: 'rename', label: '重命名' },
               { key: 'setUpstream', label: '设上游' },
               // 当前分支禁止删除（git branch -d 当前头分支无意义，服务端也会拒绝）
               { key: 'delete', label: '删除', danger: true, disabled: branch.current },
             ],
             onClick: ({ key }) =>
-              onMenuAction(key as 'checkout' | 'checkoutRebase' | 'rename' | 'setUpstream' | 'delete', branch),
+              onMenuAction(
+                key as 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'rename' | 'setUpstream' | 'delete',
+                branch,
+              ),
           }}
         >
           <Button size="small" type="text" icon={<MoreOutlined />} data-testid={`menu-local-${branch.name}`} />
@@ -394,6 +407,7 @@ export function BranchPanel({
   fetching,
   onForcePushedUpdate,
   onCheckoutRebase,
+  onCheckoutUpdate,
   tags,
   acting,
 }: BranchPanelProps): React.ReactNode {
@@ -438,9 +452,10 @@ export function BranchPanel({
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [remoteRebaseTarget, setRemoteRebaseTarget] = useState<string | null>(null);
 
-  /** 行菜单分派：检出直发回调；检出并变基本地行直发、远程行开本地名 Modal；重命名/设上游开对应 Modal；删除开受控 Popconfirm */
+  /** 行菜单分派：检出直发回调；检出并变基本地行直发、远程行开本地名 Modal；检出并更新本地行直发；
+   *  重命名/设上游开对应 Modal；删除开受控 Popconfirm */
   const handleMenuAction = (
-    key: 'checkout' | 'checkoutRebase' | 'rename' | 'setUpstream' | 'delete',
+    key: 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'rename' | 'setUpstream' | 'delete',
     branch: BranchRef,
   ): void => {
     if (key === 'checkout') onCheckout({ action: 'branch', name: branch.name });
@@ -448,6 +463,7 @@ export function BranchPanel({
       if (branch.remote) setRemoteRebaseTarget(branch.name);
       else onCheckoutRebase?.({ branch: branch.name });
     }
+    if (key === 'checkoutUpdate') onCheckoutUpdate?.({ branch: branch.name });
     if (key === 'rename') setRenameTarget(branch.name);
     if (key === 'setUpstream') setUpstreamTarget(branch.name);
     if (key === 'delete') setPendingDelete(branch.name);
@@ -551,6 +567,7 @@ export function BranchPanel({
                 onCompare={onCompare}
                 onForcePushedUpdate={onForcePushedUpdate}
                 hasCheckoutRebase={onCheckoutRebase !== undefined}
+                hasCheckoutUpdate={onCheckoutUpdate !== undefined}
               />
             ))
           )

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
-import { forcePushedUpdate, updateProject } from './update';
+import { forcePushedUpdate, updateProject, checkoutUpdate } from './update';
 
 const dirs: string[] = [];
 
@@ -185,5 +185,46 @@ describe('forcePushedUpdate（GitForcePushedBranchUpdateAction 语义）', () =>
     const err = await forcePushedUpdate(repo).catch((e: unknown) => e);
 
     expect(err).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('没有上游') });
+  });
+});
+
+describe('checkoutUpdate（GitCheckoutWithUpdateAction 语义）', () => {
+  /** 造已推送上游的 devel 分支并留在默认分支 */
+  function makeTrackedDevel(repo: string, bare: string, defaultBranch: string): void {
+    git(repo, ['checkout', '-q', '-b', 'devel']);
+    git(repo, ['push', '-q', '-u', 'origin', 'devel']);
+    git(repo, ['checkout', '-q', defaultBranch]);
+  }
+
+  it('对端新提交 → success 且分支已切换；再次执行 → up-to-date', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, defaultBranch } = makeRemoteRig();
+    makeTrackedDevel(repo, bare, defaultBranch);
+    pushRemoteCommit(bare, 'devel', 'd.txt', 'remote-devel');
+
+    const r = await checkoutUpdate(repo, { branch: 'devel' });
+    expect(r).toEqual({ status: 'success' });
+    expect(git(repo, ['symbolic-ref', '--short', 'HEAD'])).toBe('devel');
+    expect(readFileSync(join(repo, 'd.txt'), 'utf8')).toBe('remote-devel');
+
+    // 默认分支无新提交 → up-to-date（非错误——容器按「已是最新」提示）
+    const r2 = await checkoutUpdate(repo, { branch: defaultBranch, strategy: 'rebase' });
+    expect(r2).toEqual({ status: 'up-to-date' });
+    expect(git(repo, ['symbolic-ref', '--short', 'HEAD'])).toBe(defaultBranch);
+  });
+
+  it('当前分支 → INVALID_QUERY；无上游 → INVALID_QUERY；不存在 → INVALID_REF', async () => {
+    const { repo, bare, defaultBranch } = makeRemoteRig();
+    const curErr = await checkoutUpdate(repo, { branch: defaultBranch }).catch((e: unknown) => e);
+    expect(curErr).toMatchObject({ code: 'INVALID_QUERY', message: '目标已是当前分支，无需检出并更新' });
+
+    // 无上游分支：从 main 建出 noupstream 后留在 main
+    git(repo, ['checkout', '-q', '-b', 'noupstream']);
+    git(repo, ['checkout', '-q', defaultBranch]);
+    const upErr = await checkoutUpdate(repo, { branch: 'noupstream' }).catch((e: unknown) => e);
+    expect(upErr).toMatchObject({ code: 'INVALID_QUERY', message: '分支未配置上游，无法检出并更新' });
+    void bare;
+
+    const refErr = await checkoutUpdate(repo, { branch: 'ghost' }).catch((e: unknown) => e);
+    expect(refErr).toMatchObject({ code: 'INVALID_REF', message: '分支不存在：ghost' });
   });
 });

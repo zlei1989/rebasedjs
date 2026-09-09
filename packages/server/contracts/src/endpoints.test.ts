@@ -4,6 +4,7 @@ import {
   branchActionSchema,
   checkoutActionSchema,
   checkoutRebaseBodySchema,
+  checkoutUpdateBodySchema,
   gpgConfigBodySchema,
   commitBodySchema,
   amendSpecificBodySchema,
@@ -209,6 +210,16 @@ describe('checkoutRebaseBodySchema（检出并变基到当前：GitCheckoutWithR
     expect(() => checkoutRebaseBodySchema.parse({ branch: '' })).toThrow();
     expect(() => checkoutRebaseBodySchema.parse({})).toThrow();
     expect(() => checkoutRebaseBodySchema.parse({ branch: 'main', localName: '' })).toThrow();
+  });
+});
+
+describe('checkoutUpdateBodySchema（检出并更新：GitCheckoutWithUpdateAction 语义）', () => {
+  it('branch 必填；strategy 可省（缺省 merge）并限 merge/rebase', () => {
+    expect(checkoutUpdateBodySchema.parse({ branch: 'devel' })).toEqual({ branch: 'devel' });
+    expect(checkoutUpdateBodySchema.parse({ branch: 'devel', strategy: 'rebase' }))
+      .toEqual({ branch: 'devel', strategy: 'rebase' });
+    expect(() => checkoutUpdateBodySchema.parse({ branch: '' })).toThrow();
+    expect(() => checkoutUpdateBodySchema.parse({ branch: 'devel', strategy: 'ff' })).toThrow();
   });
 });
 
