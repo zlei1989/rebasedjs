@@ -4,6 +4,7 @@
  * SSE 请求用 { agent: false }（不复用池化连接）：慢速 git 夹具窗口会跨过 server 默认
  * keepAliveTimeout(5s)，Windows 下复用恰好过期套接字会 read ECONNRESET。
  * 每用例独立 REBASED_CONFIG_DIR（空注册表）；成功路径先注册临时 git 仓库。
+ * 临时目录清理带 EPERM/EBUSY 重试：Windows 上 git 子进程/SSE 流/杀毒仍持有句柄时 rmSync 抛 EPERM。
  */
 import { execFileSync } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
@@ -25,10 +26,27 @@ function tmpDir(prefix: string): string {
   return dir;
 }
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Windows 上句柄未释放时 rmSync 抛 EPERM/EBUSY（force:true 只忽略 ENOENT）：指数退避重试，耗尽后才抛出 */
+async function rmRetry(dir: string, attempts = 6): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if ((code !== 'EPERM' && code !== 'EBUSY' && code !== 'ENOTEMPTY') || i === attempts - 1) throw err;
+      await sleep(100 * (i + 1));
+    }
+  }
+}
+
 /** 建临时 git 仓库（一次提交，可选工作区改动供 diff 流产帧）并写入配置注册表，返回注册 repoId */
 function registerRepo(opts: { modify?: boolean } = {}): { repoId: string; repoPath: string } {
   const repo = tmpDir('rebased-web-koa-repo-');
   execFileSync('git', ['init', '-q', repo]);
+  execFileSync('git', ['-C', repo, 'config', 'gc.auto', '0']); // 禁后台 gc：gc --auto 子进程残留会锁临时目录（Windows EPERM）
   execFileSync('git', ['-C', repo, 'config', 'user.email', 'test@example.com']);
   execFileSync('git', ['-C', repo, 'config', 'user.name', 'Test User']);
   writeFileSync(join(repo, 'a.txt'), 'hello\n');
@@ -74,6 +92,7 @@ function makeRemoteRig(): { repoId: string; repoPath: string; bare: string; defa
   const defaultBranch = execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
   const bare = tmpDir('rebased-web-koa-bare-');
   execFileSync('git', ['init', '-q', '--bare', bare]);
+  execFileSync('git', ['-C', bare, 'config', 'gc.auto', '0']);
   execFileSync('git', ['-C', repoPath, 'remote', 'add', 'origin', bare]);
   execFileSync('git', ['-C', repoPath, 'push', '-q', '-u', 'origin', defaultBranch]);
   execFileSync('git', ['-C', bare, 'symbolic-ref', 'HEAD', `refs/heads/${defaultBranch}`]);
@@ -84,6 +103,7 @@ function makeRemoteRig(): { repoId: string; repoPath: string; bare: string; defa
 function pushRemoteCommit(bare: string, defaultBranch: string, filename: string, content: string): void {
   const other = tmpDir('rebased-web-koa-other-');
   execFileSync('git', ['clone', '-q', bare, other]);
+  execFileSync('git', ['-C', other, 'config', 'gc.auto', '0']);
   execFileSync('git', ['-C', other, 'config', 'user.email', 'test@example.com']);
   execFileSync('git', ['-C', other, 'config', 'user.name', 'Test User']);
   writeFileSync(join(other, filename), content);
@@ -114,10 +134,11 @@ beforeEach(() => {
   process.env.REBASED_CONFIG_DIR = tmpDir('rebased-web-koa-config-');
 });
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.REBASED_CONFIG_DIR;
-  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+  const current = dirs;
   dirs = [];
+  for (const dir of current) await rmRetry(dir);
 });
 
 describe('web-koa REST 端点', () => {
