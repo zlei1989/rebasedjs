@@ -14,6 +14,12 @@ export function handleApiError(error: unknown, ctx: ParameterizedContext): void 
     ctx.body = { error: { code: 'INVALID_QUERY', message: '查询参数不合法', context: error.issues } };
     return;
   }
+  // 空/非法 JSON 请求体：与 web-next 的 400 口径统一（bodyparser 层错误在此兜底，不当 500）
+  if (error instanceof SyntaxError) {
+    ctx.status = httpStatusFor('INVALID_QUERY');
+    ctx.body = { error: { code: 'INVALID_QUERY', message: '请求体不是合法 JSON' } };
+    return;
+  }
   const serviceError = toServiceError(error);
   ctx.status = httpStatusFor(serviceError.code);
   ctx.body = { error: { code: serviceError.code, message: serviceError.message, ...(serviceError.context ? { context: serviceError.context } : {}) } };

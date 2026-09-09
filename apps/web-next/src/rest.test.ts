@@ -131,6 +131,18 @@ describe('web-next REST 路由', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 
+  it('错误映射统一：空/非法 JSON 请求体 → 400 INVALID_QUERY（之前 SyntaxError 折 500，一等公民修复）', async () => {
+    const res = await postOpen(
+      new Request('http://localhost/api/repos/open', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{not-json',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
   it('open 端点：非 git 目录返回 400 NOT_A_GIT_REPO', async () => {
     const dir = tmpDir('rebased-web-next-plain-');
     const res = await postOpen(

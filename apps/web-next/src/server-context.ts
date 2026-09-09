@@ -14,6 +14,13 @@ export async function handleApiError(error: unknown, init?: ResponseInit): Promi
       { ...init, status: httpStatusFor('INVALID_QUERY') },
     );
   }
+  // 空/非法 JSON 请求体：req.json() 抛 SyntaxError——与 koa 的 400 口径统一（不当 500）
+  if (error instanceof SyntaxError) {
+    return Response.json(
+      { error: { code: 'INVALID_QUERY', message: '请求体不是合法 JSON' } },
+      { ...init, status: httpStatusFor('INVALID_QUERY') },
+    );
+  }
   const serviceError = toServiceError(error);
   return Response.json(
     { error: { code: serviceError.code, message: serviceError.message, ...(serviceError.context ? { context: serviceError.context } : {}) } },

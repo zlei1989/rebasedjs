@@ -81,6 +81,17 @@ describe('commit 功能', () => {
     expect(subject).toBe('测试提交');
   });
 
+  it('pre-commit hook 拒绝 → HOOK_FAILED（预留错误码消费，不当 500）', async () => {
+    const repo = instantiateFixture(baseTemplate);
+    dirs.push(repo);
+    writeFileSync(join(repo, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\necho "pre-commit hook failed" >&2\nexit 1\n', 'utf8');
+    writeFileSync(join(repo, 'b.txt'), 'v2');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+
+    const err = await createCommit(repo, { message: '被 hook 拒绝' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'HOOK_FAILED', message: expect.stringContaining('Git hook 拒绝') });
+  });
+
   it('assertCommitIdentity 缺 user.name 或 user.email 时抛 INVALID_QUERY', () => {
     const missing = [
       { key: 'user.name', value: null, localValue: null },

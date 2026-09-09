@@ -7,6 +7,7 @@ import {
   commitStaged,
   detectCrlfWarning,
   getGitConfigEntries,
+  GitExitError,
   headCommit,
   isAncestorCommit,
   listAmendTargets,
@@ -36,21 +37,39 @@ export function assertCommitIdentity(entries: CoreConfigEntry[]): void {
   }
 }
 
+/** Git hook 拒绝特征（LC_ALL=C 固定英文；git 各版本措辞：pre-commit hook failed / hook declined / hook exited with code N） */
+const HOOK_FAILED_PATTERN = /hook (failed|declined|exited with code)/i;
+
+/** GitExitError → HOOK_FAILED（预留错误码消费：hook 拒绝提交属用户可理解的业务失败，不当 500） */
+export function toHookFailure(error: GitExitError): ServiceError | null {
+  return HOOK_FAILED_PATTERN.test(`${error.stdout}${error.stderr}`)
+    ? new ServiceError('HOOK_FAILED', '提交被 Git hook 拒绝（pre-commit/commit-msg 等），请按 hook 提示修正后重试', { cause: error })
+    : null;
+}
+
 /** 提交暂存区：前置检查 user.name/user.email 生效值；提交后返回新哈希。
- *  crlfFix = GitCrlfDialog「修复并提交」：先写 core.autocrlf 建议值（--global）再提交 */
+ *  crlfFix = GitCrlfDialog「修复并提交」：先写 core.autocrlf 建议值（--global）再提交；hook 拒绝 → HOOK_FAILED */
 export async function createCommit(repoPath: string, body: CommitBody): Promise<{ hash: string }> {
   const entries = await getGitConfigEntries(repoPath, ['user.name', 'user.email']);
   assertCommitIdentity(entries);
   if (body.crlfFix === true) {
     await setGlobalAutocrlf(repoPath);
   }
-  const hash = await commitStaged(repoPath, {
-    message: body.message,
-    amend: body.amend,
-    signOff: body.signOff,
-    noVerify: body.noVerify,
-  });
-  return { hash };
+  try {
+    const hash = await commitStaged(repoPath, {
+      message: body.message,
+      amend: body.amend,
+      signOff: body.signOff,
+      noVerify: body.noVerify,
+    });
+    return { hash };
+  } catch (e) {
+    if (e instanceof GitExitError) {
+      const hookFailure = toHookFailure(e);
+      if (hookFailure !== null) throw hookFailure;
+    }
+    throw e;
+  }
 }
 
 /** CRLF 提示（GitCrlfDialog 语义）：检测即将提交的暂存文件是否含无属性覆盖的 CRLF（Windows + autocrlf 未建议配置） */

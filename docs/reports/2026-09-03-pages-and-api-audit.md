@@ -19,7 +19,7 @@
 | 端点路径 / HTTP 方法 | **102 / 117**（web-next 102 个 route.ts ↔ web-koa repos.ts 117 注册，15 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 122 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 69、领域类型/别名 95、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| 契约层 | zod schema 70、领域类型/别名 97、SSE 事件 6 种在用、错误码 9 实际产生 / 3 预留（HOOK_FAILED 已消费；CONFLICT 三态承载定档） |
 | 导航边（106 条） | 88 ✅（含等价边）+ 6 🟡 + 8 ➖ + 4 ❌ |
 
 ### 1.2 口径与图例

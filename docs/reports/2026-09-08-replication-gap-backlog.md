@@ -125,9 +125,15 @@
 
 gitlab checkout Bearer 注入 hardening（真机验证 + core 层改 Basic/PRIVATE-TOKEN）；web-next 空/非法 JSON body 500 与 koa 400 全局评估；createOpen 跨仓库保持打开；worktree 回滚失败包 gitFailure；resolveSubmodulePath 白名单；core vitest `fileParallelism`；unborn HEAD 建补丁/搁置（staged→`git diff --cached`、缺省→两段拼接）；execLogByCwd 仓库级淘汰；面板 key `kind+id`；addIgnore path 字符集收紧；存档名 `.`/`..` 边界统一。
 
-### 2.6 功能域与契约（3 项）
+### 2.6 功能域与契约 —— ✅ 完成记录（2026-09-21 收尾）
 
-browse（历史快照浏览）：✅ 已完成（§2.8 完成记录）；`initRepo`/`cloneRepo` 端点：✅ 已完成（§2.2 完成记录）；终稿盘点仍以架构 spec §4.2 域表逐行核；`operation.progress` SSE（有进度型长任务 UI 面时实现）；预留错误码 4 个（`CONFLICT`/`HOOK_FAILED`/`STALE_LOCK`/`CANCELLED`）随对应功能落地消费。
+- **browse（历史快照浏览）**：✅ 已完成（§2.8 完成记录）；**`initRepo`/`cloneRepo` 端点**：✅ 已完成（§2.2 完成记录）；终稿盘点以架构 spec §4.2 域表逐行核（页面缺口 0、导航边可做缺口 0——本轮记账）。
+- **`operation.progress` SSE**：✅ 已满足（不再新增冗余事件类型）——进度由 `operation.state-changed` 携带 step/total（core 读 `rebase-merge/msgnum·end`、`rebase-apply/next·last`；watcher 2s 轮询、`operationEquals` 含 step/total 步进即推送）+ OperationStatus「变基中（第 N/M 步）」呈现——Java `GitRebaseProgress` 逐帧解析在 Web 的等效为轮询态。
+- **预留错误码 4 → 1 消费 1 口径定档 2 保留**：
+  - `CONFLICT`：口径定档——冲突语义由业务三态承载（`200 { status: 'conflicts' }`，merge/rebase/cherry-pick/revert 四操作统一），不引入错误码（409 仅供真正的资源冲突类错误）；
+  - `HOOK_FAILED`：✅ 已消费——`createCommit` 捕获 pre-commit/commit-msg 等 hook 拒绝（`hook failed/declined/exited with code` 特征）→ 422 HOOK_FAILED（不当 500）+ 中文引导；api +1 单测；
+  - `STALE_LOCK`、`CANCELLED`：保留——取消/锁冲突底层路径（exec 中止、git 锁竞态）随工程排期消化，届时消费。
+- **JSON body 错误映射统一（§2.5 评估项落定）**：两端 `handleApiError` 增 SyntaxError → 400 INVALID_QUERY（web-next `req.json()` 空/非法体此前折 500；koa bodyparser 层为 400——现两端口径一致）；web-next +1 单测。
 
 ### 2.7 PR/MR 行级 diff 视图（2026-09-08 新裁定：由「明确不做」改为可排期）——✅ 全部完成
 
