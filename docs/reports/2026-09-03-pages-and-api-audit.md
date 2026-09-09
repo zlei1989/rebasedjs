@@ -444,7 +444,7 @@ Committed Changes 浏览器——按提交浏览已提交变更；对应 `Commit
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | 按提交浏览已提交变更 | ✅ | 提交列表左栏 + 分页「加载更多」 |
-| 目录树组织变更文件 | 🟡 | 平铺列表（A/M/D/R 徽标 + renameFrom）；目录树未做 |
+| 目录树组织变更文件 | ✅ | 右栏目录树（`buildFileTree` 纯函数：路径分段建目录节点、同级目录排文件前各按名称、文件叶子带 A/M/D/R 徽标 + renameFrom；目录缺省展开可折叠；文件点击 → `/diff?file&from=<hash>~1&to=<hash>`） |
 | 与 diff 查看器联动 | ✅ | 文件点击 → `/diff?file&from=<hash>~1&to=<hash>` |
 
 ### 4.19 SearchPanel ✅

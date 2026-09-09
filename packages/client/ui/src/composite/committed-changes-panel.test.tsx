@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CommittedEntry, CommittedPage } from '@rebased/contracts';
-import { CommittedChangesPanel } from './committed-changes-panel';
+import { buildFileTree, CommittedChangesPanel } from './committed-changes-panel';
 
 /** 测试提交条目工厂：补全 CommittedEntry 必填字段 */
 function makeEntry(partial: Partial<CommittedEntry> & { hash: string }): CommittedEntry {
@@ -170,5 +170,67 @@ describe('CommittedChangesPanel 交互', () => {
   it('hasMore=false 时不渲染「加载更多」按钮', () => {
     render(<CommittedChangesPanel page={makePage([makeEntry({ hash: 'hash-1' })])} />);
     expect(screen.queryByRole('button', { name: /加载更多/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('buildFileTree（目录树纯函数）', () => {
+  it('嵌套目录与根文件：目录节点带 children、文件叶子带 fileIndex/status/renameFrom', () => {
+    const tree = buildFileTree([
+      { path: 'src/app.ts', status: 'M' },
+      { path: 'src/util/str.ts', status: 'A' },
+      { path: 'README.md', status: 'D' },
+    ]);
+
+    expect(tree.map((n) => ({ name: n.name, type: n.type }))).toEqual([
+      { name: 'src', type: 'dir' },
+      { name: 'README.md', type: 'file' },
+    ]);
+    const src = tree[0];
+    // 同级排序：目录排文件前（util 目录在 app.ts 之前）、各自按名称
+    expect(src.children?.map((n) => n.name)).toEqual(['util', 'app.ts']);
+    expect(src.children?.[1]).toMatchObject({ type: 'file', status: 'M', fileIndex: 0 });
+    const util = src.children?.[0];
+    expect(util?.children?.[0]).toMatchObject({ type: 'file', path: 'src/util/str.ts', status: 'A', fileIndex: 1 });
+    expect(tree[1]).toMatchObject({ type: 'file', status: 'D', fileIndex: 2 });
+  });
+});
+
+describe('CommittedChangesPanel 目录树（CommitedChangesBrowser 文件树语义）', () => {
+  const entry = makeEntry({
+    hash: 'hash-tree',
+    files: [
+      { path: 'src/app.ts', status: 'M' },
+      { path: 'src/util/str.ts', status: 'A' },
+      { path: 'README.md', status: 'A' },
+    ],
+  });
+
+  it('目录节点渲染；点击折叠隐藏子文件、再点展开恢复（文件叶子 testid 沿用原下标）', () => {
+    render(<CommittedChangesPanel page={makePage([entry])} selectedHash="hash-tree" />);
+
+    expect(screen.getByTestId('committed-dir-src')).toBeInTheDocument();
+    expect(screen.getByTestId('committed-file-0')).toHaveTextContent('app.ts');
+    expect(screen.getByTestId('committed-file-1')).toHaveTextContent('str.ts');
+    expect(screen.getByTestId('committed-file-2')).toHaveTextContent('README.md');
+
+    // 折叠 src → 子文件隐藏（README.md 根文件不受影响）
+    fireEvent.click(screen.getByTestId('committed-dir-src'));
+    expect(screen.queryByTestId('committed-file-0')).not.toBeInTheDocument();
+    expect(screen.getByTestId('committed-file-2')).toBeInTheDocument();
+
+    // 重新展开 → 恢复
+    fireEvent.click(screen.getByTestId('committed-dir-src'));
+    expect(screen.getByTestId('committed-file-0')).toHaveTextContent('app.ts');
+  });
+
+  it('目录内文件点击仍以 (path, hash) 调 onOpenFile', () => {
+    const onOpenFile = vi.fn();
+    render(
+      <CommittedChangesPanel page={makePage([entry])} selectedHash="hash-tree" onOpenFile={onOpenFile} />,
+    );
+
+    fireEvent.click(screen.getByTestId('committed-file-1'));
+
+    expect(onOpenFile).toHaveBeenCalledWith('src/util/str.ts', 'hash-tree');
   });
 });

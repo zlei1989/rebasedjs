@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 17 项（分布于 13 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 16 项（分布于 13 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 8 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -89,7 +89,7 @@
 
 **HistoryPanel（0）**：双击 → DiffPage（%P 父哈希，根提交 root=1）与 Annotate Revision → `/blame?rev=`（blame rev 指定版本溯源）已落地（core parents 批量解析 + history %P）。
 
-**CommittedChangesPanel（1）**：目录树组织变更文件（`FileTree` 基础组件）。
+**CommittedChangesPanel（0）**：目录树组织变更文件已落地——右栏目录树（`buildFileTree` 纯函数：路径分段建目录节点、同级目录排文件前各按名称、文件叶子带状态徽标 + renameFrom、目录缺省展开可折叠（Set 折叠态）；ui +3 单测（纯函数嵌套/排序 + 渲染折叠展开 + 目录内文件点击）；文件点击 → diff 端点回调不变）。
 
 **SearchPanel（0）**：分支快速搜索已落地（Search Everywhere Git tab 语义——页内「分支快速搜索」卡片：输入即滤本地分支，行点击 → 检出并回日志页（quickswitch）；ui +3 单测。全局宿主搜索 ➖ 保持）。
 
