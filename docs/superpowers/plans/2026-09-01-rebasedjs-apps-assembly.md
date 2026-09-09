@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16.2.7 + React 19 + antd 6 + Tailwind、Koa + @koa/router + @koa/bodyparser + koa-static、Vite 7.3.6（Ruling 6/9 钉版）+ @vitejs/plugin-react、SWR、Monaco Editor（懒加载）、vitest（jsdom + node 双环境）、@testing-library/react。
 
-**Spec:** `docs/superpowers/specs/2026-09-01-rebasedjs-apps-assembly-design.md`（全部章节）。前置：Plan 2a 完成（74 用例），终审前置清单（SSE 流错误呈现、rev:'' 404 映射、ui index 导出 graph-layout 等）随任务消化。
+**Spec:** `docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md`（§4.5 ui 首跑规格与 UX 对齐、§4.6 框架层、§6.2 首跑验收、§7 步骤 5 首跑组装；附录 B UX 对照、附录 C 推迟项）。前置：Plan 2a 完成（74 用例），终审前置清单（SSE 流错误呈现、rev:'' 404 映射、ui index 导出 graph-layout 等）随任务消化。
 
 ## Global Constraints
 

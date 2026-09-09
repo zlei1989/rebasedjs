@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript 5 strict、vitest（node env，core/api 已有 testTimeout 30000）、真实 git CLI fixture、JD 镜像（`pnpm.overrides vite 7.3.6` 既有）。
 
-**Spec:** `docs/superpowers/specs/2026-09-01-rebasedjs-apps-assembly-design.md`（§3 graph-layout、§4.2 events.ts、§4.3 取消链路、§5.3 readFileAtRev/getFileVersions）。Java 参照源码：`D:\zhanglei1120\Github\rebased\platform\vcs-log\graph\`。
+**Spec:** `docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md`（§4.5.5 graph-layout、§4.2 events.ts、§4.1/§4.2/§4.6 取消链路、§4.1 readFileAtRev / §4.2 getFileVersions）。Java 参照源码：`D:\zhanglei1120\Github\rebased\platform\vcs-log\graph\`。
 
 ## Global Constraints
 

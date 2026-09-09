@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript、React 19、antd 6、SWR、vitest、Next.js 16（App Router）、Koa + @koa/router、zod。
 
-**Spec:** `docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md`（§4.2 功能清单 config/operation 行、§4.3 端点约定、§4.5 组件清单、§5 SSE 事件类型 `operation.state-changed`）；`docs/superpowers/specs/2026-09-01-rebasedjs-apps-assembly-design.md`（路由三件套、SSE/取消链路、UX 对齐条目）。
+**Spec:** `docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md`（§4.2 功能清单 config/operation 行、§4.3 端点约定、§4.5 组件清单、§5 SSE 事件类型 `operation.state-changed`；§4.6 路由三件套与 SSE/取消链路、§4.5.6 UX 对齐条目）。
 
 ## Global Constraints
 

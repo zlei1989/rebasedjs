@@ -29,6 +29,7 @@
 - 不重写 IntelliJ 平台通用 IDE 能力（Java 语言支持、调试器、数据库 grid、书签、结构视图等）。
 - 不实现 Java 版没有的功能（如 git bisect 界面）。
 - v1 不做多用户/远程托管模式；两个应用均为**本地优先**（localhost 直连本地仓库）。
+- **首跑（P1 可见产品）明确不做**（文档化，避免误判为缺失；推迟项汇总见附录 C）：欢迎屏整体（RepoPage 取代；`FlatWelcomeFrame.kt:111-125`）；克隆/init 的 UI（P2 补最小字段 URL+Directory；`VcsCloneDialog.kt:33-131`）；log 过滤/搜索 UI 与分支折叠（P2 次优先补"文本即滤 + 分支过滤弹窗"；`VcsLogClassicFilterUi.kt:148-152`）；独立 StatusPage（状态在 LogPage 顶栏）与进行中操作状态前缀（P2 operation.ts；`GitBranchUtil.java:193-204`）；提交详情面板操作按钮（Java 面板内也没有，动作在右键菜单，属 P3）；自动 fetch、保护分支（P2/P3）与 GPG 签名状态（P2 commit.ts）。
 
 ---
 
@@ -95,11 +96,14 @@
 rebasedjs/
 ├── apps/
 │   ├── web-next/          # 下游应用①：Next.js 16（App Router）
-│   │   ├── app/           # 页面壳（layout、route 页面；主体为 client components）
+│   │   ├── next.config.ts # transpilePackages：ui/client/contracts
+│   │   ├── app/           # 页面壳（layout.tsx SSR 壳、page.tsx RepoPage、repos/[repoId]/page.tsx LogPage+DiffPage；主体为 client components）
 │   │   └── app/api/       # API Routes + Server Actions：校验→调 api→错误映射
 │   └── web-koa/           # 下游应用②：Koa.js
+│       ├── src/app.ts    # koa 组装：路由 + 中间件 + 静态
 │       ├── src/routes/    # 路由：同样三件套（校验→调 api→错误映射）
 │       ├── src/middleware/# 错误处理、body 解析、SSE 流、静态资源
+│       ├── index.html、src/main.tsx、vite.config.ts  # SPA：挂载同一套 ui/client，dev 代理 /api → Koa
 │       └── public/        # 同一套 SPA 构建产物（Vite 打包 ui + client）
 ├── packages/
 │   ├── server/
@@ -107,7 +111,7 @@ rebasedjs/
 │   │   ├── api/       # 功能服务层：src/ 下一个功能一个文件
 │   │   └── contracts/ # 契约：REST 端点、zod schema、SSE 事件、领域类型、错误码
 │   └── client/
-│       ├── ui/        # 基础组件 + 组合组件，纯数据驱动
+│       ├── ui/        # base/domain/composite 组件分层 + graph-layout/（纯函数布局引擎）
 │       └── client/    # SWR hooks + SSE 订阅 hooks
 ├── docs/                  # 设计文档与功能清单
 └── eslint.shared.ts       # 共享规则 + 分层边界规则
@@ -155,7 +159,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 | `repo.ts` | 仓库发现（向上找 `.git`）、`init`/`clone`、worktree 信息 |
 | `status.ts` | `status --porcelain=v2 -z --branch` 解析 |
 | `log.ts` | 流式 `log --graph`：自定义 `--format` 分隔符 + NUL 分隔，逐条产出 `GraphLine` 事件（边/节点/标签/HEAD 装饰），分页 `--skip`、过滤（author/date/message/path）、`--follow` |
-| `diff.ts` | 大 diff 流式输出（chunk 事件），`-z` 解析文件名 |
+| `diff.ts` | 大 diff 流式输出（chunk 事件），`-z` 解析文件名；`readFileAtRev`（`git show <rev>:<file>` / 工作区读文件，供 Monaco 两侧全文） |
 | `blame.ts` / `refs.ts` / `stash.ts` / `credential.ts` | 对应 CLI 原语的薄封装（credential helper 桥接后置） |
 
 **性能与正确性要点**：
@@ -163,6 +167,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 - 全部解析走 `-z`（NUL 分隔）或自定义分隔符，文件名含空格/换行/中文均安全；
 - log 图流式 + 前端虚拟滚动，支撑大仓库（Linux 内核级）；
 - 测试用**真实 git CLI + 临时仓库 fixture**（init → 造提交 → 造分支/冲突），不 mock git；纯解析函数补单测。
+- 流式取消语义统一：`streamGit` 与 `runGit` 同为 aborted-flag 模式；close 时 aborted 一律 reject `GitExitError`(130)；消费者 break 时 try/finally 杀子进程并清理监听器；已中止 `signal` 预检。
 
 **为什么不用 simple-git**：流式能力弱、长命令可控性差；自封装 `spawn` 直接可控。
 
@@ -173,18 +178,18 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 - 入参：`repoPath: string` 显式传入 + 领域参数（**无 HTTP 对象、无隐藏全局状态**，天然支持多仓库并发）；
 - 返回：`contracts` 定义的领域类型；
 - 流式功能（log、大 diff、长操作进度）：返回 `AsyncIterable<契约事件>`，由框架层转 SSE；
-- 长操作接受可选 `{ signal }` 支持取消；
+- 长操作与流式功能接受可选 `{ signal }` 支持取消（`getLogPage`/`streamLogEvents`/`getFileDiff`/`streamDiffEvents` 直通 core）；
 - 错误：统一 `ServiceError { code, message, context?, cause? }`，`message` 为可直接展示的中文；**不抛 HTTP 概念**；
 - 文件之间仅通过 `index.ts` 公共出口互调，禁止深层相对 import。
 
-**完整功能清单（验证版，36 个功能文件 + errors.ts）**：
+**完整功能清单（验证版，37 个功能文件 + errors.ts）**：
 
 | 文件 | 功能与关键操作 | Java 侧证据 | 阶段 |
 |------|----------------|-------------|------|
 | `repo.ts` | 打开/验证/初始化/克隆、最近仓库、仓库元信息 | `GitRepositoryImpl`、`GitCloneUtils`、平台 `RecentProjectsManager` | P1 |
 | `status.ts` | 工作区状态、未跟踪、忽略状态、分支/上游信息 | `GitUntrackedFilesHolder`、`GitIgnoredFilesHolder` | P1 |
 | `log.ts` | 提交图（流式）、过滤、分页、提交详情、新标签页打开、在控制台显示 log | `GitLogProvider`、VCS Log UI、`GitExternalLogTabsProperties`、`ShowGitLogCommandAction` | P1 |
-| `diff.ts` | 工作区/暂存/提交间 diff、流式、hunk 应用/回退、与分支比较 | `GitShowDiffWithBranchPanel`、`GitCompareWithBranchAction`、`GitStageDiffAction` | P1 |
+| `diff.ts` | 工作区/暂存/提交间 diff、流式、hunk 应用/回退、与分支比较、`getFileVersions`（Monaco 两侧全文：staged→HEAD/暂存区、默认→HEAD/工作区、`from/to`→指定两版本，成对校验） | `GitShowDiffWithBranchPanel`、`GitCompareWithBranchAction`、`GitStageDiffAction` | P1 |
 | `settings.ts` | 应用设置：最近仓库、UI 偏好、**log 位置**、仓库级设置集中存储、git 可执行文件检测/引导、GPG 配置、SSH 配置 | `GitVcsPanel`、`GitExecutableSelectorPanel`、`GitGpgConfigDialog`、`SSHConnectionSettings` | P1 |
 | `errors.ts` | `ServiceError` + 错误码表 | — | P1 |
 | `operation.ts` | 进行中操作状态（merge/rebase/cherry-pick 检测）、进度事件、操作锁、**中止操作** | `GitFreezingProcess`、`GitMergeRebaseWidget`、`GitAbortOperationAction` | P2 |
@@ -218,6 +223,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 | `worktree.ts` | 工作树：创建/打开/清理/删除 | `GitWorkingTreeDialog`、`workingTrees/ui` | P4 |
 | `submodule.ts` | 子模块：状态/更新 | `GitSubmoduleUpdater`、`GitSubmodule`、`GitModulesFileReader` | P4 |
 | `browse.ts` | 浏览仓库历史快照（browse repo at revision） | `GitBrowseRepoAtRevisionAction` | P4 |
+| `events.ts` | 仓库状态事件流：轮询式 `watchRepoStatus`（每 2s `getStatus` + 深比较，变化才产事件，`signal` 可取消，框架无关可单测；与 P2 `operation.ts` 的进行中操作状态互补） | 平台 `DvcsStatusWidget` 事件驱动刷新 | P1 |
 
 可选后置（明确标注非核心）：`terminal.ts`（内置终端，xterm.js）、`local-history.ts`（本地历史，平台能力，非 git 功能）。
 
@@ -240,21 +246,23 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 
 ### 4.3 contracts —— 跨端契约
 
-- **领域类型**：`RepoStatus`、`CommitNode`/`GraphLine`、`DiffFile`/`DiffChunk`、`BranchRef`、`TagRef`、`StashEntry`、`Changelist`、`Conflict`、`Worktree`、`Submodule`、GitHub/GitLab 领域类型（`PullRequest`、`MergeRequest` 等）等全部定义于此。
+- **领域类型**：`RepoStatus`、`CommitNode`/`GraphLine`、`DiffFile`/`DiffChunk`/`FileVersions`、`BranchRef`、`TagRef`、`StashEntry`、`Changelist`、`Conflict`、`Worktree`、`Submodule`、GitHub/GitLab 领域类型（`PullRequest`、`MergeRequest` 等）等全部定义于此。
 - **端点契约**：每个端点一个 zod schema（query/body/响应/SSE 事件）。
-- **路由约定**：仓库用 **repoId** 标识（`settings` 注册 `{id, path}` 映射，不暴露文件系统路径，未来可挂鉴权）。
+- **路由约定**：仓库用 **repoId** 标识（`settings` 注册 `{id, path}` 映射，不暴露文件系统路径，未来可挂鉴权）；路由层以 `getRepoById` 解析 repoPath 后调 api。
 - **错误形状**：`{ error: { code, message, context? } }`；`httpStatusFor(code)` 纯函数放本包，两个框架应用共用同一张映射表。
-- **SSE 事件格式**：`{ type, payload }`，事件类型全部由本包定义。
+- **SSE 事件格式**：`{ type, payload }`，事件类型全部由本包定义；`serializeSseEvent` 纯函数统一帧序列化，两应用共用。
 
-**P1 端点清单**（后续阶段按功能文件同模式扩展）：
+**P1 端点清单**（首跑即此清单，两应用完全对称；后续阶段按功能文件同模式扩展）：
 
 ```text
 GET    /api/repos                        最近仓库列表
 POST   /api/repos/open      {path} → {repoId}
 GET    /api/repos/:repoId/status
-GET    /api/repos/:repoId/log?limit=50&before=…&author=…
-GET    /api/repos/:repoId/diff?file=…&from=…&to=…     （SSE 流式）
-GET    /api/repos/:repoId/events                       （SSE：状态变更 + 长操作进度）
+GET    /api/repos/:repoId/log?limit=…&skip=…&author=…&path=…
+GET    /api/repos/:repoId/log/stream      （SSE：log.line 增量）
+GET    /api/repos/:repoId/diff?file=…&from=…&to=…&staged=…
+GET    /api/repos/:repoId/diff/stream     （SSE：diff.chunk 分块）
+GET    /api/repos/:repoId/events          （SSE：repo.state-changed；长操作进度随 P2 operation.ts 接入）
 GET    /api/settings                       应用设置
 PUT    /api/settings                       更新设置
 ```
@@ -263,9 +271,17 @@ PUT    /api/settings                       更新设置
 
 ### 4.4 client —— 客户端数据层
 
-- SWR hooks：`useRecentRepos`、`useRepoStatus`、`useLogPage`、`useDiff`、`useSettings` …（按 contracts 端点一一对应）；
-- 订阅 hooks：`useRepoEvents(repoId)`（SSE 订阅：状态变更、操作进度）；
-- 类型全部来自 `contracts`；框架无关（SWR 在 Next client components 与 Vite SPA 均可运行）；
+| Hook | 类型 | 说明 |
+|------|------|------|
+| `useRecentRepos` / `useOpenRepo` | SWR / mutation | 最近仓库 + 打开 |
+| `useRepoStatus` | SWR | 状态条数据 |
+| `useLogPage` | SWR | log 首屏快照（`limit`/`skip` 游标） |
+| `useLogStream` | SSE 订阅 | `log.line` 增量追加 |
+| `useFileDiff` / `useDiffStream` | SWR / SSE | diff 全文 / 分块（UI 走全文路径） |
+| `useRepoEvents` | SSE 订阅 | `repo.state-changed` → 触发 status/log 的 revalidate |
+| `useSettings` | SWR + mutation | `logInEditor` 等 |
+
+- 类型全部来自 `contracts`；框架无关（SWR 在 Next client components 与 Vite SPA 均可运行，同源 `/api`）；
 - 禁止持有业务逻辑（不聚合、不转换业务数据，只做取数与缓存）。
 
 ### 4.5 ui —— 纯展示组件层
@@ -308,14 +324,18 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 ```text
 ui/src/
 ├── base/        # 无 git 语义的通用展示件：VirtualList、GraphCanvas、FileTree、MonacoEditor、
-│                #   DiffView、ThreeWayMergeView、EmptyState、OperationStatus
-├── domain/      # 有 git 语义的领域组件：CommitGraph、InteractiveRebaseTable、BranchTree、
-│                #   StagingArea、ConflictList、DiffFileView、CommitForm…
-├── composite/   # 页面/对话框级组合：LogPage、DiffPage、StatusPage、CommitDialog、MergeDialog…
+│                #   MonacoDiffView（React.lazy 懒加载 monaco-editor）、DiffView、ThreeWayMergeView、
+│                #   EmptyState、OperationStatus
+├── domain/      # 有 git 语义的领域组件：CommitGraph、RepoStatusBar、DiffViewer（并排/行内 +
+│                #   staged/工作区切换 + 忽略空白开关）、CommitDetailsPanel、InteractiveRebaseTable、
+│                #   BranchTree、StagingArea、ConflictList、DiffFileView、CommitForm…
+├── composite/   # 页面/对话框级组合：RepoPage、LogPage、DiffPage、StatusPage、CommitDialog、MergeDialog…
 └── graph-layout/# 自 vcs-log/graph 移植的布局算法（纯函数，不 import React）
 ```
 
 依赖方向：`composite → domain → base`；`graph-layout` 仅被 `CommitGraph` 使用；**base/domain/composite 均不发起接口调用**（数据由 props 传入）。
+
+首跑页面流程：RepoPage 打开仓库 → `/repos/[repoId]` LogPage（顶栏 RepoStatusBar + CommitGraph + 右侧 CommitDetailsPanel）→ 点文件 → DiffPage。
 
 #### 4.5.4 判定结论
 
@@ -323,24 +343,64 @@ ui/src/
 2. **Rebased 的 Java UI 组件代码不适合直接使用**——Swing/Jewel 渲染模型与 React 不通；
 3. **必须从 Rebased 拿走的资产有两类**：图布局算法（代码级移植 + testData 行为等价验证，Apache-2.0 保留声明）与各功能面板的信息架构（4.5.2 对照表）；深色视觉风格作为可选项对齐。
 
+#### 4.5.5 CommitGraph 与 graph-layout（首跑规格）
+
+**移植范围**（`platform/vcs-log/graph` 最小必需集，其余随迭代扩展）：
+
+| Java 侧 | 职责 | 首跑 |
+|---------|------|------|
+| `GraphLayoutBuilder` + `GraphLayoutImpl` | lane 分配 + 行布局 | ✅ 移植 |
+| `EdgePrintElementImpl` / `PrintElementGeneratorImpl` | 边路由（直连/折线/merge 展开行） | ✅ 移植 |
+| `GraphColorGetterByHead` / `ByNode` | 分支着色（按 HEAD ref 名 hash → HSB 色板） | ✅ 移植 |
+| `VisibleGraphImpl` + `RowsMapping` | 可见行映射（分页/增量行号对齐） | ✅ 移植 |
+| `BfsUtil`/`DfsUtil`/`GraphUtil` | 图遍历工具 | ✅ 移植（子集） |
+| `PermanentGraph`/过滤/折叠/虚线过滤边 | 缓存与高级视图 | ❌ 首跑不做 |
+
+**模块接口**（纯函数，不 import React；移植方式与 testData 行为等价验证见 §4.5.1）：
+
+```ts
+// packages/client/ui/src/graph-layout/
+export interface LayoutCommit { hash: string; parents: string[]; refs: string[] }
+export interface LayoutRow { commit: LayoutCommit; lane: number; edges: EdgeSegment[]; color: string }
+export function buildLayout(commits: LayoutCommit[]): LayoutRow[]
+```
+
+- 输入来自 `CommitInfo`（core 的 `graph` 文本字段不用于渲染，仅 debug 对照——渲染完全交给 layout 模块）
+- SSE 增量：每批到达对当前窗口重算（O(n)），行号经 `RowsMapping` 对齐
+
+**CommitGraph 渲染**：DOM 行（图列 + 提交信息列），图列用 SVG 单层 + 绝对定位；不用 canvas（配合虚拟滚动与选中态）；`VirtualList` 固定行高窗口渲染；SSE 增量 = 首屏 `getLogPage` 快照 + `useLogStream` 追加；行默认列 **Subject（图+refs chips）+ Author + Date**（Hash 列省；tag chips 默认关闭、分支 chips 开）；行悬停完整 hash、点击行 → 提交详情面板。
+
+#### 4.5.6 首跑 UX 一致性对齐（证据见附录 B）
+
+1. **提交详情面板字段集**：短 hash+复制、作者、日期（"{0} on {1} at {2}"）、加粗 subject、分支/标签 chips（两组、可复制）、父提交链接（`CommitDetailsPanel.kt:71-199`）；文件变更列表与签名状态不进（Java 面板内本来也没有）。
+2. **CommitGraph 行默认列**：Subject + Author + Date；tag chips 默认关闭（`VcsLogApplicationSettings.kt:113`）。
+3. **RepoPage 最近列表项**：显示名三级回退（`.idea/.name` → 目录名 → 路径；`RecentProjectsManagerBase.kt:1123-1184`）、路径副文本（user-home 相对化）、移除动作（带确认；`RemoveSelectedProjectsAction.kt:19-77`）、最近优先/去重/上限 50。
+4. **DiffPage**：默认并排；忽略空白开关（默认不忽略，对齐 Java DEFAULT）。
+5. **RepoStatusBar ahead/behind 形态**：彩色圆点徽标（蓝 incoming / 绿 outgoing）+ tooltip 计数，两者为 0 不显示——**Java 2025 版已无 ↑↓ 数字文本**，勿做旧版形态。
+6. **默认值文档化**：logInEditor=true、word diff（BY_WORD）、行号开、sync scroll 开——全部与 Java 一致。
+
+**两处前提修正**（实现约束）：状态条无 ↑↓ 文本；详情面板无操作按钮（动作在右键菜单，首跑不提供按钮与 Java 完全一致）。
+
 ### 4.6 框架层：web-next 与 web-koa
 
-**共同模式**：每个路由只做三件事 —— **zod 校验 → 调 api → 错误映射**。`AsyncIterable → SSE` 序列化是 `contracts` 的纯函数，apps 内零逻辑重复。
+**共同模式**：每个路由只做三件事 —— **zod 校验（contracts schema）→ `getRepoById` 解析 repoPath → 调 api → `toServiceError` + `httpStatusFor` 错误映射**。`AsyncIterable → SSE` 序列化（`serializeSseEvent`）是 `contracts` 的纯函数，apps 内零逻辑重复；两应用端点清单完全对称（§4.3）。
 
 **web-next**（Next.js 16，App Router）：
 
-- `app/layout.tsx`：SSR 壳（antd ConfigProvider、全局 chrome、加载骨架）；
+- `app/layout.tsx`：SSR 壳（antd ConfigProvider、深色主题默认、全局 chrome、加载骨架）；
 - 页面主体：client components 组装 ui + client；
-- `app/api/repos/…/route.ts`：每个端点一个 Route Handler，薄封装调服务层；SSE 用 `ReadableStream.from(asyncIterable)`；
+- `app/api/repos/…/route.ts`：每个端点一个 `GET/POST/PUT` Route Handler，薄封装调服务层；SSE 用 `ReadableStream.from(asyncIterable 映射 serializeSseEvent)`；客户端断开用 `request.signal` → AbortController → 停写并杀 git 进程；
 - Server Actions 仅作为表单类操作的便捷封装，REST 为主（保证与 web-koa 对称）。
 
 **web-koa**（Koa.js）：
 
-- `src/routes/repos.ts`：同一份端点清单（koa-router）；
-- `src/middleware/`：错误处理、body 解析、SSE 流、`koa-static` 托管 `public/`；
-- `public/`：**同一套 ui + client 的 Vite SPA 构建产物**。
+- `src/routes/repos.ts`：同一份端点清单（koa-router）；SSE 写 `ctx.res` 并监听 `close` 取消；
+- `src/middleware/`：错误处理、`@koa/bodyparser` body 解析、SSE 流、`koa-static` 托管 `public/`；
+- `public/`：**同一套 ui + client 的 Vite SPA 构建产物**（SPA 路由 react-router，`/` 与 `/repos/:repoId` 与 web-next 路径一致）。
 
-两个应用均本地运行（localhost，本地优先访问仓库）：`web-next` 用 `next dev/build/start`；`web-koa` 用 tsx + Vite。
+**运行形态**：两个应用均本地运行（localhost，本地优先访问仓库）。`web-next`：`next dev` → http://localhost:3030。`web-koa`：Koa API 服务 `tsx watch src/app.ts` → http://localhost:3031；dev 下 Vite dev server（localhost:5173）承载 SPA 页面并把 `/api` 代理到 3031（与 Koa 不同端口避免冲突）；生产 `vite build` → `koa-static` 在 3031 直接托管 `public/` + API。根 `pnpm dev` 并行起两个，端口被占用先杀占用进程（AGENT.md 既有约定）。
+
+**依赖要点**：`web-next` 增 `next@16.2.7`、`react/react-dom@19`、`antd@6`、`@ant-design/icons`、`swr`、`monaco-editor`（懒加载）、`tailwindcss`、`zod`、`@rebased/{api,ui,client,contracts}`（workspace:*）；`web-koa` 增 `koa`、`@koa/router`、`@koa/bodyparser`、`koa-static`、`tsx`、`vite@7.3.6`（钉版）、`@vitejs/plugin-react`、`@rebased/{api,contracts}`（ui/client 为构建期依赖）；`ui` 增 `antd@6`、`@ant-design/icons`、`monaco-editor`；`client` 增 `swr`。依赖安装走 JD 镜像，`pnpm.overrides` 钉版 vite 7.3.6（既有配置，不新增钉版）。
 
 ---
 
@@ -350,7 +410,7 @@ ui/src/
 |------|------|
 | 常规读写 | REST（zod 校验，JSON） |
 | log 图增量、大 diff、长操作进度、仓库状态变更 | SSE（`{type, payload}` 事件流），事件类型由 contracts 定义 |
-| 大结果集 | 分页（`limit`/`before` 游标） |
+| 大结果集 | 分页（`limit`/`skip` 游标） |
 | 取消 | 客户端断开 SSE 连接 → 框架层 AbortSignal → 服务层取消 git 进程 |
 
 事件类型（首批）：`log.line`、`diff.chunk`、`operation.progress`、`operation.state-changed`、`repo.state-changed`。
@@ -361,12 +421,12 @@ ui/src/
 
 | 层 | 测试 |
 |----|------|
-| core | 真实 git CLI + 临时仓库 fixture（造提交/分支/冲突/重命名）；解析函数单测 |
-| api | fixture 仓库集成测试，不经 HTTP 直接调服务（框架无关的可测试性红利） |
+| core | 真实 git CLI + 临时仓库 fixture（造提交/分支/冲突/重命名）；解析函数单测；取消语义三断言（exitCode 130 / 已中止预检 / break 杀进程） |
+| api | fixture 仓库集成测试，不经 HTTP 直接调服务（框架无关的可测试性红利）；`events.ts` 事件流首事件与变化检测 |
 | contracts | zod 解析、`httpStatusFor` 映射、SSE 序列化单测 |
-| ui | Testing Library + 交互测试 |
-| client | mock fetch / mock SSE 测试 |
-| apps | 只测路由装配（zod 校验 + 错误映射），不重复测服务逻辑 |
+| ui | Testing Library + 交互测试；`graph-layout` 用 Java testData 转制的行为等价夹具 |
+| client | mock fetch / mock SSE 测试（revalidate 触发、增量追加） |
+| apps | 只测路由装配（zod 校验 + 错误映射），不重复测服务逻辑；SSE 断开回归断言 git 进程被终止（不 mock api 层，真实 git fixture） |
 
 质量门（根命令，与 AGENT.md 一致）：`pnpm typecheck`（project references 全链类型）→ `pnpm format` → `pnpm test`。eslint 边界规则违反即失败。
 
@@ -416,6 +476,17 @@ ui/src/
 - 全量回归预算 **~6 分钟**（基线 359s）。明显超预算时，看 vitest 输出的每文件 Duration，最慢文件优先按上述机制复查。
 - 腐化信号：测试里出现新的 `git init` 夹具调用；`fileParallelism: false` 被无注释改回；web-koa/web-next 重新出现超百用例单文件；全量并发下 api 墙钟远超其单独跑值且无注释说明。
 
+### 6.2 首跑验收标准（P1 可见产品完成定义）
+
+1. http://localhost:3030 与 http://localhost:3031 均可打开 RepoPage，打开真实仓库后看到 CommitGraph（真图渲染）
+2. log 首屏快照 + SSE 增量渲染工作；断开页面后 git 进程被终止（无泄漏）
+3. DiffPage：Monaco 并排/行内切换、忽略空白开关、staged/工作区切换正确
+4. RepoStatusBar 徽标/tooltip 与 `/events` 推送触发 revalidate
+5. 提交详情面板字段集完整（§4.5.6(1)）
+6. `pnpm typecheck` → `pnpm format` → `pnpm test` 全绿；eslint 边界（apps 互禁、api 禁框架）生效
+
+路由层测试方式补充：Next route 函数直接构造 `Request` 断言 `Response`（状态码/错误 JSON/zod 拒绝）；Koa 直接调 `app.callback()`；SSE 测试读流首帧断言 `data: {"type":"log.line"...`，断开连接断言 git 进程被终止。
+
 ---
 
 ## 7. 落地顺序
@@ -424,9 +495,19 @@ ui/src/
 2. **contracts**：领域类型 + P1 端点 schema + 错误码表。
 3. **core**：`exec`/`repo`/`status`/`log`/`diff` 原语 + 集成测试。
 4. **api**：`repo` `status` `log` `diff` `settings` `errors` + 测试。
-5. **web-next**：壳 + 路由 + Log 图（含 `graph-layout` 算法移植与 testData 行为等价夹具）+ Diff 视图（P1 首个可见产品）。
-6. **web-koa**：同样路由 + Vite SPA 构建链。
-7. P2–P4 按清单逐项增量（每个功能 = api 一个文件 + 契约 + 两端路由 + ui 组件，各自独立子项目）。
+5. **首跑组装（web-next + web-koa，P1 可见产品：打开仓库 → CommitGraph 真图渲染 + SSE 增量 → Monaco 单文件 diff → 状态条/事件推送）**，细化为：
+   1. 依赖安装（两 app + ui/client deps，vite 钉版 7.3.6）+ 包配置（next.config/vite.config/tsconfig）
+   2. core/api 增补：streamGit 取消对齐 + readFileAtRev + signal 透传 + events.ts + getFileVersions（含 130/预检/break 三个取消断言与事件测试）
+   3. graph-layout：移植 + Java testData 行为等价夹具
+   4. ui：base（VirtualList/GraphCanvas/MonacoDiffView）→ domain（CommitGraph/RepoStatusBar/DiffViewer/CommitDetailsPanel）→ composite（三页面）
+   5. client：SWR/SSE hooks
+   6. web-next：壳 + 路由（含 SSE）+ 页面挂载 → 3030 可跑
+   7. web-koa：路由 + 中间件 + Vite SPA → 3031 可跑
+   8. UX 对齐 6 项逐项落地（§4.5.6）
+   9. 全链验收（§6.2 标准）+ 终审 + 合并决策
+6. P2–P4 按清单逐项增量（每个功能 = api 一个文件 + 契约 + 两端路由 + ui 组件，各自独立子项目）。
+
+> 首跑在 `feat/server-core` 分支进行；合并回 main 的决策挂起（待首跑验收通过后与用户确认）。
 
 ---
 
@@ -453,3 +534,82 @@ ui/src/
 6. **UI 技术栈与可移植资产**：平台含 `platform/jewel`（JetBrains Jewel，Compose Multiplatform 组件库）与 `platform/compose` 模块，git4idea UI 为 Swing 组件——渲染模型与 React DOM 不通，故 4.5.1 判定"不移植代码"；唯一代码级移植资产为 `platform/vcs-log/graph` + `graph-api` 的图布局算法（`GraphLayoutBuilder`/`EdgePrintElementImpl`/`PrintElementGeneratorImpl` 等 30+ 个类 + 7 组 testData），源码为 Apache-2.0（`LICENSE.txt` 第 8-9 行），移植保留版权声明。
 
 > 注：本地检出为浅克隆（git log 仅 1 条提交）且 git 索引为空，证据以工作树源码为准；`git4idea` 的 `frontend/rt/shared/terminal/localHistory` 模块均为支撑性代码（UI 桥、运行时、语法高亮），功能面已归入正文；`intellij.terminal` 与 `intellij.textmate.plugin` 的插件源码不在本检出（`git4idea\terminal` 仅为 git 终端桥接模块），其功能面按上游公开文档归纳。
+
+---
+
+## 附录 B：UX 一致性对照（Java 版 vs 本设计，审计 2026-09-01）
+
+结论：**无 ❌ 不一致项**；6 项 ⚠️ 已并入 §4.5.6；📌 推迟项与"明确不做"项如下。
+
+### B.1 打开仓库/克隆/最近项目
+
+| Java 侧证据 | 判定 |
+|-------------|------|
+| 最近列表最近优先、渲染面板 `RecentProjectPanel.java:486-557` | ✅ |
+| 显示名三级回退 `RecentProjectsManagerBase.kt:1123-1184` | ⚠️→§4.5.6(3) |
+| 路径副文本 user-home 相对 `RecentProjectPanel.java:521-557` | ⚠️→§4.5.6(3) |
+| 移除动作+确认 `RemoveSelectedProjectsAction.kt:19-77` | ⚠️→§4.5.6(3) |
+| 顺序最近优先/去重/上限 50 `RecentProjectsManagerBase.kt:387-434` | ⚠️→§4.5.6(3) |
+| 打开路径表单 | ✅ |
+| 欢迎屏整体 `FlatWelcomeFrame.kt:111-125` | 明确不做（RepoPage 取代） |
+| 克隆对话框（URL+Directory+浅克隆行；新版无 Test/分支选择）`VcsCloneDialog.kt:33-131` | 📌 推迟（P2 补 UI，最小字段 URL+Directory） |
+| 列表项分支后缀/图标/失效标记 | 📌 推迟（装饰性） |
+
+### B.2 VCS Log UI
+
+| Java 侧证据 | 判定 |
+|-------------|------|
+| CommitGraph（图+refs chips）`VcsLogGraphTable.java:176` | ✅ |
+| 按 HEAD 着色 `GraphColorGetterByHead.kt:11-17` | ✅（§4.5.5 移植） |
+| HEAD 装饰/实心描边 `GraphTableModel.kt:102-117` | ✅ |
+| tag chips 默认关 `VcsLogApplicationSettings.kt:113` | ⚠️→§4.5.6(2) |
+| 行默认列 Subject/Author/Date `VcsLogColumnManager.kt:31` | ⚠️→§4.5.6(2) |
+| 详情面板 `CommitDetailsPanel.kt:56` | ✅ |
+| 详情字段集 `CommitDetailsPanel.kt:71-199` | ⚠️→§4.5.6(1) |
+| 文件变更列表（独立 `VcsLogChangesBrowser`） | 📌 推迟（Java 面板内也没有） |
+| 操作按钮（面板内无，右键菜单） | ✅（首跑不提供 = 与 Java 面板一致；动作属 P3） |
+| 过滤/搜索（文本即滤 Ctrl+L + 分支弹窗为高频）`VcsLogClassicFilterUi.kt:148-152` | 明确不做（P2 次优先补文本即滤+分支弹窗） |
+| 分支折叠 | 明确不做 |
+| showInEditor=true `VcsLogApplicationSettings.kt:145-146` | ✅（logInEditor=true；TS 免重启为改进） |
+
+### B.3 Diff 查看器
+
+| Java 侧证据 | 判定 |
+|-------------|------|
+| 并排/统一两模式 `DiffRequestProcessor.java:937-1040` | ✅（Monaco side-by-side/行内） |
+| 默认并排（独立对话框）`DiffManagerImpl.kt:95-101` | ⚠️→§4.5.6(4) |
+| 行号/语法高亮 | ✅（Monaco） |
+| word diff BY_WORD 默认 `TextDiffSettingsHolder.kt:46` | ✅（§4.5.6(6) 文档化） |
+| 忽略空白开关（默认不忽略）`TextDiffSettingsHolder.kt:47` | ⚠️→§4.5.6(4) |
+| staged/工作区/三版本 `GitStageDiffUtil.kt:191-252` | ✅（首跑两版本；三版本属 P2 staging） |
+| 提交间对比 `GitDiffFromHistoryHandler.java:86-99` | ✅（from/to） |
+| 折叠开关/sync scroll/上下文行数 | 📌 推迟（默认已对齐） |
+| unified 保留 `UnifiedDiffTool.java` | ✅ |
+
+### B.4 状态条
+
+| Java 侧证据 | 判定 |
+|-------------|------|
+| 分支名（长名截断）`GitBranchWidget.kt:46,64` | ✅ |
+| ahead/behind 圆点徽标+tooltip，0 不显示，无 ↑↓ 文本 `GitInOutState.kt:70-109` | ⚠️→§4.5.6(5)（含前提修正） |
+| 进行中操作前缀 `GitBranchUtil.java:193-204` | 明确不做（P2 operation.ts） |
+| 点击弹窗/hover tooltip | 📌 推迟 |
+| 事件驱动刷新 `DvcsStatusWidget.java:145-166` | ✅（对应 SSE /events） |
+
+### B.5 设置
+
+| Java 侧证据 | 判定 |
+|-------------|------|
+| logInEditor 默认 true + 复选框 `VcsLogConfigurable.kt:62-65` | ✅ |
+| 自动 fetch（默认关，高级设置门控） | 明确不做（P3 remote/update） |
+| 保护分支（默认 master/main） | 明确不做（P2 branch.ts） |
+
+---
+
+## 附录 C：推迟项清单（按优先级）
+
+1. **P2 次优先**：log 文本即滤框 + 分支过滤弹窗（Java 高频入口）
+2. **P2 补 UI**：克隆/init 对话框（最小字段 URL+Directory）
+3. **P2 承接**：进行中操作状态前缀（operation.ts）、三版本对比（staging.ts）
+4. **P3**：cherry-pick/revert 右键菜单动作、保护分支、自动 fetch
+5. **装饰后置**：最近列表分支后缀/图标/失效标记、diff 折叠/sync/上下文设置、状态条点击弹窗
