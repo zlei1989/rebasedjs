@@ -53,6 +53,10 @@ export function ReposPage(): React.ReactNode {
             void message.error(err instanceof Error ? err.message : '移除失败');
           });
       }}
+      onOpenSettings={(repoId) => {
+        // 欢迎屏 Configure → SettingsPage 入口（#3）：以最近仓库进入设置页（设置按仓库 git 配置呈现）
+        navigate(`/repos/${repoId}/settings`);
+      }}
     />
   );
 }

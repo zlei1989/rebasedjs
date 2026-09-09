@@ -9,13 +9,14 @@
  * 回调全缺省时不渲染「更多」按钮。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
-import { Button, Dropdown, Flex, Input, Modal, Popconfirm } from 'antd';
+import { Alert, Button, Dropdown, Flex, Input, Modal, Popconfirm, Skeleton, Typography } from 'antd';
 import type { MenuProps } from 'antd';
-import type { CommitInfo, OperationState, RepoStatus } from '@rebased/contracts';
+import type { CommitInfo, CommittedEntry, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
 import { RepoStatusBar } from '../domain/repo-status-bar';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
+import { CommittedStatusTag } from '../domain/committed-status';
 import { useEffect, useMemo, useState } from 'react';
 
 /** 日志过滤条件（受控：容器持有，变更即重查快照；为空时才是默认全量视图） */
@@ -38,7 +39,10 @@ export interface LogPageProps {
   /** 中止请求进行中：操作条按钮 loading 态 */
   abortingOperation?: boolean;
   /** 设置入口回调；缺省不渲染设置按钮 */
+  /** 设置入口回调；缺省不渲染设置按钮 */
   onOpenSettings?: () => void;
+  /** 回首页（欢迎屏）入口回调（File→Close Project 语义）；缺省不渲染「首页」链接 */
+  onGoHome?: () => void;
   /** 变更（状态页）入口回调；缺省不渲染变更按钮 */
   onOpenStatus?: () => void;
   /** 分支页入口回调；缺省不渲染分支按钮 */
@@ -101,6 +105,20 @@ export interface LogPageProps {
   onRevert?: (hash: string) => void;
   /** 透传给 CommitDetailsPanel 的「浏览快照」回调（选中提交 → /browse?rev=）；缺省详情面板不渲染该按钮 */
   onBrowse?: (hash: string) => void;
+  /** 透传给 CommitDetailsPanel 的「查看变更集」回调（#13 LogPage → DiffPage 直达：全量变更文件 Modal）；缺省不渲染该按钮 */
+  onOpenChanges?: (hash: string) => void;
+  /** 变更集 Modal 受控打开键（容器经 useCommitFiles 条件拉取；'' = 关闭） */
+  changesHash?: string;
+  /** 变更集 Modal 数据（容器条件拉取；null 未就绪 → loading 态） */
+  changesEntry?: CommittedEntry | null;
+  /** 变更集拉取中 */
+  changesLoading?: boolean;
+  /** 变更集拉取错误信息 */
+  changesError?: string | null;
+  /** 关闭变更集 Modal（容器清空 hash 停止拉取） */
+  onCloseChanges?: () => void;
+  /** 变更集文件行点击（#13：容器据此导航该文件 diff——from=父哈希、to=该提交；根提交降级容器定） */
+  onOpenChangedFile?: (path: string) => void;
   /** 过滤条件（受控）；与 onFiltersChange 同传时渲染过滤输入行 */
   filters?: LogFilters;
   /** 过滤变更回调（输入去首尾空白后上抛；清空 = 空对象） */
@@ -139,6 +157,7 @@ export function LogPage({
   onAbortOperation,
   abortingOperation,
   onOpenSettings,
+  onGoHome,
   onOpenStatus,
   onOpenBranches,
   onOpenMerge,
@@ -170,6 +189,13 @@ export function LogPage({
   onCherryPick,
   onRevert,
   onBrowse,
+  onOpenChanges,
+  changesHash,
+  changesEntry,
+  changesLoading,
+  changesError,
+  onCloseChanges,
+  onOpenChangedFile,
   filters,
   onFiltersChange,
   hasMore,
@@ -304,6 +330,12 @@ export function LogPage({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #f0f0f0' }}>
+        {/* 回首页（File→Close Project 语义）：顶栏最左「首页」链接；仅容器注入回调时渲染 */}
+        {onGoHome ? (
+          <Button type="link" size="small" data-testid="log-go-home" onClick={onGoHome}>
+            首页
+          </Button>
+        ) : null}
         <span style={{ fontWeight: 600, padding: '4px 8px' }}>{repoName}</span>
         <RepoStatusBar status={status} />
         {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
@@ -464,6 +496,7 @@ export function LogPage({
               onCherryPick={onCherryPick}
               onRevert={onRevert}
               onBrowse={onBrowse}
+              onOpenChanges={onOpenChanges}
             />
           </div>
         ) : null}
@@ -550,6 +583,43 @@ export function LogPage({
           value={rewordMessage}
           onChange={(e) => setRewordMessage(e.target.value)}
         />
+      </Modal>
+      {/* 查看变更集（#13 LogPage → DiffPage 直达）：选中提交的全量变更文件 Modal——行点击 → 该文件
+          diff（from=父哈希、to=该提交；根提交降级由容器定）；数据由容器经 useCommitFiles 条件拉取 */}
+      <Modal
+        title={`变更集（${changesEntry?.shortHash ?? (changesHash === undefined || changesHash === '' ? '' : changesHash.slice(0, 7))}）`}
+        open={changesHash !== undefined && changesHash !== ''}
+        okText="关闭"
+        cancelButtonProps={{ style: { display: 'none' } }}
+        onOk={onCloseChanges}
+        onCancel={onCloseChanges}
+      >
+        {changesLoading ? (
+          <Skeleton active />
+        ) : changesError !== undefined && changesError !== null ? (
+          <Alert type="error" showIcon message={changesError} />
+        ) : changesEntry === undefined || changesEntry === null ? (
+          <Typography.Text type="secondary">暂无变更文件</Typography.Text>
+        ) : (
+          <Flex vertical gap={8}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {changesEntry.subject}
+            </Typography.Text>
+            {changesEntry.files.map((file) => (
+              <Flex key={`${file.status}-${file.path}`} align="center" gap={8}>
+                <CommittedStatusTag status={file.status} />
+                <Typography.Text
+                  data-testid={`changes-file-${file.path}`}
+                  style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
+                  ellipsis
+                  onClick={() => onOpenChangedFile?.(file.path)}
+                >
+                  {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
+                </Typography.Text>
+              </Flex>
+            ))}
+          </Flex>
+        )}
       </Modal>
     </div>
   );

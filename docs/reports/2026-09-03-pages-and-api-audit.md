@@ -20,7 +20,7 @@
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 122 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 69、领域类型/别名 95、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（106 条） | 80 ✅（含等价边）+ 8 🟡 + 8 ➖ + 10 ❌ |
+| 导航边（106 条） | 86 ✅（含等价边）+ 6 🟡 + 8 ➖ + 6 ❌ |
 
 ### 1.2 口径与图例
 
@@ -659,12 +659,12 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 |---|-----------|-----------|-----------|-----------|
 | 1 | RepoPage → 主窗口 | 双击最近项目 / Open | `OpenSelectedProjectsAction`（PlatformActions.xml:1251） | ✅ 打开成功 `navigate(/repos/:id)` |
 | 2 | RepoPage → 克隆对话框 → 主窗口 | Get from VCS | `GetFromVersionControlAction` → `VcsCloneDialog`；`ProjectCheckoutListener.java:21` | ✅ 克隆 Modal（URL + Directory）→ `POST /repos/clone` → 日志页 |
-| 3 | RepoPage → SettingsPage | 欢迎屏 Configure | PlatformActions.xml:1208-1209 | ❌ |
-| 4 | 主窗口 → RepoPage | File → Close Project | `CloseProjectsActionBase.kt:42-46` | ❌（LogPage 无回 `/` 入口） |
+| 3 | RepoPage → SettingsPage | 欢迎屏 Configure | PlatformActions.xml:1208-1209 | ✅ 欢迎屏「设置」按钮（以最近仓库 id → `/repos/:id/settings`；无最近仓库禁用） |
+| 4 | 主窗口 → RepoPage | File → Close Project | `CloseProjectsActionBase.kt:42-46` | ✅ LogPage 顶栏「首页」链接 → `/`（File→Close Project 语义） |
 | 5 | 任意处 → SettingsPage | File → Settings | PlatformActions.xml:509-510 | ➖（改由 LogPage 顶栏进入） |
 | 6 | LogPage → SettingsPage | Log tab 下拉 Show Settings | `Vcs.Log.ShowSettingsAction`（vcs-log.xml:324） | ✅ 顶栏设置按钮 → `/repos/:id/settings` |
 | 7 | SettingsPage → LogPage | 关闭对话框回源页 | —（模态语义） | ✅ 「返回日志」按钮 |
-| 8 | GitHub/GitLabPanel → SettingsPage | 面板菜单 Settings | `GHOpenSettingsAction.kt:13`、`GitLabOpenSettingsAction.kt:14` | ❌（无令牌提示卡带「去设置」回边，菜单入口未做） |
+| 8 | GitHub/GitLabPanel → SettingsPage | 面板菜单 Settings | `GHOpenSettingsAction.kt:13`、`GitLabOpenSettingsAction.kt:14` | ✅ 面板顶部「设置」按钮 → `/repos/:id/settings`（无令牌提示卡「去设置」回边既有） |
 
 #### 5.3.2 日志 / 差异 / 历史域
 
@@ -674,7 +674,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 10 | BranchPanel → LogPage | Compare with Branch | `GitCompareWithBranchAction.kt:33` | ✅ 行内「比较」→ 日志页 `?compare=<branch>` 对比视图（双 range 双向提交差异，对齐 GitCompareBranchesUi 双侧日志） |
 | 11 | SearchPanel → LogPage | 结果回车定位 | `GitSearchEverywhereContributor.kt:179` | ✅ 结果点击 → `?select=<hash>` |
 | 12 | HistoryPanel → LogPage | Show Commit in Log | `ShowCommitInLogAction`（vcs-log.xml:235） | ✅ 条目点击 → `?select=<hash>` |
-| 13 | LogPage → DiffPage | 双击/Ctrl+D；Compare Revisions | `ShowDiffAction.java:114`；vcs-log.xml:275-276 | 🟡 经 StatusPage `onOpenDiff`、CommittedChangesPanel from/to 可达，LogPage 无直达 |
+| 13 | LogPage → DiffPage | 双击/Ctrl+D；Compare Revisions | `ShowDiffAction.java:114`；vcs-log.xml:275-276 | ✅ 详情面板「查看变更集」Modal（`GET /commits/:hash` 全量变更文件；文件行 → `/diff?file&from=父&to=该提交`（根提交 `root=1`）；「与分支比较」另经 #10 双向视图） |
 | 14 | LogPage → ResetDialog | 右键 Reset Current Branch to Here | `Git.Reset.In.Log`（backend.xml:345） | ✅ 详情面板按钮 → 内嵌模态 |
 | 15 | LogPage → Undo Commit | 右键 Undo Commit | `Git.Uncommit`（backend.xml:347） | ✅ 顶栏 Popconfirm |
 | 16 | LogPage → RebaseDialog | 右键 Interactively Rebase from Here | `GitInteractiveRebaseAction.kt:16-24`（backend.xml:354） | ✅ 「更多」→ 内嵌模态（简单/交互双模式） |
@@ -682,7 +682,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 18 | LogPage → New Branch 对话框 | 右键 New Branch… | backend.xml:361-363 | ✅ 行右键「从此处新建分支…」Modal（起始点=该提交，创建后检出） |
 | 19 | LogPage → New Tag | 右键 New Tag… | `GitCreateTagAction.java:39`（backend.xml:364） | ✅ 行右键「从此处新建标签…」Modal（附注可选；ref=该提交） |
 | 20 | LogPage → 分支/标签操作子菜单 | 右键分支操作组 | `GitLogBranchOperationsActionGroup.java:188-205`（backend.xml:360） | 🟡 行右键菜单已含检出/New Branch/New Tag；Merge/Rebase 经 #79/#80；Push up to Commit 已落地见 #17 |
-| 21 | LogPage → Revert/Reword/Fixup/Squash/Drop | 右键（后四者入 rebase 引擎） | backend.xml:346-353 | 🟡 Revert=面板按钮直通；Reword/Fixup/Squash/Drop 经交互式变基编辑器可达 |
+| 21 | LogPage → Revert/Reword/Fixup/Squash/Drop | 右键（后四者入 rebase 引擎） | backend.xml:346-353 | ✅ Revert=面板按钮直通；Reword/Drop/Squash/Fixup=行右键直通（`POST /commit-edit`，r35） |
 | 22 | LogPage → Checkout / 浏览历史快照 | 右键 Checkout 组 / Browse at Revision | backend.xml:337-342 | ✅ 行右键「检出此提交（游离 HEAD）」+ 详情面板「浏览快照」 |
 | 23 | LogPage → PatchPanel | 右键 Create Patch from commit | vcs-log.xml:273 | ✅ 「更多」→ 创建 Modal 提交区间三态 |
 | 24 | LogPage → GitConsole | tab 下拉 Console | vcs-log.xml:321-322 | ✅ 「更多」→ `/console` |
@@ -734,7 +734,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 |---|-----------|-----------|-----------|-----------|
 | 61 | 状态栏 → BranchPanel | 点击分支 widget | `GitBranchWidget.kt:68-71` | ✅ 顶栏「分支」按钮（Web 无状态栏） |
 | 62 | Git 菜单 → BranchPanel | Branches… / Ctrl+Shift+` | `GitBranchesAction.java:26` | ✅ 同 #61；快捷键未做 |
-| 63 | 主工具栏 → BranchPanel | 分支下拉按钮 | `GitBranchesComboBoxAction.java:68` | ❌ |
+| 63 | 主工具栏 → BranchPanel | 分支下拉按钮 | `GitBranchesComboBoxAction.java:68` | ✅ 等效：顶栏「分支」按钮（与 #61/#62 同通道；独立组件形态不做） |
 | 64 | QuickActionsMenu → BranchPanel | Branches… 菜单项 | `GitQuickListContentProvider.java:24` | 🟡 等效：顶栏「分支」；独立组件不做 |
 | 65 | BranchPanel → New Branch 对话框 | 弹窗顶部 New Branch… | backend.xml:245-249 | ✅ 新建 Modal（起始点 + 创建后检出） |
 | 66 | BranchPanel → GitRefDialog | Checkout Branch or Revision… | `GitCheckoutFromInputAction.kt:38` | ✅ 行内三态检出 |
@@ -791,10 +791,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 106 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **80 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 7（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基 + #106 检出并更新）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
-| 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（Push up to Commit 已落地见 #17）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
+| ✅ 已复刻（含等价边） | **86 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 7（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基 + #106 检出并更新）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 5（#18/#19/#21/#22/#26）、设置域链 4（#3 欢迎屏设置 + #4 回首页 + #6 顶栏设置 + #8 面板设置）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked）、#13 变更集直达 DiffPage、#63 分支入口等效 |
+| 🟡 半通/降级 | **6 条**：#20 右键分支操作子菜单（Push up to Commit 已落地见 #17）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **8 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新、#39 命令日志 tab（internal） |
-| ❌ 未复刻 | **10 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet；#39 已归 ➖） |
+| ❌ 未复刻 | **6 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet；可做余项：#27 多文件 Prev/Next、#69 Show Diff with Working Tree） |
 
 ### 5.5 关键联动流程
 

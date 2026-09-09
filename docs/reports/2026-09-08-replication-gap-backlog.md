@@ -18,7 +18,7 @@
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
 | 页面功能点缺口 | 0 项（0 页面——§2.3 各域剩余项全部清零；2026-09-21 终核） | §2.2 / §2.3 |
-| 导航边缺口 | 8 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
+| 导航边缺口 | 2 条 ❌ 可做（#27 多文件 Prev/Next、#69 Show Diff with Working Tree）+ 1 条 🟡 形态（#20 右键分支操作子菜单）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
 
@@ -105,34 +105,21 @@
 
 **GitHubPanel / GitLabPanel（0）**：行级评论锚点与提交已落地（§2.7 完成记录）。
 
-### 2.4 P3：导航边缺口（8 条可做 + 2 条 🟡 直达，按目标页分组）
+### 2.4 P3：导航边缺口（2 条 ❌ 可做 + 1 条 🟡 形态，按目标页分组）
 
 > 边号对应盘点报告 §5.3；等效边、明确不做边（#70/#92/#96/#101/#104）不列。
+> **已核销**（2026-09-21 前各轮）：#3 欢迎屏 Configure（RepoPage「设置」按钮 → 最近仓库 /settings）、
+> #4 File→Close Project 语义（LogPage 顶栏「首页」→ `/`）、#8 面板 Settings 入口（GitHub/GitLab 面板顶「设置」）、
+> #10 行内「比较」、#13 变更集直达 DiffPage（详情面板「查看变更集」Modal → 单文件 diff）、#17 Push up to Commit、
+> #18/#19 行右键 New Branch/New Tag、#21 Reword/Drop/Squash/Fixup 行右键直通、#22 浏览快照、#26 浏览器打开、
+> #30/#31/#29/#33/#34 溯源链、#39 ➖（internal）、#43-#49 状态页入口五连、#52/#54 Patch/Shelf 回边、
+> #61/#62/#65/#67/#105/#106 分支域链、#63 分支入口等效、#83/#84 贮藏、#91 rejected→Update、#93 Reset to tracked。
 
 | 目标 | 边 | 缺口摘要 |
 |------|----|----------|
-| RepoPage | #3 | 欢迎屏 Configure → SettingsPage 入口 |
-| LogPage | #4 | 回首页入口（File→Close Project 语义） |
-| LogPage | #13 | LogPage → DiffPage 直达入口（现经 StatusPage/Committed 间接） |
-| LogPage | #17/#18/#19/#20 | #17 ✅ 已落地（行右键「Push up to Commit」→ PushDialog 哈希模式——refspec `<hash>:<当前分支>`，`POST /push` 增 `hash`；分离头指针/无效哈希显式 400）；#18/#19/#20 待办（PushDialog 既有） |
-| LogPage | #21 | reword/fixup/squash/drop 直通按钮（现经交互式变基编辑器） |
-| LogPage | #26 | Open in Browser（托管平台链接） |
-| LogPage | #39 | Show Git Log for Command |
-| LogPage | #63 | 主工具栏式分支下拉（等价物可选） |
-| DiffPage | #27 | 多文件 Prev/Next 切换（依赖单文件模型改造） |
-| BranchPanel | #10 | ✅ 已落地（行内「比较」→ 日志页 ?compare= 对比视图——双 range 双向提交差异） |
-| BranchPanel | #67/#69 | #67 ✅ 已落地（页头「Fetch」按钮——fetch 全部远程，成功后复用事件流验证分支列表）；#69 Show Diff with Working Tree 待办 |
-| BranchPanel | #70 外 | （New Working Tree 明确不做） |
-| HistoryPanel | #30/#31 | ✅ 已落地（双击 → DiffPage；Annotate Revision → /blame?rev=，见 §2.3 完成记录） |
-| BlameView | #29/#33/#34 | #29/#33 ✅ 已落地（行内「历史」「差异」）；#34 ✅ 已落地（Show All Affected：BlameView 行内「受影响」→ 提交全量变更文件 Modal——`GET /commits/:hash` 单提交清单，文件点击 → 该文件 diff（from=父哈希、to=该提交，根提交 root=1）；core `commitFiles` + api `getCommitFiles`（verifyCommitish 预检）+ client `useCommitFiles`（hash 空串 null key）+ ui 受影响 Modal（loading/error/空态/合并提示分派）+ 两端容器接线；core +3、api +2、client +2、ui +4 单测） |
-| StatusPage | #43/#44/#45/#47/#48/#49 | #43/#44/#45/#47/#48/#49 ✅ 全部已落地（#43 冲突入口等价=操作条链接+冲突跳转；#44 组级「创建补丁」→ patches paths；#45 页头「搁置」；#47 行内「注解」「历史」→ /blame、/history；#48 行「三版本」；#49 页头「存入贮藏」） |
-| CommitDialog 等效面 | #50 | ✅ 已落地（提交框「提交并推送」→ POST /commit/push：commit 先落盘 → push 缺省当前分支上游；Push up to Commit 余项见 #17） |
-| PatchPanel | #52 | ✅ 已落地（行内「导入搁置」→ 成功跳 /shelves，见 §2.3 完成记录） |
-| ShelfPanel | #54 | ✅ 已落地（restore 后 status 键回写联动；平台 Unshelve 无自动切 tab 证据） |
-| StashPanel | #83/#84 | ✅ 已落地（Unstash As Modal + 查看差异 Modal，见 §2.3 完成记录） |
-| PushDialog | #91 | ✅ 已落地（rejected → 自动弹 Update「推送被拒 — 更新项目」merge/rebase 二选 → 成功自动续推；再 rejected 循环回 Update；conflicts 引导解决） |
-| UpdateProjectDialog | #93 | ✅ 已落地（左下「Reset to tracked」→ Modal.confirm → reset --hard <upstream>；无上游不渲染） |
-| 面板 → Settings | #8 | GitHub/GitLab 面板内 Settings 菜单入口（现仅无令牌提示卡回边） |
+| LogPage | #20 | 右键分支操作子菜单形态（🟡 半通：行右键已含检出/New Branch/New Tag，Merge/Rebase 经 #79/#80——仅菜单组织形态差异，功能面完整） |
+| DiffPage | #27 | 多文件 Prev/Next 切换（依赖单文件模型改造——中-大） |
+| BranchPanel | #69 | Show Diff with Working Tree（行内入口 → DiffPage） |
 
 ### 2.5 工程排期项（11 项，随批消化）
 

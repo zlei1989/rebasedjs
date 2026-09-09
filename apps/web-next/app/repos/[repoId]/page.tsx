@@ -24,6 +24,7 @@ import {
   useInteractiveRebase,
   useAutosquash,
   useCommitEdit,
+  useCommitFiles,
   useLogPage,
   useLogStream,
   useOperation,
@@ -127,6 +128,9 @@ export default function Page({
   const [openDialog, setOpenDialog] = useState<'pull' | 'push' | 'update' | null>(null);
   // Push up to Commit（#17）：行右键「Push up to Commit」→ 打开 PushDialog 并预置目标提交 hash；null=普通推送
   const [pushUpToHash, setPushUpToHash] = useState<string | null>(null);
+  // 查看变更集（#13 LogPage → DiffPage 直达）：变更集 Modal 受控键（非空 → 条件拉取该提交全量变更文件）
+  const [changesHash, setChangesHash] = useState('');
+  const { data: changesEntry, isLoading: changesLoading, error: changesError } = useCommitFiles(repoId, changesHash);
   // 认证重试回路状态：待重试的原操作 + 认证目标 host；null 表示 AuthDialog 关闭
   const [authRetry, setAuthRetry] = useState<{ host: string; retry: () => Promise<unknown> } | null>(null);
   // 状态推送（干净提交也使 headHash 变化 → 触发此回调）：回写 status 缓存 + 重验证日志快照 + 重订阅流（新提交出现在新流顶部）；
@@ -420,7 +424,25 @@ export default function Page({
         undoCommitting={undoCommitting}
         onResetHere={onResetHere}
         onBrowse={(hash) => router.push(`/repos/${repoId}/browse?rev=${hash}`)}
+        onOpenChanges={setChangesHash}
+        changesHash={changesHash}
+        changesEntry={changesEntry}
+        changesLoading={changesLoading}
+        changesError={changesError?.message}
+        onCloseChanges={() => setChangesHash('')}
+        onOpenChangedFile={(path) => {
+          // #13：变更集内该文件 diff——from=父哈希、to=该提交（根提交 → root=1；与 BlameView「受影响」同语义）
+          const entry = changesEntry;
+          if (entry !== undefined && entry !== null) {
+            if (entry.parents.length === 0) {
+              router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&root=1`);
+            } else {
+              router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&from=${entry.parents[0]}&to=${entry.hash}`);
+            }
+          }
+        }}
         onOpenSettings={() => router.push(`/repos/${repoId}/settings`)}
+        onGoHome={() => router.push('/')}
         onOpenStatus={() => router.push(`/repos/${repoId}/status`)}
         onOpenBranches={() => router.push(`/repos/${repoId}/branches`)}
         onOpenMerge={() => router.push(`/repos/${repoId}/merge`)}

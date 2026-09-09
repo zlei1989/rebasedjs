@@ -94,10 +94,15 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   if (status === undefined) return null;
   return (
     <Flex vertical align="flex-start">
-      {/* 返回日志页 */}
-      <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-        返回日志
-      </Button>
+      {/* 返回日志页 + 设置入口（#8：面板内 Settings 菜单入口语义） */}
+      <Flex gap={8}>
+        <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
+          返回日志
+        </Button>
+        <Button type="link" data-testid="gitlab-open-settings" onClick={() => router.push(`/repos/${repoId}/settings`)}>
+          设置
+        </Button>
+      </Flex>
       {isAuthFailed(mrsError) ? (
         /* mrs 加载失败 AUTH_FAILED：提示卡 + 去设置链接（替代面板，避免无数据渲染） */
         <Alert

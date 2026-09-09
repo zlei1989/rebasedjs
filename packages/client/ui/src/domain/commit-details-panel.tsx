@@ -22,6 +22,8 @@ export interface CommitDetailsPanelProps {
   onRevert?: (hash: string) => void;
   /** 「浏览快照」回调（携带当前提交 hash → /browse?rev=）；缺省不渲染该按钮 */
   onBrowse?: (hash: string) => void;
+  /** 「查看变更集」回调（#13 LogPage → DiffPage 直达：打开该提交全量变更文件 Modal）；缺省不渲染该按钮 */
+  onOpenChanges?: (hash: string) => void;
 }
 
 export function CommitDetailsPanel({
@@ -30,6 +32,7 @@ export function CommitDetailsPanel({
   onCherryPick,
   onRevert,
   onBrowse,
+  onOpenChanges,
 }: CommitDetailsPanelProps): React.ReactNode {
   const { branches, tags } = classifyRefs(commit.refs);
   const subject = commit.message.split('\n')[0];
@@ -75,12 +78,17 @@ export function CommitDetailsPanel({
           ))}
         </div>
       ) : null}
-      {/* 操作区：浏览快照/摘樱桃/还原/Reset 当前分支到此处——逐个按回调注入渲染（仅调用方注入回调时出现；确认弹窗与 hook 调用由容器持有） */}
-      {onResetHere || onCherryPick || onRevert || onBrowse ? (
+      {/* 操作区：浏览快照/查看变更集/摘樱桃/还原/Reset 当前分支到此处——逐个按回调注入渲染（仅调用方注入回调时出现；确认弹窗与 hook 调用由容器持有） */}
+      {onResetHere || onCherryPick || onRevert || onBrowse || onOpenChanges ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {onBrowse ? (
             <Button data-testid="browse-snapshot" size="small" onClick={() => onBrowse(commit.hash)}>
               浏览快照
+            </Button>
+          ) : null}
+          {onOpenChanges ? (
+            <Button data-testid="open-changes" size="small" onClick={() => onOpenChanges(commit.hash)}>
+              查看变更集
             </Button>
           ) : null}
           {onCherryPick ? (

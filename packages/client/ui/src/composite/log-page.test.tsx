@@ -107,6 +107,18 @@ describe('LogPage', () => {
     expect(screen.getByText('c9selec')).toBeInTheDocument();
   });
 
+  it('传入 onGoHome 时顶栏渲染「首页」链接，点击回调', () => {
+    const onGoHome = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onGoHome={onGoHome} />);
+    fireEvent.click(screen.getByTestId('log-go-home'));
+    expect(onGoHome).toHaveBeenCalledTimes(1);
+  });
+
+  it('未传 onGoHome 时不渲染「首页」链接', () => {
+    render(<LogPage repoName="alpha" status={status} commits={commits} />);
+    expect(screen.queryByTestId('log-go-home')).not.toBeInTheDocument();
+  });
+
   it('传入 onUndoCommit 时渲染撤销最近提交按钮，Popconfirm 确认后回调', async () => {
     const onUndoCommit = vi.fn();
     render(<LogPage repoName="alpha" status={status} commits={commits} onUndoCommit={onUndoCommit} />);
@@ -141,6 +153,77 @@ describe('LogPage', () => {
     const selected = makeCommit({ hash: 'c9selected0001' });
     render(<LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} />);
     expect(screen.queryByTestId('reset-here')).not.toBeInTheDocument();
+  });
+
+  it('「查看变更集」（#13）：详情按钮回调 hash；changesHash 非空 → 变更集 Modal（文件行点击 → onOpenChangedFile）', () => {
+    const onOpenChanges = vi.fn();
+    const onOpenChangedFile = vi.fn();
+    const selected = makeCommit({ hash: 'c9selected0001', message: '带变更的提交' });
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        selectedCommit={selected}
+        onOpenChanges={onOpenChanges}
+        changesHash="c9selected0001"
+        changesEntry={{
+          hash: 'c9selected0001',
+          shortHash: 'c9selec',
+          subject: '带变更的提交',
+          author: 'Test User',
+          dateIso: '2026-01-02T00:00:00.000Z',
+          parents: ['c1'],
+          files: [
+            { path: 'a.txt', status: 'M' },
+            { path: 'b.txt', status: 'A' },
+            { path: 'old.txt', status: 'R', renameFrom: 'renamed.txt' },
+          ],
+        }}
+        onCloseChanges={() => {}}
+        onOpenChangedFile={onOpenChangedFile}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('open-changes'));
+    expect(onOpenChanges).toHaveBeenCalledWith('c9selected0001');
+    expect(screen.getByText('变更集（c9selec）')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('changes-file-a.txt'));
+    expect(onOpenChangedFile).toHaveBeenCalledTimes(1);
+    expect(onOpenChangedFile).toHaveBeenCalledWith('a.txt');
+    // 重命名行：原名 → 路径 展示
+    expect(screen.getByText('renamed.txt → old.txt')).toBeInTheDocument();
+  });
+
+  it('变更集 Modal：loading → Skeleton；error → Alert；未传 onOpenChanges 不渲染详情按钮', () => {
+    const selected = makeCommit({ hash: 'c9selected0001' });
+    const { rerender } = render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        selectedCommit={selected}
+        onOpenChanges={() => {}}
+        changesHash="c9selected0001"
+        changesLoading
+      />,
+    );
+    expect(document.querySelector('.ant-skeleton')).toBeInTheDocument();
+    rerender(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        selectedCommit={selected}
+        onOpenChanges={() => {}}
+        changesHash="c9selected0001"
+        changesError="boom"
+      />,
+    );
+    expect(screen.getByText('boom')).toBeInTheDocument();
+    rerender(
+      <LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} />,
+    );
+    expect(screen.queryByTestId('open-changes')).not.toBeInTheDocument();
   });
 
   it('传入 onOpenMerge 时点击合并按钮触发回调', () => {

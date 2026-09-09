@@ -142,3 +142,33 @@ describe('RepoPage 克隆/初始化入口', () => {
     expect(onInit).toHaveBeenCalledWith('/tmp/new-repo');
   });
 });
+
+describe('RepoPage 设置入口（欢迎屏 Configure → SettingsPage 语义 #3）', () => {
+  it('有最近仓库：点击以最近仓库 id 调 onOpenSettings（打开时间降序优先）', () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <RepoPage
+        repos={[
+          makeRepo({ id: 'older', openedAt: '2026-08-01T10:00:00.000Z' }),
+          makeRepo({ id: 'newer', openedAt: '2026-09-01T10:00:00.000Z' }),
+        ]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('open-settings-button'));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(onOpenSettings).toHaveBeenCalledWith('newer');
+  });
+
+  it('无最近仓库：按钮禁用；未注入回调：按钮不渲染', () => {
+    const onOpenSettings = vi.fn();
+    const { rerender } = render(
+      <RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} onOpenSettings={onOpenSettings} />,
+    );
+    expect(screen.getByTestId('open-settings-button')).toBeDisabled();
+    rerender(<RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} />);
+    expect(screen.queryByTestId('open-settings-button')).not.toBeInTheDocument();
+  });
+});

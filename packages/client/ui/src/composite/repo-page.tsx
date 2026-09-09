@@ -9,7 +9,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Button, Flex, Input, Modal, Popconfirm } from 'antd';
-import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SwitcherOutlined } from '@ant-design/icons';
+import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SettingOutlined, SwitcherOutlined } from '@ant-design/icons';
 import type { RepoInfo } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { relativeToHome } from './repo-page-utils';
@@ -32,6 +32,8 @@ export interface RepoPageProps {
   cloning?: boolean;
   /** 初始化进行中：Modal 确定按钮 loading */
   initializing?: boolean;
+  /** 设置入口（欢迎屏 Configure → SettingsPage 语义）：点击以最近仓库 id 回调；无最近仓库时禁用；缺省不渲染 */
+  onOpenSettings?: (repoId: string) => void;
 }
 
 /** 最近列表上限（对齐 Java RecentProjectsManagerBase 上限 50，与服务端 RECENT_LIMIT 同口径） */
@@ -147,6 +149,7 @@ export function RepoPage({
   onInit,
   cloning,
   initializing,
+  onOpenSettings,
 }: RepoPageProps): React.ReactNode {
   const [openPath, setOpenPath] = useState('');
   const [cloneOpen, setCloneOpen] = useState(false);
@@ -191,6 +194,19 @@ export function RepoPage({
         {onInit ? (
           <Button icon={<PlusOutlined />} loading={initializing} onClick={() => setInitOpen(true)}>
             初始化
+          </Button>
+        ) : null}
+        {/* 设置入口（欢迎屏 Configure 语义）：以最近仓库进入设置页（设置按仓库 git 配置呈现）；无仓库时禁用 */}
+        {onOpenSettings ? (
+          <Button
+            icon={<SettingOutlined />}
+            disabled={visible.length === 0}
+            data-testid="open-settings-button"
+            onClick={() => {
+              if (visible[0] !== undefined) onOpenSettings(visible[0].id);
+            }}
+          >
+            设置
           </Button>
         ) : null}
       </Flex>
