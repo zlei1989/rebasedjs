@@ -8,6 +8,7 @@ import { GitExitError } from './exec';
 import {
   createBranch,
   deleteBranch,
+  isCommitPublishedProtected,
   listBranches,
   listRecentCheckoutBranches,
   mergedBranchNames,
@@ -223,5 +224,45 @@ describe('listRecentCheckoutBranches（GitRecentCheckoutBranches 语义：reflog
     dirs.push(repo);
     makeBaseCommit(repo);
     expect(await listRecentCheckoutBranches(repo)).toEqual([]);
+  });
+});
+
+describe('isCommitPublishedProtected（GitProtectedBranches.isCommitPublishedBlocking 语义）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  /** 裸远程装置：仓库 base 提交 → bare → 推送（建立 refs/remotes/origin/<default>） */
+  function makePushedRepo(): { repo: string; bare: string; defaultBranch: string } {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const defaultBranch = makeBaseCommit(repo);
+    const bare = createTmpDir('rebased-core-bare-');
+    dirs.push(bare);
+    execFileSync('git', ['init', '-q', '--bare', bare]);
+    git(repo, ['remote', 'add', 'origin', bare]);
+    git(repo, ['push', '-q', '-u', 'origin', defaultBranch]);
+    execFileSync('git', ['-C', bare, 'symbolic-ref', 'HEAD', `refs/heads/${defaultBranch}`]);
+    return { repo, bare, defaultBranch };
+  }
+
+  it('已推送且模式匹配（剥远程名前缀后正则）→ true；不匹配 → false', async () => {
+    const { repo, defaultBranch } = makePushedRepo();
+    const head = git(repo, ['rev-parse', 'HEAD']);
+    const escaped = defaultBranch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    expect(await isCommitPublishedProtected(repo, head, [`^${escaped}$`])).toBe(true);
+    expect(await isCommitPublishedProtected(repo, head, ['^no-such-branch$'])).toBe(false);
+  });
+
+  it('未推送提交 / 模式为空 → false；非法模式防御性忽略', async () => {
+    const { repo } = makePushedRepo();
+    // 未推送的新提交（本地分支不产远程跟踪引用）
+    git(repo, ['checkout', '-q', '-b', 'local-only']);
+    writeFileSync(join(repo, 'x.txt'), 'x');
+    git(repo, ['add', 'x.txt']);
+    git(repo, ['commit', '-q', '-m', 'local']);
+    const localHead = git(repo, ['rev-parse', 'HEAD']);
+    expect(await isCommitPublishedProtected(repo, localHead, ['^.*$'])).toBe(false);
+    // 模式为空 → 快速 false；非法模式防御性视为不匹配
+    expect(await isCommitPublishedProtected(repo, git(repo, ['rev-parse', 'HEAD~1']), [])).toBe(false);
+    expect(await isCommitPublishedProtected(repo, git(repo, ['rev-parse', 'HEAD~1']), ['(['])).toBe(false);
   });
 });

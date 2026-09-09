@@ -70,6 +70,31 @@ export async function mergedBranchNames(cwd: string, ref?: string): Promise<stri
     .filter((s) => s !== '');
 }
 
+/**
+ * 提交是否已发布到受保护远程分支（GitProtectedBranches.isCommitPublishedBlocking 语义）：
+ * 含该提交的远程跟踪分支（git branch -r --contains）剥远程名前缀后（origin/master → master，
+ * 对齐 nameForRemoteOperations）与 patterns（正则，设置层已校验）任一匹配即受保护命中。
+ * patterns 为空 → false；pattern 非法 → 防御性视为不匹配。
+ */
+export async function isCommitPublishedProtected(cwd: string, hash: string, patterns: string[]): Promise<boolean> {
+  if (patterns.length === 0) return false;
+  const { stdout } = await runGit(['branch', '--format=%(refname:short)', '-r', '--contains', hash], { cwd });
+  const remoteNames = stdout
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter((s) => s !== '');
+  return remoteNames.some((name) => {
+    const localName = name.replace(/^[^/]+\//, '');
+    return patterns.some((pattern) => {
+      try {
+        return new RegExp(pattern).test(localName);
+      } catch {
+        return false;
+      }
+    });
+  });
+}
+
 /** 当前分支名（git symbolic-ref --short HEAD）：分离头指针/空仓库返回 null */
 export async function currentBranchName(cwd: string): Promise<string | null> {
   try {

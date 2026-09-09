@@ -102,6 +102,10 @@ describe('P1 端点 schema', () => {
   it('settingsPatch 校验 logInEditor 布尔与 recentRepoIds 数组', () => {
     expect(() => settingsPatchSchema.parse({ logInEditor: 'yes' })).toThrow();
     expect(settingsPatchSchema.parse({ recentRepoIds: ['a', 'b'] })).toEqual({ recentRepoIds: ['a', 'b'] });
+    // 保护分支模式列表（正则语法由服务端校验；schema 只约束形状）
+    expect(settingsPatchSchema.parse({ protectedBranchPatterns: ['^main$', '^release/'] }))
+      .toEqual({ protectedBranchPatterns: ['^main$', '^release/'] });
+    expect(() => settingsPatchSchema.parse({ protectedBranchPatterns: '^main$' })).toThrow();
   });
 });
 

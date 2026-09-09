@@ -182,7 +182,7 @@ describe('web-koa REST 端点', () => {
   it('settings 端点：GET 返回默认设置，PUT 局部更新后回读生效', async () => {
     const beforeRes = await fetch(`${base}/api/settings`);
     expect(beforeRes.status).toBe(200);
-    expect(await beforeRes.json()).toEqual({ logInEditor: true, recentRepoIds: [] });
+    expect(await beforeRes.json()).toEqual({ logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [] });
 
     const res = await fetch(`${base}/api/settings`, {
       method: 'PUT',
@@ -194,6 +194,24 @@ describe('web-koa REST 端点', () => {
 
     const afterRes = await fetch(`${base}/api/settings`);
     expect(await afterRes.json()).toMatchObject({ logInEditor: false });
+  });
+
+  it('settings 端点：PUT 保护分支模式（合法/非法正则）→ 200/400', async () => {
+    const okRes = await fetch(`${base}/api/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ protectedBranchPatterns: ['^main$', '^release/'] }),
+    });
+    expect(okRes.status).toBe(200);
+    expect(await okRes.json()).toMatchObject({ protectedBranchPatterns: ['^main$', '^release/'] });
+
+    const badRes = await fetch(`${base}/api/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ protectedBranchPatterns: ['(['] }),
+    });
+    expect(badRes.status).toBe(400);
+    expect(await badRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 
   it('settings/git-executable 端点：200 GitExecutableInfo（本机 PATH git 可执行 → ok 且版本可解析）', async () => {

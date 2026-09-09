@@ -243,6 +243,60 @@ function GpgConfigModal({
   );
 }
 
+/** 保护分支设置卡片（GitVcsPanel.protectedBranchesRow 语义）：每行一个正则模式；
+ *  行内校验正则语法（非法标红禁止保存，对齐 Java Pattern.compile 校验）；保存经 onPatchSettings 补丁 */
+function ProtectedBranchCard({
+  patterns,
+  onSave,
+}: {
+  patterns: string[];
+  onSave: (patterns: string[]) => void;
+}): React.ReactNode {
+  const [text, setText] = useState(patterns.join('\n'));
+  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l !== '');
+  const invalid = lines.find((l) => {
+    try {
+      new RegExp(l);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  const dirty = text !== patterns.join('\n');
+  return (
+    <Card title="保护分支" data-testid="protected-branches-card">
+      <Flex vertical gap={8}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          每行一个正则模式，匹配剥远程名前缀的分支名（origin/main → main）；匹配得到的远程分支上的已推送提交不可重写
+          （Reword/Drop/Squash/Fixup 将被拒绝——GitProtectedBranches.isCommitPublishedBlocking 语义）
+        </Typography.Text>
+        <Input.TextArea
+          data-testid="protected-patterns-input"
+          rows={3}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={'每行一个模式，如：\n^main$\n^release/'}
+        />
+        {invalid !== undefined && (
+          <Typography.Text type="danger" data-testid="protected-patterns-error">
+            非法正则：{invalid}
+          </Typography.Text>
+        )}
+        <div>
+          <Button
+            size="small"
+            data-testid="protected-patterns-save"
+            disabled={!dirty || invalid !== undefined}
+            onClick={() => onSave(lines)}
+          >
+            保存
+          </Button>
+        </div>
+      </Flex>
+    </Card>
+  );
+}
+
 export function SettingsPage({
   settings,
   onPatchSettings,
@@ -273,6 +327,13 @@ export function SettingsPage({
           <Skeleton active />
         )}
       </Card>
+      {/* 保护分支（GitVcsPanel.protectedBranchesRow 语义）：模式列表 + 行内正则校验；仅在应用设置就绪后渲染 */}
+      {settings !== undefined && (
+        <ProtectedBranchCard
+          patterns={settings.protectedBranchPatterns}
+          onSave={(patterns) => onPatchSettings({ protectedBranchPatterns: patterns })}
+        />
+      )}
       <Card title="Git 配置（仓库级）">
         {config ? (
           <Flex vertical gap={8}>

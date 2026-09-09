@@ -64,6 +64,9 @@ export interface FileThreeVersions {
 export interface SettingsState {
   logInEditor: boolean;
   recentRepoIds: string[];
+  /** 保护分支模式（GitVcsPanel.protectedBranchesRow 语义：正则列表，匹配剥远程名的分支名；
+   *  匹配分支上的已推送提交不可重写——isCommitPublishedBlocking 消费点；服务端保证字段存在） */
+  protectedBranchPatterns: string[];
 }
 
 /** GPG 可用密钥（GitGpgConfigUtils.parseSecretKeys 语义）：id 为 KeyID（sec 记录字段 5），description 为 uid 字段 10 */

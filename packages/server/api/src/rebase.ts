@@ -10,6 +10,7 @@ import {
   GitExitError,
   headCommit,
   isAncestorCommit,
+  isCommitPublishedProtected,
   listBranches,
   listTodoCommits,
   rebaseOnto,
@@ -19,6 +20,7 @@ import {
 import { ServiceError } from '@rebased/contracts';
 import type { AutosquashBody, CheckoutRebaseBody, CommitEditBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, TodoEntry } from '@rebased/contracts';
 import { assertNoOperationInProgress } from './operation';
+import { getSettings } from './settings';
 
 /** rebase onto：预检无进行中操作 + onto 有效性（verifyCommitish → INVALID_REF）；core 三分支状态透传 */
 export async function rebaseBranch(repoPath: string, body: RebaseBody): Promise<RebaseOutcome> {
@@ -85,7 +87,9 @@ async function isAncestorOfHead(repoPath: string, hash: string): Promise<boolean
  * 单提交编辑直通（GitSingleCommitEditingAction 语义：Reword/Drop/Squash/Fixup）：
  * 预检无进行中操作 + 哈希有效性（INVALID_REF）+ 祖先（INVALID_QUERY）+ reword 必带 message（INVALID_QUERY）
  * + squash/fixup 目标有父提交（INVALID_QUERY，根提交无父不可并入）+ hash 非 HEAD（历史重写绕过当前分支语义，
- * 对齐 Java 编辑动作在当前分支上执行——HEAD 编辑交给 interactive rebase 全量入口）。
+ * 对齐 Java 编辑动作在当前分支上执行——HEAD 编辑交给 interactive rebase 全量入口）
+ * + 受保护分支（GitProtectedBranches.isCommitPublishedBlocking 语义）：目标提交已发布到受保护远程分支 →
+ *   INVALID_QUERY（不可重写已推送受保护分支的提交——设置页「保护分支」模式列表）。
  */
 export async function commitEdit(repoPath: string, body: CommitEditBody): Promise<RebaseOutcome> {
   await assertNoOperationInProgress(repoPath);
@@ -94,6 +98,9 @@ export async function commitEdit(repoPath: string, body: CommitEditBody): Promis
   }
   if (!(await isAncestorOfHead(repoPath, body.hash))) {
     throw new ServiceError('INVALID_QUERY', '目标提交不在当前分支历史中');
+  }
+  if (await isCommitPublishedProtected(repoPath, body.hash, getSettings().protectedBranchPatterns)) {
+    throw new ServiceError('INVALID_QUERY', '目标提交已推送到受保护分支，不可重写');
   }
   if (body.action === 'reword' && (body.message === undefined || body.message.trim() === '')) {
     throw new ServiceError('INVALID_QUERY', 'reword 需要新提交信息');

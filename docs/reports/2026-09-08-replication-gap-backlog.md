@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 11 项（分布于 10 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 10 项（分布于 9 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 8 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -69,7 +69,7 @@
 
 **CommitDialog 等效面（0）**：GPG 签名/commit template 已落地——白名单键 9 键（`commit.gpgsign`/`user.signingkey`/`commit.template`）设置页读写，提交链路原生消费（`git commit` 自动读取：实测 gpgsign=true + 无效 key → 签名失败拒绝、false → 正常提交、template 键置位后 -m 提交不受扰）。（commit & push 组合执行器已落地——提交框「提交并推送」→ `POST /commit/push` commit 先落盘再推当前分支上游，三态提示；amend 历史提交/reword 已落地——提交框「amend 到…」下拉（未发布/非合并非 HEAD 提交，上限 20）→ `POST /commit/amend-specific`：amend! 提交 + `fixup -C` 交互式变基折入目标（目标信息重写/reword、中间提交重放、冲突 → 冲突页流）；CRLF 提示已落地——`GET /commit/crlf-warning`（GitCrlfProblemsDetector 语义：Windows + core.autocrlf 未建议 + 暂存文件 CRLF 无 text/crlf 属性覆盖）→ 提交框内联警告 + 三选 Modal（「修复并提交」`commitBodySchema.crlfFix` 先写 `git config --global core.autocrlf <建议值>` 再提交；「原样提交」/取消）。）
 
-**BranchPanel（2）**：保护分支设置联动；检出文件（查找已合并/清理已合并已落地——「仅看已合并」开关 +「清理已合并（N）」批量删除；最近检出/标签分组维度已落地——最近检出组（core `listRecentCheckoutBranches`：reflog `--grep-reflog=checkout:` 解析 " to \<分支\>"，最近优先/去重/存活过滤，limit 50；`BranchList.recent` 字段 + 面板「最近检出」卡片（行内「检出」→ 既有 branch 检出）+「显示最近检出」开关）+ 标签组（`tags` prop → 「标签」卡片（行内「检出」= detached）+「显示标签」开关，对齐 `showRecentBranches`/`showTags` 默认；core +2、api 断言 +1、ui +4、route 各 +1 单测）；checkout with rebase 已落地——行菜单「检出并变基到当前」（本地行菜单项；远程行下拉 → 本地名 Modal，建议名缺省剥 origin/ 前缀；`GitCheckoutWithRebaseAction` 语义）：`POST /checkout-rebase` 检出目标分支（远程 → 新建本地分支）后 rebase onto 原当前分支；目标为当前分支/分离头/同名本地分支未跟踪该远程 → INVALID_QUERY（对齐 Java tracking conflict 重命名提示）；冲突 → 冲突页流；force-push 后修复已落地——当前分支与上游分叉时行内「force-push 修复」：`POST /update/force-pushed` fetch → 本地重置到上游 → @{u}..HEAD 本地独有提交逐一 cherry-pick 重放，冲突 → 冲突页流）。
+**BranchPanel（1）**：检出文件（查找已合并/清理已合并已落地——「仅看已合并」开关 +「清理已合并（N）」批量删除；保护分支设置联动已落地——设置页「保护分支」模式列表 + 单提交编辑拦截（`POST /commit-edit` 目标提交已发布到匹配远程分支 → INVALID_QUERY；面板侧无保护分支 UI——Java 亦无，➖）；最近检出/标签分组维度已落地——最近检出组（core `listRecentCheckoutBranches`：reflog `--grep-reflog=checkout:` 解析 " to \<分支\>"，最近优先/去重/存活过滤，limit 50；`BranchList.recent` 字段 + 面板「最近检出」卡片（行内「检出」→ 既有 branch 检出）+「显示最近检出」开关）+ 标签组（`tags` prop → 「标签」卡片（行内「检出」= detached）+「显示标签」开关，对齐 `showRecentBranches`/`showTags` 默认；core +2、api 断言 +1、ui +4、route 各 +1 单测）；checkout with rebase 已落地——行菜单「检出并变基到当前」（本地行菜单项；远程行下拉 → 本地名 Modal，建议名缺省剥 origin/ 前缀；`GitCheckoutWithRebaseAction` 语义）：`POST /checkout-rebase` 检出目标分支（远程 → 新建本地分支）后 rebase onto 原当前分支；目标为当前分支/分离头/同名本地分支未跟踪该远程 → INVALID_QUERY（对齐 Java tracking conflict 重命名提示）；冲突 → 冲突页流；force-push 后修复已落地——当前分支与上游分叉时行内「force-push 修复」：`POST /update/force-pushed` fetch → 本地重置到上游 → @{u}..HEAD 本地独有提交逐一 cherry-pick 重放，冲突 → 冲突页流）。
 
 **MergeDialog（0）**：远程分支直接合并已落地——分支 Select 两组（本地非当前 / 远程 origin/xxx），远程引用名作 merge 参数（服务端核心 git merge 直接解析远程跟踪引用；api +1、ui +1 单测，实测裸仓库 fetch 后 merge origin/side 成功）。
 
@@ -101,7 +101,7 @@
 
 **GitConsole（0）**：输出折叠已落地（`foldArgs` 纯函数——`-c key=value` 对折叠为 `-c …` 占位（GitConsoleFoldingImpl 语义）；ui +2 单测；进度行折叠不适用拉取式列表）。
 
-**SettingsPage（2）**：保护分支设置；自动 fetch 设置（或确认以事件推送替代的终稿口径）。（git 可执行文件检测/引导已落地——设置页「Git 可执行文件」卡片（`GET /settings/git-executable`：PATH 查找 + `git --version` 版本徽标；未检出 → 引导文案，对照 `GitExecutableSelectorPanel`）；GPG 专属配置对话框已落地——设置页「GPG 提交签名」卡片（状态行：已启用（key/描述）/未启用）+「配置…」Modal（`GitGpgConfigDialog` 语义）：「为仓库提交签名」勾选 + 密钥下拉（`gpg --list-secret-keys --with-colons` 解析——capabilities 含 s/S 且非 D；gpg 程序取 `gpg.program` 生效值缺省 'gpg'；无可用密钥 → 提示且无法启用）→ `PUT /settings/gpg-config` 写仓库级 `commit.gpgsign`+`user.signingkey`（取消勾选仅写 false 不清 key，对齐 `writeGitGpgConfig`）；core `parseSecretKeyLines`/`parseGpgCommand`（无 shell 分词防注入）+ core +3、api +4、contracts +2、client +1、ui +4、route 各 +1 单测；SSH 专属配置对话框已撤销——Java 当前版本无 SSH 配置 UI（git4idea 无 ssh settings 证据，`core.sshCommand` 仅常量），➖ 不排任务）。
+**SettingsPage（0）**：（git 可执行文件检测/引导已落地——设置页「Git 可执行文件」卡片（`GET /settings/git-executable`：PATH 查找 + `git --version` 版本徽标；未检出 → 引导文案，对照 `GitExecutableSelectorPanel`）；GPG 专属配置对话框已落地——设置页「GPG 提交签名」卡片（状态行：已启用（key/描述）/未启用）+「配置…」Modal（`GitGpgConfigDialog` 语义）：「为仓库提交签名」勾选 + 密钥下拉（`gpg --list-secret-keys --with-colons` 解析——capabilities 含 s/S 且非 D；gpg 程序取 `gpg.program` 生效值缺省 'gpg'；无可用密钥 → 提示且无法启用）→ `PUT /settings/gpg-config` 写仓库级 `commit.gpgsign`+`user.signingkey`（取消勾选仅写 false 不清 key，对齐 `writeGitGpgConfig`）；core `parseSecretKeyLines`/`parseGpgCommand`（无 shell 分词防注入）+ core +3、api +4、contracts +2、client +1、ui +4、route 各 +1 单测；SSH 专属配置对话框已撤销——Java 当前版本无 SSH 配置 UI（git4idea 无 ssh settings 证据，`core.sshCommand` 仅常量），➖ 不排任务；保护分支设置已落地——设置页「保护分支」卡片（`GitVcsPanel.protectedBranchesRow` 语义：每行一个正则模式，行内 RegExp 校验标红禁止保存；服务端同校验 INVALID_QUERY；`SettingsState.protectedBranchPatterns` + `PUT /settings`）+ 消费联动（core `isCommitPublishedProtected`——`git branch -r --contains` 剥远程名前缀匹配；`POST /commit-edit` 目标已发布到匹配远程分支 → INVALID_QUERY「不可重写」；`GitProtectedBranches.isCommitPublishedBlocking` 语义；core +2、api +2（settings 校验/联动）、contracts +1、ui +3、route 各 +1 单测；自动 fetch 设置已定稿 ➖——Web 无后台定时任务，以 SSE 事件推送替代定时 fetch（决策记录 2026-09 终稿））。
 
 **GitHubPanel / GitLabPanel（0）**：行级评论锚点与提交已落地（§2.7 完成记录）。
 

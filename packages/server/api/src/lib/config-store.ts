@@ -32,7 +32,7 @@ export interface AppConfig {
 
 const DEFAULTS: AppConfig = {
   repos: [],
-  settings: { logInEditor: true, recentRepoIds: [] },
+  settings: { logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [] },
 };
 
 /** 配置目录：REBASED_CONFIG_DIR（测试）> ~/.rebasedjs（生产） */

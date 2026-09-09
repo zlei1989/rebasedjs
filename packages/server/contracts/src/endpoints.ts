@@ -43,6 +43,8 @@ export type ThreeWayQuery = z.infer<typeof threeWayQuerySchema>;
 export const settingsPatchSchema = z.object({
   logInEditor: z.boolean().optional(),
   recentRepoIds: z.array(z.string()).optional(),
+  /** 保护分支模式列表：正则语法由服务端校验（非法 → INVALID_QUERY） */
+  protectedBranchPatterns: z.array(z.string()).optional(),
 });
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 

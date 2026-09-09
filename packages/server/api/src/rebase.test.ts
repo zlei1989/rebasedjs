@@ -1,11 +1,13 @@
 /** rebase 功能测试：onto 三态、todo 数据源、交互式变基（清单全量校验 + 预检）、无效 ref 与进行中操作预检。
  *  性能：9 种夹具形状在 beforeAll 各建一次模板，用例经 instantiateFixture 复制（0 spawn；本机单次 git spawn ~330ms）。 */
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GitExitError } from '@rebased/core';
 import { applyAutosquash, checkoutRebase, commitEdit, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
+import { updateSettings } from './settings';
 import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
@@ -430,5 +432,55 @@ describe('checkoutRebase（检出并变基到当前分支，GitCheckoutWithRebas
       code: 'OPERATION_IN_PROGRESS',
       message: '已有进行中的操作，请先完成或中止',
     });
+  });
+});
+
+describe('commitEdit 受保护分支联动（GitProtectedBranches.isCommitPublishedBlocking 语义）', () => {
+  const dirs2: string[] = [];
+  let configDir = '';
+
+  beforeAll(() => {
+    // 隔离配置目录：本组用例设置保护分支模式（避免污染真实 ~/.rebasedjs）
+    configDir = mkdtempSync(join(tmpdir(), 'rebased-api-protected-'));
+    process.env.REBASED_CONFIG_DIR = configDir;
+  });
+
+  afterAll(() => {
+    delete process.env.REBASED_CONFIG_DIR;
+    dirs2.forEach(cleanupTmpRepo);
+  });
+
+  it('目标提交已推送且匹配保护模式 → INVALID_QUERY；不匹配 → 正常执行', async () => {
+    const repo = createTmpRepo();
+    dirs2.push(repo);
+    git(repo, ['config', 'user.email', 't@t.com']);
+    git(repo, ['config', 'user.name', 't']);
+    const branch = git(repo, ['symbolic-ref', 'HEAD', '--short']).trim();
+    writeFileSync(join(repo, 'a.txt'), 'base\n');
+    git(repo, ['add', 'a.txt']);
+    git(repo, ['commit', '-q', '-m', 'base']);
+    const base = git(repo, ['rev-parse', 'HEAD']).trim();
+    // 裸远程 + 推送：refs/remotes/origin/<branch> 建立（base 已发布）
+    const bareDir = join(tmpdir(), `rebased-api-protected-bare-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    execFileSync('git', ['init', '-q', '--bare', bareDir]);
+    dirs2.push(bareDir);
+    git(repo, ['remote', 'add', 'origin', bareDir]);
+    git(repo, ['push', '-q', '-u', 'origin', branch]);
+    // 目标提交之后再有本地提交（reword 非 HEAD 提交）
+    writeFileSync(join(repo, 'b.txt'), 'b\n');
+    git(repo, ['add', 'b.txt']);
+    git(repo, ['commit', '-q', '-m', 'second']);
+
+    // 保护模式匹配默认分支（剥远程名前缀）
+    const escaped = branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    updateSettings({ protectedBranchPatterns: [`^${escaped}$`] });
+    const blocked = await commitEdit(repo, { hash: base, action: 'reword', message: 'x' }).catch((e: unknown) => e);
+    expect(blocked).toMatchObject({ code: 'INVALID_QUERY', message: '目标提交已推送到受保护分支，不可重写' });
+
+    // 不匹配 → 正常执行（reword 直通）
+    updateSettings({ protectedBranchPatterns: ['^no-such-branch$'] });
+    const ok = await commitEdit(repo, { hash: base, action: 'reword', message: 'base（重写）' });
+    expect(ok.status).toBe('success');
+    expect(git(repo, ['log', '--format=%s', '--reverse']).trim().split('\n')[0]).toBe('base（重写）');
   });
 });

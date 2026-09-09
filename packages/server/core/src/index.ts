@@ -32,6 +32,7 @@ export {
   createBranch,
   currentBranchName,
   deleteBranch,
+  isCommitPublishedProtected,
   listBranches,
   listRecentCheckoutBranches,
   mergedBranchNames,

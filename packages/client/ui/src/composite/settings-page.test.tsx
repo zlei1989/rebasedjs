@@ -5,7 +5,7 @@ import { SettingsPage } from './settings-page';
 
 /** 测试设置工厂：补全 SettingsState 必填字段 */
 function makeSettings(): SettingsState {
-  return { logInEditor: true, recentRepoIds: [] };
+  return { logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [] };
 }
 
 /** 测试配置视图工厂：user.name 有 local 覆盖，user.email 仅全局生效值，其余键未设置 */
@@ -376,5 +376,46 @@ describe('SettingsPage GPG 提交签名（GitGpgConfigDialog 语义）', () => {
     fireEvent.click(screen.getByTestId('gpg-configure-button'));
     expect(await screen.findByTestId('gpg-no-keys')).toHaveTextContent('未找到可用的 gpg 密钥');
     expect(screen.getByRole('checkbox', { name: /为仓库提交签名/ })).toBeDisabled();
+  });
+});
+
+describe('SettingsPage 保护分支（GitVcsPanel.protectedBranchesRow 语义）', () => {
+  it('输入多个模式（每行一个）→ 以 {protectedBranchPatterns} 调 onPatchSettings', () => {
+    const onPatchSettings = vi.fn();
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={onPatchSettings}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByTestId('protected-patterns-input'), { target: { value: '^main$\n^release/' } });
+    expect(screen.getByTestId('protected-patterns-save')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('protected-patterns-save'));
+    expect(onPatchSettings).toHaveBeenCalledTimes(1);
+    expect(onPatchSettings).toHaveBeenCalledWith({ protectedBranchPatterns: ['^main$', '^release/'] });
+  });
+
+  it('非法正则：标红错误并禁止保存（RegExp 编译校验）', () => {
+    const onPatchSettings = vi.fn();
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={onPatchSettings}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByTestId('protected-patterns-input'), { target: { value: '^main$\n([' } });
+    expect(screen.getByTestId('protected-patterns-error')).toHaveTextContent('非法正则：([');
+    expect(screen.getByTestId('protected-patterns-save')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('protected-patterns-save'));
+    expect(onPatchSettings).not.toHaveBeenCalled();
+  });
+
+  it('settings 未就绪时不渲染保护分支卡片（数据源自应用设置）', () => {
+    render(<SettingsPage onPatchSettings={vi.fn()} config={makeConfig()} onSetConfig={vi.fn()} />);
+    expect(screen.queryByTestId('protected-branches-card')).not.toBeInTheDocument();
   });
 });

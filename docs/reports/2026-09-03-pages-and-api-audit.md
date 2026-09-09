@@ -311,7 +311,7 @@ Reset 与 Undo Commit；对应 `GitResetAction` / `GitNewResetDialog` / `GitUnco
 | 弹窗 Fetch | ✅ | 页头「Fetch」按钮（fetch 全部远程引用；成功后复用事件流触发分支列表验证） |
 | force-push 后修复 | ✅ | 当前分支与上游分叉（ahead>0 且 behind>0）时行内「force-push 修复」（`GitForcePushedBranchUpdateAction` 语义）：`POST /update/force-pushed`——fetch → 本地重置到上游 → 本地独有提交（@{u}..HEAD）逐一 cherry-pick 重放；冲突 → 冲突页流；无本地独有提交 → 重置即快进等价 |
 | 检出并变基到当前 | ✅ | 本地行菜单项 + 远程行下拉（`GitCheckoutWithRebaseAction` 语义）：`POST /checkout-rebase`——检出目标分支（远程 → 新建本地分支，缺省剥 `origin/` 前缀，远程行进本地名 Modal 可改）→ `rebase onto 原当前分支`；目标为当前分支/分离头/本地名冲突（既有同名分支未跟踪该远程 → 对齐 Java tracking conflict 重命名提示）→ INVALID_QUERY；冲突 → 冲突页流 |
-| 保护分支 | ❌ | 依赖完整远程只读 API（拓扑校验），与自动 fetch 一并后置 |
+| 保护分支 | ➖ | 面板侧无保护分支 UI（Java 亦无——保护只影响重写拦截与 push 对话框过滤，Web 以设置 + 编辑拦截承载，见 §4.30） |
 
 ### 4.8 MergeDialog ✅（页面化对话框）
 
@@ -604,7 +604,8 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 | git 可执行文件检测/引导 | ✅ | 设置页「Git 可执行文件」卡片（`GET /settings/git-executable`：PATH 查找 `git` + `git --version` 输出 + 已检测徽标；未检出 → 引导文案（安装 Git / 确保服务进程 PATH 可执行）——对照 `GitExecutableSelectorPanel`） |
 | GPG 专属配置对话框 | ✅ | 设置页「GPG 提交签名」卡片（状态行：已启用（key/描述）/未启用）+「配置…」Modal（对应 `GitGpgConfigDialog`/`GpgSignConfigurableRow`）：勾选「为仓库提交签名」+ 密钥下拉（`gpg --list-secret-keys --with-colons` 解析——capabilities 含 s/S 且非 D；gpg 程序取 `gpg.program` 生效值，缺省 'gpg'；无可用密钥 → Alert 且无法启用）→ 写仓库级 `commit.gpgsign`+`user.signingkey`（取消勾选仅写 false 不清 key，对齐 `writeGitGpgConfig`）；端点 `GET/PUT /settings/gpg-config`（enabled=true 无 key → 400） |
 | SSH 专属配置对话框 | ➖ | Java 当前版本无 SSH 专属配置面（git4idea 无 ssh settings UI 证据；`core.sshCommand` 仅常量）——SSH 密钥属系统级，不进应用配置 |
-| 保护分支设置 / 自动 fetch 设置 | ❌ | 未做（Web 以事件推送替代定时 fetch） |
+| 保护分支设置 | ✅ | 设置页「保护分支」卡片（`GitVcsPanel.protectedBranchesRow` 语义）：每行一个正则模式列表（匹配剥远程名前缀的分支名）——行内 RegExp 校验（非法标红禁止保存，对齐 `validateProtectedBranchesPatterns`）+ 服务端同校验（非法 → INVALID_QUERY）；存应用设置 `protectedBranchPatterns`（`PUT /settings`）；消费联动（`GitProtectedBranches.isCommitPublishedBlocking`）：单提交编辑（Reword/Drop/Squash/Fixup → `POST /commit-edit`）目标提交已发布到匹配远程分支 → INVALID_QUERY「不可重写」；服务器同步规则复选框（`isSynchronizeBranchProtectionRules`）➖（Web 无团队服务器集成） |
+| 自动 fetch 设置 | ➖ | 终稿口径：Web 无后台定时任务，以 SSE 事件推送（refs.changed/state-changed）替代定时 fetch——Git 菜单 fetch 手动词条保留，定时 fetch 设置面无对应（决策记录 2026-09 终稿） |
 
 ### 4.31 BrowsePanel ✅
 
