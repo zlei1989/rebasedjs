@@ -462,6 +462,8 @@ describe('web-next REST 路由', () => {
     const entry = body.branches.find((b: { name: string }) => b.name === current);
     expect(entry).toBeDefined();
     expect(entry.current).toBe(true);
+    // 最近检出组（reflog）：初始无 checkout 记录 → 空数组
+    expect(body.recent).toEqual([]);
   });
 
   it('branches 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {

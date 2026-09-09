@@ -1,9 +1,10 @@
 /**
- * 分支面板：本地/远程两组列表（对照 Java BranchesTreeModel 分组维度）。
+ * 分支面板：本地/远程两组列表 + 最近检出组（reflog）+ 标签组（对照 Java BranchesTreeModel 分组维度；
+ * showRecentBranches/showTags 页面级开关默认开，对齐 Java 设置默认）。
  *  行内信息：current 标记、upstream+ ahead/behind 徽标（0 不显示）、mergedIntoHead 图标（绿色对勾 Tooltip"已合并"）。
  *  操作：新建分支（Modal：名称 + 起始点可选 + 创建后检出开关）、检出、删除（Popconfirm；未合并提示需 force）、
- *        重命名（Modal 单输入）、设上游（Modal 单输入）。远程行 v1 只读展示。
- *  过滤/查找：文本过滤（名称子串，两组共用）+「仅看已合并」开关 +「清理已合并」批量删除（Popconfirm 确认，
+ *        重命名（Modal 单输入）、设上游（Modal 单输入）。
+ *  过滤/查找：文本过滤（名称子串，四组共用）+「仅看已合并」开关 +「清理已合并」批量删除（Popconfirm 确认，
  *        容器经既有 delete action 顺序删除——本地已合并且非当前分支，可安全删除无需 force）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈（message.error）由容器负责。
  */
@@ -22,7 +23,7 @@ import {
   Typography,
 } from 'antd';
 import { CheckOutlined, DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
-import type { BranchAction, BranchList, BranchRef, CheckoutAction } from '@rebased/contracts';
+import type { BranchAction, BranchList, BranchRef, CheckoutAction, TagEntry, TagList } from '@rebased/contracts';
 
 export interface BranchPanelProps {
   branches: BranchList;
@@ -42,6 +43,9 @@ export interface BranchPanelProps {
   /** 检出并变基到当前（GitCheckoutWithRebaseAction 语义）：目标分支检出后 rebase onto 变基前所在分支；
    *  本地行菜单项直发 {branch}，远程行经本地名 Modal（prefill 剥 origin/ 前缀）后回传 {branch, localName}；缺省不渲染 */
   onCheckoutRebase?: (request: { branch: string; localName?: string }) => void;
+  /** 标签列表（GitBranchesTreeSingleRepoModel tags 组语义）：注入时渲染「标签」组卡片（行内「检出」→ detached）；
+   *  缺省不渲染（向后兼容） */
+  tags?: TagList;
   acting?: boolean;
 }
 
@@ -319,8 +323,54 @@ function RemoteBranchRow({
   );
 }
 
-/** 分支组卡片：标题带计数；行列表用 Flex vertical 渲染（antd v6 已弃用 List） */
-function BranchGroupCard({
+/** 最近检出行（GitBranchesPopup recent 组语义）：名称 + current 标记 + 上游徽标 + 行内「检出」 */
+function RecentBranchRow({
+  branch,
+  onCheckout,
+}: {
+  branch: BranchRef;
+  onCheckout: (action: CheckoutAction) => void;
+}): React.ReactNode {
+  return (
+    <Flex data-testid={`row-recent-${branch.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+        {branch.name}
+      </Typography.Text>
+      {branch.current && <Tag color="green">当前</Tag>}
+      <UpstreamInfo branch={branch} />
+      <Button
+        size="small"
+        type="text"
+        data-testid={`recent-checkout-${branch.name}`}
+        onClick={() => onCheckout({ action: 'branch', name: branch.name })}
+      >
+        检出
+      </Button>
+    </Flex>
+  );
+}
+
+/** 标签行（tags 组语义：行内「检出」→ detached 检出标签） */
+function TagRow({ tag, onCheckout }: { tag: TagEntry; onCheckout: (action: CheckoutAction) => void }): React.ReactNode {
+  return (
+    <Flex data-testid={`row-tag-${tag.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+        {tag.name}
+      </Typography.Text>
+      {tag.annotated && <Tag>附注</Tag>}
+      <Button
+        size="small"
+        type="text"
+        data-testid={`tag-checkout-${tag.name}`}
+        onClick={() => onCheckout({ action: 'detach', ref: tag.name })}
+      >
+        检出
+      </Button>
+    </Flex>
+  );
+}
+
+/** 分支组卡片：标题带计数；行列表用 Flex vertical 渲染（antd v6 已弃用 List） */function BranchGroupCard({
   title,
   rows,
 }: {
@@ -344,6 +394,7 @@ export function BranchPanel({
   fetching,
   onForcePushedUpdate,
   onCheckoutRebase,
+  tags,
   acting,
 }: BranchPanelProps): React.ReactNode {
   // 过滤态：文本（名称大小写不敏感子串）+「仅看已合并」（本地/远程两组同筛选——Java 查找已合并语义）
@@ -360,6 +411,26 @@ export function BranchPanel({
   const mergedLocals = useMemo(() => locals.filter((b) => b.mergedIntoHead && !b.current), [locals]);
   const visibleLocals = useMemo(() => locals.filter(match), [locals, filterText, mergedOnly]);
   const visibleRemotes = useMemo(() => remotes.filter(match), [remotes, filterText, mergedOnly]);
+
+  // 最近检出/标签分组（Java showRecentBranches/showTags 默认开）：页面级开关；最近组只受文本过滤（历史视图不受「仅看已合并」约束）
+  const [showRecent, setShowRecent] = useState(true);
+  const [showTags, setShowTags] = useState(true);
+  const recentRefs = useMemo(() => {
+    const byName = new Map(locals.map((b) => [b.name, b]));
+    return branches.recent
+      .map((n) => byName.get(n))
+      .filter((b): b is BranchRef => b !== undefined);
+  }, [branches, locals]);
+  const visibleRecent = useMemo(() => {
+    if (!showRecent) return [];
+    const q = filterText.trim().toLowerCase();
+    return recentRefs.filter((b) => q === '' || b.name.toLowerCase().includes(q));
+  }, [showRecent, recentRefs, filterText]);
+  const visibleTags = useMemo(() => {
+    if (!showTags || tags === undefined) return [];
+    const q = filterText.trim().toLowerCase();
+    return tags.tags.filter((t) => q === '' || t.name.toLowerCase().includes(q));
+  }, [showTags, tags, filterText]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
@@ -416,6 +487,15 @@ export function BranchPanel({
         <Checkbox checked={mergedOnly} onChange={(e) => setMergedOnly(e.target.checked)}>
           仅看已合并
         </Checkbox>
+        {/* 分组维度开关（Java showRecentBranches/showTags 默认 true）：最近检出组仅有数据时渲染；标签组仅在注入 tags 时可用 */}
+        <Checkbox checked={showRecent} onChange={(e) => setShowRecent(e.target.checked)}>
+          显示最近检出
+        </Checkbox>
+        {tags !== undefined && (
+          <Checkbox checked={showTags} onChange={(e) => setShowTags(e.target.checked)}>
+            显示标签
+          </Checkbox>
+        )}
         {onCleanupMerged !== undefined ? (
           <Popconfirm
             title={`清理 ${mergedLocals.length} 个已合并分支？不可恢复`}
@@ -443,6 +523,15 @@ export function BranchPanel({
         ) : null}
       </Flex>
 
+      {/* 最近检出组（GitBranchesPopup recent 组语义）：仅数据非空时渲染；行内「检出」→ 既有 branch 检出 */}
+      {visibleRecent.length > 0 && (
+        <BranchGroupCard
+          title={`最近检出（${visibleRecent.length}${visibleRecent.length !== recentRefs.length ? `/${recentRefs.length}` : ''}）`}
+          rows={visibleRecent.map((branch) => (
+            <RecentBranchRow key={branch.name} branch={branch} onCheckout={onCheckout} />
+          ))}
+        />
+      )}
       <BranchGroupCard
         title={`本地分支（${visibleLocals.length}${visibleLocals.length !== locals.length ? `/${locals.length}` : ''}）`}
         rows={
@@ -486,6 +575,16 @@ export function BranchPanel({
           )
         }
       />
+
+      {/* 标签组（GitBranchesTreeSingleRepoModel tags 组语义）：仅注入 tags 且数据非空时渲染；行内「检出」→ detached */}
+      {tags !== undefined && visibleTags.length > 0 && (
+        <BranchGroupCard
+          title={`标签（${visibleTags.length}${visibleTags.length !== tags.tags.length ? `/${tags.tags.length}` : ''}）`}
+          rows={visibleTags.map((tag) => (
+            <TagRow key={tag.name} tag={tag} onCheckout={onCheckout} />
+          ))}
+        />
+      )}
 
       <CreateBranchModal
         open={createOpen}

@@ -20,7 +20,12 @@ function makeBranch(partial: Partial<BranchRef> & { name: string }): BranchRef {
 
 /** 测试列表工厂 */
 function makeList(branches: BranchRef[]): BranchList {
-  return { branches };
+  return { branches, recent: [] };
+}
+
+/** 测试带最近检出的列表工厂（recent 为分支名数组） */
+function makeListWithRecent(branches: BranchRef[], recent: string[]): BranchList {
+  return { branches, recent };
 }
 
 /** 测试回调工厂：全部 vi.fn() */
@@ -411,5 +416,67 @@ describe('BranchPanel 检出并变基到当前（GitCheckoutWithRebaseAction 语
     );
     expect(screen.queryByText('检出并变基到当前')).not.toBeInTheDocument();
     expect(screen.queryByTestId('menu-remote-origin/dev')).not.toBeInTheDocument();
+  });
+
+  it('recent 非空且默认开：最近检出卡片渲染，行内「检出」以 branch action 回调', () => {
+    const onCheckout = vi.fn();
+    render(
+      <BranchPanel
+        branches={makeListWithRecent(
+          [makeBranch({ name: 'dev', current: false }), makeBranch({ name: 'main', current: true })],
+          ['dev'],
+        )}
+        {...makeHandlers()}
+        onCheckout={onCheckout}
+      />,
+    );
+    expect(screen.getByText('最近检出（1）')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('recent-checkout-dev'));
+    expect(onCheckout).toHaveBeenCalledTimes(1);
+    expect(onCheckout).toHaveBeenCalledWith({ action: 'branch', name: 'dev' });
+  });
+
+  it('「显示最近检出」开关关闭 → 组隐藏；recent 无现存分支 → 组不渲染', () => {
+    const { rerender } = render(
+      <BranchPanel branches={makeListWithRecent([makeBranch({ name: 'dev' })], ['dev'])} {...makeHandlers()} />,
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: /显示最近检出/ }));
+    expect(screen.queryByText('最近检出（1）')).not.toBeInTheDocument();
+
+    rerender(
+      <BranchPanel branches={makeListWithRecent([makeBranch({ name: 'dev' })], ['gone'])} {...makeHandlers()} />,
+    );
+    expect(screen.queryByText(/^最近检出（/)).not.toBeInTheDocument();
+  });
+
+  it('tags 注入：标签卡片渲染（附注标记）+ 行内「检出」以 detach 回调；「显示标签」开关可隐藏', () => {
+    const onCheckout = vi.fn();
+    render(
+      <BranchPanel
+        branches={makeList([makeBranch({ name: 'dev' })])}
+        {...makeHandlers()}
+        onCheckout={onCheckout}
+        tags={{
+          tags: [
+            { name: 'v1.0', hash: 'a'.repeat(40), subject: null, annotated: false },
+            { name: 'v2.0', hash: 'b'.repeat(40), subject: 'release', annotated: true },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText('标签（2）')).toBeInTheDocument();
+    expect(screen.getByText('附注')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('tag-checkout-v1.0'));
+    expect(onCheckout).toHaveBeenCalledTimes(1);
+    expect(onCheckout).toHaveBeenCalledWith({ action: 'detach', ref: 'v1.0' });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /显示标签/ }));
+    expect(screen.queryByText('标签（2）')).not.toBeInTheDocument();
+  });
+
+  it('未注入 tags：不渲染标签开关与卡片（向后兼容）', () => {
+    render(<BranchPanel branches={makeList([makeBranch({ name: 'dev' })])} {...makeHandlers()} />);
+    expect(screen.queryByText(/标签/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /显示标签/ })).not.toBeInTheDocument();
   });
 });

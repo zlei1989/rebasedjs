@@ -3,6 +3,7 @@ import {
   createBranch,
   deleteBranch,
   listBranches,
+  listRecentCheckoutBranches,
   mergedBranchNames,
   renameBranch,
   setBranchUpstream,
@@ -23,11 +24,15 @@ async function requireLocalBranch(repoPath: string, name: string): Promise<void>
   }
 }
 
-/** 分支列表：core 列表 + mergedBranchNames 组合 mergedIntoHead 标志 */
+/** 分支列表：core 列表 + mergedBranchNames 组合 mergedIntoHead 标志 + 最近检出（reflog） */
 export async function getBranches(repoPath: string): Promise<BranchList> {
-  const [branches, merged] = await Promise.all([listBranches(repoPath), mergedBranchNames(repoPath)]);
+  const [branches, merged, recent] = await Promise.all([
+    listBranches(repoPath),
+    mergedBranchNames(repoPath),
+    listRecentCheckoutBranches(repoPath),
+  ]);
   const mergedSet = new Set(merged);
-  return { branches: branches.map((b) => toBranchRef(b, mergedSet)) };
+  return { branches: branches.map((b) => toBranchRef(b, mergedSet)), recent };
 }
 
 /** 分支写操作分派：create/delete/rename/setUpstream → core；delete/rename/setUpstream 前校验目标分支存在；返回刷新列表 */

@@ -239,12 +239,14 @@ describe('useCheckoutRebase', () => {
         { name: 'main', remote: false, current: true, upstream: null, ahead: 0, behind: 0, hash: 'a'.repeat(40), mergedIntoHead: false, lastCommitIso: '2025-01-01T00:00:00Z' },
         { name: 'origin/side', remote: true, current: false, upstream: null, ahead: 0, behind: 0, hash: 'b'.repeat(40), mergedIntoHead: false, lastCommitIso: '2025-01-01T00:00:00Z' },
       ],
+      recent: ['main'],
     };
     const BRANCHES_SIDE: BranchList = {
       branches: [
         { name: 'main', remote: false, current: false, upstream: null, ahead: 0, behind: 0, hash: 'a'.repeat(40), mergedIntoHead: false, lastCommitIso: '2025-01-01T00:00:00Z' },
         { name: 'side', remote: false, current: true, upstream: 'origin/side', ahead: 0, behind: 0, hash: 'b'.repeat(40), mergedIntoHead: false, lastCommitIso: '2025-01-01T00:00:00Z' },
       ],
+      recent: ['main', 'side'],
     };
     // 首次挂载 GET 返回旧值；POST 后的重验证返回新值（提交后分支切换）
     let statusGets = 0;

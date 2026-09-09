@@ -42,6 +42,8 @@ describe('branch 功能', () => {
     expect(cur?.mergedIntoHead).toBe(true);
     expect(feat?.remote).toBe(false);
     expect(feat?.mergedIntoHead).toBe(false);
+    // recent：reflog checkout 记录（最近优先）——feature → base
+    expect(list.recent).toEqual([base, 'feature']);
   });
 
   it('applyBranchAction create→delete force→rename→setUpstream 轮转，返回刷新列表', async () => {

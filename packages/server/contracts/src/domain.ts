@@ -140,9 +140,10 @@ export interface BranchRef {
   lastCommitIso: string;
 }
 
-/** 分支列表视图 */
+/** 分支列表视图：recent 为最近检出本地分支名（GitRecentCheckoutBranches 语义：reflog checkout 记录，最近优先、去重、已删不列） */
 export interface BranchList {
   branches: BranchRef[];
+  recent: string[];
 }
 
 /** 冲突条目：stages 为存在的阶段编号（1=base 共同祖先，2=ours 当前分支，3=theirs 合并来源）；组合即冲突类型（[1,2,3]=双方修改，[2,3]=双方新增，[1,2]=对方删除/我方修改，[1,3]=我方删除/对方修改） */

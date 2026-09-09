@@ -80,6 +80,31 @@ export async function currentBranchName(cwd: string): Promise<string | null> {
   }
 }
 
+/**
+ * 最近检出分支（GitRecentCheckoutBranches 语义）：reflog 的 checkout: 记录（--grep-reflog 过滤，limit 条），
+ * 每条取最后一次 " to <分支名>" 之后的分支名（最近优先）；仅保留仍存在的本地分支并去重保序。
+ * 克隆初始检出不产 checkout 记录（Java 以项目设置兜底——Web 无对应，缺失即不计）。
+ */
+export async function listRecentCheckoutBranches(cwd: string, limit = 50): Promise<string[]> {
+  const { stdout } = await runGit(
+    ['reflog', '--max-count', String(limit), '--grep-reflog', 'checkout:', '--format=%gs'],
+    { cwd },
+  );
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const line of stdout.split(/\r?\n/)) {
+    const toIndex = line.lastIndexOf(' to ');
+    if (toIndex <= 0) continue;
+    const name = line.slice(toIndex + ' to '.length).trim();
+    if (name === '' || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  // 只保留仍存在的本地分支（对齐 Java haveLocalBranch）
+  const locals = new Set((await listBranches(cwd)).filter((b) => !b.remote).map((b) => b.name));
+  return names.filter((n) => locals.has(n));
+}
+
 export async function createBranch(cwd: string, name: string, startPoint?: string): Promise<void> {
   const args = ['branch', name];
   if (startPoint !== undefined) args.push(startPoint);

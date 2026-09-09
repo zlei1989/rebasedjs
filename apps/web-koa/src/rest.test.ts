@@ -437,10 +437,12 @@ describe('web-koa REST 端点', () => {
     const current = execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
     const res = await fetch(`${base}/api/repos/${repoId}/branches`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { branches: Array<{ name: string; current: boolean }> };
+    const body = (await res.json()) as { branches: Array<{ name: string; current: boolean }>; recent: string[] };
     const entry = body.branches.find((b) => b.name === current);
     expect(entry).toBeDefined();
     expect(entry!.current).toBe(true);
+    // 最近检出组（reflog）：初始无 checkout 记录 → 空数组
+    expect(body.recent).toEqual([]);
   });
 
   it('branches 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {

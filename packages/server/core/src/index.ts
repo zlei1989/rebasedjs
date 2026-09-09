@@ -33,6 +33,7 @@ export {
   currentBranchName,
   deleteBranch,
   listBranches,
+  listRecentCheckoutBranches,
   mergedBranchNames,
   renameBranch,
   setBranchUpstream,

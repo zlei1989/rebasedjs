@@ -20,6 +20,7 @@ const LIST_A: BranchList = {
       lastCommitIso: '2026-01-01T00:00:00.000Z',
     },
   ],
+  recent: ['main'],
 };
 const LIST_B: BranchList = {
   branches: [
@@ -36,6 +37,7 @@ const LIST_B: BranchList = {
       lastCommitIso: '2026-01-02T00:00:00.000Z',
     },
   ],
+  recent: ['main'],
 };
 const CREATE_ACTION: BranchAction = { action: 'create', name: 'feature' };
 

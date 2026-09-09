@@ -30,6 +30,7 @@ const BRANCHES: BranchList = {
     makeBranch({ name: 'dev' }),
     makeBranch({ name: 'origin/main', remote: true }),
   ],
+  recent: [],
 };
 
 /** 打开分支下拉并点选指定分支（antd v6 Select：mouseDown .ant-select-content 展开、点击选项文本） */

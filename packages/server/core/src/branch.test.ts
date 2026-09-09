@@ -9,6 +9,7 @@ import {
   createBranch,
   deleteBranch,
   listBranches,
+  listRecentCheckoutBranches,
   mergedBranchNames,
   renameBranch,
   setBranchUpstream,
@@ -193,5 +194,34 @@ describe('branch 原语', () => {
     await setBranchUpstream(repo, 'feat', `origin/${defaultBranch}`);
     const feat = (await listBranches(repo)).find((b) => b.name === 'feat');
     expect(feat?.upstream).toBe(`origin/${defaultBranch}`);
+  });
+});
+
+describe('listRecentCheckoutBranches（GitRecentCheckoutBranches 语义：reflog checkout 记录）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('多次检出 → 最近优先、去重、仅存活的本地分支', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const main = makeBaseCommit(repo);
+    git(repo, ['checkout', '-q', '-b', 'a']);
+    git(repo, ['checkout', '-q', '-b', 'b']);
+    git(repo, ['checkout', '-q', 'a']);
+    git(repo, ['checkout', '-q', 'b']);
+    git(repo, ['checkout', '-q', 'a']);
+    git(repo, ['checkout', '-q', main]);
+    git(repo, ['branch', '-D', 'b']);
+    git(repo, ['checkout', '-q', 'a']);
+
+    const recent = await listRecentCheckoutBranches(repo);
+    // 最近优先：a（最后检出）→ main；（b 已删被过滤）；a 去重只出现一次
+    expect(recent).toEqual(['a', main]);
+  });
+
+  it('无 checkout 记录（初始 clone 语义）→ 空列表', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    makeBaseCommit(repo);
+    expect(await listRecentCheckoutBranches(repo)).toEqual([]);
   });
 });

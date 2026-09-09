@@ -96,7 +96,7 @@
 ### 2.3 汇总
 
 - ✅ 已复刻 29 个；🟡 等效 2 个（CommitDialog、QuickActionsMenu）。
-- 功能点级 🟡 遗留（不影响页面级结论）：BranchPanel 最近检出/标签分组与过滤、CommitDialog 等效面（GPG/commit template）、SettingsPage 面项等——逐一见 §四各页功能点表（Show Git Log for Command 已归 ➖，见 §5.3.2 #39）。
+- 功能点级 🟡 遗留（不影响页面级结论）：CommitDialog 等效面（GPG/commit template）、SettingsPage 面项等——逐一见 §四各页功能点表（Show Git Log for Command 已归 ➖，见 §5.3.2 #39）。
 
 ---
 
@@ -302,7 +302,7 @@ Reset 与 Undo Commit；对应 `GitResetAction` / `GitNewResetDialog` / `GitUnco
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 分组（本地/远程两组）与过滤 | ✅ | 文本过滤（名称子串，两组共用）+「仅看已合并」开关；"最近检出/标签"维度仍后置（见任务清单 §2.3 余项） |
+| 分组（本地/远程 + 最近检出 + 标签）与过滤 | ✅ | 最近检出组（core `listRecentCheckoutBranches`：reflog `--grep-reflog=checkout:` 记录解析 " to \<分支\>"，最近优先/去重/仅存活本地分支，limit 50 对齐 `git.recent.checkout.branches.reflog.entries.count`——`GitRecentCheckoutBranches` 语义）+ 标签组（`BranchesTreeSingleRepoModel` tags 组语义：行内「检出」= detached）；文本过滤四组共用 +「仅看已合并」开关；「显示最近检出/标签」页面级开关默认开（对齐 `showRecentBranches`/`showTags` 默认 true）；多仓库/目录前缀分组 ➖（Web 单仓库模型） |
 | 行内信息：current 标记 / 上游 + ahead/behind 徽标 / 已合并图标 | ✅ | `mergedIntoHead` 绿色对勾 |
 | 创建（起始点可选 + 创建后检出开关）/删除（未合并提示 force）/重命名/设上游 | ✅ | 删除走 Popconfirm |
 | 检出：既有分支 / 新建并检出 / detached（标签/提交） | ✅ | 三态；检出文件未做 |

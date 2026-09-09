@@ -120,6 +120,7 @@ const BRANCHES_A: BranchList = {
       lastCommitIso: '2026-01-01T00:00:00.000Z',
     },
   ],
+  recent: ['main'],
 };
 const BRANCHES_B: BranchList = {
   branches: [
@@ -135,6 +136,7 @@ const BRANCHES_B: BranchList = {
       lastCommitIso: '2026-01-02T00:00:00.000Z',
     },
   ],
+  recent: ['main'],
 };
 
 afterEach(() => {

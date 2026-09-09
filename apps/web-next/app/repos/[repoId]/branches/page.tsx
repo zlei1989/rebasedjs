@@ -6,7 +6,7 @@
  * 本页自订阅 events：外部 CLI 检出/重命名当前分支时重验证分支列表刷新 current 标记
  * （纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
-import { useBranchAction, useBranches, useCheckout, useCheckoutRebase, useFetch, useForcePushedUpdate, useRepoEvents } from '@rebased/client';
+import { useBranchAction, useBranches, useCheckout, useCheckoutRebase, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
 import { Button, Flex, Modal, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -16,6 +16,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { repoId } = use(params);
   const router = useRouter();
   const { data: branches, mutate: mutateBranches } = useBranches(repoId);
+  // 标签组（GitBranchesTreeSingleRepoModel tags 组语义）：分支面板底部「标签」卡片（行内检出 = detached）
+  const { data: tags } = useTags(repoId);
   const { trigger: branchAction, isMutating: actingBranch } = useBranchAction(repoId);
   const { trigger: checkout, isMutating: checkingOut } = useCheckout(repoId);
   // 弹窗 Fetch（GitBranchPopupFetchAction 语义）：fetch 全部远程 → 成功后重验证分支列表（远程行/merged 态变化）
@@ -114,6 +116,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         fetching={fetching}
         onForcePushedUpdate={onForcePushedUpdate}
         onCheckoutRebase={onCheckoutRebase}
+        tags={tags}
         acting={actingBranch || checkingOut || fixingForcePushed || rebaseCheckingOut}
       />
     </Flex>
