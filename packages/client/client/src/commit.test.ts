@@ -2,8 +2,8 @@
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AmendSpecificBody, AmendTarget, CommitAndPushBody, CommitAndPushOutcome, CommitBody } from '@rebased/contracts';
-import { useAmendSpecificCommit, useAmendTargets, useCommit, useCommitAndPush } from './commit';
+import type { AmendSpecificBody, AmendTarget, CommitAndPushBody, CommitAndPushOutcome, CommitBody, CrlfWarning } from '@rebased/contracts';
+import { useAmendSpecificCommit, useAmendTargets, useCommit, useCommitAndPush, useCrlfWarning } from './commit';
 import { freshCache } from './testing/fresh-cache';
 
 const HASH = 'b'.repeat(40);
@@ -135,6 +135,33 @@ describe('useAmendTargets', () => {
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useCrlfWarning', () => {
+  it('GET 端点返回 CrlfWarning（提交前 CRLF 检测）', async () => {
+    const CRLF: CrlfWarning = { warning: true, files: ['a.txt', 'b.txt'] };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(CRLF), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: CrlfWarning; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useCrlfWarning('r-cmt-9');
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result?.data).toEqual(CRLF));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-cmt-9/commit/crlf-warning');
     await act(async () => {
       renderer.unmount();
     });

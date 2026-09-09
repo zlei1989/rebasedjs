@@ -5,10 +5,12 @@
 import {
   amendSpecificCommit as coreAmendSpecificCommit,
   commitStaged,
+  detectCrlfWarning,
   getGitConfigEntries,
   headCommit,
   isAncestorCommit,
   listAmendTargets,
+  setGlobalAutocrlf,
   verifyCommitish,
   type CoreConfigEntry,
   pushBranch,
@@ -20,6 +22,7 @@ import {
   type CommitAndPushBody,
   type CommitAndPushOutcome,
   type CommitBody,
+  type CrlfWarning,
 } from '@rebased/contracts';
 import { assertNoOperationInProgress } from './operation';
 import { withAuth } from './remote';
@@ -33,10 +36,14 @@ export function assertCommitIdentity(entries: CoreConfigEntry[]): void {
   }
 }
 
-/** 提交暂存区：前置检查 user.name/user.email 生效值；提交后返回新哈希 */
+/** 提交暂存区：前置检查 user.name/user.email 生效值；提交后返回新哈希。
+ *  crlfFix = GitCrlfDialog「修复并提交」：先写 core.autocrlf 建议值（--global）再提交 */
 export async function createCommit(repoPath: string, body: CommitBody): Promise<{ hash: string }> {
   const entries = await getGitConfigEntries(repoPath, ['user.name', 'user.email']);
   assertCommitIdentity(entries);
+  if (body.crlfFix === true) {
+    await setGlobalAutocrlf(repoPath);
+  }
   const hash = await commitStaged(repoPath, {
     message: body.message,
     amend: body.amend,
@@ -44,6 +51,11 @@ export async function createCommit(repoPath: string, body: CommitBody): Promise<
     noVerify: body.noVerify,
   });
   return { hash };
+}
+
+/** CRLF 提示（GitCrlfDialog 语义）：检测即将提交的暂存文件是否含无属性覆盖的 CRLF（Windows + autocrlf 未建议配置） */
+export async function getCrlfWarning(repoPath: string): Promise<CrlfWarning> {
+  return detectCrlfWarning(repoPath);
 }
 
 /**

@@ -15,6 +15,7 @@ import {
   useChangelists,
   useCommit,
   useCommitAndPush,
+  useCrlfWarning,
   useCreatePatch,
   useDiffPatch,
   useHunkStaging,
@@ -24,7 +25,7 @@ import {
   useStaging,
   useStashAction,
 } from '@rebased/client';
-import type { HunkStagingBody, StagingBody } from '@rebased/contracts';
+import type { CommitBody, HunkStagingBody, StagingBody } from '@rebased/contracts';
 import { StatusPage } from '@rebased/ui';
 import { Button, Flex, Modal, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -42,6 +43,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // amend 指定历史提交（GitCommitDialog「Amend <subject>」下拉语义）：候选列表 + 指定目标重写
   const { data: amendTargets } = useAmendTargets(repoId);
   const { trigger: amendSpecific, isMutating: amendingSpecific } = useAmendSpecificCommit(repoId);
+  // CRLF 提示（GitCrlfDialog 语义）：提交点击时先重验证再判定（暂存内容随操作变化，挂载期数据可能过期）
+  const { data: crlfData, mutate: crlfMutate } = useCrlfWarning(repoId);
   // 页级动作（Create Patch from changes / Shelve Changes / Stash Files 语义）：
   // createPatch 响应回写 patches 键；shelf/stash 响应回写 shelves/stashes 键（容器只负责成功提示与跳转）
   const { trigger: createPatch } = useCreatePatch(repoId);
@@ -61,6 +64,35 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   } = useDiffPatch(repoId, patchSel?.path ?? '', patchSel?.staged ?? false);
   // 提交成功计数：并入 StatusPage key，commit 后 remount 清空提交框与勾选态（staging 回写由 hook 完成，无需 remount）
   const [commitSeq, setCommitSeq] = useState(0);
+  // CRLF 提示（GitCrlfDialog 语义）：提交点击先重验证（暂存内容随操作变化）→ 涉事时弹三选 Modal
+  const [crlfPending, setCrlfPending] = useState<{ body: CommitBody; kind: 'commit' | 'push' } | null>(null);
+  /** 提交（无 CRLF 分支）：成功清空提交框重验证 */
+  const doCommit = (body: CommitBody): void => {
+    commit(body)
+      .then(() => {
+        setCommitSeq((n) => n + 1);
+        void mutate();
+        invalidatePatch();
+      })
+      .catch(onError);
+  };
+  /** 提交并推送（无 CRLF 分支）：commit 先落盘，push 结果按三态提示（pushed 成功 / up-to-date 已最新 / rejected 引导拉取） */
+  const doCommitAndPush = (body: CommitBody): void => {
+    commitAndPush(body)
+      .then((outcome) => {
+        setCommitSeq((n) => n + 1);
+        void mutate();
+        invalidatePatch();
+        if (outcome.push.status === 'pushed') {
+          void message.success('已提交并推送');
+        } else if (outcome.push.status === 'up-to-date') {
+          void message.info('已提交（远端已是最新）');
+        } else {
+          void message.warning(outcome.push.hint ?? '推送被拒绝，请先拉取');
+        }
+      })
+      .catch(onError);
+  };
   // 状态推送（外部 CLI 变更/后台操作完成）：server-authoritative 回写 status 缓存；
   // revalidate:false 与 staging hook 回写约定一致，避免 GET 竞态覆盖。
   // watcher 仅轮询 status/operation：只有 RepoStatus 字段变化才产 repo.state-changed，
@@ -109,30 +141,28 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onUnstage={(paths) => onStaging({ action: 'unstage', paths })}
         onDiscard={(paths) => onStaging({ action: 'discard', paths })}
         onCommit={(body) => {
-          commit(body)
-            .then(() => {
-              setCommitSeq((n) => n + 1);
-              void mutate();
-              invalidatePatch();
+          // CRLF 提示（GitCrlfDialog 语义）：提交点击先重验证——涉事则弹三选 Modal（修复并提交/原样提交/取消）
+          void crlfMutate()
+            .then((w) => {
+              if (w?.warning !== true) {
+                doCommit(body);
+                return;
+              }
+              setCrlfPending({ body, kind: 'commit' });
             })
-            .catch(onError);
+            .catch(() => doCommit(body));
         }}
         // 提交并推送：commit 先落盘，push 结果按三态提示（pushed 成功 / up-to-date 已最新 / rejected 引导拉取）
         onCommitAndPush={(body) => {
-          commitAndPush(body)
-            .then((outcome) => {
-              setCommitSeq((n) => n + 1);
-              void mutate();
-              invalidatePatch();
-              if (outcome.push.status === 'pushed') {
-                void message.success('已提交并推送');
-              } else if (outcome.push.status === 'up-to-date') {
-                void message.info('已提交（远端已是最新）');
-              } else {
-                void message.warning(outcome.push.hint ?? '推送被拒绝，请先拉取');
+          void crlfMutate()
+            .then((w) => {
+              if (w?.warning !== true) {
+                doCommitAndPush(body);
+                return;
               }
+              setCrlfPending({ body, kind: 'push' });
             })
-            .catch(onError);
+            .catch(() => doCommitAndPush(body));
         }}
         // amend 指定历史提交：success → 清空提交框重验证（历史重写）；conflicts → 跳冲突页（continue/abort 流）
         onAmendSpecific={(body) => {
@@ -151,6 +181,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             .catch(onError);
         }}
         amendTargets={amendTargets}
+        crlfFiles={crlfData?.warning === true ? crlfData.files : undefined}
         committing={committing || committingPush || amendingSpecific}
         changelists={changelists}
         // 变更列表操作失败同样走统一 message.error
@@ -213,6 +244,43 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         // Show History（#47）：行内「历史」→ /history?file=
         onOpenHistory={(path) => router.push(`/repos/${repoId}/history?file=${encodeURIComponent(path)}`)}
       />
+      {/* CRLF 提示（GitCrlfDialog 语义）：三选——修复并提交（写 core.autocrlf 建议值）/ 原样提交 / 取消 */}
+      <Modal
+        title="检测到 CRLF 行尾符"
+        open={crlfPending !== null}
+        footer={[
+          <Button key="cancel" data-testid="crlf-cancel" onClick={() => setCrlfPending(null)}>
+            取消
+          </Button>,
+          <Button
+            key="keep"
+            data-testid="crlf-keep"
+            onClick={() => {
+              const pending = crlfPending;
+              setCrlfPending(null);
+              if (pending !== null) (pending.kind === 'commit' ? doCommit : doCommitAndPush)(pending.body);
+            }}
+          >
+            原样提交
+          </Button>,
+          <Button
+            key="fix"
+            type="primary"
+            data-testid="crlf-fix"
+            onClick={() => {
+              const pending = crlfPending;
+              setCrlfPending(null);
+              if (pending !== null) (pending.kind === 'commit' ? doCommit : doCommitAndPush)({ ...pending.body, crlfFix: true });
+            }}
+          >
+            修复并提交
+          </Button>,
+        ]}
+        onCancel={() => setCrlfPending(null)}
+      >
+        即将提交的文件含 CRLF 行尾符（core.autocrlf 未按建议设置，Windows 建议 true）。
+        「修复并提交」将设置 <code>git config --global core.autocrlf true</code> 后提交；「原样提交」直接提交（CRLF 将原样入库）。
+      </Modal>
     </Flex>
   );
 }

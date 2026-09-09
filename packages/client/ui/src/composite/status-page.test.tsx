@@ -292,6 +292,17 @@ describe('StatusPage', () => {
     expect(screen.getByTestId('commit-and-push-button')).toBeDisabled();
   });
 
+  it('CRLF 提示：crlfFiles 非空渲染警告内联提示（GitCrlfDialog 语义）；空/缺省不渲染', () => {
+    const { rerender } = render(
+      <StatusPage status={makeStatus([])} {...makeHandlers()} crlfFiles={['a.txt', 'b.txt']} />,
+    );
+    expect(screen.getByTestId('crlf-warning')).toHaveTextContent('CRLF 行尾符');
+    expect(screen.getByTestId('crlf-warning')).toHaveTextContent('a.txt、b.txt');
+
+    rerender(<StatusPage status={makeStatus([])} {...makeHandlers()} />);
+    expect(screen.queryByTestId('crlf-warning')).not.toBeInTheDocument();
+  });
+
   it('patchLoading 时补丁预览区显示骨架', () => {
     const { container } = render(
       <StatusPage status={makeStatus([])} {...makeHandlers()} patchLoading />,

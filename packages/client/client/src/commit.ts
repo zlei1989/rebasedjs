@@ -1,8 +1,9 @@
 /** 提交 hook：POST …/commit → {hash}；POST …/commit/push 组合执行器（薄封装端点，不持业务逻辑）；
- *  amend 指定历史提交（GitCommitDialog「Amend <subject>」语义）：GET …/commit/amend-targets 候选列表 + POST …/commit/amend-specific */
+ *  amend 指定历史提交（GitCommitDialog「Amend <subject>」语义）：GET …/commit/amend-targets 候选列表 + POST …/commit/amend-specific；
+ *  CRLF 提示（GitCrlfDialog 语义）：GET …/commit/crlf-warning */
 import useSWR, { type SWRResponse } from 'swr';
 import useSWRMutation from 'swr/mutation';
-import type { AmendSpecificBody, AmendTarget, CommitAndPushBody, CommitAndPushOutcome, CommitBody } from '@rebased/contracts';
+import type { AmendSpecificBody, AmendTarget, CommitAndPushBody, CommitAndPushOutcome, CommitBody, CrlfWarning } from '@rebased/contracts';
 import { getJson, postJson } from './http';
 
 /** 提交：POST /api/repos/:repoId/commit → {hash}；成功后由调用方触发 log/status 刷新（events 推送亦覆盖） */
@@ -30,6 +31,11 @@ export function useCommitAndPush(repoId: string): {
 /** amend 目标候选：GET /api/repos/:repoId/commit/amend-targets → AmendTarget[]（未发布的非合并非 HEAD 提交，旧→新，上限 20） */
 export function useAmendTargets(repoId: string): SWRResponse<AmendTarget[]> {
   return useSWR<AmendTarget[]>(repoId === '' ? null : `/api/repos/${repoId}/commit/amend-targets`, getJson);
+}
+
+/** CRLF 提示：GET /api/repos/:repoId/commit/crlf-warning → CrlfWarning（提交前检查——容器提交时先 mutate() 重验证再判定） */
+export function useCrlfWarning(repoId: string): SWRResponse<CrlfWarning> {
+  return useSWR<CrlfWarning>(repoId === '' ? null : `/api/repos/${repoId}/commit/crlf-warning`, getJson);
 }
 
 /** amend 指定历史提交：POST /api/repos/:repoId/commit/amend-specific → {status, hash?}（success=重写完成；conflicts=冲突态交冲突页） */

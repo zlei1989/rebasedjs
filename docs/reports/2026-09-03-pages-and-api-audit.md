@@ -16,10 +16,10 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **96 / 110**（web-next 96 个 route.ts ↔ web-koa repos.ts 110 注册，14 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **97 / 111**（web-next 97 个 route.ts ↔ web-koa repos.ts 111 注册，14 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 115 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 66、领域类型/别名 91、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| `@rebased/api` 公共出口 | 116 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 66、领域类型/别名 92、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
 | 导航边（104 条） | 78 ✅（含等价边）+ 8 🟡 + 7 ➖ + 11 ❌ |
 
 ### 1.2 口径与图例
@@ -102,7 +102,7 @@
 
 ## 三、接口盘点
 
-### 3.1 端点总表（96 路径 / 110 方法，两端完全对称）
+### 3.1 端点总表（97 路径 / 111 方法，两端完全对称）
 
 > 路径前缀 `/api`；`id` 即 `repoId`。SSE 3 个：`log/stream`、`diff/stream`、`events`。每个路由只做三件事：zod 校验 → 调 `@rebased/api` → 错误映射。
 
@@ -125,7 +125,7 @@
 | operation | `repos/:id/operation`、`operation/abort`、`operation/continue`、`operation/skip` | GET + 3×POST | 进行中操作查询/中止/继续（continue 泛化四操作共用）/跳过（rebase/cherry-pick/revert） | LogPage 操作条、ConflictsPanel「完成合并/跳过」 | ✅ |
 | staging | `repos/:id/staging` | POST | 文件级 stage/unstage/discard | StatusPage | ✅ |
 | staging | `repos/:id/staging/hunks` | POST | hunk 级暂存（按 diff/patch hunk 索引） | StatusPage 补丁预览行内 hunk 选择 | ✅ |
-| commit | `repos/:id/commit`、`commit/push`、`commit/amend-targets`、`commit/amend-specific` | POST ×2 + GET ×1 + POST ×1 | 提交（amend/signOff/noVerify）/ commit & push 组合执行器（commit 先落盘 → push 当前分支上游）/ amend 目标候选 / amend 指定历史提交（amend! 提交 + fixup -C 折入目标） | StatusPage 提交框 | ✅ |
+| commit | `repos/:id/commit`、`commit/push`、`commit/amend-targets`、`commit/amend-specific`、`commit/crlf-warning` | POST ×2 + GET ×2 + POST ×1 | 提交（amend/signOff/noVerify/crlfFix）/ commit & push 组合执行器（commit 先落盘 → push 当前分支上游）/ amend 目标候选 / amend 指定历史提交（amend! 提交 + fixup -C 折入目标）/ CRLF 提示检测 | StatusPage 提交框 | ✅ |
 | branch | `repos/:id/branches` | GET/POST | 分支列表 / create/delete/rename/setUpstream | BranchPanel、MergeDialog | ✅ |
 | checkout | `repos/:id/checkout` | POST | 检出 branch/newBranch/detach | BranchPanel | ✅ |
 | reset | `repos/:id/reset`、`reset/undo-commit` | POST | 三模式 reset / 撤销最近提交 | LogPage ResetDialog / 顶栏 | ✅ |
@@ -153,7 +153,7 @@
 | worktree | `repos/:id/worktrees`、`worktrees/remove`、`worktrees/prune` | GET/POST + 2×POST | 工作树列表 / 创建 / 移除 / 清理 | WorktreePanel | ✅ |
 | submodule | `repos/:id/submodules`、`submodules/update` | GET/POST | 子模块列表（四态）/ 更新（init/recursive） | SubmodulePanel | ✅ |
 
-**小结**：96 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
+**小结**：97 路径全部有客户端消费方，无死接口；半使用 0（diff/stream 分块文本已接 Monaco 渐进渲染、staging/hunks 已接行内 hunk 选择——P0 两项消化完毕，见任务清单 §2.1）。
 
 ### 3.2 契约层（`@rebased/contracts`）
 
@@ -164,7 +164,7 @@
 
 ### 3.3 服务层与使用状态
 
-- `@rebased/api` 公共出口 115 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
+- `@rebased/api` 公共出口 116 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
 - **未挂端点 0**：`initRepo`/`cloneRepo` 已随 repo 域收尾挂 `/repos/init`、`/repos/clone`（见任务清单 §2.2 完成记录）。
 - **半使用接口 2 个**：`streamDiffEvents`（diff/stream 已订阅未渲染）、`applyHunkStaging`（无 UI 入口）。
 
@@ -277,7 +277,7 @@ Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存
 | sign-off / 跳过 hooks | ✅ | signOff / noVerify 复选框 |
 | amend 历史提交 / reword | ✅ | 提交框「amend 到…」下拉（GitCommitDialog「Amend <subject>」语义：未发布/非合并非 HEAD 提交，上限 20；`GET /commit/amend-targets`）；选中目标 → `POST /commit/amend-specific`（amend! 提交 + fixup -C 折入目标——目标提交信息重写、中间提交重放；冲突 → 冲突页 continue/abort 流） |
 | GPG 签名 / commit template | ❌ | 白名单键可在设置页读写，提交链路未消费 |
-| CRLF 提示 | ❌ | `GitCrlfDialog` 未做 |
+| CRLF 提示 | ✅ | 提交框内联警告 + 三选 Modal（GitCrlfDialog 语义：Windows + core.autocrlf 未建议 + 暂存文件 CRLF 无 text/crlf 属性覆盖；`GET /commit/crlf-warning` 检测——提交点击先重验证；「修复并提交」= `git config --global core.autocrlf <建议值>` + 提交（`commitBodySchema.crlfFix`），「原样提交」= 直接提交，取消返回） |
 | commit & push / push up to commit | ✅ | 提交框「提交并推送」（`POST /commit/push` 组合执行器：commit 先落盘 → push 缺省当前分支上游；三态提示 pushed/up-to-date/rejected）；Push up to Commit 经日志行右键（#17：`POST /push` 哈希模式，refspec `<hash>:<当前分支>`） |
 
 ### 4.6 ResetDialog ✅（内嵌 LogPage 模态）
@@ -821,8 +821,8 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
 | 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 110 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（96 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（110 注册）+ `src/middleware/error.ts` |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（97 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（111 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |

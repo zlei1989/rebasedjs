@@ -138,15 +138,17 @@ describe('hunkStagingBodySchema（hunk 级操作）', () => {
 });
 
 describe('commitBodySchema（提交请求体）', () => {
-  it('message 必填，amend/signOff/noVerify 可选布尔', () => {
+  it('message 必填，amend/signOff/noVerify/crlfFix 可选布尔', () => {
     expect(commitBodySchema.parse({ message: '修复：暂存逻辑' })).toEqual({ message: '修复：暂存逻辑' });
     expect(commitBodySchema.parse({ message: 'x', amend: true, signOff: true, noVerify: true }))
       .toEqual({ message: 'x', amend: true, signOff: true, noVerify: true });
+    expect(commitBodySchema.parse({ message: 'x', crlfFix: true })).toEqual({ message: 'x', crlfFix: true });
   });
   it('拒绝空 message 与非布尔 amend', () => {
     expect(() => commitBodySchema.parse({ message: '' })).toThrow();
     expect(() => commitBodySchema.parse({})).toThrow();
     expect(() => commitBodySchema.parse({ message: 'x', amend: 'yes' })).toThrow();
+    expect(() => commitBodySchema.parse({ message: 'x', crlfFix: 'yes' })).toThrow();
   });
 });
 

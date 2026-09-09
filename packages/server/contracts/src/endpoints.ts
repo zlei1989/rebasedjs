@@ -68,12 +68,14 @@ export const hunkStagingBodySchema = z.object({
 });
 export type HunkStagingBody = z.infer<typeof hunkStagingBodySchema>;
 
-/** 提交请求体：message 必填；amend 改上次提交；signOff 追加 Signed-off-by；noVerify 跳过 hooks */
+/** 提交请求体：message 必填；amend 改上次提交；signOff 追加 Signed-off-by；noVerify 跳过 hooks；
+ *  crlfFix = CRLF 提示（GitCrlfDialog 修复并提交）：先写 core.autocrlf 建议值再提交 */
 export const commitBodySchema = z.object({
   message: z.string().min(1),
   amend: z.boolean().optional(),
   signOff: z.boolean().optional(),
   noVerify: z.boolean().optional(),
+  crlfFix: z.boolean().optional(),
 });
 export type CommitBody = z.infer<typeof commitBodySchema>;
 

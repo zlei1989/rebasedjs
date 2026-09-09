@@ -241,6 +241,9 @@ export interface UpdateOutcome { fetched: string[]; pull: PullOutcome; }
 export interface ForcePushedUpdateOutcome { status: 'updated' | 'success' | 'conflicts'; applied: string[]; }
 /** commit & push 组合执行器结果：commit 已落盘 + push 业务结果（pushed/rejected/up-to-date） */
 export interface CommitAndPushOutcome { commit: { hash: string }; push: PushOutcome; }
+/** CRLF 提示（GitCrlfDialog 语义）：warning=true 时即将提交的暂存文件含 CRLF 且 core.autocrlf 未建议配置、相关文件无 text/crlf gitattribute 覆盖；
+ *  files 为涉事文件相对路径列表（提示语展示用） */
+export interface CrlfWarning { warning: boolean; files: string[]; }
 
 /** 溯源行（line-porcelain 逐字段）：lineno 为最终文件行号（1-based） */
 export interface BlameLine {

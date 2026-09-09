@@ -9,6 +9,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Button,
   Card,
   Checkbox,
@@ -83,6 +84,8 @@ export interface StatusPageProps {
   amendTargets?: AmendTarget[] | null;
   /** amend 指定历史提交：选中具体目标后提交走此回调（AmendSpecificBody：targetHash + 重写后的 message） */
   onAmendSpecific?: (body: AmendSpecificBody) => void;
+  /** CRLF 提示涉事文件（GitCrlfDialog 语义；容器提交时先重验证再判定）：非空时提交框渲染警告内联提示 */
+  crlfFiles?: string[];
 }
 
 /** porcelain X 码（暂存区列）：M/A/D/R/C 视为已暂存 */
@@ -492,6 +495,7 @@ function CommitCard({
   onCommitAndPush,
   amendTargets,
   onAmendSpecific,
+  crlfFiles,
 }: {
   committing?: boolean;
   onCommit: (body: CommitBody) => void;
@@ -501,6 +505,8 @@ function CommitCard({
   amendTargets?: AmendTarget[] | null;
   /** amend 指定历史提交（选中具体目标后提交走此回调）；缺省不渲染下拉 */
   onAmendSpecific?: (body: AmendSpecificBody) => void;
+  /** CRLF 提示涉事文件（非空渲染警告内联提示——GitCrlfDialog 的 Web 形态） */
+  crlfFiles?: string[];
 }): React.ReactNode {
   const [message, setMessage] = useState('');
   const [amend, setAmend] = useState(false);
@@ -538,6 +544,14 @@ function CommitCard({
   return (
     <Card size="small" title="提交">
       <Flex vertical gap={8}>
+        {crlfFiles !== undefined && crlfFiles.length > 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            data-testid="crlf-warning"
+            message={`即将提交的文件含 CRLF 行尾符（${crlfFiles.slice(0, 3).join('、')}${crlfFiles.length > 3 ? ` 等 ${crlfFiles.length} 个` : ''}）；core.autocrlf 未按建议设置，建议修复后提交`}
+          />
+        ) : null}
         <Input.TextArea
           data-testid="commit-message"
           autoSize={{ minRows: 2, maxRows: 6 }}
@@ -777,6 +791,7 @@ export function StatusPage({
   onCommitAndPush,
   amendTargets,
   onAmendSpecific,
+  crlfFiles,
 }: StatusPageProps): React.ReactNode {
   const grouped = useMemo(() => groupChanges(status.entries), [status.entries]);
 
@@ -979,6 +994,7 @@ export function StatusPage({
         onCommitAndPush={onCommitAndPush}
         amendTargets={amendTargets}
         onAmendSpecific={onAmendSpecific}
+        crlfFiles={crlfFiles}
       />
 
       {/* 页头/组级动作 Modal：创建补丁（组级勾选路径）/ 搁置 / 存入贮藏（三选一，同刻只开一个） */}

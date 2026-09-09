@@ -25,7 +25,7 @@ export { useAutosquash, useRebase, useRebaseTodo, useInteractiveRebase } from '.
 export { useCherryPick, useRevert } from './pick';
 export { useTags, useTagAction } from './tag';
 export { useStaging, useHunkStaging } from './staging';
-export { useAmendSpecificCommit, useAmendTargets, useCommit, useCommitAndPush } from './commit';
+export { useAmendSpecificCommit, useAmendTargets, useCommit, useCommitAndPush, useCrlfWarning } from './commit';
 export { useBranches, useBranchAction } from './branches';
 export { useStashes, useStashAction, useStashDiff, useStashUnstashAs } from './stash';
 export { useChangelists, useChangelistAction } from './changelist';
