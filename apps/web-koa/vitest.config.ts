@@ -6,5 +6,7 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     testTimeout: 30000,
+    // 统一 git 提交身份（GIT_AUTHOR_*/GIT_COMMITTER_*），夹具提交的作者断言依赖于此
+    setupFiles: ['src/testing/setup.ts'],
   },
 });

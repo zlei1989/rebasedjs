@@ -556,8 +556,6 @@ describe('checkoutGithubPr（真实临时仓库 + 裸仓库装置）', () => {
     const other = createTmpDir('rebased-github-other-');
     dirs.push(other);
     execFileSync('git', ['clone', '-q', bare, other]);
-    git(other, ['config', 'user.email', 'test@example.com']);
-    git(other, ['config', 'user.name', 'Test User']);
     writeFileSync(join(other, 'pr.txt'), 'pr-7 content');
     git(other, ['add', 'pr.txt']);
     git(other, ['commit', '-q', '-m', 'pr 7 commit']);

@@ -1,8 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+/** update 服务测试：updateProject merge/rebase 策略、forcePushedUpdate 强推修复。
+ *  性能：裸仓库 rig 在 beforeAll 建一次模板，用例复制 repo/bare 并以文本替换修正 origin URL（0 spawn）。 */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 import { forcePushedUpdate, updateProject } from './update';
 
@@ -30,10 +33,10 @@ function makeBaseCommit(repo: string): string {
 }
 
 /** 裸仓库 + clone 配方：本地仓库 + 裸仓库充当 origin + push -u 建 upstream；裸仓库 HEAD 指默认分支 */
-function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
-  const repo = track(createTmpRepo());
+function buildRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
+  const repo = createTmpRepo();
   const defaultBranch = makeBaseCommit(repo);
-  const bare = track(createTmpDir('rebased-api-bare-'));
+  const bare = createTmpDir('rebased-api-bare-');
   execFileSync('git', ['init', '-q', '--bare', bare]);
   git(repo, ['remote', 'add', 'origin', bare]);
   git(repo, ['push', '-q', '-u', 'origin', defaultBranch]);
@@ -41,24 +44,43 @@ function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } 
   return { repo, bare, defaultBranch };
 }
 
+// ---- rig 模板：beforeAll 建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+let rigTemplate: { repo: string; bare: string; defaultBranch: string } | null = null;
+
+beforeAll(() => {
+  // withAuth 认证回路会查账户簿记（loadConfig）：测试隔离到临时目录，绝不触碰真实 ~/.rebasedjs
+  process.env.REBASED_CONFIG_DIR = mkdtempSync(join(tmpdir(), 'rebased-api-config-'));
+  rigTemplate = buildRemoteRig();
+  templateDirs.push(rigTemplate.repo, rigTemplate.bare);
+});
+
+afterAll(() => {
+  dirs.forEach(cleanupTmpRepo);
+  templateDirs.forEach(cleanupTmpRepo);
+});
+
+/** 复制 rig 模板：repo 与 bare 各复制一份，文本替换 origin URL 指向新的 bare 副本（0 spawn）。
+ *  gitconfig 值内反斜杠转义为双反斜杠存储，替换时须同样转义。 */
+function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
+  const tpl = rigTemplate!;
+  const escape = (p: string): string => p.replace(/\\/g, '\\\\');
+  const repo = track(instantiateFixture(tpl.repo));
+  const bare = track(instantiateFixture(tpl.bare));
+  const cfgPath = join(repo, '.git', 'config');
+  writeFileSync(cfgPath, readFileSync(cfgPath, 'utf8').split(escape(tpl.bare)).join(escape(bare)));
+  return { repo, bare, defaultBranch: tpl.defaultBranch };
+}
+
 /** 第二 clone 对端：改动指定文件并推到裸仓库默认分支（制造远端新提交） */
 function pushRemoteCommit(bare: string, defaultBranch: string, filename: string, content: string): void {
   const other = track(createTmpDir('rebased-api-other-'));
   execFileSync('git', ['clone', '-q', bare, other]);
-  git(other, ['config', 'user.email', 'test@example.com']);
-  git(other, ['config', 'user.name', 'Test User']);
   writeFileSync(join(other, filename), content);
   git(other, ['add', filename]);
   git(other, ['commit', '-q', '-m', `remote: ${filename}`]);
   git(other, ['push', '-q', 'origin', `HEAD:${defaultBranch}`]);
 }
-
-beforeAll(() => {
-  // withAuth 认证回路会查账户簿记（loadConfig）：测试隔离到临时目录，绝不触碰真实 ~/.rebasedjs
-  process.env.REBASED_CONFIG_DIR = mkdtempSync(join(tmpdir(), 'rebased-api-config-'));
-});
-
-afterAll(() => dirs.forEach(cleanupTmpRepo));
 
 describe('updateProject', () => {
   it(
@@ -113,8 +135,6 @@ describe('forcePushedUpdate（GitForcePushedBranchUpdateAction 语义）', () =>
     // 对端强推：另一 clone 从 base 起新增提交
     const other = track(createTmpDir('rebased-api-other-'));
     execFileSync('git', ['clone', '-q', bare, other]);
-    git(other, ['config', 'user.email', 'test@example.com']);
-    git(other, ['config', 'user.name', 'Test User']);
     writeFileSync(join(other, 'r.txt'), 'remote-new');
     git(other, ['add', 'r.txt']);
     git(other, ['commit', '-q', '-m', 'remote-keep']);
@@ -126,7 +146,7 @@ describe('forcePushedUpdate（GitForcePushedBranchUpdateAction 语义）', () =>
     '强推修复：fetch → 本地重置到上游 → 本地独有提交重放（applied 与树内容断言）',
     { timeout: RIG_TIMEOUT },
     async () => {
-      const { repo, bare, defaultBranch, localOnly } = makeForcePushedRig();
+      const { repo, localOnly } = makeForcePushedRig();
 
       const r = await forcePushedUpdate(repo);
 
@@ -140,7 +160,6 @@ describe('forcePushedUpdate（GitForcePushedBranchUpdateAction 语义）', () =>
       expect(readFileSync(join(repo, 'r.txt'), 'utf8')).toBe('remote-new');
       expect(readFileSync(join(repo, 'l1.txt'), 'utf8')).toBe('local1');
       expect(readFileSync(join(repo, 'l2.txt'), 'utf8')).toBe('local2');
-      void bare;
     },
   );
 

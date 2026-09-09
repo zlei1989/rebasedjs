@@ -96,7 +96,7 @@ describe('web-next SSE 路由', () => {
 
   it('log/stream：git 执行失败 → 流内 stream.error 帧后关闭，不崩响应', async () => {
     const { repoId, repoPath } = registerRepo();
-    rmSync(repoPath, { recursive: true, force: true }); // 注册后删除仓库目录 → streamLogEvents 抛 GIT_ERROR
+    await rmRetry(repoPath); // 注册后删除仓库目录 → streamLogEvents 抛 GIT_ERROR（Windows 句柄未释放时重试，修复 flake）
     const res = await getLogStream(new Request(`http://localhost/api/repos/${repoId}/log/stream`), ctx(repoId));
     expect(res.status).toBe(200);
     const body = await res.text();

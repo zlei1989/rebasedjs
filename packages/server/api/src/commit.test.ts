@@ -1,10 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+/** commit 服务测试：提交/身份断言/CRLF/组合推送/amend/GPG-模板链路。
+ *  性能：base 提交模板与裸仓库 rig 在 beforeAll 各建一次，用例经 instantiateFixture 复制（0 spawn）。 */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { amendSpecificCommit, assertCommitIdentity, commitAndPush, createCommit, getAmendTargets, getCrlfWarning } from './commit';
-import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
+import { instantiateFixture } from './testing/fixture';
+import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
@@ -27,10 +30,10 @@ function makeBaseCommit(repo: string): string {
 }
 
 /** 裸仓库对端装置：本地仓库 + bare 当 origin + push -u 建 upstream（配方同 remote 测试） */
-function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
-  const repo = track(createTmpRepo()); // fixture 已预置 user.name/user.email
+function buildRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
+  const repo = createTmpRepo(); // fixture 已预置 user.name/user.email
   const defaultBranch = makeBaseCommit(repo);
-  const bare = track(mkdtempSync(join(tmpdir(), 'rebased-api-bare-')));
+  const bare = createTmpDir('rebased-api-bare-');
   execFileSync('git', ['init', '-q', '--bare', bare]);
   git(repo, ['remote', 'add', 'origin', bare]);
   git(repo, ['push', '-q', '-u', 'origin', defaultBranch]);
@@ -38,13 +41,39 @@ function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } 
   return { repo, bare, defaultBranch };
 }
 
+// ---- 夹具模板：beforeAll 各建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
+
+let baseTemplate = '';
+let rigTemplate: { repo: string; bare: string; defaultBranch: string } | null = null;
+
+beforeAll(() => {
+  baseTemplate = createTmpRepo();
+  makeBaseCommit(baseTemplate);
+  rigTemplate = buildRemoteRig();
+  templateDirs.push(baseTemplate, rigTemplate.repo, rigTemplate.bare);
+});
+
+/** 复制 rig 模板：repo 与 bare 各复制一份，文本替换 origin URL 指向新的 bare 副本（0 spawn）。
+ *  gitconfig 值内反斜杠转义为双反斜杠存储，替换时须同样转义。 */
+function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
+  const tpl = rigTemplate!;
+  const escape = (p: string): string => p.replace(/\\/g, '\\\\');
+  const repo = track(instantiateFixture(tpl.repo));
+  const bare = track(instantiateFixture(tpl.bare));
+  const cfgPath = join(repo, '.git', 'config');
+  writeFileSync(cfgPath, readFileSync(cfgPath, 'utf8').split(escape(tpl.bare)).join(escape(bare)));
+  return { repo, bare, defaultBranch: tpl.defaultBranch };
+}
+
 describe('commit 功能', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('createCommit 提交暂存区并返回新哈希', async () => {
-    const repo = createTmpRepo(); // fixture 已预置 user.name/user.email
+    const repo = instantiateFixture(baseTemplate); // fixture 已预置 user.name/user.email
     dirs.push(repo);
-    writeFileSync(join(repo, 'a.txt'), 'v1');
+    writeFileSync(join(repo, 'b.txt'), 'v2');
     execFileSync('git', ['-C', repo, 'add', '.']);
     const { hash } = await createCommit(repo, { message: '测试提交' });
     expect(hash).toMatch(/^[0-9a-f]{40}$/);
@@ -90,9 +119,8 @@ describe('CRLF 提示（GitCrlfDialog 语义）', () => {
   afterAll(() => crlfDirs.forEach(cleanupTmpRepo));
 
   it('getCrlfWarning：暂存 CRLF 文件无属性覆盖 → warning true + 文件列表（Windows 平台；autocrlf 本地置 false 绕过系统默认 true）', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     crlfDirs.push(repo);
-    makeBaseCommit(repo); // a.txt 入库（LF）
     execFileSync('git', ['-C', repo, 'config', 'core.autocrlf', 'false']);
     writeFileSync(join(repo, 'crlf.txt'), 'line1\r\n');
     execFileSync('git', ['-C', repo, 'add', 'crlf.txt']);
@@ -104,9 +132,8 @@ describe('CRLF 提示（GitCrlfDialog 语义）', () => {
   });
 
   it('createCommit crlfFix：先写 global core.autocrlf 建议值再提交（GIT_CONFIG_GLOBAL 隔离）', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     crlfDirs.push(repo);
-    makeBaseCommit(repo);
     writeFileSync(join(repo, 'b.txt'), 'v2\n');
     execFileSync('git', ['-C', repo, 'add', 'b.txt']);
 
@@ -134,9 +161,9 @@ describe('commitAndPush 组合执行器（GitCommitAndPushExecutor 语义）', (
   });
 
   it('无上游分支且未带 push 载荷：push 失败透出（提交已落盘——非原子语义）', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     dirs.push(repo);
-    writeFileSync(join(repo, 'a.txt'), 'v1');
+    writeFileSync(join(repo, 'a.txt'), 'v2');
     execFileSync('git', ['-C', repo, 'add', '.']);
 
     let err: unknown;
@@ -156,10 +183,8 @@ describe('commitAndPush 组合执行器（GitCommitAndPushExecutor 语义）', (
     writeFileSync(join(repo, 'a.txt'), 'v2');
     execFileSync('git', ['-C', repo, 'add', '.']);
     // 对端前进一个提交（分叉）：clone 裸仓库 → 提交 → 推回默认分支
-    const wc = track(mkdtempSync(join(tmpdir(), 'rebased-api-other-')));
+    const wc = track(createTmpDir('rebased-api-other-'));
     execFileSync('git', ['clone', '-q', bare, wc]);
-    git(wc, ['config', 'user.email', 't@e.c']);
-    git(wc, ['config', 'user.name', 'Other']);
     writeFileSync(join(wc, 'b.txt'), 'remote');
     git(wc, ['add', 'b.txt']);
     git(wc, ['commit', '-q', '-m', 'remote']);
@@ -178,9 +203,8 @@ describe('amend 指定历史提交（GitCommitDialog「Amend <subject>」语义�
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('getAmendTargets：返回未发布的非合并非 HEAD 提交（HEAD=c2 排除，仅 init 候选）', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     dirs.push(repo);
-    makeBaseCommit(repo);
     git(repo, ['commit', '--allow-empty', '-q', '-m', 'c2']);
 
     const targets = await getAmendTargets(repo);
@@ -190,9 +214,8 @@ describe('amend 指定历史提交（GitCommitDialog「Amend <subject>」语义�
   });
 
   it('amendSpecificCommit：reword 目标提交成功（提交数不变、信息重写）', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     dirs.push(repo);
-    makeBaseCommit(repo);
     git(repo, ['commit', '--allow-empty', '-q', '-m', 'c2']);
     const target = git(repo, ['rev-parse', 'HEAD~1']);
 
@@ -205,9 +228,8 @@ describe('amend 指定历史提交（GitCommitDialog「Amend <subject>」语义�
   });
 
   it('amendSpecificCommit：目标为 HEAD → INVALID_QUERY；无效哈希 → INVALID_REF；非祖先 → INVALID_QUERY', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     dirs.push(repo);
-    makeBaseCommit(repo);
     const head = git(repo, ['rev-parse', 'HEAD']);
 
     const headErr = await amendSpecificCommit(repo, { targetHash: head, message: 'x' }).catch((e: unknown) => e);
@@ -242,9 +264,8 @@ describe('GPG / commit template 提交链路消费', () => {
   afterAll(() => gpgDirs.forEach(cleanupTmpRepo));
 
   it('commit.gpgsign=true + user.signingkey 无效：提交被签名失败拒绝（配置被消费的实证）', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     gpgDirs.push(repo);
-    makeBaseCommit(repo);
     writeFileSync(join(repo, 'b.txt'), 'v2\n');
     execFileSync('git', ['-C', repo, 'add', 'b.txt']);
     execFileSync('git', ['-C', repo, 'config', 'commit.gpgsign', 'true']);
@@ -259,9 +280,8 @@ describe('GPG / commit template 提交链路消费', () => {
   });
 
   it('commit.gpgsign=false：签名关闭 → 提交成功（关闭态消费验证）', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     gpgDirs.push(repo);
-    makeBaseCommit(repo);
     writeFileSync(join(repo, 'b.txt'), 'v2\n');
     execFileSync('git', ['-C', repo, 'add', 'b.txt']);
     execFileSync('git', ['-C', repo, 'config', 'commit.gpgsign', 'false']);
@@ -272,9 +292,8 @@ describe('GPG / commit template 提交链路消费', () => {
   });
 
   it('commit.template：git commit -m 优先于模板——设置模板键后提交仍成功', async () => {
-    const repo = createTmpRepo();
+    const repo = instantiateFixture(baseTemplate);
     gpgDirs.push(repo);
-    makeBaseCommit(repo);
     writeFileSync(join(repo, 'tpl.txt'), '模板内容\n');
     execFileSync('git', ['-C', repo, 'config', 'commit.template', join(repo, 'tpl.txt')]);
     writeFileSync(join(repo, 'b.txt'), 'v2\n');

@@ -17,6 +17,7 @@ import {
   pushRepo,
 } from './remote';
 import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
+import { instantiateFixture } from './testing/fixture';
 
 const dirs: string[] = [];
 
@@ -45,10 +46,10 @@ function makeBaseCommit(repo: string): string {
 }
 
 /** 裸仓库 + clone 配方：本地仓库 + 裸仓库充当 origin + push -u 建 upstream；裸仓库 HEAD 指默认分支 */
-function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
-  const repo = track(createTmpRepo());
+function buildRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
+  const repo = createTmpRepo();
   const defaultBranch = makeBaseCommit(repo);
-  const bare = track(createTmpDir('rebased-api-bare-'));
+  const bare = createTmpDir('rebased-api-bare-');
   execFileSync('git', ['init', '-q', '--bare', bare]);
   git(repo, ['remote', 'add', 'origin', bare]);
   git(repo, ['push', '-q', '-u', 'origin', defaultBranch]);
@@ -56,24 +57,43 @@ function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } 
   return { repo, bare, defaultBranch };
 }
 
+// ---- rig 模板：beforeAll 建一次（与账户配置 beforeAll 合并）；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+let rigTemplate: { repo: string; bare: string; defaultBranch: string } | null = null;
+
+beforeAll(() => {
+  // 账户簿记写入应用配置：测试隔离到临时目录，绝不触碰真实 ~/.rebasedjs
+  process.env.REBASED_CONFIG_DIR = mkdtempSync(join(tmpdir(), 'rebased-api-config-'));
+  rigTemplate = buildRemoteRig();
+  templateDirs.push(rigTemplate.repo, rigTemplate.bare);
+});
+
+afterAll(() => {
+  dirs.forEach(cleanupTmpRepo);
+  templateDirs.forEach(cleanupTmpRepo);
+});
+
+/** 复制 rig 模板：repo 与 bare 各复制一份，文本替换 origin URL 指向新的 bare 副本（0 spawn）。
+ *  gitconfig 值内反斜杠转义为双反斜杠存储，替换时须同样转义。 */
+function makeRemoteRig(): { repo: string; bare: string; defaultBranch: string } {
+  const tpl = rigTemplate!;
+  const escape = (p: string): string => p.replace(/\\/g, '\\\\');
+  const repo = track(instantiateFixture(tpl.repo));
+  const bare = track(instantiateFixture(tpl.bare));
+  const cfgPath = join(repo, '.git', 'config');
+  writeFileSync(cfgPath, readFileSync(cfgPath, 'utf8').split(escape(tpl.bare)).join(escape(bare)));
+  return { repo, bare, defaultBranch: tpl.defaultBranch };
+}
+
 /** 第二 clone 对端：改动指定文件并推到裸仓库默认分支（制造远端新提交） */
 function pushRemoteCommit(bare: string, defaultBranch: string, filename: string, content: string): void {
   const other = track(createTmpDir('rebased-api-other-'));
   execFileSync('git', ['clone', '-q', bare, other]);
-  git(other, ['config', 'user.email', 'test@example.com']);
-  git(other, ['config', 'user.name', 'Test User']);
   writeFileSync(join(other, filename), content);
   git(other, ['add', filename]);
   git(other, ['commit', '-q', '-m', `remote: ${filename}`]);
   git(other, ['push', '-q', 'origin', `HEAD:${defaultBranch}`]);
 }
-
-beforeAll(() => {
-  // 账户簿记写入应用配置：测试隔离到临时目录，绝不触碰真实 ~/.rebasedjs
-  process.env.REBASED_CONFIG_DIR = mkdtempSync(join(tmpdir(), 'rebased-api-config-'));
-});
-
-afterAll(() => dirs.forEach(cleanupTmpRepo));
 
 describe('远程 CRUD', () => {
   it(

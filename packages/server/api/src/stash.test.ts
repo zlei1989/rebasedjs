@@ -1,21 +1,36 @@
-import { afterAll, describe, expect, it } from 'vitest';
+/** stash 功能测试：save/apply/pop/drop/branch/unstashAs/getStashDiff 与预检。
+ *  性能：带 init 提交的夹具在 beforeAll 建一次模板，用例经 instantiateFixture 复制（0 spawn）。 */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyStashAction, getStashDiff, getStashes, unstashAs } from './stash';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
-/** 造一个带初始提交的仓库（a.txt 提交为 init）；贮藏需要 HEAD 提交作基底 */
-function repoWithCommit(): string {
-  const repo = createTmpRepo();
+/** 复制模板为独立夹具并入册（afterAll 统一清理） */
+function instantiate(template: string): string {
+  const repo = instantiateFixture(template);
   dirs.push(repo);
-  writeFileSync(join(repo, 'a.txt'), 'v1');
-  execFileSync('git', ['-C', repo, 'add', '.']);
-  execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
   return repo;
 }
+
+// ---- 夹具模板：beforeAll 建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
+
+let baseTemplate = '';
+
+beforeAll(() => {
+  // 带初始提交的仓库（a.txt 提交为 init）；贮藏需要 HEAD 提交作基底
+  baseTemplate = createTmpRepo();
+  writeFileSync(join(baseTemplate, 'a.txt'), 'v1');
+  execFileSync('git', ['-C', baseTemplate, 'add', '.']);
+  execFileSync('git', ['-C', baseTemplate, 'commit', '-q', '-m', 'init']);
+  templateDirs.push(baseTemplate);
+});
 
 /** 当前分支短名（git 版本间 init 默认分支不同，动态取） */
 function currentBranch(repo: string): string {
@@ -26,12 +41,12 @@ describe('stash 功能', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('getStashes 空仓库 → 空列表', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     expect(await getStashes(repo)).toEqual({ stashes: [] });
   });
 
   it('save 保存工作区改动 → 列表 1 条且工作区改动被收走', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v2');
 
     const list = await applyStashAction(repo, { action: 'save', message: 's1' });
@@ -44,7 +59,7 @@ describe('stash 功能', () => {
   });
 
   it('save keepIndex：暂存区保持不动（--keep-index 语义），工作区变更被收走', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     // 工作区 v2 + 暂存 v2（a.txt 已被 add）；再改回 v3 留工作区
     writeFileSync(join(repo, 'a.txt'), 'v2');
     execFileSync('git', ['-C', repo, 'add', 'a.txt']);
@@ -58,7 +73,7 @@ describe('stash 功能', () => {
   });
 
   it('无工作区改动 save → INVALID_QUERY', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     await expect(applyStashAction(repo, { action: 'save' })).rejects.toMatchObject({
       code: 'INVALID_QUERY',
       message: expect.stringContaining('没有可贮藏的工作区改动'),
@@ -66,7 +81,7 @@ describe('stash 功能', () => {
   });
 
   it('仅未跟踪文件：未 includeUntracked → INVALID_QUERY；includeUntracked → 成功', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     writeFileSync(join(repo, 'new.txt'), 'n');
 
     await expect(applyStashAction(repo, { action: 'save' })).rejects.toMatchObject({
@@ -78,7 +93,7 @@ describe('stash 功能', () => {
   });
 
   it('越界 apply/pop/drop/branch → INVALID_REF（贮藏不存在：stash@{n}）', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v2');
     await applyStashAction(repo, { action: 'save' });
 
@@ -97,7 +112,7 @@ describe('stash 功能', () => {
   });
 
   it('save→apply→drop 轮转，返回刷新列表', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v2');
 
     const afterSave = await applyStashAction(repo, { action: 'save', message: 'rot' });
@@ -115,7 +130,7 @@ describe('stash 功能', () => {
   });
 
   it('branch 动作：贮藏转为新分支，HEAD 切到该分支且贮藏消失', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     const base = currentBranch(repo);
     writeFileSync(join(repo, 'a.txt'), 'v2');
     await applyStashAction(repo, { action: 'save', message: 'to-branch' });
@@ -129,7 +144,7 @@ describe('stash 功能', () => {
   });
 
   it('unstashAs：检出目标分支 + apply（不 drop），工作区得到改动且贮藏保留', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     // 建第二个分支（目标分支）再回主分支
     execFileSync('git', ['-C', repo, 'branch', 'target-branch']);
     writeFileSync(join(repo, 'a.txt'), 'v2');
@@ -142,7 +157,7 @@ describe('stash 功能', () => {
   });
 
   it('unstashAs 目标分支不存在 → git 报错上抛；索引越界 → INVALID_REF', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v2');
     await applyStashAction(repo, { action: 'save', message: 's' });
     await expect(unstashAs(repo, { index: 0, branch: 'no-such-branch' })).rejects.toBeInstanceOf(Error);
@@ -150,7 +165,7 @@ describe('stash 功能', () => {
   });
 
   it('getStashDiff：返回 unified 补丁全文（含改动行）与 index；索引越界 → INVALID_REF', async () => {
-    const repo = repoWithCommit();
+    const repo = instantiate(baseTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v2\nv3\n');
     await applyStashAction(repo, { action: 'save', message: 'patch' });
     const diff = await getStashDiff(repo, 0);

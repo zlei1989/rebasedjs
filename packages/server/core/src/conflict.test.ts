@@ -1,17 +1,19 @@
-/** conflict 原语测试：冲突列表/三阶段内容（含双方新增无 base）/整侧采纳 + 标记解决/删除解决。 */
+/** conflict 原语测试：冲突列表/三阶段内容（含双方新增无 base）/整侧采纳 + 标记解决/删除解决。
+ *  性能：4 种夹具形状（base/改-改/双方新增/删除-修改冲突）在 beforeAll 各建一次模板，用例经 instantiateFixture 复制（0 spawn）。 */
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkoutConflictSide, deleteConflictFile, listConflictedPaths, markResolved, readStageContent } from './conflict';
 import { runGit } from './exec';
 import { mergeBranch } from './merge';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
-/** 建临时仓库并入册（afterAll 统一清理） */
-function makeRepo(): string {
-  const repo = createTmpRepo();
+/** 复制模板为独立夹具并入册（afterAll 统一清理） */
+function instantiate(template: string): string {
+  const repo = instantiateFixture(template);
   dirs.push(repo);
   return repo;
 }
@@ -67,26 +69,44 @@ async function makeDeleteModifyConflict(repo: string): Promise<void> {
   await mergeBranch(repo, { branch: 'side' });
 }
 
+// ---- 夹具模板：beforeAll 各建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
+
+let baseTemplate = '';
+let modifyConflictTemplate = '';
+let bothAddedConflictTemplate = '';
+let deleteModifyConflictTemplate = '';
+
+beforeAll(async () => {
+  baseTemplate = createTmpRepo();
+  await makeBaseCommit(baseTemplate);
+  modifyConflictTemplate = createTmpRepo();
+  await makeModifyConflict(modifyConflictTemplate);
+  bothAddedConflictTemplate = createTmpRepo();
+  await makeBothAddedConflict(bothAddedConflictTemplate);
+  deleteModifyConflictTemplate = createTmpRepo();
+  await makeDeleteModifyConflict(deleteModifyConflictTemplate);
+  templateDirs.push(baseTemplate, modifyConflictTemplate, bothAddedConflictTemplate, deleteModifyConflictTemplate);
+});
+
 describe('conflict 原语', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('无冲突仓库 listConflictedPaths 返回空数组', async () => {
-    const repo = makeRepo();
-    await makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
 
     expect(await listConflictedPaths(repo)).toEqual([]);
   });
 
   it('改-改冲突态 listConflictedPaths 聚合三阶段', async () => {
-    const repo = makeRepo();
-    await makeModifyConflict(repo);
+    const repo = instantiate(modifyConflictTemplate);
 
     expect(await listConflictedPaths(repo)).toEqual([{ path: 'a.txt', stages: [1, 2, 3] }]);
   });
 
   it('readStageContent 分别返回 base/ours/theirs 内容', async () => {
-    const repo = makeRepo();
-    await makeModifyConflict(repo);
+    const repo = instantiate(modifyConflictTemplate);
 
     expect(await readStageContent(repo, 'a.txt', 1)).toBe('base\n');
     expect(await readStageContent(repo, 'a.txt', 2)).toBe('main\n');
@@ -94,8 +114,7 @@ describe('conflict 原语', () => {
   });
 
   it('双方新增冲突无 base：stage 1 返回 null，stage 2/3 正常', async () => {
-    const repo = makeRepo();
-    await makeBothAddedConflict(repo);
+    const repo = instantiate(bothAddedConflictTemplate);
 
     expect(await listConflictedPaths(repo)).toEqual([{ path: 'b.txt', stages: [2, 3] }]);
     expect(await readStageContent(repo, 'b.txt', 1)).toBeNull();
@@ -104,15 +123,13 @@ describe('conflict 原语', () => {
   });
 
   it('readStageContent 对不存在路径返回 null', async () => {
-    const repo = makeRepo();
-    await makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
 
     expect(await readStageContent(repo, 'ghost.txt', 2)).toBeNull();
   });
 
   it('checkoutConflictSide(theirs) + markResolved 后工作区为对方内容且冲突清空', async () => {
-    const repo = makeRepo();
-    await makeModifyConflict(repo);
+    const repo = instantiate(modifyConflictTemplate);
 
     await checkoutConflictSide(repo, 'a.txt', 'theirs');
     await markResolved(repo, 'a.txt');
@@ -122,8 +139,7 @@ describe('conflict 原语', () => {
   });
 
   it('checkoutConflictSide(ours) 后工作区为本方内容', async () => {
-    const repo = makeRepo();
-    await makeModifyConflict(repo);
+    const repo = instantiate(modifyConflictTemplate);
 
     await checkoutConflictSide(repo, 'a.txt', 'ours');
 
@@ -131,8 +147,7 @@ describe('conflict 原语', () => {
   });
 
   it('deleteConflictFile 以删除解决删除/修改冲突：工作区文件删除、删除已暂存、冲突清空', async () => {
-    const repo = makeRepo();
-    await makeDeleteModifyConflict(repo);
+    const repo = instantiate(deleteModifyConflictTemplate);
     expect(await listConflictedPaths(repo)).toEqual([{ path: 'a.txt', stages: [1, 2] }]);
 
     await deleteConflictFile(repo, 'a.txt');

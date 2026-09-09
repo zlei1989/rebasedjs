@@ -1,12 +1,21 @@
-/** worktree 服务集成测试（真实 git）；api 层预检/映射裁定见 task-3-brief。 */
-import { afterAll, describe, expect, it } from 'vitest';
+/** worktree 服务集成测试（真实 git）；api 层预检/映射裁定见 task-3-brief。
+ *  性能：base 提交夹具在 beforeAll 建一次模板，用例经 instantiateFixture 复制（0 spawn）。 */
 import { execFileSync } from 'node:child_process';
 import { realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createWorktree, getWorktrees, pruneWorktrees, removeWorktree } from './worktree';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
+
+/** 复制模板为独立夹具并入册（afterAll 统一清理） */
+function instantiate(template: string): string {
+  const repo = instantiateFixture(template);
+  dirs.push(repo);
+  return repo;
+}
 
 function git(repo: string, args: string[]): string {
   return execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
@@ -19,6 +28,18 @@ function makeBaseCommit(repo: string): string {
   git(repo, ['commit', '-q', '-m', 'init']);
   return defaultBranch;
 }
+
+// ---- 夹具模板：beforeAll 建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
+
+let baseTemplate = '';
+
+beforeAll(() => {
+  baseTemplate = createTmpRepo();
+  makeBaseCommit(baseTemplate);
+  templateDirs.push(baseTemplate);
+});
 
 /** 主仓库旁的副工作树路径（带空格，验证 porcelain 路径不引号） */
 function siblingPath(repo: string, suffix: string): string {
@@ -34,9 +55,8 @@ describe('worktree 服务', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('getWorktrees 单仓库返回主工作树（branch/head 完整哈希）', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    const base = makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
+    const base = git(repo, ['symbolic-ref', 'HEAD', '--short']);
     const headSha = git(repo, ['rev-parse', 'HEAD']);
 
     const list = await getWorktrees(repo);
@@ -50,9 +70,7 @@ describe('worktree 服务', () => {
   });
 
   it('getWorktrees：repoPath 为 realpath 长形式时主工作树 path 字符串等于入参', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     const repoReal = realpathSync.native(repo); // 长形式（%TEMP% 为 8.3 短形式，git 输出长形式+正斜杠）
 
     const list = await getWorktrees(repoReal);
@@ -62,9 +80,7 @@ describe('worktree 服务', () => {
   });
 
   it('createWorktree newBranch：返回刷新列表含主+副（branch 名与 head）', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     const wtPath = siblingPath(repo, '-wt dir');
     dirs.push(wtPath);
 
@@ -79,9 +95,7 @@ describe('worktree 服务', () => {
   });
 
   it('createWorktree branch 挂接既有分支', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     git(repo, ['branch', 'feat']);
     const wtPath = siblingPath(repo, '-wt attach');
     dirs.push(wtPath);
@@ -93,9 +107,7 @@ describe('worktree 服务', () => {
   });
 
   it('createWorktree 预检互斥：branch+newBranch 同给或都缺 → INVALID_QUERY（先于分支存在性）', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     const wtPath = siblingPath(repo, '-wt excl');
 
     // 同给：即使分支不存在也先报互斥（裁定预检顺序）
@@ -110,9 +122,7 @@ describe('worktree 服务', () => {
   });
 
   it('createWorktree 分支不存在 → INVALID_REF', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
 
     await expect(
       createWorktree(repo, { path: siblingPath(repo, '-wt nope'), branch: 'nope' }),
@@ -123,9 +133,8 @@ describe('worktree 服务', () => {
   });
 
   it('createWorktree 路径无效：非绝对 / 在 repo 内 / 逃逸 → INVALID_QUERY', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    const base = makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
+    const base = git(repo, ['symbolic-ref', 'HEAD', '--short']);
     const cases = [
       join('relative', 'wt'), // 相对路径
       join(repo, 'inside'), // 在仓库目录内
@@ -140,9 +149,8 @@ describe('worktree 服务', () => {
   });
 
   it('createWorktree 路径无效（realpath 归一判定）：恰等 repoPath / 大小写变体 / 8.3 变体 inside / 副工作树目录内 → INVALID_QUERY 且不残留条目', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    const base = makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
+    const base = git(repo, ['symbolic-ref', 'HEAD', '--short']);
     const repoReal = realpathSync.native(repo);
     // 8.3 短名（FSO ShortPath；未启用 8.3 时回落长名）——长父目录 + 短名仓库目录混合构造
     const shortBase = execFileSync(
@@ -177,9 +185,7 @@ describe('worktree 服务', () => {
   });
 
   it('removeWorktree path 等于主仓库 → INVALID_QUERY', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
 
     await expect(removeWorktree(repo, { path: repo })).rejects.toMatchObject({
       code: 'INVALID_QUERY',
@@ -188,9 +194,7 @@ describe('worktree 服务', () => {
   });
 
   it('removeWorktree 不在列表（不存在/逃逸路径）→ 直接 INVALID_QUERY 不调 core', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
 
     const missing = siblingPath(repo, '-never');
     await expect(removeWorktree(repo, { path: missing })).rejects.toMatchObject({
@@ -205,9 +209,7 @@ describe('worktree 服务', () => {
   });
 
   it('removeWorktree force 透传：dirty 无 force → GIT_ERROR，force → 成功且列表复原', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     const wtPath = siblingPath(repo, '-wt dirty');
     dirs.push(wtPath);
     const created = await createWorktree(repo, { path: wtPath, newBranch: 'dirty-b' });
@@ -222,9 +224,7 @@ describe('worktree 服务', () => {
   });
 
   it('pruneWorktrees：目录缺失的陈旧条目被清理', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     const wtPath = siblingPath(repo, '-wt stale');
     await createWorktree(repo, { path: wtPath, newBranch: 'stale-b' });
     rmSync(wtPath, { recursive: true, force: true });

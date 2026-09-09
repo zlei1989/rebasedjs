@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildLayout, buildLinearGraph, containingBranches, edgesInRow } from './build-layout';
 import { linearCommits } from './fixtures/linear';

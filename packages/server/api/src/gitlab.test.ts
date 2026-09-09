@@ -723,8 +723,6 @@ describe('checkoutGitlabMr（真实临时仓库 + 裸仓库装置）', () => {
     const other = createTmpDir('rebased-gitlab-other-');
     dirs.push(other);
     execFileSync('git', ['clone', '-q', bare, other]);
-    git(other, ['config', 'user.email', 'test@example.com']);
-    git(other, ['config', 'user.name', 'Test User']);
     writeFileSync(join(other, 'mr.txt'), 'mr-7 content');
     git(other, ['add', 'mr.txt']);
     git(other, ['commit', '-q', '-m', 'mr 7 commit']);

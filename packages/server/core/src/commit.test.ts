@@ -1,13 +1,24 @@
-import { afterAll, describe, expect, it } from 'vitest';
+/** commit 原语测试：提交暂存/amend/signOff、amend 目标候选、amend 指定历史提交。
+ *  性能：夹具形状在 beforeAll 各建一次模板（空仓/c4 线性/c4+远程/合并停点/c3 线性/a.txt 三提交），
+ *  用例经 instantiateFixture 复制（0 spawn）。 */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { amendSpecificCommit, commitStaged, listAmendTargets } from './commit';
 import { runGit } from './exec';
 import { stagePaths } from './staging';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
+
+/** 复制模板为独立夹具并入册（afterAll 统一清理） */
+function instantiate(template: string): string {
+  const repo = instantiateFixture(template);
+  dirs.push(repo);
+  return repo;
+}
 
 function git(repo: string, ...args: string[]): string {
   return execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
@@ -21,12 +32,79 @@ function commitFile(repo: string, file: string, content: string, msg: string): s
   return git(repo, 'rev-parse', 'HEAD');
 }
 
+// ---- 夹具模板：beforeAll 各建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
+
+let emptyTemplate = '';
+let c4Template = '';
+let c4Hashes: string[] = [];
+let c4PublishedTemplate = '';
+let c4PublishedHashes: string[] = [];
+let mergeStopTemplate = '';
+let mergeStopMain = '';
+let c3Template = '';
+let c3Hashes: string[] = [];
+let a3Template = '';
+let a3C2 = '';
+
+beforeAll(async () => {
+  // ① 空仓（commitStaged 首提交场景）
+  emptyTemplate = createTmpRepo();
+  // ② c1..c4 四提交线性（listAmendTargets 无远程场景）
+  c4Template = createTmpRepo();
+  c4Hashes = [
+    commitFile(c4Template, 'a.txt', 'a1', 'c1'),
+    commitFile(c4Template, 'b.txt', 'b1', 'c2'),
+    commitFile(c4Template, 'c.txt', 'c1', 'c3'),
+    commitFile(c4Template, 'd.txt', 'd1', 'c4'),
+  ];
+  // ③ 同 ② 但 c1..c2 已推送到裸远程（发布过滤场景）
+  c4PublishedTemplate = createTmpRepo();
+  c4PublishedHashes = [
+    commitFile(c4PublishedTemplate, 'a.txt', 'a1', 'c1'),
+    commitFile(c4PublishedTemplate, 'b.txt', 'b1', 'c2'),
+    commitFile(c4PublishedTemplate, 'c.txt', 'c1', 'c3'),
+    commitFile(c4PublishedTemplate, 'd.txt', 'd1', 'c4'),
+  ];
+  const bare = createTmpDir('rebased-remote-');
+  templateDirs.push(bare);
+  execFileSync('git', ['init', '-q', '--bare', bare]);
+  git(c4PublishedTemplate, 'remote', 'add', 'origin', bare);
+  execFileSync('git', ['-C', c4PublishedTemplate, 'push', '-q', 'origin', `${c4PublishedHashes[1]}:refs/heads/main`]);
+  // ④ c1 + side 分支 + no-ff 合并（HEAD=合并提交，合并之后由用例自行续提交）
+  mergeStopTemplate = createTmpRepo();
+  commitFile(mergeStopTemplate, 'a.txt', 'a1', 'c1');
+  mergeStopMain = git(mergeStopTemplate, 'symbolic-ref', '--short', 'HEAD');
+  git(mergeStopTemplate, 'checkout', '-q', '-b', 'side');
+  commitFile(mergeStopTemplate, 's.txt', 's1', 'side1');
+  git(mergeStopTemplate, 'checkout', '-q', mergeStopMain);
+  git(mergeStopTemplate, 'merge', '--no-ff', '-m', 'merge side', 'side');
+  // ⑤ c1..c3 三提交（amend 指定提交场景）
+  c3Template = createTmpRepo();
+  c3Hashes = [
+    commitFile(c3Template, 'a.txt', 'a1', 'c1'),
+    commitFile(c3Template, 'b.txt', 'b1', 'c2'),
+    commitFile(c3Template, 'c.txt', 'c1', 'c3'),
+  ];
+  // ⑥ a.txt 三提交（amend 冲突场景：目标 v2、中间 v3）
+  a3Template = createTmpRepo();
+  commitFile(a3Template, 'a.txt', 'v1', 'c1');
+  writeFileSync(join(a3Template, 'a.txt'), 'v2');
+  await stagePaths(a3Template, ['a.txt']);
+  await commitStaged(a3Template, { message: 'c2' }); // 目标：a.txt=v2
+  writeFileSync(join(a3Template, 'a.txt'), 'v3');
+  await stagePaths(a3Template, ['a.txt']);
+  await commitStaged(a3Template, { message: 'c3' }); // 中间：a.txt=v3
+  a3C2 = git(a3Template, 'rev-parse', 'HEAD~1');
+  templateDirs.push(emptyTemplate, c4Template, c4PublishedTemplate, mergeStopTemplate, c3Template, a3Template);
+});
+
 describe('commitStaged', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('提交暂存区并返回 40 位十六进制哈希，提交标题等于 message', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
+    const repo = instantiate(emptyTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v1');
     await stagePaths(repo, ['a.txt']);
     const hash = await commitStaged(repo, { message: 'feat: 初始提交' });
@@ -36,8 +114,7 @@ describe('commitStaged', () => {
   });
 
   it('amend 修订上一提交：提交数不变', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
+    const repo = instantiate(emptyTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v1');
     await stagePaths(repo, ['a.txt']);
     await commitStaged(repo, { message: 'init' });
@@ -51,8 +128,7 @@ describe('commitStaged', () => {
   });
 
   it('signOff 追加 Signed-off-by 尾注', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
+    const repo = instantiate(emptyTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v1');
     await stagePaths(repo, ['a.txt']);
     await commitStaged(repo, { message: 'signed', signOff: true });
@@ -65,32 +141,16 @@ describe('listAmendTargets（amend 目标候选）', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('无远程：排除 HEAD，新→旧列出其余非合并提交（上限 20）', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    const h1 = commitFile(repo, 'a.txt', 'a1', 'c1');
-    const h2 = commitFile(repo, 'b.txt', 'b1', 'c2');
-    const h3 = commitFile(repo, 'c.txt', 'c1', 'c3');
-    commitFile(repo, 'd.txt', 'd1', 'c4');
+    const repo = instantiate(c4Template);
 
     const targets = await listAmendTargets(repo);
 
     expect(targets.map((t) => t.subject)).toEqual(['c3', 'c2', 'c1']);
-    expect(targets.map((t) => t.hash)).toEqual([h3, h2, h1]);
+    expect(targets.map((t) => t.hash)).toEqual([c4Hashes[2], c4Hashes[1], c4Hashes[0]]);
   });
 
   it('发布过滤：远程可达的提交不出现（push 后 origin/main 祖先被排除）', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    commitFile(repo, 'a.txt', 'a1', 'c1');
-    const h2 = commitFile(repo, 'b.txt', 'b1', 'c2');
-    commitFile(repo, 'c.txt', 'c1', 'c3');
-    commitFile(repo, 'd.txt', 'd1', 'c4');
-    // 发布 c1..c2：push 到裸仓库 → 远程跟踪引用 origin/main
-    const bare = createTmpDir('rebased-remote-');
-    dirs.push(bare);
-    execFileSync('git', ['init', '-q', '--bare', bare]);
-    git(repo, 'remote', 'add', 'origin', bare);
-    execFileSync('git', ['-C', repo, 'push', '-q', 'origin', `${h2}:refs/heads/main`]);
+    const repo = instantiate(c4PublishedTemplate);
 
     const targets = await listAmendTargets(repo);
 
@@ -99,14 +159,7 @@ describe('listAmendTargets（amend 目标候选）', () => {
   });
 
   it('HEAD/首个合并提交处停止：HEAD=合并 → 空；合并之后的非 HEAD 提交仍可作目标', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    commitFile(repo, 'a.txt', 'a1', 'c1');
-    const main = git(repo, 'symbolic-ref', '--short', 'HEAD');
-    git(repo, 'checkout', '-q', '-b', 'side');
-    commitFile(repo, 's.txt', 's1', 'side1');
-    git(repo, 'checkout', '-q', main);
-    git(repo, 'merge', '--no-ff', '-m', 'merge side', 'side');
+    const repo = instantiate(mergeStopTemplate);
 
     // HEAD=合并提交 → 无目标（Java stopAtFirstMergeCommit：走查止于 HEAD）
     expect(await listAmendTargets(repo)).toEqual([]);
@@ -122,11 +175,7 @@ describe('amendSpecificCommit（amend 指定历史提交）', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('reword 目标提交：目标提交信息重写、提交数不变、目标之后的提交原样重放', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    commitFile(repo, 'a.txt', 'a1', 'c1');
-    commitFile(repo, 'b.txt', 'b1', 'c2');
-    commitFile(repo, 'c.txt', 'c1', 'c3');
+    const repo = instantiate(c3Template);
     const headBefore = git(repo, 'rev-parse', 'HEAD');
 
     const result = await amendSpecificCommit(repo, { targetHash: git(repo, 'rev-parse', 'HEAD~1'), message: 'c2（重写）' });
@@ -141,11 +190,7 @@ describe('amendSpecificCommit（amend 指定历史提交）', () => {
   });
 
   it('amend 到目标（带暂存改动）：改动折入目标提交；目标之后的提交树保持最终状态', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    commitFile(repo, 'a.txt', 'a1', 'c1');
-    commitFile(repo, 'b.txt', 'b1', 'c2');
-    commitFile(repo, 'c.txt', 'c1', 'c3');
+    const repo = instantiate(c3Template);
     const target = git(repo, 'rev-parse', 'HEAD~1');
     // 暂存 b.txt 改动（amend 提交携带）
     writeFileSync(join(repo, 'b.txt'), 'b2');
@@ -162,19 +207,11 @@ describe('amendSpecificCommit（amend 指定历史提交）', () => {
   });
 
   it('冲突：折入目标与中间提交改动冲突 → status conflicts（rebase 冲突态交冲突页）', async () => {
-    const repo = createTmpRepo();
-    dirs.push(repo);
-    commitFile(repo, 'a.txt', 'v1', 'c1');
-    writeFileSync(join(repo, 'a.txt'), 'v2');
-    await stagePaths(repo, ['a.txt']);
-    await commitStaged(repo, { message: 'c2' }); // 目标：a.txt=v2
-    writeFileSync(join(repo, 'a.txt'), 'v3');
-    await stagePaths(repo, ['a.txt']);
-    await commitStaged(repo, { message: 'c3' }); // 中间：a.txt=v3
+    const repo = instantiate(a3Template);
     // 暂存 v3→v4：amend 提交 diff 的上下文（v3）与目标树（v2）不匹配 → 折入冲突
     writeFileSync(join(repo, 'a.txt'), 'v4');
     await stagePaths(repo, ['a.txt']);
-    const target = git(repo, 'rev-parse', 'HEAD~1');
+    const target = a3C2;
 
     const result = await amendSpecificCommit(repo, { targetHash: target, message: 'c2（冲突）' });
 

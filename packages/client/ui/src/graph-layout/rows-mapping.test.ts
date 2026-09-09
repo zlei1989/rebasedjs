@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { mapRowsToVisible } from './rows-mapping';
 import type { LayoutRow } from './types';

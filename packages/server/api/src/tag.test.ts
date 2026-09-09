@@ -1,9 +1,11 @@
-/** tag 功能测试：列表映射、create/delete/push 分派与预检（重名/不存在）、推送后返回刷新列表。 */
+/** tag 功能测试：列表映射、create/delete/push 分派与预检（重名/不存在）、推送后返回刷新列表。
+ *  性能：base 提交与裸仓库 rig 在 beforeAll 各建一次模板，用例经 instantiateFixture 复制（0 spawn）。 */
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyTagAction, getTags } from './tag';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -11,9 +13,9 @@ const dirs: string[] = [];
 /** 裸仓库装置的用例 git 调用密集（本机单次 git 进程启动约秒级），统一放宽用例超时 */
 const RIG_TIMEOUT = 120000;
 
-/** 建临时仓库并入册（afterAll 统一清理） */
-function makeRepo(): string {
-  const repo = createTmpRepo();
+/** 复制模板为独立夹具并入册（afterAll 统一清理） */
+function instantiate(template: string): string {
+  const repo = instantiateFixture(template);
   dirs.push(repo);
   return repo;
 }
@@ -33,11 +35,10 @@ function makeBaseCommit(repo: string): string {
 }
 
 /** 裸仓库 + 远程 origin 装置（配方同 remote.test.ts）：裸仓库 HEAD 指到默认分支 */
-function makeRemoteRig(): { repo: string; bare: string; branch: string } {
-  const repo = makeRepo();
+function buildRemoteRig(): { repo: string; bare: string; branch: string } {
+  const repo = createTmpRepo();
   const branch = makeBaseCommit(repo);
   const bare = createTmpDir('rebased-api-bare-');
-  dirs.push(bare);
   execFileSync('git', ['init', '-q', '--bare', bare]);
   git(repo, ['remote', 'add', 'origin', bare]);
   git(repo, ['push', '-q', '-u', 'origin', branch]);
@@ -45,12 +46,38 @@ function makeRemoteRig(): { repo: string; bare: string; branch: string } {
   return { repo, bare, branch };
 }
 
+// ---- 夹具模板：beforeAll 各建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
+
+let baseTemplate = '';
+let rigTemplate: { repo: string; bare: string; branch: string } | null = null;
+
+beforeAll(() => {
+  baseTemplate = createTmpRepo();
+  makeBaseCommit(baseTemplate);
+  rigTemplate = buildRemoteRig();
+  templateDirs.push(baseTemplate, rigTemplate.repo, rigTemplate.bare);
+});
+
+/** 复制 rig 模板：repo 与 bare 各复制一份，文本替换 origin URL 指向新的 bare 副本（0 spawn）。
+ *  gitconfig 值内反斜杠转义为双反斜杠存储，替换时须同样转义。 */
+function makeRemoteRig(): { repo: string; bare: string; branch: string } {
+  const tpl = rigTemplate!;
+  const escape = (p: string): string => p.replace(/\\/g, '\\\\');
+  const repo = instantiate(tpl.repo);
+  const bare = instantiate(tpl.bare);
+  const cfgPath = join(repo, '.git', 'config');
+  writeFileSync(cfgPath, readFileSync(cfgPath, 'utf8').split(escape(tpl.bare)).join(escape(bare)));
+  return { repo, bare, branch: tpl.branch };
+}
+
 describe('getTags', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('无标签 → 空列表；创建轻量与附注后字段映射正确（annotated/subject/hash）', async () => {
-    const repo = makeRepo();
-    const branch = makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
+    const branch = git(repo, ['symbolic-ref', 'HEAD', '--short']).trim();
     const head = git(repo, ['rev-parse', 'HEAD']).trim();
 
     expect(await getTags(repo)).toEqual({ tags: [] });
@@ -75,8 +102,7 @@ describe('applyTagAction', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('create 重名 → INVALID_QUERY 标签已存在；delete 不存在 → INVALID_REF 标签不存在', async () => {
-    const repo = makeRepo();
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     await applyTagAction(repo, { action: 'create', name: 'v1' });
 
     await expect(applyTagAction(repo, { action: 'create', name: 'v1', ref: 'HEAD' })).rejects.toMatchObject({
@@ -90,8 +116,7 @@ describe('applyTagAction', () => {
   });
 
   it('delete 后从列表消失且返回刷新列表', async () => {
-    const repo = makeRepo();
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     await applyTagAction(repo, { action: 'create', name: 'tmp' });
 
     const afterDelete = await applyTagAction(repo, { action: 'delete', name: 'tmp' });
@@ -142,8 +167,7 @@ describe('applyTagAction', () => {
   });
 
   it('deleteRemote 无远程：git 报错透出（GIT_ERROR 折叠）', { timeout: RIG_TIMEOUT }, async () => {
-    const repo = makeRepo();
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
     await applyTagAction(repo, { action: 'create', name: 'v1' });
     await expect(applyTagAction(repo, { action: 'deleteRemote', name: 'v1' })).rejects.toBeInstanceOf(Error);
   });

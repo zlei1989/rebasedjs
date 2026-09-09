@@ -1,17 +1,19 @@
-/** conflict 功能测试：冲突列表、三版本内容、ours/theirs/manual/delete 解决路径与刷新列表。 */
+/** conflict 功能测试：冲突列表、三版本内容、ours/theirs/manual/delete 解决路径与刷新列表。
+ *  性能：3 种夹具形状（base/改-改冲突态/删除-修改冲突态）在 beforeAll 各建一次模板，用例经 instantiateFixture 复制（0 spawn）。 */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getConflictContents, getConflicts, resolveConflict } from './conflict';
 import { mergeBranchIntoCurrent } from './merge';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
-/** 建临时仓库并入册（afterAll 统一清理） */
-function makeRepo(): string {
-  const repo = createTmpRepo();
+/** 复制模板为独立夹具并入册（afterAll 统一清理） */
+function instantiate(template: string): string {
+  const repo = instantiateFixture(template);
   dirs.push(repo);
   return repo;
 }
@@ -31,8 +33,7 @@ function makeBaseCommit(repo: string): string {
 }
 
 /** 冲突场景并入合并态：base 后两侧改 a.txt 同一行，发起合并产生冲突 */
-async function repoInConflictedMerge(): Promise<string> {
-  const repo = makeRepo();
+async function buildConflictedMerge(repo: string): Promise<void> {
   const main = makeBaseCommit(repo);
   git(repo, ['checkout', '-q', '-b', 'side']);
   writeFileSync(join(repo, 'a.txt'), 'side\n');
@@ -43,12 +44,10 @@ async function repoInConflictedMerge(): Promise<string> {
   git(repo, ['add', '.']);
   git(repo, ['commit', '-q', '-m', 'main']);
   await mergeBranchIntoCurrent(repo, { branch: 'side' });
-  return repo;
 }
 
 /** 删除/修改冲突场景（[1,3] 我方删除/对方修改）：side 改 a.txt，主分支删 a.txt，发起合并产生冲突 */
-async function repoInDeleteModifyConflict(): Promise<string> {
-  const repo = makeRepo();
+async function buildDeleteModifyConflict(repo: string): Promise<void> {
   const main = makeBaseCommit(repo);
   git(repo, ['checkout', '-q', '-b', 'side']);
   writeFileSync(join(repo, 'a.txt'), 'side\n');
@@ -58,36 +57,52 @@ async function repoInDeleteModifyConflict(): Promise<string> {
   git(repo, ['rm', '-q', 'a.txt']);
   git(repo, ['commit', '-q', '-m', 'main delete']);
   await mergeBranchIntoCurrent(repo, { branch: 'side' });
-  return repo;
 }
+
+// ---- 夹具模板：beforeAll 各建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
+
+let baseTemplate = '';
+let conflictedTemplate = '';
+let deleteModifyTemplate = '';
+
+beforeAll(async () => {
+  baseTemplate = createTmpRepo();
+  makeBaseCommit(baseTemplate);
+  conflictedTemplate = createTmpRepo();
+  await buildConflictedMerge(conflictedTemplate);
+  deleteModifyTemplate = createTmpRepo();
+  await buildDeleteModifyConflict(deleteModifyTemplate);
+  templateDirs.push(baseTemplate, conflictedTemplate, deleteModifyTemplate);
+});
 
 describe('conflict 功能', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('无冲突时 getConflicts 返回空列表', async () => {
-    const repo = makeRepo();
-    makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
 
     const list = await getConflicts(repo);
     expect(list.conflicts).toEqual([]);
   });
 
   it('冲突合并后 getConflicts 列出冲突路径与阶段', async () => {
-    const repo = await repoInConflictedMerge();
+    const repo = instantiate(conflictedTemplate);
 
     const list = await getConflicts(repo);
     expect(list.conflicts).toEqual([{ path: 'a.txt', stages: [1, 2, 3] }]);
   });
 
   it('getConflictContents 返回 base/ours/theirs 三版本内容', async () => {
-    const repo = await repoInConflictedMerge();
+    const repo = instantiate(conflictedTemplate);
 
     const contents = await getConflictContents(repo, 'a.txt');
     expect(contents).toEqual({ path: 'a.txt', base: 'base\n', ours: 'main\n', theirs: 'side\n' });
   });
 
   it('resolveConflict ours 采纳当前分支版本并返回刷新列表', async () => {
-    const repo = await repoInConflictedMerge();
+    const repo = instantiate(conflictedTemplate);
 
     const list = await resolveConflict(repo, { strategy: 'ours', path: 'a.txt' });
     expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('main\n');
@@ -95,7 +110,7 @@ describe('conflict 功能', () => {
   });
 
   it('resolveConflict theirs 采纳合并来源版本并返回刷新列表', async () => {
-    const repo = await repoInConflictedMerge();
+    const repo = instantiate(conflictedTemplate);
 
     const list = await resolveConflict(repo, { strategy: 'theirs', path: 'a.txt' });
     expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('side\n');
@@ -103,7 +118,7 @@ describe('conflict 功能', () => {
   });
 
   it('resolveConflict manual 写入自定义内容并返回刷新列表', async () => {
-    const repo = await repoInConflictedMerge();
+    const repo = instantiate(conflictedTemplate);
 
     const list = await resolveConflict(repo, { strategy: 'manual', path: 'a.txt', content: 'resolved\n' });
     expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('resolved\n');
@@ -111,7 +126,7 @@ describe('conflict 功能', () => {
   });
 
   it('resolveConflict 对非冲突路径 → INVALID_QUERY', async () => {
-    const repo = await repoInConflictedMerge();
+    const repo = instantiate(conflictedTemplate);
 
     await expect(resolveConflict(repo, { strategy: 'manual', path: 'ghost.txt', content: 'x' })).rejects.toMatchObject(
       {
@@ -129,7 +144,7 @@ describe('conflict 功能', () => {
   });
 
   it('resolveConflict delete 以删除解决删除/修改冲突并返回刷新列表', async () => {
-    const repo = await repoInDeleteModifyConflict();
+    const repo = instantiate(deleteModifyTemplate);
     expect((await getConflicts(repo)).conflicts).toEqual([{ path: 'a.txt', stages: [1, 3] }]);
 
     const list = await resolveConflict(repo, { strategy: 'delete', path: 'a.txt' });

@@ -1,17 +1,19 @@
-/** merge 原语测试：快进/已最新/冲突/no-ff 合并提交/continueMerge（含 squash 退化提交）。 */
+/** merge 原语测试：快进/已最新/冲突/no-ff 合并提交/continueMerge（含 squash 退化提交）。
+ *  性能：3 种夹具形状（base/快进/冲突）在 beforeAll 各建一次模板，用例经 instantiateFixture 复制（0 spawn）。 */
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GitExitError, runGit } from './exec';
 import { canContinueMerge, continueMerge, mergeBranch } from './merge';
 import { getOperationState } from './operation';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
 
-/** 建临时仓库并入册（afterAll 统一清理） */
-function makeRepo(): string {
-  const repo = createTmpRepo();
+/** 复制模板为独立夹具并入册（afterAll 统一清理） */
+function instantiate(template: string): string {
+  const repo = instantiateFixture(template);
   dirs.push(repo);
   return repo;
 }
@@ -49,12 +51,29 @@ async function makeConflictScenario(repo: string): Promise<void> {
   await runGit(['commit', '-m', 'main'], { cwd: repo });
 }
 
+// ---- 夹具模板：beforeAll 各建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
+
+let baseTemplate = '';
+let ffTemplate = '';
+let conflictTemplate = '';
+
+beforeAll(async () => {
+  baseTemplate = createTmpRepo();
+  await makeBaseCommit(baseTemplate);
+  ffTemplate = createTmpRepo();
+  await makeFfScenario(ffTemplate);
+  conflictTemplate = createTmpRepo();
+  await makeConflictScenario(conflictTemplate);
+  templateDirs.push(baseTemplate, ffTemplate, conflictTemplate);
+});
+
 describe('merge 原语', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   it('快进合并返回 success 且 HEAD 前进到 side', async () => {
-    const repo = makeRepo();
-    await makeFfScenario(repo);
+    const repo = instantiate(ffTemplate);
 
     const result = await mergeBranch(repo, { branch: 'side' });
     expect(result.status).toBe('success');
@@ -65,8 +84,7 @@ describe('merge 原语', () => {
   });
 
   it('重复合并返回 up-to-date', async () => {
-    const repo = makeRepo();
-    await makeFfScenario(repo);
+    const repo = instantiate(ffTemplate);
     await mergeBranch(repo, { branch: 'side' });
 
     const result = await mergeBranch(repo, { branch: 'side' });
@@ -75,8 +93,7 @@ describe('merge 原语', () => {
   });
 
   it('冲突合并返回 conflicts 且操作态为 merge', async () => {
-    const repo = makeRepo();
-    await makeConflictScenario(repo);
+    const repo = instantiate(conflictTemplate);
 
     const result = await mergeBranch(repo, { branch: 'side' });
     expect(result.status).toBe('conflicts');
@@ -85,16 +102,14 @@ describe('merge 原语', () => {
   });
 
   it('非 0 退出且无 MERGE_HEAD（分支不存在）原样抛 GitExitError', async () => {
-    const repo = makeRepo();
-    await makeBaseCommit(repo);
+    const repo = instantiate(baseTemplate);
 
     await expect(mergeBranch(repo, { branch: 'ghost' })).rejects.toBeInstanceOf(GitExitError);
     expect((await getOperationState(repo)).kind).toBe('none');
   });
 
   it('noFf 快进场景产双父合并提交', async () => {
-    const repo = makeRepo();
-    await makeFfScenario(repo);
+    const repo = instantiate(ffTemplate);
 
     const result = await mergeBranch(repo, { branch: 'side', noFf: true });
     expect(result.status).toBe('success');
@@ -103,8 +118,7 @@ describe('merge 原语', () => {
   });
 
   it('continueMerge 解决冲突后产合并提交且操作态回到 none（服务端无 TTY，不开编辑器）', async () => {
-    const repo = makeRepo();
-    await makeConflictScenario(repo);
+    const repo = instantiate(conflictTemplate);
     expect((await mergeBranch(repo, { branch: 'side' })).status).toBe('conflicts');
 
     // 手工解决：写最终内容 + add 标记已解决
@@ -118,8 +132,7 @@ describe('merge 原语', () => {
   });
 
   it('squash 合并不产提交也不进合并态，continueMerge 退化为 git commit 产单父提交', async () => {
-    const repo = makeRepo();
-    await makeFfScenario(repo);
+    const repo = instantiate(ffTemplate);
 
     const result = await mergeBranch(repo, { branch: 'side', squash: true });
     expect(result.status).toBe('success');
@@ -135,8 +148,7 @@ describe('merge 原语', () => {
   });
 
   it('squash 冲突（从不写 MERGE_HEAD）凭未合并条目分类为 conflicts 而非抛错', async () => {
-    const repo = makeRepo();
-    await makeConflictScenario(repo);
+    const repo = instantiate(conflictTemplate);
 
     const result = await mergeBranch(repo, { branch: 'side', squash: true });
     expect(result.status).toBe('conflicts');
@@ -145,18 +157,15 @@ describe('merge 原语', () => {
   });
 
   it('canContinueMerge：合并态或 squash 信息文件在场为 true，干净仓库为 false', async () => {
-    const clean = makeRepo();
-    await makeBaseCommit(clean);
+    const clean = instantiate(baseTemplate);
     expect(await canContinueMerge(clean)).toBe(false);
 
-    const merging = makeRepo();
-    await makeConflictScenario(merging);
+    const merging = instantiate(conflictTemplate);
     await mergeBranch(merging, { branch: 'side' });
     expect(await canContinueMerge(merging)).toBe(true);
 
     // squash 合并不进合并态但留 SQUASH_MSG：可继续（退化为 git commit）
-    const squashing = makeRepo();
-    await makeFfScenario(squashing);
+    const squashing = instantiate(ffTemplate);
     await mergeBranch(squashing, { branch: 'side', squash: true });
     expect(await canContinueMerge(squashing)).toBe(true);
   });

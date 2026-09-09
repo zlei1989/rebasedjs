@@ -1,4 +1,4 @@
-﻿# Rebased.js 架构重构设计
+# Rebased.js 架构重构设计
 
 - **日期**：2026-09-01
 - **状态**：待评审
@@ -369,6 +369,52 @@ ui/src/
 | apps | 只测路由装配（zod 校验 + 错误映射），不重复测服务逻辑 |
 
 质量门（根命令，与 AGENT.md 一致）：`pnpm typecheck`（project references 全链类型）→ `pnpm format` → `pnpm test`。eslint 边界规则违反即失败。
+
+### 6.1 测试性能基线（防腐化）
+
+> 2026-09-02 实测：全套 `pnpm test` 从 **1759s → 359s（4.9×）**。本节记录成本模型、机制与护栏——后续迭代新增测试时以此为准，防止性能腐化回退。
+
+**基线数据**
+
+| 包 | 优化前 | 优化后 | 关键手段 |
+|----|--------|--------|----------|
+| contracts | 3.1s | 1.2s | 无改动（已近地板） |
+| core | 929.0s | 89.0s | 建仓 0 spawn + 夹具快照 + `maxWorkers: 4` 文件并行（原 `fileParallelism: false`） |
+| api | 160.2s | 92.3s（单独跑） | 同上 + `maxWorkers: 8`；全量并发下受其他 git 包争用约为 159s |
+| ui | 197.8s | 87.2s | 纯函数测试切 node 环境 |
+| web-koa | 242.4s | 108.1s | 单文件 171 用例 → 11 文件并行 |
+| web-next | 195.9s | 101.1s | 单文件 160 用例 → 10 文件并行 + sse flake 修复 |
+
+**成本模型**：本机单次 git 进程 spawn ≈ **330ms**（msys2 git + 杀软开销；`rev-parse`/`status` 各 10 次均值）。全套数千次 spawn 曾贡献 20+ 分钟纯进程开销。测试性能的第一性优化 = 削减 spawn 数，其次才是并行度。
+
+**机制（按收益排序）**
+
+1. **建仓模板化**（core/api `src/testing/tmp-repo.ts`）：模块级用真实 `git init` 建一次模板仓库，`[user]` 段以 `writeFileSync` 直接追加 `.git/config`；之后每次 `createTmpRepo()` 仅 `cpSync` 复制（0 spawn）。模板目录随进程存续，残留交给系统临时目录清理。
+2. **身份环境变量**（core/api `src/testing/setup.ts`）：注入 `GIT_AUTHOR_NAME/EMAIL`、`GIT_COMMITTER_NAME/EMAIL`（值 = `Test User` / `test@example.com`），夹具中所有 `git config user.name/email` 行删除。注意：**`git config --local --get` 不读环境变量**——断言 `localValue` 的用例必须显式写配置（web-next `rest.test.ts` 以本地包装 registerRepo 处理，见该文件注释）。
+3. **夹具快照**（core/api `src/testing/fixture.ts` 的 `instantiateFixture(template)`）：同构夹具（三提交/冲突/裸远端 rig）在 `beforeAll` 用真实 git 各建一次模板，用例复制独立副本（互不污染，可任意修改）。模板目录放独立 `templateDirs`，由**文件级** `afterAll` 清理——若混入各 describe 共享的 `dirs`，首个 describe 的 afterAll 会提前删掉后续仍要用的模板。
+4. **远程 rig 复制的 URL 修正**：repo 与 bare 两个目录都复制后，须文本替换 repo 的 origin URL 指向 bare 新副本。坑：gitconfig 值内反斜杠以 `\\` 转义存储，替换时两侧都要 `p.replace(/\\/g, '\\\\')`；`.gitmodules` 与 `.git/modules/<path>/config` 存的是正斜杠形式（`submodule add` 按入参原样写入），按正斜杠替换。
+5. **并行度配置**（改动前读各包 `vitest.config.ts` 注释）：
+   - core：`maxWorkers: 4` + 文件级并行。历史（15 worker 全并行）下 msys2 git 并发导致交互式 rebase 30s 超时与临时目录竞态；P0 把 spawn 数砍掉大半后，4 worker 连续 3 跑全绿。**若复现 flake，回退 `fileParallelism: false` 即可，其余优化不受影响**。
+   - api：`maxWorkers: 8`（默认 nCPU 并发 × 每文件数十 spawn 会互相拖慢单次 spawn，并曾出现 forks worker 终止超时）。
+   - core/api 均设 `hookTimeout: 120000`：模板 beforeAll 钩子串行执行数十次 spawn，默认 10s 必然超时。
+   - 根 `package.json` test 脚本 `--workspace-concurrency=4`；如需继续压总时长，可实验 3 或 git 重包/轻包错峰（api 在全量并发下从 92s 恶化到 159s 即争用代价）。
+6. **大套件拆分**：web-koa/web-next 按域一个 describe 一个文件（11/10 个），共享纯辅助函数放 `apps/*/src/testing/`（web-koa `integration.ts`、web-next `routes-helpers.ts`），文件级 server/环境生命周期各自持有。单文件套件无法并行，是墙钟上限。
+7. **ui 纯函数测试**：`// @vitest-environment node` 文件头跳过 jsdom；`src/testing/setup.ts` 的 DOM 补丁（ResizeObserver/matchMedia）以 `typeof window !== 'undefined'` 守卫，node 环境下不执行。
+
+**新增测试的规矩**
+
+| ✅ 必须 | ❌ 禁止 |
+|---------|---------|
+| 建仓用 `createTmpRepo()` / `createTmpDir()` | 测试内直接 `git init`（裸仓库装置除外） |
+| 同构夹具 beforeAll 建模板 + `instantiateFixture` | 每用例 `makeXxxRepo()` 全量重建 |
+| 身份靠 setup 环境变量 | 夹具里 `git config user.name/email`（断言 localValue 除外） |
+| 纯函数测试标 node 环境 | 无 DOM 依赖仍跑 jsdom |
+| 按域新增小测试文件 | 向既有大套件无限追加用例 |
+
+**回归护栏**
+
+- 全量回归预算 **~6 分钟**（基线 359s）。明显超预算时，看 vitest 输出的每文件 Duration，最慢文件优先按上述机制复查。
+- 腐化信号：测试里出现新的 `git init` 夹具调用；`fileParallelism: false` 被无注释改回；web-koa/web-next 重新出现超百用例单文件；全量并发下 api 墙钟远超其单独跑值且无注释说明。
 
 ---
 

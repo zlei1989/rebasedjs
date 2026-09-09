@@ -1,10 +1,13 @@
-/** operation 服务测试：真实 git CLI + 临时仓库，验证状态映射与无操作时 INVALID_QUERY 语义。 */
+/** operation 服务测试：真实 git CLI + 临时仓库，验证状态映射与无操作时 INVALID_QUERY 语义。
+ *  性能：5 种冲突/干净态夹具在 beforeAll 各建一次模板，用例经 instantiateFixture 复制（0 spawn；
+ *  历史每用例建仓 + 10-13 spawn 搭冲突态）。 */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServiceError } from '@rebased/contracts';
 import { abortOperation, continueOperation, getOperation, skipOperation } from './operation';
+import { instantiateFixture } from './testing/fixture';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 function git(dir: string, args: string[]): void {
@@ -42,44 +45,9 @@ function createMergeConflict(repo: string): void {
   }
 }
 
-describe('operation 服务', () => {
-  let repo: string;
-  beforeEach(() => { repo = createTmpRepo(); });
-  afterEach(() => { cleanupTmpRepo(repo); });
-
-  it('干净仓库 getOperation 返回 { kind: none }', async () => {
-    expect(await getOperation(repo)).toEqual({ kind: 'none' });
-  });
-
-  it('无进行中操作时 abortOperation 抛 ServiceError(INVALID_QUERY)', async () => {
-    await expect(abortOperation(repo)).rejects.toBeInstanceOf(ServiceError);
-    await expect(abortOperation(repo)).rejects.toMatchObject({
-      code: 'INVALID_QUERY',
-      message: '当前没有进行中的操作',
-    });
-  });
-
-  it('merge 冲突时检测为 merge，abort 后返回 { kind: none }', async () => {
-    createMergeConflict(repo);
-    expect((await getOperation(repo)).kind).toBe('merge');
-    expect(await abortOperation(repo)).toEqual({ kind: 'none' });
-  });
-});
-
 /** continueOperation 的冲突装置与 resolve 配方（同 Task 2 core 测试手法，造真实冲突态） */
 function makeRebaseConflict(repo: string): void {
-  const main = gitOut(repo, ['symbolic-ref', 'HEAD', '--short']).trim();
-  writeFileSync(join(repo, 'a.txt'), 'base\n');
-  git(repo, ['add', '.']);
-  git(repo, ['commit', '-q', '-m', 'base']);
-  git(repo, ['checkout', '-q', '-b', 'side']);
-  writeFileSync(join(repo, 'a.txt'), 'side\n');
-  git(repo, ['add', '.']);
-  git(repo, ['commit', '-q', '-m', 'side']);
-  git(repo, ['checkout', '-q', main]);
-  writeFileSync(join(repo, 'a.txt'), 'main\n');
-  git(repo, ['add', '.']);
-  git(repo, ['commit', '-q', '-m', 'main']);
+  makeMergeScenario(repo);
   try {
     git(repo, ['rebase', 'side']);
   } catch {
@@ -104,21 +72,78 @@ function makePickConflict(repo: string): string {
   return one;
 }
 
-describe('continueOperation', () => {
-  let repo: string;
-  beforeEach(() => { repo = createTmpRepo(); });
-  afterEach(() => { cleanupTmpRepo(repo); });
+// ---- 夹具模板：beforeAll 各建一次；templateDirs 文件级 afterAll 清理 ----
+const templateDirs: string[] = [];
+afterAll(() => templateDirs.forEach(cleanupTmpRepo));
 
+let emptyTemplate = '';
+let mergeConflictTemplate = '';
+let rebaseConflictTemplate = '';
+let squashConflictTemplate = '';
+let pickConflictTemplate = '';
+let pickOne = '';
+
+beforeAll(() => {
+  emptyTemplate = createTmpRepo();
+  mergeConflictTemplate = createTmpRepo();
+  createMergeConflict(mergeConflictTemplate);
+  rebaseConflictTemplate = createTmpRepo();
+  makeRebaseConflict(rebaseConflictTemplate);
+  squashConflictTemplate = createTmpRepo();
+  makeMergeScenario(squashConflictTemplate);
+  try {
+    git(squashConflictTemplate, ['merge', '--squash', 'side']);
+  } catch {
+    // squash 冲突以非零退出码结束，忽略（不写 MERGE_HEAD）
+  }
+  pickConflictTemplate = createTmpRepo();
+  pickOne = makePickConflict(pickConflictTemplate);
+  templateDirs.push(emptyTemplate, mergeConflictTemplate, rebaseConflictTemplate, squashConflictTemplate, pickConflictTemplate);
+});
+
+/** 复制模板为独立夹具（conflict 态在 .git 内，随复制携带） */
+function fresh(template: string): string {
+  return instantiateFixture(template);
+}
+
+describe('operation 服务', () => {
+  it('干净仓库 getOperation 返回 { kind: none }', async () => {
+    const repo = fresh(emptyTemplate);
+    expect(await getOperation(repo)).toEqual({ kind: 'none' });
+    cleanupTmpRepo(repo);
+  });
+
+  it('无进行中操作时 abortOperation 抛 ServiceError(INVALID_QUERY)', async () => {
+    const repo = fresh(emptyTemplate);
+    await expect(abortOperation(repo)).rejects.toBeInstanceOf(ServiceError);
+    await expect(abortOperation(repo)).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '当前没有进行中的操作',
+    });
+    cleanupTmpRepo(repo);
+  });
+
+  it('merge 冲突时检测为 merge，abort 后返回 { kind: none }', async () => {
+    const repo = fresh(mergeConflictTemplate);
+    expect((await getOperation(repo)).kind).toBe('merge');
+    expect(await abortOperation(repo)).toEqual({ kind: 'none' });
+    cleanupTmpRepo(repo);
+  });
+});
+
+describe('continueOperation', () => {
   it('无进行中操作 → INVALID_QUERY 当前没有可继续的操作', async () => {
+    const repo = fresh(emptyTemplate);
     await expect(continueOperation(repo)).rejects.toBeInstanceOf(ServiceError);
     await expect(continueOperation(repo)).rejects.toMatchObject({
       code: 'INVALID_QUERY',
       message: '当前没有可继续的操作',
     });
+    cleanupTmpRepo(repo);
   });
 
   it('merge 冲突解决后 continue → 完成且返回刷新状态（双亲提交）', async () => {
-    createMergeConflict(repo);
+    const repo = fresh(mergeConflictTemplate);
     writeFileSync(join(repo, 'a.txt'), 'resolved\n');
     git(repo, ['add', 'a.txt']);
 
@@ -126,15 +151,11 @@ describe('continueOperation', () => {
     expect(status.entries).toEqual([]);
     expect(gitOut(repo, ['rev-parse', 'HEAD']).trim()).toBe(status.headHash);
     expect(gitOut(repo, ['log', '--format=%P', '-1']).trim().split(' ')).toHaveLength(2);
+    cleanupTmpRepo(repo);
   });
 
   it('squash 冲突全链：kind none 但 canContinueMerge 放行 → 单父提交（squash 退化不回归）', async () => {
-    makeMergeScenario(repo);
-    try {
-      git(repo, ['merge', '--squash', 'side']);
-    } catch {
-      // squash 冲突以非零退出码结束，忽略（不写 MERGE_HEAD）
-    }
+    const repo = fresh(squashConflictTemplate);
     expect((await getOperation(repo)).kind).toBe('none'); // squash 不在合并态
 
     writeFileSync(join(repo, 'a.txt'), 'side\n');
@@ -143,10 +164,11 @@ describe('continueOperation', () => {
     expect(status.entries).toEqual([]);
     expect(gitOut(repo, ['log', '--format=%P', '-1']).trim().split(' ')).toHaveLength(1);
     expect(gitOut(repo, ['show', 'HEAD:a.txt'])).toBe('side\n');
+    cleanupTmpRepo(repo);
   });
 
   it('rebase 冲突解决后 continue → 完成（操作态回 none）', async () => {
-    makeRebaseConflict(repo);
+    const repo = fresh(rebaseConflictTemplate);
     expect((await getOperation(repo)).kind).toBe('rebase');
     writeFileSync(join(repo, 'a.txt'), 'resolved\n');
     git(repo, ['add', 'a.txt']);
@@ -156,12 +178,13 @@ describe('continueOperation', () => {
     expect(await getOperation(repo)).toEqual({ kind: 'none' });
     expect(gitOut(repo, ['log', '--format=%s', '-3']).trim().split('\n')).toEqual(['main', 'side', 'base']);
     expect(gitOut(repo, ['show', 'HEAD:a.txt'])).toBe('resolved\n');
+    cleanupTmpRepo(repo);
   });
 
   it('cherry-pick 冲突解决后 continue → 完成（生成被摘提交）', async () => {
-    const one = makePickConflict(repo);
+    const repo = fresh(pickConflictTemplate);
     try {
-      git(repo, ['cherry-pick', one]);
+      git(repo, ['cherry-pick', pickOne]);
     } catch {
       // cherry-pick 冲突以非零退出码结束，忽略
     }
@@ -173,12 +196,13 @@ describe('continueOperation', () => {
     expect(status.entries).toEqual([]);
     expect(gitOut(repo, ['log', '--format=%s', '-1']).trim()).toBe('one');
     expect(gitOut(repo, ['show', 'HEAD:a.txt'])).toBe('resolved\n');
+    cleanupTmpRepo(repo);
   });
 
   it('revert 冲突解决后 continue → 完成（生成 Revert 提交）', async () => {
-    const one = makePickConflict(repo);
+    const repo = fresh(pickConflictTemplate);
     try {
-      git(repo, ['revert', one]);
+      git(repo, ['revert', pickOne]);
     } catch {
       // revert 冲突以非零退出码结束，忽略
     }
@@ -191,34 +215,30 @@ describe('continueOperation', () => {
     expect(status.entries).toEqual([]);
     expect(gitOut(repo, ['log', '--format=%s', '-1']).trim()).toBe('Revert "one"');
     expect(gitOut(repo, ['show', 'HEAD:a.txt'])).toBe('base\n');
+    cleanupTmpRepo(repo);
   });
 });
 
 describe('skipOperation', () => {
-  let repo: string;
-  beforeEach(() => { repo = createTmpRepo(); });
-  afterEach(() => { cleanupTmpRepo(repo); });
-
   it('无进行中操作 → INVALID_QUERY（无态可跳）', async () => {
+    const repo = fresh(emptyTemplate);
     await expect(skipOperation(repo)).rejects.toMatchObject({ code: 'INVALID_QUERY' });
+    cleanupTmpRepo(repo);
   });
 
   it('rebase 冲突 → 跳过：冲突提交丢弃、操作态回 none、返回刷新状态', async () => {
-    makeMergeScenario(repo);
-    try {
-      git(repo, ['rebase', 'side']);
-    } catch {
-      // rebase 冲突以非零退出码结束，忽略
-    }
+    const repo = fresh(rebaseConflictTemplate);
     expect((await getOperation(repo)).kind).toBe('rebase');
 
     const status = await skipOperation(repo);
     expect(status.headHash).toMatch(/^[0-9a-f]{40}$/);
     expect(gitOut(repo, ['log', '--format=%s', '-2']).trim().split('\n')).toEqual(['side', 'base']);
+    cleanupTmpRepo(repo);
   });
 
   it('merge 冲突 → INVALID_QUERY（merge 无 skip 概念）', async () => {
-    createMergeConflict(repo);
+    const repo = fresh(mergeConflictTemplate);
     await expect(skipOperation(repo)).rejects.toMatchObject({ code: 'INVALID_QUERY' });
+    cleanupTmpRepo(repo);
   });
 });
