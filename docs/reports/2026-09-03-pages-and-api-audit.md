@@ -16,11 +16,11 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **100 / 114**（web-next 100 个 route.ts ↔ web-koa repos.ts 114 注册，14 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **101 / 116**（web-next 101 个 route.ts ↔ web-koa repos.ts 116 注册，15 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 119 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 67、领域类型/别名 93、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（105 条） | 79 ✅（含等价边）+ 8 🟡 + 7 ➖ + 11 ❌ |
+| `@rebased/api` 公共出口 | 121 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 68、领域类型/别名 95、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
+| 导航边（105 条） | 79 ✅（含等价边）+ 8 🟡 + 8 ➖ + 10 ❌ |
 
 ### 1.2 口径与图例
 
@@ -96,7 +96,7 @@
 ### 2.3 汇总
 
 - ✅ 已复刻 29 个；🟡 等效 2 个（CommitDialog、QuickActionsMenu）。
-- 功能点级 🟡 遗留（不影响页面级结论）：LogPage 行右键余项（Show Git Log for Command）、BranchPanel 最近检出/标签分组与过滤、CommitDialog 等效面（GPG/commit template）、SettingsPage 面项等——逐一见 §四各页功能点表。
+- 功能点级 🟡 遗留（不影响页面级结论）：BranchPanel 最近检出/标签分组与过滤、CommitDialog 等效面（GPG/commit template）、SettingsPage 面项等——逐一见 §四各页功能点表（Show Git Log for Command 已归 ➖，见 §5.3.2 #39）。
 
 ---
 
@@ -122,6 +122,7 @@
 | settings | `settings`、`settings/git-executable` | GET/PUT + GET | 应用设置读写 / git 可执行文件检测（PATH + 版本，GitExecutableSelectorPanel 语义） | SettingsPage | ✅ |
 | auth | `auth/accounts`、`auth/accounts/delete` | GET/POST/POST | 账户/令牌存储（应用级） | SettingsPage 账户卡片、远程认证 | ✅ |
 | config | `repos/:id/config` | GET/PUT | git 配置白名单 9 键读写（含 GPG/commit template） | SettingsPage | ✅ |
+| gpg-config | `repos/:id/settings/gpg-config` | GET/PUT | GPG 提交签名配置（启用态 + 密钥列表 + 写 commit.gpgsign/user.signingkey） | SettingsPage | ✅ |
 | operation | `repos/:id/operation`、`operation/abort`、`operation/continue`、`operation/skip` | GET + 3×POST | 进行中操作查询/中止/继续（continue 泛化四操作共用）/跳过（rebase/cherry-pick/revert） | LogPage 操作条、ConflictsPanel「完成合并/跳过」 | ✅ |
 | staging | `repos/:id/staging` | POST | 文件级 stage/unstage/discard | StatusPage | ✅ |
 | staging | `repos/:id/staging/hunks` | POST | hunk 级暂存（按 diff/patch hunk 索引） | StatusPage 补丁预览行内 hunk 选择 | ✅ |
@@ -592,7 +593,7 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 
 应用设置 + git 配置页；对应 `GitVcsPanel` / `GitExecutableSelectorPanel` / `GitGpgConfigDialog` / `SSHConnectionSettings` / `VcsLogConfigurable` / `GitConfig`。
 
-- **落点**：路由 `/repos/:id/settings`（key=repoId 切仓库强制重挂载）；组件 `composite/settings-page.tsx`；服务 `api/{config,auth}.ts`；端点 `GET/PUT /settings`、`GET/PUT /config`、`auth/accounts` 三端点。
+- **落点**：路由 `/repos/:id/settings`（key=repoId 切仓库强制重挂载）；组件 `composite/settings-page.tsx`；服务 `api/{config,gpg,auth}.ts`；端点 `GET/PUT /settings`、`GET/PUT /config`、`GET/PUT /settings/gpg-config`、`auth/accounts` 三端点。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
@@ -601,7 +602,8 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 | 账户/令牌管理 | ✅ | host/account/token 添加覆盖、Popconfirm 删除；token 不下行仅掩码；配置文件 0600 |
 | 集中存储（Rebased 独家"禁用 .idea"的 TS 映射） | ✅ | 应用配置集中于 `api/lib/config-store` |
 | git 可执行文件检测/引导 | ✅ | 设置页「Git 可执行文件」卡片（`GET /settings/git-executable`：PATH 查找 `git` + `git --version` 输出 + 已检测徽标；未检出 → 引导文案（安装 Git / 确保服务进程 PATH 可执行）——对照 `GitExecutableSelectorPanel`） |
-| GPG/SSH 专属配置对话框 | 🟡 | 白名单键 `commit.gpgsign`/`user.signingkey` 可读写；专属对话框未做 |
+| GPG 专属配置对话框 | ✅ | 设置页「GPG 提交签名」卡片（状态行：已启用（key/描述）/未启用）+「配置…」Modal（对应 `GitGpgConfigDialog`/`GpgSignConfigurableRow`）：勾选「为仓库提交签名」+ 密钥下拉（`gpg --list-secret-keys --with-colons` 解析——capabilities 含 s/S 且非 D；gpg 程序取 `gpg.program` 生效值，缺省 'gpg'；无可用密钥 → Alert 且无法启用）→ 写仓库级 `commit.gpgsign`+`user.signingkey`（取消勾选仅写 false 不清 key，对齐 `writeGitGpgConfig`）；端点 `GET/PUT /settings/gpg-config`（enabled=true 无 key → 400） |
+| SSH 专属配置对话框 | ➖ | Java 当前版本无 SSH 专属配置面（git4idea 无 ssh settings UI 证据；`core.sshCommand` 仅常量）——SSH 密钥属系统级，不进应用配置 |
 | 保护分支设置 / 自动 fetch 设置 | ❌ | 未做（Web 以事件推送替代定时 fetch） |
 
 ### 4.31 BrowsePanel ✅
@@ -695,7 +697,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 36 | 任意处 → SearchPanel | Search Everywhere Git tab | `GitSearchEverywhereContributor` | ✅ 「更多」→ `/search` |
 | 37 | 工具窗口 → CommittedChangesPanel | Repository tab | `CommittedChangesViewManager.kt:39` | ✅ 「更多」→ `/committed` |
 | 38 | CommittedChangesPanel → DiffPage | 双击变更 | `ChangesBrowserBase` | ✅ 文件点击 → `/diff?file&from=<hash>~1&to=<hash>` |
-| 39 | LogPage → 带命令过滤器的 Log tab | Show Git Log for Command（internal） | backend.xml:322 | ❌ |
+| 39 | LogPage → 带命令过滤器的 Log tab | Show Git Log for Command（internal） | backend.xml:322、:374-377 | ➖ internal 动作：`internal="true"` 且仅挂 `Vcs.Log.Internal` 组（内部模式才可见），非用户可达入口；Web 无对应概念（LogPage 过滤行等效承载用户面过滤） |
 
 #### 5.3.3 变更 / 提交域
 
@@ -787,8 +789,8 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | Java 版导航边（收录 105 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
 | ✅ 已复刻（含等价边） | **79 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 6（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
 | 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（Push up to Commit 已落地见 #17）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
-| ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **11 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
+| ➖ Web 无对应 | **8 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新、#39 命令日志 tab（internal） |
+| ❌ 未复刻 | **10 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet；#39 已归 ➖） |
 
 ### 5.5 关键联动流程
 
@@ -824,9 +826,9 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 层 | 位置 |
 |----|------|
 | 契约 | `packages/server/contracts/src/{endpoints,domain,errors,sse,host}.ts` |
-| 服务层 | `packages/server/api/src/*.ts`（38 模块，`index.ts` 110 出口） |
-| web-next 路由 | `apps/web-next/app/api/**/route.ts`（100 文件） |
-| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（114 注册）+ `src/middleware/error.ts` |
+| 服务层 | `packages/server/api/src/*.ts`（39 模块，`index.ts` 121 出口） |
+| web-next 路由 | `apps/web-next/app/api/**/route.ts`（101 文件） |
+| web-koa 路由 | `apps/web-koa/src/routes/repos.ts`（116 注册）+ `src/middleware/error.ts` |
 | 客户端 hooks | `packages/client/client/src/*.ts` |
 | UI 组件 | `packages/client/ui/src/composite/*.tsx`（31 页面组件 + base/domain 层） |
 | 页面容器 | web-next：`app/page.tsx` + `app/repos/[repoId]/{page.tsx,*/page.tsx}`（22 子路由）；web-koa：`src/pages.tsx` + `src/pages/*.tsx`（22 文件，两端同构） |

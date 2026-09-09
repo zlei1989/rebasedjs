@@ -110,6 +110,15 @@ export const checkoutRebaseBodySchema = z.object({
 });
 export type CheckoutRebaseBody = z.infer<typeof checkoutRebaseBodySchema>;
 
+/** GPG 提交签名配置（GitGpgConfigDialog 语义）：enabled=true 时 key 必选；enabled=false 仅写 commit.gpgsign=false（不清 user.signingkey） */
+export const gpgConfigBodySchema = z
+  .object({
+    enabled: z.boolean(),
+    key: z.string().min(1).nullable().optional(),
+  })
+  .refine((body) => !body.enabled || typeof body.key === 'string', { message: '启用提交签名必须选择密钥' });
+export type GpgConfigBody = z.infer<typeof gpgConfigBodySchema>;
+
 /** 分支写操作（判别联合）：create 可带 startPoint；delete 的 force 对应 git branch -D；rename 改名；setUpstream 设置上游 */
 export const branchActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create'), name: z.string().min(1), startPoint: z.string().optional() }),

@@ -4,6 +4,7 @@ import {
   branchActionSchema,
   checkoutActionSchema,
   checkoutRebaseBodySchema,
+  gpgConfigBodySchema,
   commitBodySchema,
   amendSpecificBodySchema,
   autosquashBodySchema,
@@ -204,6 +205,19 @@ describe('checkoutRebaseBodySchema（检出并变基到当前：GitCheckoutWithR
     expect(() => checkoutRebaseBodySchema.parse({ branch: '' })).toThrow();
     expect(() => checkoutRebaseBodySchema.parse({})).toThrow();
     expect(() => checkoutRebaseBodySchema.parse({ branch: 'main', localName: '' })).toThrow();
+  });
+});
+
+describe('gpgConfigBodySchema（GPG 提交签名配置：GitGpgConfigDialog 语义）', () => {
+  it('enabled=false 可无 key；enabled=true 必须带非空 key', () => {
+    expect(gpgConfigBodySchema.parse({ enabled: false })).toEqual({ enabled: false });
+    expect(gpgConfigBodySchema.parse({ enabled: true, key: 'A1B2C3' })).toEqual({ enabled: true, key: 'A1B2C3' });
+    expect(gpgConfigBodySchema.parse({ enabled: false, key: null })).toEqual({ enabled: false, key: null });
+  });
+  it('enabled=true 却无 key/空 key/null key → 拒绝（refine）', () => {
+    expect(() => gpgConfigBodySchema.parse({ enabled: true })).toThrow();
+    expect(() => gpgConfigBodySchema.parse({ enabled: true, key: '' })).toThrow();
+    expect(() => gpgConfigBodySchema.parse({ enabled: true, key: null })).toThrow();
   });
 });
 

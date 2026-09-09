@@ -14,6 +14,7 @@ import { GET as getStatus } from '../app/api/repos/[repoId]/status/route';
 import { GET as getLog } from '../app/api/repos/[repoId]/log/route';
 import { GET as getDiff } from '../app/api/repos/[repoId]/diff/route';
 import { GET as getConfig, PUT as putConfig } from '../app/api/repos/[repoId]/config/route';
+import { GET as getGpgConfig, PUT as putGpgConfig } from '../app/api/repos/[repoId]/settings/gpg-config/route';
 import { GET as getOperation } from '../app/api/repos/[repoId]/operation/route';
 import { POST as postAbort } from '../app/api/repos/[repoId]/operation/abort/route';
 import { POST as postStaging } from '../app/api/repos/[repoId]/staging/route';
@@ -410,6 +411,36 @@ describe('web-next REST 路由', () => {
     const res = await getConfig(new Request('http://localhost/api/repos/nope/config'), ctx('nope'));
     expect(res.status).toBe(404);
     expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
+  });
+
+  it('gpg-config 端点：GET 返回视图（gpg 不可用 → keys 空）；PUT 写两键并复核；enabled 无 key → 400', { timeout: 120000 }, async () => {
+    const repoId = registerRepo();
+    execFileSync('git', ['-C', lastRepoPath, 'config', '--local', 'gpg.program', 'Z:\\no-such-dir\\gpg.exe']);
+    const call = (method: 'GET' | 'PUT', body?: unknown) =>
+      (method === 'GET' ? getGpgConfig : putGpgConfig)(
+        new Request(`http://localhost/api/repos/${repoId}/settings/gpg-config`, {
+          method,
+          headers: { 'content-type': 'application/json' },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        }),
+        ctx(repoId),
+      );
+
+    const getRes = await call('GET');
+    expect(getRes.status).toBe(200);
+    expect(await getRes.json()).toEqual({ enabled: false, key: null, keys: [] });
+
+    const KEY = 'A'.repeat(16);
+    const putRes = await call('PUT', { enabled: true, key: KEY });
+    expect(putRes.status).toBe(200);
+    expect(await putRes.json()).toMatchObject({ enabled: true, key: KEY });
+    expect(
+      execFileSync('git', ['-C', lastRepoPath, 'config', '--local', '--get', 'commit.gpgsign'], { encoding: 'utf8' }).trim(),
+    ).toBe('true');
+
+    const badRes = await call('PUT', { enabled: true });
+    expect(badRes.status).toBe(400);
+    expect(await badRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 
   it('operation 端点：无进行中操作返回 200 与 {kind:"none"}', async () => {

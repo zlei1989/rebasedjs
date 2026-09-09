@@ -1,10 +1,10 @@
 /**
- * 设置页：应用设置（logInEditor 开关）+ 仓库 Git 配置（白名单键逐行：生效值展示 + local 覆盖输入 + 保存）。
+ * 设置页：应用设置（logInEditor 开关）+ 仓库 Git 配置（白名单键逐行：生效值展示 + local 覆盖输入 + 保存）+ GPG 提交签名（可选卡片）。
  *  账户卡片为可选第三张卡：仅在注入 accounts/回调时渲染（向后兼容）；token 本体不下行，仅展示掩码 tokenPreview。
  * 纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
  */
 import { useState } from 'react';
-import { Alert, Button, Card, Flex, Input, Modal, Popconfirm, Skeleton, Switch, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Skeleton, Select, Switch, Tag, Typography } from 'antd';
 import type {
   AccountBody,
   AccountDeleteBody,
@@ -14,6 +14,8 @@ import type {
   GitConfigEntry,
   GitConfigView,
   GitExecutableInfo,
+  GpgConfigBody,
+  GpgConfigView,
   SettingsPatch,
   SettingsState,
 } from '@rebased/contracts';
@@ -35,6 +37,12 @@ export interface SettingsPageProps {
   onDeleteAccount?: (body: AccountDeleteBody) => void;
   /** git 可执行文件信息（GitExecutableSelectorPanel 语义）：提供时渲染「Git 可执行文件」卡片（检测 + 版本 + 失败引导） */
   gitExecutable?: GitExecutableInfo;
+  /** GPG 提交签名配置（GitGpgConfigDialog 语义）：提供时渲染「GPG 提交签名」卡片（启用态 + 选定密钥 + 可用密钥列表） */
+  gpgConfig?: GpgConfigView;
+  /** 保存 GPG 签名配置回调（{ enabled, key }；enabled=true 时 key 必选） */
+  onSetGpgConfig?: (body: GpgConfigBody) => Promise<unknown> | void;
+  /** GPG 保存请求进行中：Modal 确定 loading */
+  gpgSaving?: boolean;
 }
 
 /** 单个配置键行：生效值副文本 + local 覆盖输入 + 保存（值非空且与 localValue 不同才可点） */
@@ -169,8 +177,87 @@ function AddAccountModal({
   );
 }
 
-export function SettingsPage({ settings, onPatchSettings, config, onSetConfig, accounts, onAddAccount, onDeleteAccount, gitExecutable }: SettingsPageProps): React.ReactNode {
+/** GPG 提交签名配置 Modal（GitGpgConfigDialog 语义）：checkbox 启用 + 密钥下拉（来自 gpg --list-secret-keys），
+ *  确定回调 { enabled, key }（取消勾选 → key 为 null，服务端仅写 commit.gpgsign=false 不清 user.signingkey）。
+ *  条件渲染（open 才挂载）保证每次打开从当前配置重置状态；无可用密钥时 Alert 提示且无法勾选启用 */
+function GpgConfigModal({
+  config,
+  saving,
+  onSetGpgConfig,
+  onClose,
+}: {
+  config: GpgConfigView;
+  saving?: boolean;
+  onSetGpgConfig: (body: GpgConfigBody) => Promise<unknown> | void;
+  onClose: () => void;
+}): React.ReactNode {
+  const [enabled, setEnabled] = useState(config.enabled);
+  // 初始选中：当前 key 且仍在可用密钥列表中（保留外部配置值——列表可能不含它，仍允许显示）
+  const [key, setKey] = useState<string | null>(config.key);
+  const noKeys = config.keys.length === 0;
+  const submit = (): void => {
+    onSetGpgConfig({ enabled, key: enabled ? key : null });
+    onClose();
+  };
+  return (
+    <Modal
+      title="GPG 提交签名配置"
+      open
+      okText="确定"
+      cancelText="取消"
+      okButtonProps={{ disabled: enabled && key === null, 'data-testid': 'gpg-config-submit' }}
+      confirmLoading={saving}
+      onOk={submit}
+      onCancel={onClose}
+    >
+      <Flex vertical gap={12}>
+        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={noKeys}>
+          为仓库提交签名（commit.gpgsign）
+        </Checkbox>
+        <Select
+          data-testid="gpg-key-select"
+          style={{ width: '100%' }}
+          placeholder="选择签名密钥"
+          disabled={!enabled || noKeys}
+          value={key ?? undefined}
+          onChange={(v: string) => setKey(v)}
+          options={config.keys.map((k) => ({
+            value: k.id,
+            label: k.description === null ? k.id : `${k.id}（${k.description}）`,
+          }))}
+        />
+        {noKeys && (
+          <Alert
+            type="warning"
+            showIcon
+            data-testid="gpg-no-keys"
+            message="未找到可用的 gpg 密钥"
+            description="gpg --list-secret-keys 无结果或 gpg 不可用；请先在系统配置签名密钥（gpg.program 可指定 gpg 程序路径）"
+          />
+        )}
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          配置与 git config 同步（commit.gpgsign / user.signingkey）
+        </Typography.Text>
+      </Flex>
+    </Modal>
+  );
+}
+
+export function SettingsPage({
+  settings,
+  onPatchSettings,
+  config,
+  onSetConfig,
+  accounts,
+  onAddAccount,
+  onDeleteAccount,
+  gitExecutable,
+  gpgConfig,
+  onSetGpgConfig,
+  gpgSaving,
+}: SettingsPageProps): React.ReactNode {
   const [addOpen, setAddOpen] = useState(false);
+  const [gpgOpen, setGpgOpen] = useState(false);
   return (
     <Flex vertical gap={16} style={{ padding: 16, maxWidth: 720 }}>
       <Card title="应用设置">
@@ -219,6 +306,39 @@ export function SettingsPage({ settings, onPatchSettings, config, onSetConfig, a
           )}
         </Card>
       ) : null}
+      {/* GPG 提交签名（GitGpgConfigDialog / GpgSignConfigurableRow 语义）：状态行 + 「配置…」→ 密钥 Modal */}
+      {gpgConfig !== undefined && onSetGpgConfig !== undefined && (
+        <Card
+          title="GPG 提交签名"
+          data-testid="gpg-card"
+          extra={
+            <Button size="small" data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
+              配置…
+            </Button>
+          }
+        >
+          <Flex align="center" gap={8}>
+            {gpgConfig.enabled ? (
+              <>
+                <Tag color="green" data-testid="gpg-enabled-tag">
+                  已启用
+                </Tag>
+                <Typography.Text>{gpgConfig.key ?? '未配置签名密钥（commit.gpgsign=true）'}</Typography.Text>
+                {gpgConfig.key !== null && (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {gpgConfig.keys.find((k) => k.id === gpgConfig.key)?.description ?? ''}
+                  </Typography.Text>
+                )}
+              </>
+            ) : (
+              <>
+                <Tag data-testid="gpg-disabled-tag">未启用</Tag>
+                <Typography.Text type="secondary">commit.gpgsign 为 false/未设置</Typography.Text>
+              </>
+            )}
+          </Flex>
+        </Card>
+      )}
       {/* 账户卡片：仅在 accounts 与两个回调齐备时渲染（旧容器缺省即不出现，向后兼容） */}
       {accounts && onAddAccount && onDeleteAccount && (
         <Card
@@ -246,6 +366,15 @@ export function SettingsPage({ settings, onPatchSettings, config, onSetConfig, a
       )}
       {onAddAccount && (
         <AddAccountModal open={addOpen} onAddAccount={onAddAccount} onClose={() => setAddOpen(false)} />
+      )}
+      {/* GPG 配置 Modal：条件渲染（开才挂载）→ 每次打开从当前配置重置 checkbox/密钥选择 */}
+      {gpgOpen && gpgConfig !== undefined && onSetGpgConfig !== undefined && (
+        <GpgConfigModal
+          config={gpgConfig}
+          saving={gpgSaving}
+          onSetGpgConfig={onSetGpgConfig}
+          onClose={() => setGpgOpen(false)}
+        />
       )}
     </Flex>
   );

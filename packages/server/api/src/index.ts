@@ -20,6 +20,7 @@ export { continueMergeOperation, mergeBranchIntoCurrent } from './merge';
 export { getConflictContents, getConflicts, resolveConflict } from './conflict';
 export { applyStashAction, getStashDiff, getStashes, unstashAs } from './stash';
 export { getGitExecutableInfo, getSettings, updateSettings } from './settings';
+export { getGpgSettings, setGpgSettings } from './gpg';
 export { applyChangelistAction, getChangelists } from './changelist';
 export { applyPatchService, createPatch, deletePatch, getPatches } from './patch';
 export { applyShelfAction, getShelves, importPatchIntoShelf } from './shelf';

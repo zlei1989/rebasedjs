@@ -18,7 +18,7 @@ export { useHistory } from './history';
 export { useBrowseTree, useBrowseContent } from './browse';
 export { useCommitFiles, useCommittedPage } from './committed';
 export { useSearch } from './search';
-export { useGitExecutableInfo, useSettings } from './settings';
+export { useGitExecutableInfo, useGpgConfig, useSettings, useSetGpgConfig } from './settings';
 export { useRepoConfig, useSetConfig } from './config';
 export { useAbortOperation, useContinueOperation, useOperation, useSkipOperation } from './operation';
 export { useAutosquash, useCheckoutRebase, useCommitEdit, useRebase, useRebaseTodo, useInteractiveRebase } from './rebase';

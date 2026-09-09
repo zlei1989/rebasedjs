@@ -271,3 +271,110 @@ describe('SettingsPage 账户卡片', () => {
     expect(screen.queryByText('Git 可执行文件')).not.toBeInTheDocument();
   });
 });
+
+describe('SettingsPage GPG 提交签名（GitGpgConfigDialog 语义）', () => {
+  const VIEW_DISABLED = {
+    enabled: false,
+    key: null,
+    keys: [{ id: 'A'.repeat(16), description: 'Test User <test@example.com>' }],
+  };
+  const VIEW_ENABLED = { enabled: true, key: 'A'.repeat(16), keys: VIEW_DISABLED.keys };
+
+  it('未启用 → 「未启用」徽标 + 配置按钮；已启用 → 「已启用」+ 密钥及描述', () => {
+    const { rerender } = render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+        gpgConfig={VIEW_DISABLED}
+        onSetGpgConfig={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('GPG 提交签名')).toBeInTheDocument();
+    expect(screen.getByTestId('gpg-disabled-tag')).toBeInTheDocument();
+    expect(screen.getByTestId('gpg-configure-button')).toBeInTheDocument();
+
+    rerender(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+        gpgConfig={VIEW_ENABLED}
+        onSetGpgConfig={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('gpg-enabled-tag')).toBeInTheDocument();
+    expect(screen.getByText('A'.repeat(16))).toBeInTheDocument();
+    expect(screen.getByText('Test User <test@example.com>')).toBeInTheDocument();
+  });
+
+  it('未传 gpgConfig 时不渲染 GPG 卡片（向后兼容）', () => {
+    render(<SettingsPage settings={makeSettings()} onPatchSettings={vi.fn()} config={makeConfig()} onSetConfig={vi.fn()} />);
+    expect(screen.queryByText('GPG 提交签名')).not.toBeInTheDocument();
+  });
+
+  it('配置 Modal：取消勾选 → 提交 { enabled:false, key:null }；勾选无密钥 → 确定禁用', async () => {
+    const onSetGpgConfig = vi.fn();
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+        gpgConfig={VIEW_ENABLED}
+        onSetGpgConfig={onSetGpgConfig}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('gpg-configure-button'));
+    const checkbox = await screen.findByRole('checkbox', { name: /为仓库提交签名/ });
+    expect(checkbox).toBeChecked();
+    // 取消勾选 → key 不可选 → 提交 { enabled:false, key:null }（服务端仅写 commit.gpgsign=false）
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onSetGpgConfig).toHaveBeenCalledTimes(1);
+    expect(onSetGpgConfig).toHaveBeenCalledWith({ enabled: false, key: null });
+  });
+
+  it('配置 Modal：勾选启用 + 选择密钥 → 提交 { enabled:true, key }', async () => {
+    const onSetGpgConfig = vi.fn();
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+        gpgConfig={VIEW_DISABLED}
+        onSetGpgConfig={onSetGpgConfig}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('gpg-configure-button'));
+    const checkbox = await screen.findByRole('checkbox', { name: /为仓库提交签名/ });
+    expect(checkbox).not.toBeChecked();
+    // 未勾选时确定可用且提交 key:null（关闭签名）；勾选后需选密钥
+    fireEvent.click(checkbox);
+    expect(screen.getByTestId('gpg-config-submit')).toBeDisabled();
+    fireEvent.mouseDown(screen.getByTestId('gpg-key-select'));
+    fireEvent.click(await screen.findByText(/A{16}（Test User <test@example.com>）/));
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onSetGpgConfig).toHaveBeenCalledTimes(1);
+    expect(onSetGpgConfig).toHaveBeenCalledWith({ enabled: true, key: 'A'.repeat(16) });
+  });
+
+  it('无可用密钥：Alert 提示且启用勾选禁用', async () => {
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={vi.fn()}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+        gpgConfig={{ enabled: false, key: null, keys: [] }}
+        onSetGpgConfig={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('gpg-configure-button'));
+    expect(await screen.findByTestId('gpg-no-keys')).toHaveTextContent('未找到可用的 gpg 密钥');
+    expect(screen.getByRole('checkbox', { name: /为仓库提交签名/ })).toBeDisabled();
+  });
+});

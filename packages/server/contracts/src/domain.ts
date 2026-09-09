@@ -66,6 +66,20 @@ export interface SettingsState {
   recentRepoIds: string[];
 }
 
+/** GPG 可用密钥（GitGpgConfigUtils.parseSecretKeys 语义）：id 为 KeyID（sec 记录字段 5），description 为 uid 字段 10 */
+export interface GpgKeyEntry {
+  id: string;
+  description: string | null;
+}
+
+/** GPG 提交签名配置视图（GitGpgConfigDialog 语义）：enabled=commit.gpgsign 生效为 true；key=user.signingkey 生效值；
+ *  keys=gpg --list-secret-keys 可签名（capabilities 含 s/S 且非 D）密钥列表 */
+export interface GpgConfigView {
+  enabled: boolean;
+  key: string | null;
+  keys: GpgKeyEntry[];
+}
+
 export interface LogEvent {
   type: 'log.line';
   payload: CommitInfo;

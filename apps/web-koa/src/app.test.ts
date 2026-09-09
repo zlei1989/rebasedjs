@@ -348,6 +348,35 @@ describe('web-koa REST 端点', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
   });
 
+  it('gpg-config 端点：GET 返回视图（gpg 不可用 → keys 空）；PUT 写两键并复核；enabled 无 key → 400', { timeout: 120000 }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    execFileSync('git', ['-C', repoPath, 'config', '--local', 'gpg.program', 'Z:\\no-such-dir\\gpg.exe']);
+    const put = (body: unknown) =>
+      fetch(`${base}/api/repos/${repoId}/settings/gpg-config`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    const getRes = await fetch(`${base}/api/repos/${repoId}/settings/gpg-config`);
+    expect(getRes.status).toBe(200);
+    expect(await getRes.json()).toEqual({ enabled: false, key: null, keys: [] });
+
+    // enabled=true + key → 写 commit.gpgsign/user.signingkey（仓库级）并返回刷新视图
+    const KEY = 'A'.repeat(16);
+    const putRes = await put({ enabled: true, key: KEY });
+    expect(putRes.status).toBe(200);
+    expect(await putRes.json()).toMatchObject({ enabled: true, key: KEY });
+    expect(
+      execFileSync('git', ['-C', repoPath, 'config', '--local', '--get', 'commit.gpgsign'], { encoding: 'utf8' }).trim(),
+    ).toBe('true');
+
+    // enabled=true 无 key → 400（schema refine）
+    const badRes = await put({ enabled: true });
+    expect(badRes.status).toBe(400);
+    expect(await badRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
   it('operation 端点：无进行中操作返回 200 与 {kind:"none"}', async () => {
     const { repoId } = registerRepo();
     const res = await fetch(`${base}/api/repos/${repoId}/operation`);
