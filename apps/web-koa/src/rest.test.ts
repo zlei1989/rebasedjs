@@ -179,6 +179,18 @@ describe('web-koa REST 端点', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 
+  it('diff/branch-working 端点：分支与工作树一致 → 空清单；ghost → 400 INVALID_REF', async () => {
+    const { repoId, repoPath } = registerRepo();
+    const main = execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    const okRes = await fetch(`${base}/api/repos/${repoId}/diff/branch-working?branch=${encodeURIComponent(main)}`);
+    expect(okRes.status).toBe(200);
+    expect(await okRes.json()).toMatchObject({ branch: main, files: [] });
+
+    const ghostRes = await fetch(`${base}/api/repos/${repoId}/diff/branch-working?branch=ghost`);
+    expect(ghostRes.status).toBe(400);
+    expect(await ghostRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
   it('settings 端点：GET 返回默认设置，PUT 局部更新后回读生效', async () => {
     const beforeRes = await fetch(`${base}/api/settings`);
     expect(beforeRes.status).toBe(200);

@@ -5,6 +5,7 @@ import {
   checkoutActionSchema,
   checkoutRebaseBodySchema,
   checkoutUpdateBodySchema,
+  branchWorkingDiffQuerySchema,
   gpgConfigBodySchema,
   commitBodySchema,
   amendSpecificBodySchema,
@@ -220,6 +221,14 @@ describe('checkoutUpdateBodySchema（检出并更新：GitCheckoutWithUpdateActi
       .toEqual({ branch: 'devel', strategy: 'rebase' });
     expect(() => checkoutUpdateBodySchema.parse({ branch: '' })).toThrow();
     expect(() => checkoutUpdateBodySchema.parse({ branch: 'devel', strategy: 'ff' })).toThrow();
+  });
+});
+
+describe('branchWorkingDiffQuerySchema（分支 vs 工作树查询）', () => {
+  it('branch 必填非空', () => {
+    expect(branchWorkingDiffQuerySchema.parse({ branch: 'dev' })).toEqual({ branch: 'dev' });
+    expect(() => branchWorkingDiffQuerySchema.parse({})).toThrow();
+    expect(() => branchWorkingDiffQuerySchema.parse({ branch: '' })).toThrow();
   });
 });
 

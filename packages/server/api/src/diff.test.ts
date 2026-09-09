@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getFileDiff, getFileThreeVersions, getFileVersions, streamDiffEvents } from './diff';
+import { getBranchWorkingDiff, getFileDiff, getFileThreeVersions, getFileVersions, streamDiffEvents } from './diff';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -38,11 +38,16 @@ describe('diff 功能', () => {
     expect(text).toBe(full.text);
   });
 
-  it('仅提供 from 无 to 时抛 INVALID_QUERY', async () => {
+  it('to 无 from 时抛 INVALID_QUERY（from-only = 分支 vs 工作树，合法）', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
-    await expect(getFileDiff(repo, { file: 'a.txt', from: 'HEAD', staged: false })).rejects.toMatchObject({ code: 'INVALID_QUERY' });
-    await expect(streamDiffEvents(repo, { file: 'a.txt', from: 'HEAD', staged: false })[Symbol.asyncIterator]().next()).rejects.toMatchObject({ code: 'INVALID_QUERY' });
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    await expect(getFileDiff(repo, { file: 'a.txt', to: 'HEAD', staged: false })).rejects.toMatchObject({ code: 'INVALID_QUERY' });
+    // from-only：分支 vs 工作树（GitShowDiffWithRefAction 语义）——工作树与 HEAD 一致 → 空 diff
+    const branchDiff = await getFileDiff(repo, { file: 'a.txt', from: 'HEAD', staged: false });
+    expect(branchDiff.text).toBe('');
   });
 
   it('staged 与 from/to 并存时抛 INVALID_QUERY', async () => {
@@ -89,11 +94,17 @@ describe('diff 功能', () => {
     await expect(getFileThreeVersions(repo, { file: 'no-such.txt' })).rejects.toBeInstanceOf(Error);
   });
 
-  it('getFileVersions 沿用成对校验', async () => {
+  it('getFileVersions 沿用成对校验（to 无 from → INVALID_QUERY；from-only 合法 = 分支 vs 工作树）', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
-    await expect(getFileVersions(repo, { file: 'a.txt', from: 'HEAD', staged: false }))
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    await expect(getFileVersions(repo, { file: 'a.txt', to: 'HEAD', staged: false }))
       .rejects.toMatchObject({ code: 'INVALID_QUERY' });
+    // from-only = 分支 vs 工作树（GitShowDiffWithRefAction 语义）：前后两侧 = 分支侧全文 + 工作树全文
+    const fromOnly = await getFileVersions(repo, { file: 'a.txt', from: 'HEAD', staged: false });
+    expect(fromOnly).toEqual({ before: 'v1', after: 'v1' });
   });
 
   it('getFileVersions from/to：路径在 from 侧不存在（新增 A）→ before 为空串（git diff A B -- path 语义）', async () => {
@@ -136,5 +147,50 @@ describe('diff 功能', () => {
     dirs.push(repo);
     await expect(getFileDiff(repo, { file: join(repo, 'secret.txt'), staged: false }))
       .rejects.toMatchObject({ code: 'INVALID_QUERY' });
+  });
+});
+
+describe('getBranchWorkingDiff（GitShowDiffWithRefAction 语义：分支 vs 工作树）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('分支落后 HEAD 且有工作树改动 → 文件清单含状态；与工作树一致 → 空清单', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    execFileSync('git', ['-C', repo, 'config', 'user.email', 't@t.com']);
+    execFileSync('git', ['-C', repo, 'config', 'user.name', 't']);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    const main = execFileSync('git', ['-C', repo, 'symbolic-ref', '--short', 'HEAD']).toString().trim();
+    // dev 分支停在 init（落后）；main 上加 new.txt 并改 a.txt 工作树
+    execFileSync('git', ['-C', repo, 'checkout', '-q', '-b', 'dev']);
+    const dev = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD']).toString().trim();
+    execFileSync('git', ['-C', repo, 'checkout', '-q', main]);
+    writeFileSync(join(repo, 'new.txt'), 'n');
+    execFileSync('git', ['-C', repo, 'add', 'new.txt']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'add new']);
+    writeFileSync(join(repo, 'a.txt'), 'v2'); // 工作树再改
+
+    const view = await getBranchWorkingDiff(repo, dev);
+    expect(view.branch).toBe(dev);
+    const paths = view.files.map((f) => f.path).sort();
+    expect(paths).toEqual(['a.txt', 'new.txt']);
+    expect(view.files.find((f) => f.path === 'new.txt')?.status).toBe('A');
+    expect(view.files.find((f) => f.path === 'a.txt')?.status).toBe('M');
+
+    // 与工作树一致（检出 dev、无改动）→ 空清单
+    execFileSync('git', ['-C', repo, 'stash', '-q']);
+    execFileSync('git', ['-C', repo, 'checkout', '-q', dev]);
+    const empty = await getBranchWorkingDiff(repo, dev);
+    expect(empty.files).toEqual([]);
+  });
+
+  it('无效分支 → INVALID_REF', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    await expect(getBranchWorkingDiff(repo, 'ghost')).rejects.toMatchObject({
+      code: 'INVALID_REF',
+      message: '引用不存在或不是提交：ghost',
+    });
   });
 });

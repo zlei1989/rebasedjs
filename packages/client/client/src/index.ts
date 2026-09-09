@@ -12,7 +12,7 @@ export {
   useRepoStatus,
 } from './repos';
 export { useLogPage, useLogStream } from './log';
-export { useFileDiff, useDiffStream, useDiffPatch, useFileThreeWay } from './diff';
+export { useBranchWorkingDiff, useFileDiff, useDiffStream, useDiffPatch, useFileThreeWay } from './diff';
 export { useBlame } from './blame';
 export { useHistory } from './history';
 export { useBrowseTree, useBrowseContent } from './browse';

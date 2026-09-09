@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { collectFileDiff, streamFileDiff } from './diff';
+import { collectFileDiff, listDiffFiles, streamFileDiff } from './diff';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -47,5 +47,39 @@ describe('diff 原语', () => {
     let streamed = '';
     for await (const chunk of streamFileDiff(repo, { file: 'a.txt' })) streamed += chunk;
     expect(streamed).toBe(text);
+  });
+
+  it('collectFileDiff from-only：分支 vs 工作树（GitShowDiffWithRefAction 语义）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    const head = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD']).toString().trim();
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    const text = await collectFileDiff(repo, { file: 'a.txt', from: head });
+    expect(text).toContain('-v1');
+    expect(text).toContain('+v2');
+  });
+
+  it('listDiffFiles：--name-status 解析（M/A/D + R 重命名双路径）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    execFileSync('git', ['-C', repo, 'config', 'user.email', 't@t.com']);
+    execFileSync('git', ['-C', repo, 'config', 'user.name', 't']);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    const head = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD']).toString().trim();
+    execFileSync('git', ['-C', repo, 'mv', 'a.txt', 'renamed.txt']);
+    writeFileSync(join(repo, 'new.txt'), 'n');
+    execFileSync('git', ['-C', repo, 'add', 'new.txt']);
+
+    const files = await listDiffFiles(repo, head);
+    const byPath = new Map(files.map((f) => [f.path, f]));
+    expect(byPath.get('renamed.txt')).toMatchObject({ status: 'R', renameFrom: 'a.txt' });
+    expect(byPath.get('new.txt')).toMatchObject({ status: 'A' });
+    // 重命名 + 新增（无删除行——git diff <ref> 将 rename 折叠为 R）
+    expect(files.some((f) => f.path === 'a.txt' && f.status === 'D')).toBe(false);
   });
 });

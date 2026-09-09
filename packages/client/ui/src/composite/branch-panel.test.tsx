@@ -447,6 +447,36 @@ describe('BranchPanel 检出并变基到当前（GitCheckoutWithRebaseAction 语
     expect((await screen.findByText('检出并更新')).closest('li')).toHaveClass('ant-dropdown-menu-item-disabled');
   });
 
+  it('「与工作树差异」（#69）：菜单点击以分支名回调；受控 Modal 渲染文件行（点击 → onOpenWorkingDiffFile）', async () => {
+    const onShowDiffWithWorkingTree = vi.fn();
+    const onOpenWorkingDiffFile = vi.fn();
+    render(
+      <BranchPanel
+        branches={makeList([makeBranch({ name: 'dev' }), makeBranch({ name: 'main', current: true })])}
+        {...makeHandlers()}
+        onShowDiffWithWorkingTree={onShowDiffWithWorkingTree}
+        workingDiffBranch="dev"
+        workingDiffData={{ branch: 'dev', files: [{ path: 'a.txt', status: 'M' }] }}
+        onCloseWorkingDiff={() => {}}
+        onOpenWorkingDiffFile={onOpenWorkingDiffFile}
+      />,
+    );
+    await openLocalMenu('dev');
+    fireEvent.click(screen.getByText('与工作树差异'));
+    expect(onShowDiffWithWorkingTree).toHaveBeenCalledTimes(1);
+    expect(onShowDiffWithWorkingTree).toHaveBeenCalledWith('dev');
+
+    expect(screen.getByText('与工作树差异（dev）')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('working-diff-file-a.txt'));
+    expect(onOpenWorkingDiffFile).toHaveBeenCalledTimes(1);
+    expect(onOpenWorkingDiffFile).toHaveBeenCalledWith('dev', 'a.txt');
+  });
+
+  it('未传 onShowDiffWithWorkingTree：菜单不渲染该项（向后兼容）', () => {
+    render(<BranchPanel branches={makeList([makeBranch({ name: 'dev' })])} {...makeHandlers()} />);
+    expect(screen.queryByText('与工作树差异')).not.toBeInTheDocument();
+  });
+
   it('recent 非空且默认开：最近检出卡片渲染，行内「检出」以 branch action 回调', () => {
     const onCheckout = vi.fn();
     render(

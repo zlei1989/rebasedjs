@@ -6,11 +6,11 @@
  * 本页自订阅 events：外部 CLI 检出/重命名当前分支时重验证分支列表刷新 current 标记
  * （纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
-import { useBranchAction, useBranches, useCheckout, useCheckoutRebase, useCheckoutUpdate, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
+import { useBranchAction, useBranches, useBranchWorkingDiff, useCheckout, useCheckoutRebase, useCheckoutUpdate, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
 import { Button, Flex, Modal, message } from 'antd';
 import { useRouter } from 'next/navigation';
-import { use } from 'react';
+import { use, useState } from 'react';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
@@ -57,6 +57,9 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
       })
       .catch(onError);
   };
+  // 与工作树差异（GitShowDiffWithRefAction 语义）：文件清单 Modal——行点击 → DiffPage（?file=&from=<branch>）
+  const [workingDiffBranch, setWorkingDiffBranch] = useState('');
+  const { data: workingDiffData, isLoading: workingDiffLoading, error: workingDiffError } = useBranchWorkingDiff(repoId, workingDiffBranch);
   const onForcePushedUpdate = (): void => {
     Modal.confirm({
       title: 'force-push 修复',
@@ -135,6 +138,15 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onForcePushedUpdate={onForcePushedUpdate}
         onCheckoutRebase={onCheckoutRebase}
         onCheckoutUpdate={onCheckoutUpdate}
+        onShowDiffWithWorkingTree={setWorkingDiffBranch}
+        workingDiffBranch={workingDiffBranch}
+        workingDiffData={workingDiffData}
+        workingDiffLoading={workingDiffLoading}
+        workingDiffError={workingDiffError?.message}
+        onCloseWorkingDiff={() => setWorkingDiffBranch('')}
+        onOpenWorkingDiffFile={(branch, path) =>
+          router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&from=${encodeURIComponent(branch)}`)
+        }
         tags={tags}
         acting={actingBranch || checkingOut || fixingForcePushed || rebaseCheckingOut || updatingCheckout}
       />

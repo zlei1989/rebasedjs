@@ -36,6 +36,12 @@ export const diffQuerySchema = z.object({
 });
 export type DiffQuery = z.infer<typeof diffQuerySchema>;
 
+/** 分支 vs 工作树差异查询（GitShowDiffWithRefAction 语义）：branch 解析失败 → INVALID_REF */
+export const branchWorkingDiffQuerySchema = z.object({
+  branch: z.string().min(1),
+});
+export type BranchWorkingDiffQuery = z.infer<typeof branchWorkingDiffQuerySchema>;
+
 /** 三版本对比查询：file 必填（HEAD / 暂存区 / 工作区 三侧全文，GitStageCompareThreeVersionsAction 语义） */
 export const threeWayQuerySchema = z.object({ file: z.string().min(1) });
 export type ThreeWayQuery = z.infer<typeof threeWayQuerySchema>;

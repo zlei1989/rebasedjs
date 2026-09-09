@@ -10,6 +10,7 @@
  */
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Button,
   Card,
   Checkbox,
@@ -18,12 +19,14 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Skeleton,
   Tag,
   Tooltip,
   Typography,
 } from 'antd';
 import { CheckOutlined, DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
-import type { BranchAction, BranchList, BranchRef, CheckoutAction, TagEntry, TagList } from '@rebased/contracts';
+import type { BranchAction, BranchList, BranchRef, BranchWorkingDiff, CheckoutAction, TagEntry, TagList } from '@rebased/contracts';
+import { CommittedStatusTag } from '../domain/committed-status';
 
 export interface BranchPanelProps {
   branches: BranchList;
@@ -46,6 +49,20 @@ export interface BranchPanelProps {
   /** 检出并更新（GitCheckoutWithUpdateAction 语义）：本地行菜单直发 {branch}——检出后 fetch 跟踪分支 + 策略化更新
    *  （strategy 缺省 merge，对齐更新策略默认）；无上游分支行该项禁用；缺省不渲染 */
   onCheckoutUpdate?: (request: { branch: string; strategy?: 'merge' | 'rebase' }) => void;
+  /** 与工作树差异（GitShowDiffWithRefAction 语义）：本地行菜单直发 branch——打开分支 vs 当前工作树差异 Modal；缺省不渲染 */
+  onShowDiffWithWorkingTree?: (branch: string) => void;
+  /** 差异 Modal 受控打开键（容器经 useBranchWorkingDiff 条件拉取；'' = 关闭） */
+  workingDiffBranch?: string;
+  /** 差异 Modal 数据（容器条件拉取） */
+  workingDiffData?: BranchWorkingDiff | null;
+  /** 差异拉取中 */
+  workingDiffLoading?: boolean;
+  /** 差异拉取错误信息 */
+  workingDiffError?: string | null;
+  /** 关闭差异 Modal（容器清空 branch 停止拉取） */
+  onCloseWorkingDiff?: () => void;
+  /** 差异文件行点击（容器据此导航 DiffPage：?file=&from=<branch>） */
+  onOpenWorkingDiffFile?: (branch: string, path: string) => void;
   /** 标签列表（GitBranchesTreeSingleRepoModel tags 组语义）：注入时渲染「标签」组卡片（行内「检出」→ detached）；
    *  缺省不渲染（向后兼容） */
   tags?: TagList;
@@ -211,17 +228,20 @@ function LocalBranchRow({
   onForcePushedUpdate,
   hasCheckoutRebase,
   hasCheckoutUpdate,
+  hasWorkingDiff,
 }: {
   branch: BranchRef;
   /** 当前等待删除确认的分支名（受控 Popconfirm 锚定本行菜单按钮） */
   pendingDelete: string | null;
-  onMenuAction: (key: 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'rename' | 'setUpstream' | 'delete', branch: BranchRef) => void;
+  onMenuAction: (key: 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'workingDiff' | 'rename' | 'setUpstream' | 'delete', branch: BranchRef) => void;
   onDelete: (branch: BranchRef) => void;
   onDeleteCancel: () => void;
   /** 是否渲染「检出并变基到当前」菜单项（容器已接 onCheckoutRebase 时 true） */
   hasCheckoutRebase: boolean;
   /** 是否渲染「检出并更新」菜单项（容器已接 onCheckoutUpdate 时 true） */
   hasCheckoutUpdate: boolean;
+  /** 是否渲染「与工作树差异」菜单项（容器已接 onShowDiffWithWorkingTree 时 true） */
+  hasWorkingDiff: boolean;
   /** 与当前分支比较（GitCompareWithBranchAction 语义）；当前分支无意义（A..A 空循环），禁用 */
   onCompare?: (branch: string) => void;
   /** force-push 后修复（GitForcePushedBranchUpdateAction 语义）：当前分支与上游分叉（ahead>0 且 behind>0）时渲染 */
@@ -282,6 +302,10 @@ function LocalBranchRow({
               ...(hasCheckoutUpdate
                 ? [{ key: 'checkoutUpdate', label: '检出并更新', disabled: branch.current || branch.upstream === null }]
                 : []),
+              // 与工作树差异（GitShowDiffWithRefAction 语义）：分支 vs 当前工作树（含未提交变更）；当前分支无意义，禁用
+              ...(hasWorkingDiff
+                ? [{ key: 'workingDiff', label: '与工作树差异', disabled: branch.current }]
+                : []),
               { key: 'rename', label: '重命名' },
               { key: 'setUpstream', label: '设上游' },
               // 当前分支禁止删除（git branch -d 当前头分支无意义，服务端也会拒绝）
@@ -289,7 +313,7 @@ function LocalBranchRow({
             ],
             onClick: ({ key }) =>
               onMenuAction(
-                key as 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'rename' | 'setUpstream' | 'delete',
+                key as 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'workingDiff' | 'rename' | 'setUpstream' | 'delete',
                 branch,
               ),
           }}
@@ -408,6 +432,13 @@ export function BranchPanel({
   onForcePushedUpdate,
   onCheckoutRebase,
   onCheckoutUpdate,
+  onShowDiffWithWorkingTree,
+  workingDiffBranch,
+  workingDiffData,
+  workingDiffLoading,
+  workingDiffError,
+  onCloseWorkingDiff,
+  onOpenWorkingDiffFile,
   tags,
   acting,
 }: BranchPanelProps): React.ReactNode {
@@ -452,10 +483,10 @@ export function BranchPanel({
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [remoteRebaseTarget, setRemoteRebaseTarget] = useState<string | null>(null);
 
-  /** 行菜单分派：检出直发回调；检出并变基本地行直发、远程行开本地名 Modal；检出并更新本地行直发；
+  /** 行菜单分派：检出直发回调；检出并变基本地行直发、远程行开本地名 Modal；检出并更新/与工作树差异本地行直发；
    *  重命名/设上游开对应 Modal；删除开受控 Popconfirm */
   const handleMenuAction = (
-    key: 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'rename' | 'setUpstream' | 'delete',
+    key: 'checkout' | 'checkoutRebase' | 'checkoutUpdate' | 'workingDiff' | 'rename' | 'setUpstream' | 'delete',
     branch: BranchRef,
   ): void => {
     if (key === 'checkout') onCheckout({ action: 'branch', name: branch.name });
@@ -464,6 +495,7 @@ export function BranchPanel({
       else onCheckoutRebase?.({ branch: branch.name });
     }
     if (key === 'checkoutUpdate') onCheckoutUpdate?.({ branch: branch.name });
+    if (key === 'workingDiff') onShowDiffWithWorkingTree?.(branch.name);
     if (key === 'rename') setRenameTarget(branch.name);
     if (key === 'setUpstream') setUpstreamTarget(branch.name);
     if (key === 'delete') setPendingDelete(branch.name);
@@ -568,6 +600,7 @@ export function BranchPanel({
                 onForcePushedUpdate={onForcePushedUpdate}
                 hasCheckoutRebase={onCheckoutRebase !== undefined}
                 hasCheckoutUpdate={onCheckoutUpdate !== undefined}
+                hasWorkingDiff={onShowDiffWithWorkingTree !== undefined}
               />
             ))
           )
@@ -651,6 +684,40 @@ export function BranchPanel({
           onClose={() => setRemoteRebaseTarget(null)}
         />
       )}
+      {/* 与工作树差异 Modal（GitShowDiffWithRefAction 语义）：branch vs 当前工作树文件清单——行点击 →
+          该文件 diff（?file=&from=<branch>）；数据由容器经 useBranchWorkingDiff 条件拉取 */}
+      <Modal
+        title={`与工作树差异（${workingDiffBranch === undefined || workingDiffBranch === '' ? '' : workingDiffBranch}）`}
+        open={workingDiffBranch !== undefined && workingDiffBranch !== ''}
+        okText="关闭"
+        cancelButtonProps={{ style: { display: 'none' } }}
+        onOk={onCloseWorkingDiff}
+        onCancel={onCloseWorkingDiff}
+      >
+        {workingDiffLoading ? (
+          <Skeleton active />
+        ) : workingDiffError !== undefined && workingDiffError !== null ? (
+          <Alert type="error" showIcon message={workingDiffError} />
+        ) : workingDiffData === undefined || workingDiffData === null ? (
+          <Typography.Text type="secondary">暂无差异（工作树与分支一致）</Typography.Text>
+        ) : (
+          <Flex vertical gap={8}>
+            {workingDiffData.files.map((file) => (
+              <Flex key={`${file.status}-${file.path}`} align="center" gap={8}>
+                <CommittedStatusTag status={file.status} />
+                <Typography.Text
+                  data-testid={`working-diff-file-${file.path}`}
+                  style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
+                  ellipsis
+                  onClick={() => onOpenWorkingDiffFile?.(workingDiffData.branch, file.path)}
+                >
+                  {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
+                </Typography.Text>
+              </Flex>
+            ))}
+          </Flex>
+        )}
+      </Modal>
     </Flex>
   );
 }

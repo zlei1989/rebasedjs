@@ -2,9 +2,9 @@
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DiffFile, FileThreeVersions, FileVersions, SseEvent } from '@rebased/contracts';
+import type { BranchWorkingDiff, DiffFile, FileThreeVersions, FileVersions, SseEvent } from '@rebased/contracts';
 import { subscribeSse } from './events';
-import { useDiffPatch, useDiffStream, useFileDiff, useFileThreeWay } from './diff';
+import { useBranchWorkingDiff, useDiffPatch, useDiffStream, useFileDiff, useFileThreeWay } from './diff';
 import { freshCache } from './testing/fresh-cache';
 
 vi.mock('./events', () => ({ subscribeSse: vi.fn() }));
@@ -152,6 +152,58 @@ describe('useFileThreeWay', () => {
     let result: { data?: FileThreeVersions; error?: unknown } | undefined;
     function Probe() {
       const { data, error } = useFileThreeWay('r-diff-7', '');
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+
+    expect(result?.data).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useBranchWorkingDiff（GitShowDiffWithRefAction 语义）', () => {
+  it('按 branch 拼接查询串请求 branch-working 端点并返回 BranchWorkingDiff', async () => {
+    const VIEW: BranchWorkingDiff = {
+      branch: 'dev',
+      files: [{ path: 'a.txt', status: 'M' }],
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(VIEW), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: BranchWorkingDiff; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useBranchWorkingDiff('r-diff-8', 'dev');
+      result = { data, error };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(result?.data).toEqual(VIEW));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-diff-8/diff/branch-working?branch=dev');
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it('branch 为空串时挂 null key：不发请求', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let result: { data?: BranchWorkingDiff; error?: unknown } | undefined;
+    function Probe() {
+      const { data, error } = useBranchWorkingDiff('r-diff-9', '');
       result = { data, error };
       return null;
     }

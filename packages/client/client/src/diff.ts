@@ -1,7 +1,7 @@
-/** 差异 hooks：一次性 SWR + SSE 分块流（text 累积 + connected/error 状态） */
+/** 差异 hooks：一次性 SWR + SSE 分块流（text 累积 + connected/error 状态）+ 分支 vs 工作树清单 */
 import { useEffect, useState } from 'react';
 import useSWR, { type SWRResponse } from 'swr';
-import type { DiffFile, FileThreeVersions, FileVersions } from '@rebased/contracts';
+import type { BranchWorkingDiff, DiffFile, FileThreeVersions, FileVersions } from '@rebased/contracts';
 import { getJson } from './http';
 import { subscribeSse } from './events';
 
@@ -25,6 +25,13 @@ export function useDiffPatch(repoId: string, file: string, staged: boolean): SWR
 export function useFileThreeWay(repoId: string, file: string): SWRResponse<FileThreeVersions> {
   const params = new URLSearchParams({ file });
   return useSWR<FileThreeVersions>(file === '' ? null : `/api/repos/${repoId}/diff/three-way?${params.toString()}`, getJson);
+}
+
+/** 分支 vs 工作树差异（GitShowDiffWithRefAction 语义）：GET /api/repos/:repoId/diff/branch-working?branch=；
+ *  branch 为空串时挂 null key 不发请求（条件拉取，页面可无条件挂载） */
+export function useBranchWorkingDiff(repoId: string, branch: string): SWRResponse<BranchWorkingDiff> {
+  const params = new URLSearchParams({ branch });
+  return useSWR<BranchWorkingDiff>(branch === '' ? null : `/api/repos/${repoId}/diff/branch-working?${params.toString()}`, getJson);
 }
 
 /** 订阅 diff 分块：SSE diff.chunk → text 累积拼接；stream.error → error 暴露并断开；connected 表示订阅存活，卸载即中止。

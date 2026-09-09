@@ -13,6 +13,7 @@ import { POST as postOpen } from '../app/api/repos/open/route';
 import { GET as getStatus } from '../app/api/repos/[repoId]/status/route';
 import { GET as getLog } from '../app/api/repos/[repoId]/log/route';
 import { GET as getDiff } from '../app/api/repos/[repoId]/diff/route';
+import { GET as getBranchWorkingDiff } from '../app/api/repos/[repoId]/diff/branch-working/route';
 import { GET as getConfig, PUT as putConfig } from '../app/api/repos/[repoId]/config/route';
 import { GET as getGpgConfig, PUT as putGpgConfig } from '../app/api/repos/[repoId]/settings/gpg-config/route';
 import { GET as getOperation } from '../app/api/repos/[repoId]/operation/route';
@@ -92,6 +93,24 @@ describe('web-next REST 路由', () => {
     const res = await getDiff(new Request('http://localhost/api/repos/r1/diff'), ctx('r1'));
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
+  it('diff/branch-working 端点：分支与工作树一致 → 空清单；ghost → 400 INVALID_REF', async () => {
+    const repoId = registerRepo();
+    const main = execFileSync('git', ['-C', lastRepoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    const okRes = await getBranchWorkingDiff(
+      new Request(`http://localhost/api/repos/${repoId}/diff/branch-working?branch=${encodeURIComponent(main)}`),
+      ctx(repoId),
+    );
+    expect(okRes.status).toBe(200);
+    expect(await okRes.json()).toMatchObject({ branch: main, files: [] });
+
+    const ghostRes = await getBranchWorkingDiff(
+      new Request(`http://localhost/api/repos/${repoId}/diff/branch-working?branch=ghost`),
+      ctx(repoId),
+    );
+    expect(ghostRes.status).toBe(400);
+    expect(await ghostRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });
 
   it('repos 端点：空注册表返回 200 与空数组', async () => {

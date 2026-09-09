@@ -20,7 +20,7 @@
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 122 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 69、领域类型/别名 95、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（106 条） | 86 ✅（含等价边）+ 6 🟡 + 8 ➖ + 6 ❌ |
+| 导航边（106 条） | 87 ✅（含等价边）+ 6 🟡 + 8 ➖ + 5 ❌ |
 
 ### 1.2 口径与图例
 
@@ -309,6 +309,7 @@ Reset 与 Undo Commit；对应 `GitResetAction` / `GitNewResetDialog` / `GitUnco
 | 检出：既有分支 / 新建并检出 / detached（标签/提交） | ✅ | 三态（检出文件 ➖——当前 Java 版本无 CheckoutFiles 类动作（git4idea 无证据）；Changes 视图「回滚/丢弃」语义由 StatusPage「丢弃改动」（staging discard）承载） |
 | 查找已合并 / 清理已合并与过时分支 | ✅ | 「仅看已合并」开关 +「清理已合并（N）」批量删除（已合并且非当前本地分支，Popconfirm → 逐条 delete，完成重验证列表） |
 | 与当前分支比较 | ✅ | 行内「比较」→ 日志页 `?compare=<branch>` 对比视图（双 range 双向提交差异；「当前」分支禁用） |
+| 与工作树差异 | ✅ | 行菜单「与工作树差异」（`GitShowDiffWithRefAction` 语义；当前分支禁用）：`GET /diff/branch-working`——`git diff <ref> --name-status` 分支 vs 当前工作树清单（含未提交变更，R/C 带 renameFrom；无效分支 → INVALID_REF）；文件行 → `/diff?file&from=<分支>`（from-only = 分支 vs 工作树，DiffPage 复用既有单文件视图） |
 | 弹窗 Fetch | ✅ | 页头「Fetch」按钮（fetch 全部远程引用；成功后复用事件流触发分支列表验证） |
 | force-push 后修复 | ✅ | 当前分支与上游分叉（ahead>0 且 behind>0）时行内「force-push 修复」（`GitForcePushedBranchUpdateAction` 语义）：`POST /update/force-pushed`——fetch → 本地重置到上游 → 本地独有提交（@{u}..HEAD）逐一 cherry-pick 重放；冲突 → 冲突页流；无本地独有提交 → 重置即快进等价 |
 | 检出并变基到当前 | ✅ | 本地行菜单项 + 远程行下拉（`GitCheckoutWithRebaseAction` 语义）：`POST /checkout-rebase`——检出目标分支（远程 → 新建本地分支，缺省剥 `origin/` 前缀，远程行进本地名 Modal 可改）→ `rebase onto 原当前分支`；目标为当前分支/分离头/本地名冲突（既有同名分支未跟踪该远程 → 对齐 Java tracking conflict 重命名提示）→ INVALID_QUERY；冲突 → 冲突页流 |
@@ -740,7 +741,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 66 | BranchPanel → GitRefDialog | Checkout Branch or Revision… | `GitCheckoutFromInputAction.kt:38` | ✅ 行内三态检出 |
 | 67 | BranchPanel → fetch | 弹窗 Fetch 按钮 | `GitBranchPopupFetchAction.kt:21-24` | ✅ 分支页顶部「Fetch」按钮（fetch 全部远程 → 成功后重验证分支列表） |
 | 68 | BranchPanel → PushDialog | 分支菜单 Push… | backend.xml:272 | ✅ 「更多」→ 内嵌 PushDialog |
-| 69 | BranchPanel → DiffPage | Show Diff with Working Tree | `GitShowDiffWithRefAction.kt:25` | ❌ |
+| 69 | BranchPanel → DiffPage | Show Diff with Working Tree | `GitShowDiffWithRefAction.kt:25` | ✅ 行菜单「与工作树差异」→ 差异 Modal（`GET /diff/branch-working`：`git diff <ref> --name-status` 清单含未提交变更；文件行 → `/diff?file&from=<分支>`——from-only 分支 vs 工作树语义） |
 | 70 | BranchPanel → WorktreePanel | 分支菜单 New Working Tree | backend.xml:269 | ❌ 明确不做 |
 | 71 | BranchPanel → 直接执行动作集 | Checkout/Merge/Rebase/Pull/Update/Rename/Delete/Push Tags（弹窗内无 Reset） | backend.xml:251-283 | ✅ 等价集齐：行内四动作 + 各域对话框/页面 |
 | 105 | BranchPanel → 直接执行动作集 | Checkout and rebase onto current（分支菜单检出族） | `GitCheckoutWithRebaseAction.kt:23-74` + backend.xml:251-256 | ✅ 行菜单「检出并变基到当前」（远程行进本地名 Modal，prefill 建议名；检出后 rebase onto 原当前分支；冲突 → 冲突页流） |
@@ -791,10 +792,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 106 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **86 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 7（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基 + #106 检出并更新）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 5（#18/#19/#21/#22/#26）、设置域链 4（#3 欢迎屏设置 + #4 回首页 + #6 顶栏设置 + #8 面板设置）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked）、#13 变更集直达 DiffPage、#63 分支入口等效 |
+| ✅ 已复刻（含等价边） | **87 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 8（#10 比较 + #61/#62/#65 既有 + #67 fetch + #105 检出并变基 + #106 检出并更新 + #69 与工作树差异）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 5（#18/#19/#21/#22/#26）、设置域链 4（#3 欢迎屏设置 + #4 回首页 + #6 顶栏设置 + #8 面板设置）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked）、#13 变更集直达 DiffPage、#63 分支入口等效 |
 | 🟡 半通/降级 | **6 条**：#20 右键分支操作子菜单（Push up to Commit 已落地见 #17）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **8 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新、#39 命令日志 tab（internal） |
-| ❌ 未复刻 | **6 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet；可做余项：#27 多文件 Prev/Next、#69 Show Diff with Working Tree） |
+| ❌ 未复刻 | **5 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet；可做余项：#27 多文件 Prev/Next） |
 
 ### 5.5 关键联动流程
 

@@ -332,6 +332,19 @@ export interface CommittedEntry {
 /** Committed Changes 分页视图：hasMore 表示存在后续页 */
 export interface CommittedPage { entries: CommittedEntry[]; hasMore: boolean; }
 
+/** 分支 vs 工作树差异文件条目（git diff <ref> --name-status；R/C 含 renameFrom） */
+export interface DiffFileEntry {
+  path: string;
+  status: CommittedFileStatus;
+  renameFrom?: string;
+}
+
+/** 分支 vs 工作树差异视图（GitShowDiffWithRefAction 语义：branch 与当前工作树比较——含未提交变更） */
+export interface BranchWorkingDiff {
+  branch: string;
+  files: DiffFileEntry[];
+}
+
 /** 搜索命中：grep 命中为提交；pickaxe 命中同 */
 export interface SearchResult {
   hash: string;
