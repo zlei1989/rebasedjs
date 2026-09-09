@@ -5,14 +5,17 @@
  */
 import {
   addRemote,
+  currentBranchName,
   fetchRemote,
   GitExitError,
   isShallowRepo,
   listRemotes,
   pullRemote,
   pushBranch,
+  pushUpToCommit,
   removeRemote,
   setRemoteUrl,
+  verifyCommitish,
 } from '@rebased/core';
 import type {
   FetchBody,
@@ -154,8 +157,29 @@ export async function pullRepo(repoPath: string, body: PullBody): Promise<PullOu
   );
 }
 
-/** push：rejected（non-fast-forward）为业务结果（status 'rejected' + 中文 hint），非错误（走认证回路） */
+/** push：rejected（non-fast-forward）为业务结果（status 'rejected' + 中文 hint），非错误（走认证回路）；
+ *  hash = Push up to Commit（GitPushUpToCommitAction 语义）：refspec <hash>:<当前分支>——预检分离头指针（INVALID_QUERY）与
+ *  哈希有效性（INVALID_REF）；hash 模式下 body.branch 被忽略（分支取当前分支，与 Java 一致） */
 export async function pushRepo(repoPath: string, body: PushBody): Promise<PushOutcome> {
+  if (body.hash !== undefined) {
+    if (!(await verifyCommitish(repoPath, body.hash))) {
+      throw new ServiceError('INVALID_REF', `引用不存在或不是提交：${body.hash}`);
+    }
+    const branch = await currentBranchName(repoPath);
+    if (branch === null) {
+      throw new ServiceError('INVALID_QUERY', '分离头指针状态下不可 Push up to Commit（请先检出分支）');
+    }
+    const hash = body.hash;
+    return withAuth(repoPath, body.remote, (extraConfig) =>
+      pushUpToCommit(repoPath, {
+        hash,
+        branch,
+        remote: body.remote,
+        forceWithLease: body.forceWithLease,
+        extraConfig,
+      }),
+    );
+  }
   return withAuth(repoPath, body.remote, (extraConfig) =>
     pushBranch(repoPath, {
       remote: body.remote,

@@ -70,6 +70,16 @@ export async function mergedBranchNames(cwd: string, ref?: string): Promise<stri
     .filter((s) => s !== '');
 }
 
+/** 当前分支名（git symbolic-ref --short HEAD）：分离头指针/空仓库返回 null */
+export async function currentBranchName(cwd: string): Promise<string | null> {
+  try {
+    const { stdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd });
+    return stdout.trim() === '' ? null : stdout.trim();
+  } catch {
+    return null;
+  }
+}
+
 export async function createBranch(cwd: string, name: string, startPoint?: string): Promise<void> {
   const args = ['branch', name];
   if (startPoint !== undefined) args.push(startPoint);

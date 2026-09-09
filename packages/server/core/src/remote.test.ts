@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { abortGitOperation, getOperationState } from './operation';
-import { addRemote, fetchRemote, isShallowRepo, listRemotes, pullRemote, pushBranch, removeRemote, setRemoteUrl } from './remote';
+import { addRemote, fetchRemote, isShallowRepo, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
 import { getStatus } from './status';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
@@ -241,6 +241,36 @@ describe('pushBranch', () => {
       git(repo, ['checkout', '-q', defaultBranch]);
     },
   );
+});
+
+describe('pushUpToCommit（GitPushUpToCommitAction 语义）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('远端领先且未 force → rejected；fetch 后 force-with-lease → pushed 且对端分支移到该提交', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, defaultBranch } = makeRemoteRig();
+    pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+    const base = git(repo, ['rev-parse', 'HEAD']).trim();
+
+    const rejected = await pushUpToCommit(repo, { hash: base, branch: defaultBranch, remote: 'origin' });
+    expect(rejected.status).toBe('rejected');
+    expect(rejected.hint).toContain('先拉取');
+
+    // force-with-lease 以本地远程跟踪引用为租约期望值：先 fetch 再强推（对端领先超出本地认知时 lease 拒绝）
+    await fetchRemote(repo, { remote: 'origin' });
+    const forced = await pushUpToCommit(repo, { hash: base, branch: defaultBranch, remote: 'origin', forceWithLease: true });
+    expect(forced.status).toBe('pushed');
+    expect(git(bare, ['rev-parse', defaultBranch])).toBe(base);
+  });
+
+  it('hash 即远端当前提交 → up-to-date（refspec 无移动）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, defaultBranch } = makeRemoteRig();
+    const head = git(repo, ['rev-parse', 'HEAD']).trim();
+    expect(git(bare, ['rev-parse', defaultBranch])).toBe(head);
+
+    const r = await pushUpToCommit(repo, { hash: head, branch: defaultBranch, remote: 'origin' });
+
+    expect(r.status).toBe('up-to-date');
+  });
 });
 
 describe('传输超时兜底（P3-A 终审 Finding 1）', () => {

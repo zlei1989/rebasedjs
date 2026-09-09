@@ -1076,6 +1076,23 @@ describe('web-koa remotes/fetch/pull/push/update 端点', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 
+  it('push 端点：hash（Push up to Commit）——fetch 后远端领先时 forceWithLease 回推 200 pushed 且对端分支移到该提交；无效 hash → 400 INVALID_REF', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath, bare, defaultBranch } = makeRemoteRig();
+    pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+    const base = execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    // force-with-lease 以本地远程跟踪引用为租约期望值（对端领先超出认知时 lease 拒绝）
+    execFileSync('git', ['-C', repoPath, 'fetch', '-q', 'origin']);
+
+    const res = await postJson(`/api/repos/${repoId}/push`, { hash: base, remote: 'origin', forceWithLease: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'pushed' });
+    expect(execFileSync('git', ['-C', bare, 'rev-parse', defaultBranch], { encoding: 'utf8' }).trim()).toBe(base);
+
+    const refRes = await postJson(`/api/repos/${repoId}/push`, { hash: 'deadbeef'.repeat(5), remote: 'origin' });
+    expect(refRes.status).toBe(400);
+    expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
   it('update 端点：merge 策略返回 200 UpdateOutcome（fetched + pull.updated 且工作区同步）', { timeout: RIG_TIMEOUT }, async () => {
     const { repoId, repoPath, bare, defaultBranch } = makeRemoteRig();
     pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');

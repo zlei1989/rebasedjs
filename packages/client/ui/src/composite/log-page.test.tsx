@@ -699,4 +699,19 @@ describe('LogPage 行右键菜单', () => {
     expect(screen.queryByText('Fixup Commit')).not.toBeInTheDocument();
     expect(screen.queryByText('Squash Commit')).not.toBeInTheDocument();
   });
+
+  it('Push up to Commit：注入 onPushUpToCommit 时渲染菜单项并以选中行 hash 回调；未注入不渲染', async () => {
+    const onPushUpToCommit = vi.fn();
+    const { rerender } = render(
+      <LogPage repoName="alpha" status={status} commits={commits} onPushUpToCommit={onPushUpToCommit} />,
+    );
+    fireEvent.contextMenu(screen.getByText('第二笔提交'));
+    fireEvent.click(await screen.findByText('Push up to Commit'));
+    expect(onPushUpToCommit).toHaveBeenCalledWith('c2');
+
+    rerender(<LogPage repoName="alpha" status={status} commits={commits} onCherryPick={vi.fn()} />);
+    fireEvent.contextMenu(screen.getByText('第二笔提交'));
+    expect(await screen.findByText('摘樱桃')).toBeInTheDocument();
+    expect(screen.queryByText('Push up to Commit')).not.toBeInTheDocument();
+  });
 });

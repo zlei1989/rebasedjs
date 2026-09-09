@@ -118,6 +118,8 @@ export function RepoPage(): React.ReactNode {
   const [resetTarget, setResetTarget] = useState<{ hash: string; label: string } | null>(null);
   // pull/push/update 对话框状态机：同一时间只开一个；null 表示全关（对话框内部选择态在关闭时自复位）
   const [openDialog, setOpenDialog] = useState<'pull' | 'push' | 'update' | null>(null);
+  // Push up to Commit（#17）：行右键「Push up to Commit」→ 打开 PushDialog 并预置目标提交 hash；null=普通推送
+  const [pushUpToHash, setPushUpToHash] = useState<string | null>(null);
   // 认证重试回路状态：待重试的原操作 + 认证目标 host；null 表示 AuthDialog 关闭
   const [authRetry, setAuthRetry] = useState<{ host: string; retry: () => Promise<unknown> } | null>(null);
   // 状态推送（干净提交也使 headHash 变化 → 触发此回调）：回写 status 缓存 + 重验证日志快照 + 重订阅流（新提交出现在新流顶部）；
@@ -411,8 +413,15 @@ export function RepoPage(): React.ReactNode {
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onAutosquash={onAutosquash}
+        onPushUpToCommit={(hash) => {
+          setPushUpToHash(hash);
+          setOpenDialog('push');
+        }}
         onOpenPull={() => setOpenDialog('pull')}
-        onOpenPush={() => setOpenDialog('push')}
+        onOpenPush={() => {
+          setPushUpToHash(null);
+          setOpenDialog('push');
+        }}
         onOpenUpdate={() => setOpenDialog('update')}
         onOpenRemotes={() => navigate(`/repos/${repoId}/remotes`)}
         filters={{ author, path }}
@@ -499,8 +508,12 @@ export function RepoPage(): React.ReactNode {
         remotes={remotes ?? { remotes: [], shallow: false }}
         currentBranch={status.branch}
         confirming={pushing}
+        upToHash={pushUpToHash ?? undefined}
         onOk={onPushOk}
-        onCancel={() => setOpenDialog(null)}
+        onCancel={() => {
+          setPushUpToHash(null);
+          setOpenDialog(null);
+        }}
       />
       <UpdateProjectDialog
         open={openDialog === 'update'}

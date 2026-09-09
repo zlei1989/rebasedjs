@@ -20,7 +20,7 @@
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 114 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
 | 契约层 | zod schema 66、领域类型/别名 90、SSE 事件 6 种在用、错误码 8 实际产生 / 4 预留 |
-| 导航边（104 条） | 77 ✅（含等价边）+ 8 🟡 + 7 ➖ + 12 ❌ |
+| 导航边（104 条） | 78 ✅（含等价边）+ 8 🟡 + 7 ➖ + 11 ❌ |
 
 ### 1.2 口径与图例
 
@@ -96,7 +96,7 @@
 ### 2.3 汇总
 
 - ✅ 已复刻 29 个；🟡 等效 2 个（CommitDialog、QuickActionsMenu）。
-- 功能点级 🟡 遗留（不影响页面级结论）：LogPage 右键动作余项（Push up to Commit、reword/fixup/squash/drop 直通）、BranchPanel 最近检出/标签分组与过滤、CommitDialog 等效面（GPG/commit template、CRLF 提示）、SettingsPage 面项等——逐一见 §四各页功能点表。
+- 功能点级 🟡 遗留（不影响页面级结论）：LogPage 右键动作余项（reword/fixup/squash/drop 直通）、BranchPanel 最近检出/标签分组与过滤、CommitDialog 等效面（GPG/commit template、CRLF 提示）、SettingsPage 面项等——逐一见 §四各页功能点表。
 
 ---
 
@@ -219,7 +219,7 @@
 | 远程操作认证重试回路 | ✅ | `AUTH_FAILED` → 关对话框开 AuthDialog（host 自 context，不含 token）→ retry 重放 |
 | 分页（limit ≤500 / skip 游标） | ✅ | 「加载更多」limit 阶梯放大（50→100→…→500 封顶）；过滤或翻页时切快照模式（流仅默认视图接入，Ruling 6 同查询约束） |
 | 过滤（author / path） | ✅ | 「文本即滤」双输入（作者/路径，Enter/失焦提交，去首尾空白；清空即恢复）；与服务端 `--author`/`-- path` 过滤一致 |
-| 行右键菜单形态 | ✅ | 行右键菜单（对齐 Java `Vcs.Log.ContextMenu` 组）：检出（游离 HEAD）/ 从此处新建分支（创建后检出）/ 从此处新建标签（附注可选）/ 在浏览器中打开（GitHub/GitLab 提交页链接）+ 摘樱桃·还原·Reset·浏览快照复用面板按钮；Push up to Commit、reword/fixup/squash/drop 直通为余项（见任务清单 §2.3） |
+| 行右键菜单形态 | ✅ | 行右键菜单（对齐 Java `Vcs.Log.ContextMenu` 组）：检出（游离 HEAD）/ 从此处新建分支（创建后检出）/ 从此处新建标签（附注可选）/ 在浏览器中打开（GitHub/GitLab 提交页链接）+ 摘樱桃·还原·Reset·浏览快照复用面板按钮 + Push up to Commit（#17）+ Fixup/Squash Commit（auto-squash，§4.9）；reword/fixup/squash/drop 直通为余项（见任务清单 §2.3） |
 | 分支折叠 / PermanentGraph 高级视图 | ❌ | 2026-09-08 重新裁定：由「明确不做」改为**可选任务**（依赖过滤 UI 与 PermanentGraph 类缓存结构先行，见任务清单 §2.8） |
 | 新标签页打开 log、为命令过滤的 log | ❌ | internal 动作未做 |
 
@@ -278,7 +278,7 @@ Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存
 | amend 历史提交 / reword | ✅ | 提交框「amend 到…」下拉（GitCommitDialog「Amend <subject>」语义：未发布/非合并非 HEAD 提交，上限 20；`GET /commit/amend-targets`）；选中目标 → `POST /commit/amend-specific`（amend! 提交 + fixup -C 折入目标——目标提交信息重写、中间提交重放；冲突 → 冲突页 continue/abort 流） |
 | GPG 签名 / commit template | ❌ | 白名单键可在设置页读写，提交链路未消费 |
 | CRLF 提示 | ❌ | `GitCrlfDialog` 未做 |
-| commit & push / push up to commit | ✅ | 提交框「提交并推送」（`POST /commit/push` 组合执行器：commit 先落盘 → push 缺省当前分支上游；三态提示 pushed/up-to-date/rejected）；Push up to Commit 待办 |
+| commit & push / push up to commit | ✅ | 提交框「提交并推送」（`POST /commit/push` 组合执行器：commit 先落盘 → push 缺省当前分支上游；三态提示 pushed/up-to-date/rejected）；Push up to Commit 经日志行右键（#17：`POST /push` 哈希模式，refspec `<hash>:<当前分支>`） |
 
 ### 4.6 ResetDialog ✅（内嵌 LogPage 模态）
 
@@ -669,10 +669,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 14 | LogPage → ResetDialog | 右键 Reset Current Branch to Here | `Git.Reset.In.Log`（backend.xml:345） | ✅ 详情面板按钮 → 内嵌模态 |
 | 15 | LogPage → Undo Commit | 右键 Undo Commit | `Git.Uncommit`（backend.xml:347） | ✅ 顶栏 Popconfirm |
 | 16 | LogPage → RebaseDialog | 右键 Interactively Rebase from Here | `GitInteractiveRebaseAction.kt:16-24`（backend.xml:354） | ✅ 「更多」→ 内嵌模态（简单/交互双模式） |
-| 17 | LogPage → PushDialog | 右键 Push Commits up to Here | `GitPushUpToCommitAction.kt:60`（backend.xml:355） | ❌（PushDialog 已落地，「推至指定提交」语义未做） |
+| 17 | LogPage → PushDialog | 右键 Push Commits up to Here | `GitPushUpToCommitAction.kt:60`（backend.xml:355） | ✅ 行右键「Push up to Commit」→ PushDialog 哈希模式（refspec `<hash>:<当前分支>`——远端被覆盖的分支须勾 force-with-lease；`POST /push` 增 `hash` 字段，分离头/无效哈希显式 400） |
 | 18 | LogPage → New Branch 对话框 | 右键 New Branch… | backend.xml:361-363 | ✅ 行右键「从此处新建分支…」Modal（起始点=该提交，创建后检出） |
 | 19 | LogPage → New Tag | 右键 New Tag… | `GitCreateTagAction.java:39`（backend.xml:364） | ✅ 行右键「从此处新建标签…」Modal（附注可选；ref=该提交） |
-| 20 | LogPage → 分支/标签操作子菜单 | 右键分支操作组 | `GitLogBranchOperationsActionGroup.java:188-205`（backend.xml:360） | 🟡 行右键菜单已含检出/New Branch/New Tag；Merge/Rebase 经 #79/#80；Push up to Commit 未做 |
+| 20 | LogPage → 分支/标签操作子菜单 | 右键分支操作组 | `GitLogBranchOperationsActionGroup.java:188-205`（backend.xml:360） | 🟡 行右键菜单已含检出/New Branch/New Tag；Merge/Rebase 经 #79/#80；Push up to Commit 已落地见 #17 |
 | 21 | LogPage → Revert/Reword/Fixup/Squash/Drop | 右键（后四者入 rebase 引擎） | backend.xml:346-353 | 🟡 Revert=面板按钮直通；Reword/Fixup/Squash/Drop 经交互式变基编辑器可达 |
 | 22 | LogPage → Checkout / 浏览历史快照 | 右键 Checkout 组 / Browse at Revision | backend.xml:337-342 | ✅ 行右键「检出此提交（游离 HEAD）」+ 详情面板「浏览快照」 |
 | 23 | LogPage → PatchPanel | 右键 Create Patch from commit | vcs-log.xml:273 | ✅ 「更多」→ 创建 Modal 提交区间三态 |
@@ -780,10 +780,10 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 | 口径 | 数量 |
 |------|------|
 | Java 版导航边（收录 104 条） | 出边最多：LogPage（仓库枢纽）；Git 主菜单承载入边 20+（Web 由顶栏+更多菜单聚合承接） |
-| ✅ 已复刻（含等价边） | **77 条**：LogPage 出边 23（顶栏 5 + 更多菜单 18）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 5（#10 比较 + #61/#62/#65 既有 + #67 fetch）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
-| 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（含 Push up to Commit 余项）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
+| ✅ 已复刻（含等价边） | **78 条**：LogPage 出边 24（顶栏 5 + 更多菜单 18 + #17 Push up to Commit）、各子页回边 21、操作/冲突链路 7、StatusPage 链 9（#43/#44/#45/#47/#48/#49 六入口 + #40/#42/#46）、BranchPanel 链 5（#10 比较 + #61/#62/#65 既有 + #67 fetch）、远程/集成链 8（#98 行级 diff 视图）、本地工具链 8（#83/#84 贮藏）、源码链路 5（#29/#30/#31/#33/#34 受影响文件）、repo 入库链 2（#2/#87 克隆）、日志右键链 4（#18/#19/#22/#26）、Patch/Shelf 回边 2（#52/#54）、提交框链 1（#50 commit&push）、被拒联动 1（#91 rejected→Update）、更新框链 1（#93 Reset to tracked） |
+| 🟡 半通/降级 | **8 条**：#13 LogPage→DiffPage、#20 右键分支操作子菜单（Push up to Commit 已落地见 #17）、#21 右键动作集（reword 族经交互式变基）、#41 提交框等效、#64/#72/#73/#74 QuickActions 等效 |
 | ➖ Web 无对应 | **7 条**：#5/#9 全局入口、#28/#32 编辑器宿主、#35 关闭注解、#55 写入后开编辑器、#92 流程内子模块更新 |
-| ❌ 未复刻 | **12 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
+| ❌ 未复刻 | **11 条**（含明确不做：New Working Tree、打开 worktree、Share Project、GitLab Snippet） |
 
 ### 5.5 关键联动流程
 

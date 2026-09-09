@@ -200,6 +200,34 @@ describe('fetch/pull/push 三状态', () => {
   );
 });
 
+describe('pushRepo hash 模式（Push up to Commit 语义）', () => {
+  it('远端领先 → fetch 后 forceWithLease 回推 hash → pushed 且对端分支移到该提交', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, defaultBranch } = makeRemoteRig();
+    pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+    const base = git(repo, ['rev-parse', 'HEAD']).trim();
+    // force-with-lease 以本地远程跟踪引用为租约期望值（对端领先超出认知时 lease 拒绝）
+    git(repo, ['fetch', '-q', 'origin']);
+
+    const r = await pushRepo(repo, { hash: base, remote: 'origin', forceWithLease: true });
+
+    expect(r.status).toBe('pushed');
+    expect(git(bare, ['rev-parse', defaultBranch])).toBe(base);
+  });
+
+  it('无效哈希 → INVALID_REF；分离头指针 → INVALID_QUERY', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo } = makeRemoteRig();
+
+    const refErr = await pushRepo(repo, { hash: 'deadbeef'.repeat(5), remote: 'origin' }).catch((e: unknown) => e);
+    expect(refErr).toMatchObject({ code: 'INVALID_REF' });
+
+    git(repo, ['checkout', '-q', '--detach']);
+    const detachedErr = await pushRepo(repo, { hash: git(repo, ['rev-parse', 'HEAD']).trim(), remote: 'origin' }).catch(
+      (e: unknown) => e,
+    );
+    expect(detachedErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('分离头指针') });
+  });
+});
+
 describe('认证回路', () => {
   it.each([
     'fatal: Authentication failed for \'https://github.com/u/r.git/\'',

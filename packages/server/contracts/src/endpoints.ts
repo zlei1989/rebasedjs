@@ -198,13 +198,19 @@ export type FetchBody = z.infer<typeof fetchBodySchema>;
 export const pullBodySchema = z.object({ remote: z.string().optional(), rebase: z.boolean().optional() });
 export type PullBody = z.infer<typeof pullBodySchema>;
 
-/** push 请求体：forceWithLease 为安全强推（--force-with-lease）；setUpstream 对应 -u */
-export const pushBodySchema = z.object({
-  remote: z.string().optional(),
-  branch: z.string().optional(),
-  forceWithLease: z.boolean().optional(),
-  setUpstream: z.boolean().optional(),
-});
+/** push 请求体：forceWithLease 为安全强推（--force-with-lease）；setUpstream 对应 -u；
+ *  hash = Push up to Commit（GitPushUpToCommitAction 语义：refspec <hash>:<当前分支>——远端分支推到该提交，与 setUpstream 互斥） */
+export const pushBodySchema = z
+  .object({
+    remote: z.string().optional(),
+    branch: z.string().optional(),
+    hash: z.string().min(1).optional(),
+    forceWithLease: z.boolean().optional(),
+    setUpstream: z.boolean().optional(),
+  })
+  .refine((b) => b.hash === undefined || b.setUpstream !== true, {
+    message: 'Push up to Commit 不支持 setUpstream（-u 只能设分支引用）',
+  });
 export type PushBody = z.infer<typeof pushBodySchema>;
 
 /** commit & push 组合执行器载荷：提交体 + 可选推送体（push 缺省=当前分支上游——GitCommitAndPushExecutor 语义） */

@@ -28,6 +28,7 @@ export { amendSpecificCommit, commitStaged, headCommit, isAncestorCommit, listAm
 export type { CoreAmendSpecificResult } from './commit';
 export {
   createBranch,
+  currentBranchName,
   deleteBranch,
   listBranches,
   mergedBranchNames,
@@ -43,8 +44,8 @@ export { checkoutConflictSide, deleteConflictFile, listConflictedPaths, markReso
 export type { CoreConflict } from './conflict';
 export { applyStash, dropStash, listStashes, popStash, saveStash, stashPatch, stashToBranch } from './stash';
 export type { CoreStash } from './stash';
-export { addRemote, fetchRemote, isShallowRepo, listRemotes, pullRemote, pushBranch, removeRemote, setRemoteUrl } from './remote';
-export type { CoreRemote } from './remote';
+export { addRemote, fetchRemote, isShallowRepo, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
+export type { CorePushOutcome, CoreRemote } from './remote';
 export { diffRefsSnapshots, takeRefsSnapshot } from './refs';
 export type { RefsSnapshot } from './refs';
 export { autosquashCommit, continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';

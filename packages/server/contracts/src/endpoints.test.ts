@@ -464,6 +464,12 @@ describe('pushBodySchema（push 请求体）', () => {
     expect(() => pushBodySchema.parse({ setUpstream: 1 })).toThrow();
     expect(() => pushBodySchema.parse({ branch: 1 })).toThrow();
   });
+  it('hash（Push up to Commit）：接受 hash+/−forceWithLease；hash 与 setUpstream 互斥', () => {
+    expect(pushBodySchema.parse({ hash: 'aaaaaa', remote: 'origin' })).toEqual({ hash: 'aaaaaa', remote: 'origin' });
+    expect(pushBodySchema.parse({ hash: 'aaaaaa', forceWithLease: true })).toEqual({ hash: 'aaaaaa', forceWithLease: true });
+    expect(() => pushBodySchema.parse({ hash: '', remote: 'origin' })).toThrow();
+    expect(() => pushBodySchema.parse({ hash: 'aaaaaa', setUpstream: true })).toThrow();
+  });
 });
 
 describe('updateBodySchema（Update Project 请求体）', () => {

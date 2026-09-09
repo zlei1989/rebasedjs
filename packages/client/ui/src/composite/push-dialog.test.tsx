@@ -93,3 +93,43 @@ describe('PushDialog 载荷组装', () => {
     expect(onOk).not.toHaveBeenCalled();
   });
 });
+
+describe('PushDialog Push up to Commit（#17）', () => {
+  it('upToHash 提供时：标题/提示含目标提交、分支锁定当前分支、setUpstream 隐藏', () => {
+    render(
+      <PushDialog
+        open
+        remotes={TWO_REMOTES}
+        currentBranch="main"
+        upToHash="aabbccdd"
+        onOk={vi.fn()}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByText('推送（Push up to Commit）')).toBeInTheDocument();
+    expect(screen.getByTestId('push-upto-hint')).toHaveTextContent('aabbccd');
+    expect(screen.getByTestId('push-branch-input')).toBeDisabled();
+    expect(screen.getByTestId('push-branch-input')).toHaveValue('main');
+    expect(screen.queryByRole('checkbox', { name: /设为上游/ })).not.toBeInTheDocument();
+  });
+
+  it('提交载荷：{remote, hash, forceWithLease 可选}——不含 branch/setUpstream', () => {
+    const { onOk } = makeHandlers();
+    render(
+      <PushDialog
+        open
+        remotes={TWO_REMOTES}
+        currentBranch="main"
+        upToHash="aabbccdd"
+        onOk={onOk}
+        onCancel={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onOk).toHaveBeenCalledWith({ remote: 'origin', hash: 'aabbccdd' });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /安全强推/ }));
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onOk).toHaveBeenLastCalledWith({ remote: 'origin', hash: 'aabbccdd', forceWithLease: true });
+  });
+});

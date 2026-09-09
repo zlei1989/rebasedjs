@@ -122,6 +122,8 @@ export interface LogPageProps {
   /** 行右键「Fixup/Squash Commit」（GitAutoSquashCommitAction 语义：fixup!/squash! 提交折入目标）；
    *  提供时渲染两项菜单（action + 目标 hash）；缺省不渲染 */
   onAutosquash?: (action: 'fixup' | 'squash', hash: string) => void;
+  /** 行右键「Push up to Commit」（GitPushUpToCommitAction 语义：推送该提交到当前分支远端分支）；缺省不渲染该菜单项 */
+  onPushUpToCommit?: (hash: string) => void;
 }
 
 export function LogPage({
@@ -175,6 +177,7 @@ export function LogPage({
   onCreateTag,
   onOpenInBrowser,
   onAutosquash,
+  onPushUpToCommit,
 }: LogPageProps): React.ReactNode {
   // 行右键菜单：右键记录 hash（菜单项按 hash 组装），点击项分发对应回调；Modal 输入在菜单项后展开
   const [menuHash, setMenuHash] = useState<string | null>(null);
@@ -201,8 +204,9 @@ export function LogPage({
       items.push({ key: 'fixup-commit', label: 'Fixup Commit' });
       items.push({ key: 'squash-commit', label: 'Squash Commit' });
     }
+    if (onPushUpToCommit !== undefined) items.push({ key: 'push-up-to-commit', label: 'Push up to Commit' });
     return items;
-  }, [menuHash, onCheckoutRevision, onCheckoutNewBranch, onCreateTag, onOpenInBrowser, onCherryPick, onRevert, onResetHere, onBrowse, onAutosquash]);
+  }, [menuHash, onCheckoutRevision, onCheckoutNewBranch, onCreateTag, onOpenInBrowser, onCherryPick, onRevert, onResetHere, onBrowse, onAutosquash, onPushUpToCommit]);
   const onMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
     if (menuHash === null) return;
     if (key === 'checkout-revision') onCheckoutRevision?.(menuHash);
@@ -215,6 +219,7 @@ export function LogPage({
     else if (key === 'browse') onBrowse?.(menuHash);
     else if (key === 'fixup-commit') onAutosquash?.('fixup', menuHash);
     else if (key === 'squash-commit') onAutosquash?.('squash', menuHash);
+    else if (key === 'push-up-to-commit') onPushUpToCommit?.(menuHash);
   };
   // 过滤输入（受控）：本地草稿即时回显，提交（Enter/失焦）才上抛——避免每击键重查快照
   const [authorDraft, setAuthorDraft] = useState(filters?.author ?? '');

@@ -128,15 +128,23 @@ export async function pullRemote(
  *   业务结果 'rejected' + 中文引导 hint（非错误，上层按 200 透出）；
  * - 其余失败（无远程、认证失败等）原样抛 GitExitError。
  */
-export async function pushBranch(
+/** push 结果三态：pushed / rejected（非快进，业务结果非错误）/ up-to-date（Everything up-to-date） */
+export interface CorePushOutcome {
+  status: 'pushed' | 'rejected' | 'up-to-date';
+  hint?: string;
+}
+
+/** 执行 push 参数并分类结果（pushBranch / pushUpToCommit 共用）：
+ *  - 成功：stdout/stderr 含 "Everything up-to-date" → up-to-date；否则 pushed；
+ *  - 非快进被拒（LC_ALL=C：stderr 含 rejected + non-fast-forward/fetch first）→
+ *    业务结果 'rejected' + 中文引导 hint（非错误，上层按 200 透出）；
+ *  - 其余失败（无远程、认证失败等）原样抛 GitExitError。
+ */
+async function runPushAndClassify(
   cwd: string,
-  opts: { remote?: string; branch?: string; forceWithLease?: boolean; setUpstream?: boolean; extraConfig?: string[]; timeoutMs?: number },
-): Promise<{ status: 'pushed' | 'rejected' | 'up-to-date'; hint?: string }> {
-  const args = ['push'];
-  if (opts.setUpstream === true) args.push('-u');
-  if (opts.forceWithLease === true) args.push('--force-with-lease');
-  if (opts.remote !== undefined) args.push(opts.remote);
-  if (opts.branch !== undefined) args.push(opts.branch);
+  args: string[],
+  opts: { extraConfig?: string[]; timeoutMs?: number },
+): Promise<CorePushOutcome> {
   try {
     const { stdout, stderr } = await runGit(args, { cwd, extraConfig: opts.extraConfig, timeoutMs: opts.timeoutMs ?? TRANSFER_TIMEOUT_MS });
     const upToDate = stdout.includes('Everything up-to-date') || stderr.includes('Everything up-to-date');
@@ -151,6 +159,34 @@ export async function pushBranch(
     }
     throw err;
   }
+}
+
+export async function pushBranch(
+  cwd: string,
+  opts: { remote?: string; branch?: string; forceWithLease?: boolean; setUpstream?: boolean; extraConfig?: string[]; timeoutMs?: number },
+): Promise<CorePushOutcome> {
+  const args = ['push'];
+  if (opts.setUpstream === true) args.push('-u');
+  if (opts.forceWithLease === true) args.push('--force-with-lease');
+  if (opts.remote !== undefined) args.push(opts.remote);
+  if (opts.branch !== undefined) args.push(opts.branch);
+  return runPushAndClassify(cwd, args, opts);
+}
+
+/**
+ * Push up to Commit（GitPushUpToCommitAction 语义）：refspec = <hash>:<branch>——
+ * 把远端分支推到选中提交（远端更新的成员提交依赖 force-with-lease 覆盖）；
+ * branch 为当前分支名（分离头指针由调用方预检/拒绝）；rejected 判定同 pushBranch。
+ */
+export async function pushUpToCommit(
+  cwd: string,
+  opts: { hash: string; branch: string; remote?: string; forceWithLease?: boolean; extraConfig?: string[]; timeoutMs?: number },
+): Promise<CorePushOutcome> {
+  const args = ['push'];
+  if (opts.forceWithLease === true) args.push('--force-with-lease');
+  if (opts.remote !== undefined) args.push(opts.remote);
+  args.push(`${opts.hash}:${opts.branch}`);
+  return runPushAndClassify(cwd, args, opts);
 }
 
 /** 浅克隆检测：git rev-parse --is-shallow-repository（输出 'true'/'false'） */
