@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { collectFileDiff, listDiffFiles, streamFileDiff } from './diff';
+import { collectFileDiff, collectWorkingDiff, isUnbornHead, listDiffFiles, streamFileDiff } from './diff';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -81,5 +81,31 @@ describe('diff 原语', () => {
     expect(byPath.get('new.txt')).toMatchObject({ status: 'A' });
     // 重命名 + 新增（无删除行——git diff <ref> 将 rename 折叠为 R）
     expect(files.some((f) => f.path === 'a.txt' && f.status === 'D')).toBe(false);
+  });
+
+  it('isUnbornHead / collectWorkingDiff：空仓库两段拼接（暂存 vs 空树 + 工作区 vs 索引）；born = git diff HEAD 语义', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    expect(await isUnbornHead(repo)).toBe(true);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+
+    const unborn = await collectWorkingDiff(repo);
+    expect(unborn).toContain('+v1'); // 暂存段（vs 空树全新增）
+    expect(unborn).toContain('-v1');
+    expect(unborn).toContain('+v2');
+    // 仅暂存 & 仅工作区：拼接不含对方遗漏
+    const stagedOnly = await collectWorkingDiff(repo, []);
+    expect(stagedOnly).toContain('+v1');
+    void stagedOnly;
+
+    // born：与 git diff HEAD 等价（工作区全量）——commit 带走暂存的 v1，HEAD= v1、工作区 v3
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    expect(await isUnbornHead(repo)).toBe(false);
+    writeFileSync(join(repo, 'a.txt'), 'v3');
+    const born = await collectWorkingDiff(repo);
+    expect(born).toContain('-v1');
+    expect(born).toContain('+v3');
   });
 });

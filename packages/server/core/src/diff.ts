@@ -1,5 +1,5 @@
 /** diff 原语：--no-ext-diff 禁外部差异工具；P1 输出 unified diff 全文/流；分支 vs 工作树文件清单。 */
-import { runGit, streamGit } from './exec';
+import { GitExitError, runGit, streamGit } from './exec';
 
 export interface FileDiffOptions {
   file: string;
@@ -34,6 +34,31 @@ export interface CoreDiffFileEntry {
   path: string;
   status: string;
   renameFrom?: string;
+}
+
+/** unborn HEAD（空仓库）判定：git rev-parse --verify HEAD 失败（exit 128）即无提交 */
+export async function isUnbornHead(cwd: string): Promise<boolean> {
+  try {
+    await runGit(['rev-parse', '--verify', 'HEAD'], { cwd });
+    return false;
+  } catch (e) {
+    if (e instanceof GitExitError) return true;
+    throw e;
+  }
+}
+
+/**
+ * 工作区全量 diff（含暂存；建补丁/搁置数据源）：born = `git diff HEAD`；
+ * unborn（空仓库）——`git diff HEAD` 无对象可对比：分段拼接 `git diff --cached`（暂存 vs 空树）+ `git diff`（工作区 vs 索引）。
+ */
+export async function collectWorkingDiff(cwd: string, paths?: string[]): Promise<string> {
+  const trailing = paths === undefined ? [] : ['--', ...paths];
+  if (!(await isUnbornHead(cwd))) {
+    return (await runGit(['diff', '--no-ext-diff', 'HEAD', ...trailing], { cwd })).stdout;
+  }
+  const cached = (await runGit(['diff', '--no-ext-diff', '--cached', ...trailing], { cwd })).stdout;
+  const unstaged = (await runGit(['diff', '--no-ext-diff', ...trailing], { cwd })).stdout;
+  return `${cached}${unstaged}`;
 }
 
 /**

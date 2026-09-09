@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { GitExitError, checkApplyPatch, runGit } from '@rebased/core';
+import { GitExitError, checkApplyPatch, collectWorkingDiff, isUnbornHead, runGit } from '@rebased/core';
 import {
   ServiceError,
   type PatchApplyBody,
@@ -32,8 +32,17 @@ function patchesDirOf(repoPath: string): string {
   return join(getConfigDir(), 'patches', repoIdOf(loadConfig(), repoPath));
 }
 
-/** name → 存档文件路径；name 未限制正则（仅 apply/delete body），含路径逃逸一律按不存在处理 */
+/** 存档名边界（补丁/搁置共用；§2.5 硬化）：禁路径分隔符（/ \——Windows 反斜杠即分隔符，注入可逃逸到 base 子目录）
+ *  与精确 `.`/`..`；空名同拒 */
+export function assertValidEntryName(name: string, kind: '补丁' | '搁置'): void {
+  if (name === '' || name === '.' || name === '..' || /[\\/]/.test(name)) {
+    throw new ServiceError('INVALID_QUERY', `${kind}名不合法：${name}`);
+  }
+}
+
+/** name → 存档文件路径；边界校验（分隔符/`.`/`..`）+ 逃逸兜底（防御纵深） */
 function patchFileOf(dir: string, name: string): string {
+  assertValidEntryName(name, '补丁');
   const base = resolve(dir);
   const file = resolve(join(base, `${name}.patch`));
   if (!file.startsWith(base + sep)) throw new ServiceError('INVALID_REF', `补丁不存在：${name}`);
@@ -78,12 +87,21 @@ export async function getPatches(repoPath: string): Promise<PatchList> {
   return { patches: listPatches(patchesDirOf(repoPath)) };
 }
 
-/** 创建补丁：diff 全文写入 <name>.patch（空 diff 照常创建 0 字节文件；同名覆盖更新），返回刷新列表 */
+/** 创建补丁：diff 全文写入 <name>.patch（空 diff 照常创建 0 字节文件；同名覆盖更新），返回刷新列表。
+ *  unborn HEAD（空仓库）：工作区模式经 collectWorkingDiff 两段拼接（staged → `git diff --cached`）。 */
 export async function createPatch(repoPath: string, body: PatchCreateBody): Promise<PatchList> {
+  assertValidEntryName(body.name, '补丁');
   const dir = patchesDirOf(repoPath);
-  const { stdout } = await runGit(buildCreateDiffArgs(body), { cwd: repoPath });
+  let text: string;
+  if (body.from === undefined && body.to === undefined && (await isUnbornHead(repoPath))) {
+    text = body.staged
+      ? (await runGit(['diff', '--no-ext-diff', '--cached', ...(body.paths !== undefined ? ['--', ...body.paths] : [])], { cwd: repoPath })).stdout
+      : await collectWorkingDiff(repoPath, body.paths);
+  } else {
+    ({ stdout: text } = await runGit(buildCreateDiffArgs(body), { cwd: repoPath }));
+  }
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${body.name}.patch`), stdout, 'utf8');
+  writeFileSync(join(dir, `${body.name}.patch`), text, 'utf8');
   return getPatches(repoPath);
 }
 

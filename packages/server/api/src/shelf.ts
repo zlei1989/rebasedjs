@@ -15,11 +15,11 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
-import { getStatus, runGit } from '@rebased/core';
+import { collectWorkingDiff, getStatus } from '@rebased/core';
 import { ServiceError, type ShelfAction, type ShelfEntry, type ShelfList } from '@rebased/contracts';
 import type { AppConfig } from './lib/config-store';
 import { getConfigDir, loadConfig } from './lib/config-store';
-import { applyPatchText, readPatchText } from './patch';
+import { applyPatchText, assertValidEntryName, readPatchText } from './patch';
 
 /** repoPath → repoId：经 config.repos 注册表反查（沿 changelist 先例）；未注册 → REPO_NOT_FOUND（防御） */
 function repoIdOf(config: AppConfig, repoPath: string): string {
@@ -35,8 +35,9 @@ function shelvesDirOf(repoPath: string): string {
   return join(getConfigDir(), 'shelves', repoIdOf(loadConfig(), repoPath));
 }
 
-/** name → shelf 目录；restore/drop 的 name 未限制正则，路径逃逸一律按不存在处理 */
+/** name → shelf 目录；restore/drop 的 name 边界校验（分隔符/`.`/`..`）+ 逃逸兜底（防御纵深） */
 function shelfDirOf(repoPath: string, name: string): string {
+  assertValidEntryName(name, '搁置');
   const base = resolve(shelvesDirOf(repoPath));
   const dir = resolve(join(base, name));
   if (!dir.startsWith(base + sep)) throw new ServiceError('INVALID_REF', `搁置不存在：${name}`);
@@ -68,14 +69,14 @@ function listShelves(dir: string): ShelfEntry[] {
 }
 
 /**
- * save：diff HEAD 写 patch.diff；未跟踪（?? 项，未跟踪目录折叠为 dir/）递归复制，跳过 .git。
- * 折叠目录整树复制：目录内被忽略文件也会随档（与逐文件收集的差异），v1 接受；目录层级深。
+ * save：diff HEAD（unborn 空仓库 → collectWorkingDiff 两段拼接）写 patch.diff；未跟踪（?? 项，未跟踪目录折叠为 dir/）
+ * 递归复制，跳过 .git。折叠目录整树复制：目录内被忽略文件也会随档（与逐文件收集的差异），v1 接受；目录层级深。
  */
 async function saveShelf(repoPath: string, name: string): Promise<void> {
   const dir = shelfDirOf(repoPath, name);
   if (existsSync(dir)) throw new ServiceError('INVALID_QUERY', `搁置已存在：${name}`);
 
-  const { stdout: diff } = await runGit(['diff', '--no-ext-diff', 'HEAD'], { cwd: repoPath });
+  const diff = await collectWorkingDiff(repoPath);
   const status = await getStatus(repoPath);
   const untracked = status.entries.filter((e) => e.code === '??').map((e) => e.path);
 

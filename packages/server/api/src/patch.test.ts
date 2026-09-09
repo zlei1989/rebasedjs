@@ -52,6 +52,34 @@ describe('patch 功能', () => {
     await expect(createPatch(unregistered, { name: 'x' })).rejects.toMatchObject({ code: 'REPO_NOT_FOUND' });
   });
 
+  it('unborn HEAD（空仓库）建补丁：缺省两段拼接（暂存+工作区）、staged → --cached（§2.5 硬化）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    await openRepo(repo);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', 'a.txt']);
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+
+    await createPatch(repo, { name: 'unborn-full' });
+    const full = readFileSync(join(await patchesDir(repo), 'unborn-full.patch'), 'utf8');
+    expect(full).toContain('+v1'); // 暂存段（vs 空树）
+    expect(full).toContain('-v1'); // 工作区段
+    expect(full).toContain('+v2');
+
+    await createPatch(repo, { name: 'unborn-staged', staged: true });
+    const staged = readFileSync(join(await patchesDir(repo), 'unborn-staged.patch'), 'utf8');
+    expect(staged).toContain('+v1');
+    expect(staged).not.toContain('+v2');
+  });
+
+  it('存档名边界：空名/`.`/`..`/含分隔符 → INVALID_QUERY（§2.5 硬化）', async () => {
+    const repo = await repoWithCommit('a.txt', 'v1');
+    for (const name of ['', '.', '..', 'a/b', 'a\\b']) {
+      const err = await createPatch(repo, { name }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: 'INVALID_QUERY', message: `补丁名不合法：${name}` });
+    }
+  });
+
   it('创建：缺省 = git diff HEAD（工作区全量，含暂存）；列表含名称/大小/时间', async () => {
     const repo = await repoWithCommit('a.txt', 'v1');
     writeFileSync(join(repo, 'a.txt'), 'v2');
@@ -196,8 +224,11 @@ describe('patch 功能', () => {
       code: 'INVALID_REF',
       message: '补丁不存在：ghost',
     });
-    // name 未限制正则 → 服务层防御路径逃逸（按不存在处理）
-    await expect(applyPatchService(repo, { name: '../x' })).rejects.toMatchObject({ code: 'INVALID_REF' });
+    // 逃逸名（分隔符）→ 边界收紧为非法（INVALID_QUERY），不再按「不存在」处理（§2.5 硬化）
+    await expect(applyPatchService(repo, { name: '../x' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '补丁名不合法：../x',
+    });
   });
 
   it('空 diff（无变更）照常创建 0 字节补丁文件', async () => {

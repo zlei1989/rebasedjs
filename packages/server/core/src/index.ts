@@ -14,7 +14,7 @@ export { commitFiles, committedPage } from './committed';
 export type { CoreCommittedEntry } from './committed';
 export { searchCommits } from './search';
 export type { CoreSearchResult } from './search';
-export { collectFileDiff, listDiffFiles, streamFileDiff } from './diff';
+export { collectFileDiff, collectWorkingDiff, isUnbornHead, listDiffFiles, streamFileDiff } from './diff';
 export type { CoreDiffFileEntry, FileDiffOptions } from './diff';
 export { listTreeAtRevision, parseTreeList } from './tree';
 export type { CoreTreeEntry } from './tree';
