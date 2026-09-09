@@ -1303,6 +1303,23 @@ describe('web-koa rebase/cherry-pick/revert/tags 端点', () => {
     expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
   });
 
+  it('commit-edit 端点：drop 中间提交 → 200 success 且 git log 复核；reword 缺 message → 400 INVALID_QUERY', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath } = registerRepo();
+    makeLocalCommit(repoPath, 'one.txt', 'one\n', 'one');
+    const one = git(repoPath, ['rev-parse', 'HEAD']).trim();
+    makeLocalCommit(repoPath, 'two.txt', 'two\n', 'two');
+
+    const res = await jsonPost(`/api/repos/${repoId}/commit-edit`, { hash: one, action: 'drop' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(git(repoPath, ['log', '--format=%s']).trim().split('\n').reverse()).toEqual(['init', 'two']);
+    expect(git(repoPath, ['ls-tree', '-r', '--name-only', 'HEAD'])).not.toContain('one.txt');
+
+    const rewRes = await jsonPost(`/api/repos/${repoId}/commit-edit`, { hash: git(repoPath, ['rev-parse', 'HEAD']).trim(), action: 'reword' });
+    expect(rewRes.status).toBe(400);
+    expect(await rewRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
   it('cherry-pick 端点：祖先提交摘樱桃 → 200 success', { timeout: RIG_TIMEOUT }, async () => {
     const { repoId, repoPath } = registerRepo();
     const base = git(repoPath, ['rev-parse', 'HEAD']).trim();

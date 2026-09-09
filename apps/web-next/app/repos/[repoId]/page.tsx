@@ -23,6 +23,7 @@ import {
   useGitlabStatus,
   useInteractiveRebase,
   useAutosquash,
+  useCommitEdit,
   useLogPage,
   useLogStream,
   useOperation,
@@ -223,6 +224,30 @@ export default function Page({
       onOk: () => autosquash({ hash, action }).then(dispatchRebaseOutcome).catch(onError),
     });
   };
+  // === 单提交编辑直通（GitSingleCommitEditingAction 语义：reword/drop/squash/fixup）===
+  const { trigger: commitEdit } = useCommitEdit(repoId);
+  const ACTION_LABELS: Record<'reword' | 'drop' | 'squash' | 'fixup', string> = {
+    reword: '重写提交信息',
+    drop: '删除提交（其变更一并丢弃）',
+    squash: '并入父提交（提交数 -1，信息合并）',
+    fixup: '并入父提交（保留父提交信息，提交数 -1）',
+  };
+  const onEditCommit = (action: 'reword' | 'drop' | 'squash' | 'fixup', hash: string, message?: string): void => {
+    if (action === 'reword') {
+      // 信息已由行右键 Modal 收集（message 非空）
+      commitEdit({ hash, action, message })
+        .then(dispatchRebaseOutcome)
+        .catch(onError);
+      return;
+    }
+    Modal.confirm({
+      title: `${action === 'drop' ? 'Drop' : action === 'squash' ? 'Squash' : 'Fixup'} Commit`,
+      content: `${ACTION_LABELS[action]}（历史将被重写）；冲突时可在冲突页解决`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => commitEdit({ hash, action }).then(dispatchRebaseOutcome).catch(onError),
+    });
+  };
   // === 摘樱桃/还原区（CommitDetailsPanel 回调 → 容器确认 → hook）===
   const { trigger: cherryPick } = useCherryPick(repoId);
   const { trigger: revert } = useRevert(repoId);
@@ -418,6 +443,7 @@ export default function Page({
         onCherryPick={onCherryPick}
         onRevert={onRevert}
         onAutosquash={onAutosquash}
+        onEditCommit={onEditCommit}
         onPushUpToCommit={(hash) => {
           setPushUpToHash(hash);
           setOpenDialog('push');

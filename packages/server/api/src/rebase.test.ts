@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError } from '@rebased/core';
-import { applyAutosquash, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
+import { applyAutosquash, commitEdit, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -258,5 +258,37 @@ describe('applyAutosquash（fixup!/squash! 折入）', () => {
 
     const refErr = await applyAutosquash(repo, { hash: 'deadbeef'.repeat(5), action: 'squash' }).catch((e: unknown) => e);
     expect(refErr).toMatchObject({ code: 'INVALID_REF' });
+  });
+});
+
+describe('commitEdit（单提交编辑直通：reword/drop）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('reword：重写目标提交信息（提交数不变、信息生效）', async () => {
+    const repo = makeRepo();
+    makeBaseCommit(repo);
+    makeCommit(repo, 'b.txt', 'b1\n', 'c2');
+    const base = git(repo, ['rev-parse', 'HEAD~1']).trim();
+
+    const result = await commitEdit(repo, { hash: base, action: 'reword', message: 'base（重写）' });
+
+    expect(result.status).toBe('success');
+    expect(git(repo, ['rev-list', '--count', 'HEAD']).trim()).toBe('2');
+    expect(git(repo, ['log', '--format=%s']).trim().split('\n').reverse()).toEqual(['base（重写）', 'c2']);
+  });
+
+  it('reword 缺 message → INVALID_QUERY；无效哈希 → INVALID_REF；根提交 squash → INVALID_QUERY', async () => {
+    const repo = makeRepo();
+    makeBaseCommit(repo);
+    const root = git(repo, ['rev-parse', 'HEAD']).trim();
+
+    const msgErr = await commitEdit(repo, { hash: root, action: 'reword' }).catch((e: unknown) => e);
+    expect(msgErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('reword 需要新提交信息') });
+
+    const refErr = await commitEdit(repo, { hash: 'deadbeef'.repeat(5), action: 'drop' }).catch((e: unknown) => e);
+    expect(refErr).toMatchObject({ code: 'INVALID_REF' });
+
+    const rootErr = await commitEdit(repo, { hash: root, action: 'squash' }).catch((e: unknown) => e);
+    expect(rootErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('父提交') });
   });
 });

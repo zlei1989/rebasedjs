@@ -21,7 +21,7 @@ export { useSearch } from './search';
 export { useGitExecutableInfo, useSettings } from './settings';
 export { useRepoConfig, useSetConfig } from './config';
 export { useAbortOperation, useContinueOperation, useOperation, useSkipOperation } from './operation';
-export { useAutosquash, useRebase, useRebaseTodo, useInteractiveRebase } from './rebase';
+export { useAutosquash, useCommitEdit, useRebase, useRebaseTodo, useInteractiveRebase } from './rebase';
 export { useCherryPick, useRevert } from './pick';
 export { useTags, useTagAction } from './tag';
 export { useStaging, useHunkStaging } from './staging';

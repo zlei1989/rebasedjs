@@ -132,12 +132,14 @@ function quoteForSh(value: string): string {
  * 交互式变基：entries 经 api 层校验后写入临时 todo 文件，再以
  * env GIT_SEQUENCE_EDITOR=<已引号包裹的 node+shim 路径> 与 REBASED_TODO_FILE=<临时文件>
  * 执行 git rebase -i <base>；shim 以 git 传入的 todo 路径（末参）覆写已备 todo——实现程序化编辑。
+ * message 提供时（reword 单提交编辑）：同目录落消息 shim 与 REBASED_MESSAGE_FILE，注入 GIT_EDITOR——
+ * 消息编辑器打开即被覆写为新提交信息（无 TTY 下的 reword；GIT_EDITOR 优先级高于 -c core.editor=true）。
  * shim 源一并落盘到同一临时目录（见 SHIM_SOURCE 头注释：绕过打包器对 import.meta.url 的破坏）。
  * 冲突判定同 rebaseOnto；完成后清理临时目录（成功/冲突/异常均清理）。
  */
 export async function runInteractiveRebase(
   cwd: string,
-  opts: { base: string; entries: { hash: string; action: string }[] },
+  opts: { base: string; entries: { hash: string; action: string }[]; message?: string },
 ): Promise<CoreRebaseResult> {
   const todoDir = await mkdtemp(join(tmpdir(), 'rebased-todo-'));
   const todoFile = join(todoDir, 'todo');
@@ -147,10 +149,19 @@ export async function runInteractiveRebase(
     await writeFile(todoFile, `${lines}\n`, 'utf8');
     await writeFile(shimFile, SHIM_SOURCE, 'utf8');
     const editor = `${quoteForSh(process.execPath)} ${quoteForSh(shimFile)}`;
-    return await rebaseWithStatus(cwd, ['rebase', '-i', opts.base], {
+    const env: Record<string, string> = {
       GIT_SEQUENCE_EDITOR: editor,
       REBASED_TODO_FILE: todoFile,
-    });
+    };
+    if (opts.message !== undefined) {
+      const messageFile = join(todoDir, 'message');
+      const messageShim = join(todoDir, 'git-message-editor.mjs');
+      await writeFile(messageFile, opts.message, 'utf8');
+      await writeFile(messageShim, MESSAGE_SHIM_SOURCE, 'utf8');
+      env.GIT_EDITOR = `${quoteForSh(process.execPath)} ${quoteForSh(messageShim)}`;
+      env.REBASED_MESSAGE_FILE = messageFile;
+    }
+    return await rebaseWithStatus(cwd, ['rebase', '-i', opts.base], env);
   } finally {
     await rm(todoDir, { recursive: true, force: true });
   }
@@ -168,6 +179,66 @@ export async function continueRebase(cwd: string): Promise<void> {
 /** 跳过冲突中的变基提交：git rebase --skip（GitRebaseResumeMode.SKIP 语义——丢弃当前提交，继续后续） */
 export async function skipRebase(cwd: string): Promise<void> {
   await runGit(['-c', 'core.editor=true', 'rebase', '--skip'], { cwd });
+}
+
+/** <rev> 是否有父（rev-parse --verify --quiet <rev>^ exit 1 = 无，即根提交）；其余失败原样上抛 */
+async function revHasParent(cwd: string, rev: string): Promise<boolean> {
+  try {
+    await runGit(['rev-parse', '--verify', '--quiet', `${rev}^`], { cwd });
+    return true;
+  } catch (e) {
+    if (e instanceof GitExitError && e.exitCode === 1) return false;
+    throw e;
+  }
+}
+
+/** 全量历史（--root 基的 todo 数据源）：git log --reverse --format=%H%x00%s（HEAD 祖先，旧→新） */
+async function historyOldToNew(cwd: string): Promise<{ hash: string; subject: string }[]> {
+  const { stdout } = await runGit(['log', '--reverse', '--format=%H%x00%s'], { cwd });
+  const commits: { hash: string; subject: string }[] = [];
+  for (const line of stdout.split('\n')) {
+    if (line === '') continue;
+    const sep = line.indexOf('\0');
+    if (sep === -1) continue;
+    commits.push({ hash: line.slice(0, sep), subject: line.slice(sep + 1) });
+  }
+  return commits;
+}
+
+/**
+ * 单提交编辑直通（GitSingleCommitEditingAction 语义：Reword/Squash/Fixup/Drop 提交）：
+ * - reword：base=<hash>^，todo 首行 reword + GIT_EDITOR 消息 shim 写入新信息（message 必填）；
+ * - drop：base=<hash>^，todo 该行 drop；
+ * - squash/fixup（并入父提交）：base=<父>^（父为根提交时 --root），todo = [pick 父, squash|fixup hash, pick 其余...]；
+ *   squash 的消息编辑器走 git 默认（合并信息；未注入 message 保持默认交互语义的确定性落盘）。
+ * 根提交 reword/drop（--root）、根提交的 squash/fixup（无父 → 上层预检拒绝）。
+ * 冲突 → 'conflicts'（rebase 冲突态交冲突页）。
+ */
+export async function editCommitAction(
+  cwd: string,
+  opts: { hash: string; action: 'reword' | 'drop' | 'squash' | 'fixup'; message?: string },
+): Promise<CoreRebaseResult> {
+  const hashHasParent = await revHasParent(cwd, opts.hash);
+  let base: string;
+  if (opts.action === 'squash' || opts.action === 'fixup') {
+    if (hashHasParent) {
+      base = (await revHasParent(cwd, `${opts.hash}^`)) ? `${opts.hash}^^` : '--root';
+    } else {
+      throw new Error('根提交无父提交，不可 squash/fixup');
+    }
+  } else {
+    base = hashHasParent ? `${opts.hash}^` : '--root';
+  }
+  const commits = base === '--root' ? await historyOldToNew(cwd) : await listTodoCommits(cwd, base);
+  const entries: { hash: string; action: string }[] = [];
+  for (const c of commits) {
+    entries.push(c.hash === opts.hash ? { hash: c.hash, action: opts.action } : { hash: c.hash, action: 'pick' });
+  }
+  return runInteractiveRebase(cwd, {
+    base,
+    entries,
+    ...(opts.action === 'reword' ? { message: opts.message } : {}),
+  });
 }
 
 /**

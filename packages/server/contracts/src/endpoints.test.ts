@@ -6,6 +6,7 @@ import {
   commitBodySchema,
   amendSpecificBodySchema,
   autosquashBodySchema,
+  commitEditBodySchema,
   commitAndPushBodySchema,
   committedQuerySchema,
   configPutBodySchema,
@@ -173,6 +174,21 @@ describe('autosquashBodySchema（auto-squash：fixup!/squash! 提交折入）', 
     expect(() => autosquashBodySchema.parse({ hash: '', action: 'fixup' })).toThrow();
     expect(() => autosquashBodySchema.parse({ hash: 'aaaaaa' })).toThrow();
     expect(() => autosquashBodySchema.parse({ hash: 'aaaaaa', action: 'reword' })).toThrow();
+  });
+});
+
+describe('commitEditBodySchema（单提交编辑直通）', () => {
+  it('hash + action 齐备 → 原样解析（reword 可带 message；其余缺省）', () => {
+    expect(commitEditBodySchema.parse({ hash: 'aaaaaa', action: 'reword', message: '新信息' }))
+      .toEqual({ hash: 'aaaaaa', action: 'reword', message: '新信息' });
+    expect(commitEditBodySchema.parse({ hash: 'aaaaaa', action: 'drop' })).toEqual({ hash: 'aaaaaa', action: 'drop' });
+    expect(commitEditBodySchema.parse({ hash: 'aaaaaa', action: 'squash' })).toEqual({ hash: 'aaaaaa', action: 'squash' });
+    expect(commitEditBodySchema.parse({ hash: 'aaaaaa', action: 'fixup' })).toEqual({ hash: 'aaaaaa', action: 'fixup' });
+  });
+  it('hash 空串/缺失或 action 非法 → 抛错', () => {
+    expect(() => commitEditBodySchema.parse({ hash: '', action: 'drop' })).toThrow();
+    expect(() => commitEditBodySchema.parse({ action: 'drop' })).toThrow();
+    expect(() => commitEditBodySchema.parse({ hash: 'aaaaaa', action: 'amend' })).toThrow();
   });
 });
 

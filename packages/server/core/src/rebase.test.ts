@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitExitError, runGit } from './exec';
 import { getOperationState } from './operation';
-import { autosquashCommit, continueRebase, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
+import { autosquashCommit, continueRebase, editCommitAction, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -324,5 +324,61 @@ describe('autosquashCommit（fixup!/squash! 折入，GitAutoSquashCommitAction �
     await expect(autosquashCommit(repo, { hash: base, action: 'fixup' })).rejects.toMatchObject({
       name: 'GitExitError',
     });
+  });
+});
+
+describe('editCommitAction（GitSingleCommitEditingAction 语义：reword/drop/squash/fixup 直通）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  /** 三提交装置：c1（a.txt）/c2（b.txt）/c3（c.txt），返回 c1..c3 哈希 */
+  async function makeRepo3(repo: string): Promise<string[]> {
+    const c1 = await makeCommit(repo, 'a.txt', 'v1\n', 'c1');
+    const c2 = await makeCommit(repo, 'b.txt', 'b1\n', 'c2');
+    const c3 = await makeCommit(repo, 'c.txt', 'c1\n', 'c3');
+    return [c1, c2, c3];
+  }
+
+  it('reword：目标提交信息重写（消息 shim 覆写）、其余提交原样、提交数不变', async () => {
+    const repo = makeRepo();
+    const [, c2] = await makeRepo3(repo);
+
+    const result = await editCommitAction(repo, { hash: c2, action: 'reword', message: 'c2（重写）' });
+
+    expect(result.status).toBe('success');
+    const subjects = (await runGit(['log', '--format=%s'], { cwd: repo })).stdout.trim().split('\n').reverse();
+    expect(subjects).toEqual(['c1', 'c2（重写）', 'c3']);
+    expect((await runGit(['rev-list', '--count', 'HEAD'], { cwd: repo })).stdout.trim()).toBe('3');
+    // 重写后的提交树不变（b.txt 仍在）
+    const newC2 = (await runGit(['log', '--format=%H', '--reverse'], { cwd: repo })).stdout.trim().split('\n')[1];
+    expect((await runGit(['show', `${newC2}:b.txt`], { cwd: repo })).stdout).toBe('b1\n');
+  });
+
+  it('drop：目标提交消失（变更一并丢弃）、其余提交原样、提交数 -1', async () => {
+    const repo = makeRepo();
+    const [, c2] = await makeRepo3(repo);
+
+    const result = await editCommitAction(repo, { hash: c2, action: 'drop' });
+
+    expect(result.status).toBe('success');
+    const subjects = (await runGit(['log', '--format=%s'], { cwd: repo })).stdout.trim().split('\n').reverse();
+    expect(subjects).toEqual(['c1', 'c3']);
+    expect((await runGit(['rev-list', '--count', 'HEAD'], { cwd: repo })).stdout.trim()).toBe('2');
+    expect((await runGit(['ls-tree', '-r', '--name-only', 'HEAD'], { cwd: repo })).stdout).not.toContain('b.txt');
+  });
+
+  it('fixup：目标并入父提交（提交数 -1、父主题保留、内容合并）', async () => {
+    const repo = makeRepo();
+    const c1 = await makeCommit(repo, 'a.txt', 'v1\n', 'c1');
+    const c2 = await makeCommit(repo, 'b.txt', 'b1\n', 'c2');
+
+    const result = await editCommitAction(repo, { hash: c2, action: 'fixup' });
+
+    expect(result.status).toBe('success');
+    const subjects = (await runGit(['log', '--format=%s'], { cwd: repo })).stdout.trim().split('\n').reverse();
+    // fixup 并入父：提交数 -1，父（c1）信息保留
+    expect(subjects).toEqual(['c1']);
+    expect((await runGit(['rev-list', '--count', 'HEAD'], { cwd: repo })).stdout.trim()).toBe('1');
+    expect((await runGit(['ls-tree', '-r', '--name-only', 'HEAD'], { cwd: repo })).stdout).toContain('b.txt');
+    void c1;
   });
 });

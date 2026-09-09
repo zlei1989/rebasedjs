@@ -5,6 +5,7 @@
  */
 import {
   autosquashCommit,
+  editCommitAction,
   GitExitError,
   headCommit,
   isAncestorCommit,
@@ -14,7 +15,7 @@ import {
   verifyCommitish,
 } from '@rebased/core';
 import { ServiceError } from '@rebased/contracts';
-import type { AutosquashBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, TodoEntry } from '@rebased/contracts';
+import type { AutosquashBody, CommitEditBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, TodoEntry } from '@rebased/contracts';
 import { assertNoOperationInProgress } from './operation';
 
 /** rebase onto：预检无进行中操作 + onto 有效性（verifyCommitish → INVALID_REF）；core 三分支状态透传 */
@@ -76,4 +77,30 @@ async function isAncestorOfHead(repoPath: string, hash: string): Promise<boolean
   const head = await headCommit(repoPath);
   if (head === null) return false;
   return isAncestorCommit(repoPath, hash, head);
+}
+
+/**
+ * 单提交编辑直通（GitSingleCommitEditingAction 语义：Reword/Drop/Squash/Fixup）：
+ * 预检无进行中操作 + 哈希有效性（INVALID_REF）+ 祖先（INVALID_QUERY）+ reword 必带 message（INVALID_QUERY）
+ * + squash/fixup 目标有父提交（INVALID_QUERY，根提交无父不可并入）+ hash 非 HEAD（历史重写绕过当前分支语义，
+ * 对齐 Java 编辑动作在当前分支上执行——HEAD 编辑交给 interactive rebase 全量入口）。
+ */
+export async function commitEdit(repoPath: string, body: CommitEditBody): Promise<RebaseOutcome> {
+  await assertNoOperationInProgress(repoPath);
+  if (!(await verifyCommitish(repoPath, body.hash))) {
+    throw new ServiceError('INVALID_REF', `引用不存在或不是提交：${body.hash}`);
+  }
+  if (!(await isAncestorOfHead(repoPath, body.hash))) {
+    throw new ServiceError('INVALID_QUERY', '目标提交不在当前分支历史中');
+  }
+  if (body.action === 'reword' && (body.message === undefined || body.message.trim() === '')) {
+    throw new ServiceError('INVALID_QUERY', 'reword 需要新提交信息');
+  }
+  if (body.action === 'squash' || body.action === 'fixup') {
+    // 父提交有效性：根提交（无父）→ INVALID_QUERY（哈希为 HEAD 祖先时父亦在历史内，无需再查祖先）
+    if (!(await verifyCommitish(repoPath, `${body.hash}^`))) {
+      throw new ServiceError('INVALID_QUERY', 'squash/fixup 目标须有父提交（当前分支历史内）');
+    }
+  }
+  return editCommitAction(repoPath, body);
 }

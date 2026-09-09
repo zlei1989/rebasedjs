@@ -124,6 +124,9 @@ export interface LogPageProps {
   onAutosquash?: (action: 'fixup' | 'squash', hash: string) => void;
   /** 行右键「Push up to Commit」（GitPushUpToCommitAction 语义：推送该提交到当前分支远端分支）；缺省不渲染该菜单项 */
   onPushUpToCommit?: (hash: string) => void;
+  /** 单提交编辑直通（GitSingleCommitEditingAction 语义）：reword（带 message）/drop/squash/fixup（并入父提交）；
+   *  提供时渲染「Reword Commit」「Drop Commit」「Squash Commit」「Fixup Commit」四项菜单；缺省不渲染 */
+  onEditCommit?: (action: 'reword' | 'drop' | 'squash' | 'fixup', hash: string, message?: string) => void;
 }
 
 export function LogPage({
@@ -178,6 +181,7 @@ export function LogPage({
   onOpenInBrowser,
   onAutosquash,
   onPushUpToCommit,
+  onEditCommit,
 }: LogPageProps): React.ReactNode {
   // 行右键菜单：右键记录 hash（菜单项按 hash 组装），点击项分发对应回调；Modal 输入在菜单项后展开
   const [menuHash, setMenuHash] = useState<string | null>(null);
@@ -186,6 +190,9 @@ export function LogPage({
   const [branchName, setBranchName] = useState('');
   const [tagName, setTagName] = useState('');
   const [tagMessage, setTagMessage] = useState('');
+  // Reword 提交信息输入（GitSingleCommitEditingAction 语义：message 必填——Modal 预填当前主题）
+  const [rewordHash, setRewordHash] = useState<string | null>(null);
+  const [rewordMessage, setRewordMessage] = useState('');
   const menuItems = useMemo<MenuProps['items']>(() => {
     const hash = menuHash;
     if (hash === null) return [];
@@ -205,8 +212,15 @@ export function LogPage({
       items.push({ key: 'squash-commit', label: 'Squash Commit' });
     }
     if (onPushUpToCommit !== undefined) items.push({ key: 'push-up-to-commit', label: 'Push up to Commit' });
+    if (onEditCommit !== undefined) {
+      items.push({ type: 'divider' });
+      items.push({ key: 'reword-commit', label: 'Reword Commit' });
+      items.push({ key: 'drop-commit', label: 'Drop Commit' });
+      items.push({ key: 'squash-parent', label: 'Squash Commit（并入父提交）' });
+      items.push({ key: 'fixup-parent', label: 'Fixup Commit（并入父提交）' });
+    }
     return items;
-  }, [menuHash, onCheckoutRevision, onCheckoutNewBranch, onCreateTag, onOpenInBrowser, onCherryPick, onRevert, onResetHere, onBrowse, onAutosquash, onPushUpToCommit]);
+  }, [menuHash, onCheckoutRevision, onCheckoutNewBranch, onCreateTag, onOpenInBrowser, onCherryPick, onRevert, onResetHere, onBrowse, onAutosquash, onPushUpToCommit, onEditCommit]);
   const onMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
     if (menuHash === null) return;
     if (key === 'checkout-revision') onCheckoutRevision?.(menuHash);
@@ -220,6 +234,13 @@ export function LogPage({
     else if (key === 'fixup-commit') onAutosquash?.('fixup', menuHash);
     else if (key === 'squash-commit') onAutosquash?.('squash', menuHash);
     else if (key === 'push-up-to-commit') onPushUpToCommit?.(menuHash);
+    else if (key === 'reword-commit') {
+      setRewordHash(menuHash);
+      // 预填当前提交主题首行（message 全量首行；用户可在 Modal 中改写）
+      setRewordMessage(commits.find((c) => c.hash === menuHash)?.message.split('\n')[0] ?? '');
+    } else if (key === 'drop-commit') onEditCommit?.('drop', menuHash);
+    else if (key === 'squash-parent') onEditCommit?.('squash', menuHash);
+    else if (key === 'fixup-parent') onEditCommit?.('fixup', menuHash);
   };
   // 过滤输入（受控）：本地草稿即时回显，提交（Enter/失焦）才上抛——避免每击键重查快照
   const [authorDraft, setAuthorDraft] = useState(filters?.author ?? '');
@@ -506,6 +527,29 @@ export function LogPage({
             onChange={(e) => setTagMessage(e.target.value)}
           />
         </Flex>
+      </Modal>
+      {/* Reword 提交信息（单提交编辑直通：message 必填——经交互式变基 reword + GIT_EDITOR 消息 shim 覆写） */}
+      <Modal
+        title="Reword Commit"
+        open={rewordHash !== null}
+        okText="确定"
+        cancelText="取消"
+        okButtonProps={{ disabled: rewordMessage.trim() === '' }}
+        onOk={() => {
+          if (rewordHash !== null && rewordMessage.trim() !== '') {
+            onEditCommit?.('reword', rewordHash, rewordMessage.trim());
+          }
+          setRewordHash(null);
+        }}
+        onCancel={() => setRewordHash(null)}
+      >
+        <Input.TextArea
+          data-testid="reword-message-input"
+          placeholder="新的提交信息"
+          autoSize={{ minRows: 2, maxRows: 6 }}
+          value={rewordMessage}
+          onChange={(e) => setRewordMessage(e.target.value)}
+        />
       </Modal>
     </div>
   );

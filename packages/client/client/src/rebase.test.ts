@@ -1,9 +1,9 @@
-/** rebase.ts 测试：useRebase/useInteractiveRebase/useAutosquash 突变（POST 各自端点）+ useRebaseTodo 查询（base 空串挂 null key 不发请求） */
+/** rebase.ts 测试：useRebase/useInteractiveRebase/useAutosquash/useCommitEdit 突变（POST 各自端点）+ useRebaseTodo 查询（base 空串挂 null key 不发请求） */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AutosquashBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, TodoEntry } from '@rebased/contracts';
-import { useAutosquash, useInteractiveRebase, useRebase, useRebaseTodo } from './rebase';
+import type { AutosquashBody, CommitEditBody, InteractiveRebaseBody, RebaseBody, RebaseOutcome, TodoEntry } from '@rebased/contracts';
+import { useAutosquash, useCommitEdit, useInteractiveRebase, useRebase, useRebaseTodo } from './rebase';
 import { freshCache } from './testing/fresh-cache';
 
 const REBASE_BODY: RebaseBody = { onto: 'main', branch: 'feature' };
@@ -172,6 +172,44 @@ describe('useAutosquash', () => {
 
     expect(outcome).toEqual(OUTCOME);
     expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-rb-5/autosquash', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(BODY),
+    });
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe('useCommitEdit', () => {
+  it('trigger 发起 POST commit-edit（reword 带 message）并返回 RebaseOutcome；挂载时不自动 POST', async () => {
+    const fetchMock = vi.fn(async (_input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify(OUTCOME), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const BODY: CommitEditBody = { hash: 'aaaaaa', action: 'reword', message: '新信息' };
+
+    let result: { trigger?: (body: CommitEditBody) => Promise<RebaseOutcome>; isMutating?: boolean } = {};
+    function Probe() {
+      const { trigger, isMutating } = useCommitEdit('r-rb-6');
+      result = { trigger, isMutating };
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(freshCache(createElement(Probe)));
+    });
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ method: 'POST' }));
+
+    let outcome: RebaseOutcome | undefined;
+    await act(async () => {
+      outcome = await result.trigger!(BODY);
+    });
+
+    expect(outcome).toEqual(OUTCOME);
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-rb-6/commit-edit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(BODY),

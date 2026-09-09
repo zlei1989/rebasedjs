@@ -48,6 +48,7 @@ import { POST as postRebase } from '../app/api/repos/[repoId]/rebase/route';
 import { GET as getRebaseTodo } from '../app/api/repos/[repoId]/rebase/todo/route';
 import { POST as postInteractiveRebase } from '../app/api/repos/[repoId]/rebase/interactive/route';
 import { POST as postAutosquash } from '../app/api/repos/[repoId]/autosquash/route';
+import { POST as postCommitEdit } from '../app/api/repos/[repoId]/commit-edit/route';
 import { POST as postCherryPick } from '../app/api/repos/[repoId]/cherry-pick/route';
 import { POST as postRevert } from '../app/api/repos/[repoId]/revert/route';
 import { POST as postContinueOperation } from '../app/api/repos/[repoId]/operation/continue/route';
@@ -1289,6 +1290,23 @@ describe('web-next rebase/cherry-pick/revert/tags 路由', () => {
     const refRes = await postAutosquash(jsonPost(`${repoId}/autosquash`, { hash: 'deadbeef'.repeat(5), action: 'fixup' }), ctx(repoId));
     expect(refRes.status).toBe(400);
     expect(await refRes.json()).toMatchObject({ error: { code: 'INVALID_REF' } });
+  });
+
+  it('commit-edit 端点：drop 中间提交 → 200 success 且 git log 复核；reword 缺 message → 400 INVALID_QUERY', { timeout: RIG_TIMEOUT }, async () => {
+    const repoId = registerRepo();
+    makeLocalCommit('one.txt', 'one\n', 'one');
+    const one = git(['rev-parse', 'HEAD']).trim();
+    makeLocalCommit('two.txt', 'two\n', 'two');
+
+    const res = await postCommitEdit(jsonPost(`${repoId}/commit-edit`, { hash: one, action: 'drop' }), ctx(repoId));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'success' });
+    expect(git(['log', '--format=%s']).trim().split('\n').reverse()).toEqual(['init', 'two']);
+    expect(git(['ls-tree', '-r', '--name-only', 'HEAD'])).not.toContain('one.txt');
+
+    const rewRes = await postCommitEdit(jsonPost(`${repoId}/commit-edit`, { hash: git(['rev-parse', 'HEAD']).trim(), action: 'reword' }), ctx(repoId));
+    expect(rewRes.status).toBe(400);
+    expect(await rewRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 
   it('cherry-pick 端点：祖先提交摘樱桃 → 200 success', { timeout: RIG_TIMEOUT }, async () => {

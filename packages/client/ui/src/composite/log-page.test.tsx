@@ -714,4 +714,22 @@ describe('LogPage 行右键菜单', () => {
     expect(await screen.findByText('摘樱桃')).toBeInTheDocument();
     expect(screen.queryByText('Push up to Commit')).not.toBeInTheDocument();
   });
+
+  it('单提交编辑直通：注入 onEditCommit 时渲染 Reword/Drop/Squash/Fixup 菜单；reword 经 Modal 收集新信息', async () => {
+    const onEditCommit = vi.fn();
+    render(<LogPage repoName="alpha" status={status} commits={commits} onEditCommit={onEditCommit} />);
+    // Drop：直接回调（action + hash）
+    fireEvent.contextMenu(screen.getByText('第二笔提交'));
+    fireEvent.click(await screen.findByText('Drop Commit'));
+    expect(onEditCommit).toHaveBeenCalledWith('drop', 'c2');
+
+    // Reword：Modal 预填当前提交信息首行 → 修改 → 确定 → (action, hash, message)
+    fireEvent.contextMenu(screen.getByText('第二笔提交'));
+    fireEvent.click(await screen.findByText('Reword Commit'));
+    const input = await screen.findByTestId('reword-message-input');
+    expect(input).toHaveValue('第二笔提交');
+    fireEvent.change(input, { target: { value: 'c2（重写）' } });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onEditCommit).toHaveBeenCalledWith('reword', 'c2', 'c2（重写）');
+  });
 });
