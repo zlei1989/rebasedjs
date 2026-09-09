@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
-import { updateProject } from './update';
+import { forcePushedUpdate, updateProject } from './update';
 
 const dirs: string[] = [];
 
@@ -97,4 +97,74 @@ describe('updateProject', () => {
       expect(subjects[1]).toBe('remote: b.txt');
     },
   );
+});
+
+describe('forcePushedUpdate（GitForcePushedBranchUpdateAction 语义）', () => {
+  /** 远端强推装置：本地有 2 个未推送提交（c1/c2）→ 对端以远端 reset 掉并新增 remote-keep 提交（模拟强推） */
+  function makeForcePushedRig(): { repo: string; bare: string; defaultBranch: string; localOnly: string[] } {
+    const { repo, bare, defaultBranch } = makeRemoteRig();
+    writeFileSync(join(repo, 'l1.txt'), 'local1');
+    git(repo, ['add', 'l1.txt']);
+    git(repo, ['commit', '-q', '-m', 'local1']);
+    writeFileSync(join(repo, 'l2.txt'), 'local2');
+    git(repo, ['add', 'l2.txt']);
+    git(repo, ['commit', '-q', '-m', 'local2']);
+    const localOnly = [git(repo, ['rev-parse', 'HEAD~1']), git(repo, ['rev-parse', 'HEAD'])];
+    // 对端强推：另一 clone 从 base 起新增提交
+    const other = track(mkdtempSync(join(tmpdir(), 'rebased-api-other-')));
+    execFileSync('git', ['clone', '-q', bare, other]);
+    git(other, ['config', 'user.email', 'test@example.com']);
+    git(other, ['config', 'user.name', 'Test User']);
+    writeFileSync(join(other, 'r.txt'), 'remote-new');
+    git(other, ['add', 'r.txt']);
+    git(other, ['commit', '-q', '-m', 'remote-keep']);
+    git(other, ['push', '-q', 'origin', `HEAD:${defaultBranch}`]);
+    return { repo, bare, defaultBranch, localOnly };
+  }
+
+  it(
+    '强推修复：fetch → 本地重置到上游 → 本地独有提交重放（applied 与树内容断言）',
+    { timeout: RIG_TIMEOUT },
+    async () => {
+      const { repo, bare, defaultBranch, localOnly } = makeForcePushedRig();
+
+      const r = await forcePushedUpdate(repo);
+
+      expect(r.status).toBe('success');
+      expect(r.applied).toEqual(localOnly);
+      // 重置+重放后的最终树 = 对端新提交 + 本地两笔提交
+      const subjects = git(repo, ['log', '--format=%s']).split('\n');
+      expect(subjects[0]).toBe('local2');
+      expect(subjects[1]).toBe('local1');
+      expect(subjects[2]).toBe('remote-keep');
+      expect(readFileSync(join(repo, 'r.txt'), 'utf8')).toBe('remote-new');
+      expect(readFileSync(join(repo, 'l1.txt'), 'utf8')).toBe('local1');
+      expect(readFileSync(join(repo, 'l2.txt'), 'utf8')).toBe('local2');
+      void bare;
+    },
+  );
+
+  it(
+    '无本地独有提交（远端纯领先）→ updated + applied 空（重置即快进等价）',
+    { timeout: RIG_TIMEOUT },
+    async () => {
+      const { repo, bare, defaultBranch } = makeRemoteRig();
+      pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+
+      const r = await forcePushedUpdate(repo);
+
+      expect(r).toEqual({ status: 'updated', applied: [] });
+      expect(git(repo, ['rev-parse', 'HEAD'])).toBe(git(bare, ['rev-parse', defaultBranch]));
+      expect(readFileSync(join(repo, 'b.txt'), 'utf8')).toBe('from-other');
+    },
+  );
+
+  it('当前分支无上游 → INVALID_QUERY', async () => {
+    const repo = track(createTmpRepo());
+    makeBaseCommit(repo);
+
+    const err = await forcePushedUpdate(repo).catch((e: unknown) => e);
+
+    expect(err).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('没有上游') });
+  });
 });

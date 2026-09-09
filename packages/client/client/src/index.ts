@@ -39,7 +39,7 @@ export { useMerge, useContinueMerge } from './merge';
 export { useConflicts, useConflictContents, useResolveConflict } from './conflicts';
 export { useAccounts, useUpsertAccount, useDeleteAccount } from './auth';
 export { useRemotes, useRemoteAction, useFetch, usePull, usePush } from './remote';
-export { useUpdateProject } from './update';
+export { useForcePushedUpdate, useUpdateProject } from './update';
 export {
   useGithubStatus,
   useGithubPrs,

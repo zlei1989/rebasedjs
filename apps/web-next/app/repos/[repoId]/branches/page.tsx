@@ -6,9 +6,9 @@
  * 本页自订阅 events：外部 CLI 检出/重命名当前分支时重验证分支列表刷新 current 标记
  * （纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
-import { useBranchAction, useBranches, useCheckout, useFetch, useRepoEvents } from '@rebased/client';
+import { useBranchAction, useBranches, useCheckout, useFetch, useForcePushedUpdate, useRepoEvents } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
-import { Button, Flex, message } from 'antd';
+import { Button, Flex, Modal, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 
@@ -20,6 +20,33 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const { trigger: checkout, isMutating: checkingOut } = useCheckout(repoId);
   // 弹窗 Fetch（GitBranchPopupFetchAction 语义）：fetch 全部远程 → 成功后重验证分支列表（远程行/merged 态变化）
   const { trigger: fetch, isMutating: fetching } = useFetch(repoId);
+  // force-push 后修复（GitForcePushedBranchUpdateAction 语义）：当前分支与上游分叉时行内入口——
+  // fetch → 本地重置到上游 → 本地独有提交重放（冲突 → 冲突页）
+  const { trigger: forcePushedUpdate, isMutating: fixingForcePushed } = useForcePushedUpdate(repoId);
+  const onForcePushedUpdate = (): void => {
+    Modal.confirm({
+      title: 'force-push 修复',
+      content: '远端分支可能被强推（本地与上游分叉）。将拉取远端并把本地分支重置到上游，再把本地独有提交重放回来；冲突时可在冲突页解决。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () =>
+        forcePushedUpdate()
+          .then((outcome) => {
+            if (outcome.status === 'conflicts') {
+              void message.warning('重放存在冲突，请在冲突页解决');
+              router.push(`/repos/${repoId}/conflicts`);
+              return;
+            }
+            if (outcome.status === 'success') {
+              void message.success(`已重置并重放 ${outcome.applied.length} 个本地提交`);
+            } else {
+              void message.success('已同步到上游（无本地独有提交）');
+            }
+            void mutateBranches();
+          })
+          .catch(onError),
+    });
+  };
   // 外部 CLI 检出/重命名当前分支 → repo.state-changed（branch/headHash 变化）→ 重验证分支列表刷新 current 标记；
   // 注：纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件（watcher 架构的已知局限，已登记 P3 缺口）
   useRepoEvents(repoId, { onStatus: () => void mutateBranches() });
@@ -71,7 +98,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             .catch(onError);
         }}
         fetching={fetching}
-        acting={actingBranch || checkingOut}
+        onForcePushedUpdate={onForcePushedUpdate}
+        acting={actingBranch || checkingOut || fixingForcePushed}
       />
     </Flex>
   );

@@ -59,7 +59,7 @@ export {
 export { applyAutosquash, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
 export { cherryPick, revert } from './pick';
 export { applyTagAction, getTags } from './tag';
-export { updateProject } from './update';
+export { forcePushedUpdate, updateProject } from './update';
 export { createWorktree, getWorktrees, pruneWorktrees, removeWorktree } from './worktree';
 export { getSubmodules, updateSubmodules } from './submodule';
 export { toServiceError } from './errors';

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { abortGitOperation, getOperationState } from './operation';
-import { addRemote, fetchRemote, isShallowRepo, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
+import { addRemote, fetchRemote, isShallowRepo, listLocalOnlyCommits, listRemotes, pullRemote, pushBranch, pushUpToCommit, removeRemote, setRemoteUrl } from './remote';
 import { getStatus } from './status';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
@@ -270,6 +270,35 @@ describe('pushUpToCommit（GitPushUpToCommitAction 语义）', () => {
     const r = await pushUpToCommit(repo, { hash: head, branch: defaultBranch, remote: 'origin' });
 
     expect(r.status).toBe('up-to-date');
+  });
+});
+
+describe('listLocalOnlyCommits（@{u}..HEAD，force-push 修复的重放清单）', () => {
+  afterAll(() => dirs.forEach(cleanupTmpRepo));
+
+  it('本地独有提交：@{u}..HEAD 旧→新返回未推送哈希；对端领先时仅本地提交', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, defaultBranch } = makeRemoteRig();
+    writeFileSync(join(repo, 'l1.txt'), 'l1');
+    git(repo, ['add', 'l1.txt']);
+    git(repo, ['commit', '-q', '-m', 'local1']);
+    writeFileSync(join(repo, 'l2.txt'), 'l2');
+    git(repo, ['add', 'l2.txt']);
+    git(repo, ['commit', '-q', '-m', 'local2']);
+    const local = [git(repo, ['rev-parse', 'HEAD~1']), git(repo, ['rev-parse', 'HEAD'])];
+
+    // 对端再推一笔：fetch 后 @{u} 更新 → 本地独有仍只有 local1/local2
+    pushRemoteCommit(bare, defaultBranch, 'b.txt', 'from-other');
+    await fetchRemote(repo, { remote: 'origin' });
+
+    const commits = await listLocalOnlyCommits(repo);
+
+    expect(commits).toEqual(local);
+  });
+
+  it('无本地独有提交 → 空数组', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo } = makeRemoteRig();
+
+    expect(await listLocalOnlyCommits(repo)).toEqual([]);
   });
 });
 

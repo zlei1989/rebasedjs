@@ -236,6 +236,9 @@ export interface PullOutcome { status: 'up-to-date' | 'updated' | 'conflicts'; }
 export interface PushOutcome { status: 'pushed' | 'rejected' | 'up-to-date'; hint?: string; }
 /** Update Project 结果 = fetch + pull 的组合视图 */
 export interface UpdateOutcome { fetched: string[]; pull: PullOutcome; }
+/** force-push 后修复（GitForcePushedBranchUpdateAction 语义）：status updated=重置完成 / success=重放完成 / conflicts=重放冲突态；
+ *  applied 为被重放的本地独有提交哈希（旧→新；updated 时为空） */
+export interface ForcePushedUpdateOutcome { status: 'updated' | 'success' | 'conflicts'; applied: string[]; }
 /** commit & push 组合执行器结果：commit 已落盘 + push 业务结果（pushed/rejected/up-to-date） */
 export interface CommitAndPushOutcome { commit: { hash: string }; push: PushOutcome; }
 

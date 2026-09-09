@@ -194,3 +194,12 @@ export async function isShallowRepo(cwd: string): Promise<boolean> {
   const { stdout } = await runGit(['rev-parse', '--is-shallow-repository'], { cwd });
   return stdout.trim() === 'true';
 }
+
+/** 本地独有提交（@{u}..HEAD，旧→新；无上游时由调用方预检/拒绝）——force-push 修复的重放清单 */
+export async function listLocalOnlyCommits(cwd: string): Promise<string[]> {
+  const { stdout } = await runGit(['log', '--reverse', '--format=%H', '@{u}..HEAD'], { cwd });
+  return stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s !== '');
+}

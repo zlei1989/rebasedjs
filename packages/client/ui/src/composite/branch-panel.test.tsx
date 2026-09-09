@@ -308,4 +308,43 @@ describe('BranchPanel 过滤/查找已合并', () => {
     render(<BranchPanel branches={LIST} {...makeHandlers()} />);
     expect(screen.queryByTestId('cleanup-merged')).not.toBeInTheDocument();
   });
+
+  it('force-push 修复：当前分支与上游分叉（ahead>0 且 behind>0）时渲染按钮；点击回调；其余行/状态不渲染', () => {
+    const onForcePushedUpdate = vi.fn();
+    const { rerender } = render(
+      <BranchPanel
+        branches={makeList([
+          makeBranch({ name: 'main', current: true, upstream: 'origin/main', ahead: 2, behind: 3 }),
+          makeBranch({ name: 'dev', upstream: 'origin/dev', ahead: 1, behind: 1 }),
+        ])}
+        {...makeHandlers()}
+        onForcePushedUpdate={onForcePushedUpdate}
+      />,
+    );
+    // 仅当前分支且分叉 → 渲染；非当前分支（分叉也）不渲染
+    expect(screen.getByTestId('force-push-fix-main')).toBeInTheDocument();
+    expect(screen.queryByTestId('force-push-fix-dev')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('force-push-fix-main'));
+    expect(onForcePushedUpdate).toHaveBeenCalledTimes(1);
+
+    // 未分叉（纯 ahead）→ 不渲染
+    rerender(
+      <BranchPanel
+        branches={makeList([makeBranch({ name: 'main', current: true, upstream: 'origin/main', ahead: 2, behind: 0 })])}
+        {...makeHandlers()}
+        onForcePushedUpdate={onForcePushedUpdate}
+      />,
+    );
+    expect(screen.queryByTestId('force-push-fix-main')).not.toBeInTheDocument();
+  });
+
+  it('未传 onForcePushedUpdate 时不渲染 force-push 修复按钮（分叉态亦然）', () => {
+    render(
+      <BranchPanel
+        branches={makeList([makeBranch({ name: 'main', current: true, upstream: 'origin/main', ahead: 2, behind: 3 })])}
+        {...makeHandlers()}
+      />,
+    );
+    expect(screen.queryByTestId('force-push-fix-main')).not.toBeInTheDocument();
+  });
 });

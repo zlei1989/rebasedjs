@@ -1132,6 +1132,39 @@ describe('web-koa remotes/fetch/pull/push/update 端点', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
   });
 
+  it('update/force-pushed 端点：对端强推后（本地独有提交）→ 200 success + applied + 树含双方内容；无上游 → 400 INVALID_QUERY', { timeout: RIG_TIMEOUT }, async () => {
+    const { repoId, repoPath, bare, defaultBranch } = makeRemoteRig();
+    makeLocalCommit(repoPath, 'l1.txt', 'local1', 'local1');
+    makeLocalCommit(repoPath, 'l2.txt', 'local2', 'local2');
+    // 对端强推：另一 clone 从 init 起新增 remote-keep
+    const other = tmpDir('rebased-web-koa-other-');
+    execFileSync('git', ['clone', '-q', bare, other]);
+    execFileSync('git', ['-C', other, 'config', 'user.email', 't@e.c']);
+    execFileSync('git', ['-C', other, 'config', 'user.name', 'T']);
+    writeFileSync(join(other, 'r.txt'), 'remote-new');
+    execFileSync('git', ['-C', other, 'add', 'r.txt']);
+    execFileSync('git', ['-C', other, 'commit', '-q', '-m', 'remote-keep']);
+    execFileSync('git', ['-C', other, 'push', '-q', 'origin', `HEAD:${defaultBranch}`]);
+
+    const res = await postJson(`/api/repos/${repoId}/update/force-pushed`, {});
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string; applied: string[] };
+    expect(body.status).toBe('success');
+    expect(body.applied).toHaveLength(2);
+    // 重放后树 = remote-keep + local1/local2
+    const logSubjects = execFileSync('git', ['-C', repoPath, 'log', '--format=%s'], { encoding: 'utf8' }).trim().split('\n');
+    expect(logSubjects[0]).toBe('local2');
+    expect(logSubjects[1]).toBe('local1');
+    expect(logSubjects[2]).toBe('remote-keep');
+    expect(readFileSync(join(repoPath, 'r.txt'), 'utf8')).toBe('remote-new');
+
+    // 无上游仓库 → 400 INVALID_QUERY
+    const noUpstream = registerRepo();
+    const badRes = await postJson(`/api/repos/${noUpstream.repoId}/update/force-pushed`, {});
+    expect(badRes.status).toBe(400);
+    expect(await badRes.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
+  });
+
   it('update 端点：未注册 repoId 返回 404 REPO_NOT_FOUND', async () => {
     const res = await postJson('/api/repos/nope/update', { strategy: 'merge' });
     expect(res.status).toBe(404);

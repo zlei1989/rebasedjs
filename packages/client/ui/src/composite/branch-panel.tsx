@@ -36,6 +36,9 @@ export interface BranchPanelProps {
   onFetch?: () => void;
   /** fetch 请求进行中：按钮 loading 态 */
   fetching?: boolean;
+  /** force-push 后修复（GitForcePushedBranchUpdateAction 语义）：当前分支与上游分叉（ahead>0 且 behind>0）
+   *  时当前行渲染「force-push 修复」按钮；缺省不渲染 */
+  onForcePushedUpdate?: () => void;
   acting?: boolean;
 }
 
@@ -184,7 +187,7 @@ function SingleInputModal({
   );
 }
 
-/** 本地分支行：名称 + current Tag + 上游徽标 + 合并图标 + 行尾 Dropdown（检出/重命名/设上游/删除）+ 比较按钮 */
+/** 本地分支行：名称 + current Tag + 上游徽标 + 合并图标 + 行尾 Dropdown（检出/重命名/设上游/删除）+ 比较按钮 + force-push 修复 */
 function LocalBranchRow({
   branch,
   pendingDelete,
@@ -192,6 +195,7 @@ function LocalBranchRow({
   onDelete,
   onDeleteCancel,
   onCompare,
+  onForcePushedUpdate,
 }: {
   branch: BranchRef;
   /** 当前等待删除确认的分支名（受控 Popconfirm 锚定本行菜单按钮） */
@@ -201,7 +205,10 @@ function LocalBranchRow({
   onDeleteCancel: () => void;
   /** 与当前分支比较（GitCompareWithBranchAction 语义）；当前分支无意义（A..A 空循环），禁用 */
   onCompare?: (branch: string) => void;
+  /** force-push 后修复（GitForcePushedBranchUpdateAction 语义）：当前分支与上游分叉（ahead>0 且 behind>0）时渲染 */
+  onForcePushedUpdate?: () => void;
 }): React.ReactNode {
+  const diverged = branch.current && branch.upstream !== null && branch.ahead > 0 && branch.behind > 0;
   return (
     <Flex data-testid={`row-local-${branch.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
@@ -222,6 +229,18 @@ function LocalBranchRow({
           比较
         </Button>
       )}
+      {/* force-push 修复：远端被强推（本地与上游分叉且无法普通更新）时的恢复通道——重置到上游 + 重放本地提交 */}
+      {onForcePushedUpdate !== undefined && diverged ? (
+        <Button
+          size="small"
+          type="text"
+          danger
+          data-testid={`force-push-fix-${branch.name}`}
+          onClick={onForcePushedUpdate}
+        >
+          force-push 修复
+        </Button>
+      ) : null}
       {/* 删除走受控 Popconfirm：Dropdown 菜单项点击即关菜单，故确认框锚定在菜单按钮上按状态开关 */}
       <Popconfirm
         open={pendingDelete === branch.name}
@@ -288,6 +307,7 @@ export function BranchPanel({
   onCompare,
   onFetch,
   fetching,
+  onForcePushedUpdate,
   acting,
 }: BranchPanelProps): React.ReactNode {
   // 过滤态：文本（名称大小写不敏感子串）+「仅看已合并」（本地/远程两组同筛选——Java 查找已合并语义）
@@ -396,6 +416,7 @@ export function BranchPanel({
                 onDelete={handleDelete}
                 onDeleteCancel={() => setPendingDelete(null)}
                 onCompare={onCompare}
+                onForcePushedUpdate={onForcePushedUpdate}
               />
             ))
           )
