@@ -53,6 +53,7 @@ import {
   type RebaseOutcome,
   type ResetBody,
   type UpdateBody,
+  type UpdateOutcome,
 } from '@rebased/contracts';
 import { AuthDialog, BranchCompareView, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
 import { Modal, message } from 'antd';
@@ -330,7 +331,9 @@ export default function Page({
     );
   };
   // UpdateProjectDialog 确定：结果 = fetch 引用数 + pull 状态的组合视图；
-  // 若为推送被拒后的更新（pendingPushRef 非空）→ 更新成功（up-to-date/updated）后自动续推原推送体
+  // 若为推送被拒后的更新（pendingPushRef 非空）→ 更新成功（up-to-date/updated）后自动续推原推送体（结果面板不展示——流程闭环）；
+  // 常规更新 → 结果面板呈现（对话框保持打开，用户读后关闭）
+  const [updateOutcome, setUpdateOutcome] = useState<UpdateOutcome | null>(null);
   const onUpdateOk = (body: UpdateBody): void => {
     const pendingPush = pendingPushRef.current;
     runRemoteOp(
@@ -338,14 +341,13 @@ export default function Page({
       (outcome) => {
         if (outcome.pull.status === 'conflicts') {
           pendingPushRef.current = null;
-          setOpenDialog(null);
+          setUpdateOutcome(outcome);
           void message.warning('更新存在冲突，请解决后完成');
           return;
         }
         if (pendingPush === null) {
-          setOpenDialog(null);
-          if (outcome.pull.status === 'up-to-date') void message.info('已是最新');
-          else void message.success(`更新完成（fetch 更新 ${outcome.fetched.length} 个引用）`);
+          // 常规更新：结果面板（fetched + pull 汇总）——对话框保持打开，用户读后点「关闭」
+          setUpdateOutcome(outcome);
           return;
         }
         // 推送被拒后的续推：update 成功 → 重推 pendingPush；rejected 再次出现则回到 update （用户改策略再试）
@@ -575,9 +577,11 @@ export default function Page({
           });
         }}
         resetting={resetting}
+        outcome={updateOutcome}
         onOk={onUpdateOk}
         onCancel={() => {
           pendingPushRef.current = null;
+          setUpdateOutcome(null);
           setOpenDialog(null);
         }}
       />

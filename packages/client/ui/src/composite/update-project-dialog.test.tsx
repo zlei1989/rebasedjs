@@ -83,3 +83,47 @@ describe('UpdateProjectDialog', () => {
     expect(screen.queryByTestId('reset-to-tracked')).not.toBeInTheDocument();
   });
 });
+
+describe('UpdateProjectDialog 更新会话结果面板（GitUpdateSession 语义）', () => {
+  it('outcome 提供：渲染结果汇总（fetch 引用数 + pull 状态）；footer 变为「关闭」（确定隐藏）', () => {
+    const onCancel = vi.fn();
+    render(
+      <UpdateProjectDialog
+        open
+        onOk={vi.fn()}
+        onCancel={onCancel}
+        outcome={{
+          fetched: ['refs/remotes/origin/main', 'refs/remotes/origin/dev'],
+          pull: { status: 'updated' },
+        }}
+      />,
+    );
+    const panel = screen.getByTestId('update-outcome-panel');
+    expect(panel).toHaveTextContent('更新结果');
+    expect(panel).toHaveTextContent('fetch 更新 2 个远程引用');
+    expect(panel).toHaveTextContent('已合入当前分支');
+    expect(screen.queryByRole('button', { name: /确\s*定/ })).not.toBeInTheDocument();
+
+    // 点「关闭」→ onCancel（结果态 footer 文案）
+    fireEvent.click(screen.getByRole('button', { name: /关\s*闭/ }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('outcome conflicts：面板提示到冲突页解决；up-to-date 提示已是最新', () => {
+    const { rerender } = render(
+      <UpdateProjectDialog
+        open
+        onOk={vi.fn()}
+        onCancel={() => {}}
+        outcome={{ fetched: [], pull: { status: 'conflicts' } }}
+      />,
+    );
+    expect(screen.getByTestId('update-outcome-panel')).toHaveTextContent('更新存在冲突');
+    expect(screen.getByTestId('update-outcome-panel')).toHaveTextContent('冲突页');
+
+    rerender(
+      <UpdateProjectDialog open onOk={vi.fn()} onCancel={() => {}} outcome={{ fetched: [], pull: { status: 'up-to-date' } }} />,
+    );
+    expect(screen.getByTestId('update-outcome-panel')).toHaveTextContent('已是最新');
+  });
+});

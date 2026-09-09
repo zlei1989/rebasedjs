@@ -1,11 +1,13 @@
 /**
- * Update Project 对话框（对照 Java GitUpdateOptionsDialog）：
- *  策略 Radio（merge/rebase，默认 merge）——update = fetch 全部 + 按策略合入当前分支。
+ * Update Project 对话框（对照 Java GitUpdateOptionsDialog + GitUpdateSession 结果面板）：
+ *  策略 Radio（merge/rebase，默认 merge）——update = fetch 全部 + 按策略合入当前分支；
+ *  更新会话结果（outcome 非空时）：fetched 引用数 + pull 状态汇总面板（up-to-date/updated/conflicts 提示），
+ *  结果态下 footer 变为「关闭」。
  *  纯受控：open 由父级持有；策略为内部状态，关闭时复位为 merge。
  */
 import { useState } from 'react';
-import { Button, Flex, Modal, Radio, Typography } from 'antd';
-import type { UpdateBody } from '@rebased/contracts';
+import { Alert, Button, Flex, Modal, Radio, Typography } from 'antd';
+import type { UpdateBody, UpdateOutcome } from '@rebased/contracts';
 
 export interface UpdateProjectDialogProps {
   open: boolean;
@@ -15,6 +17,8 @@ export interface UpdateProjectDialogProps {
   confirming?: boolean;
   /** 推送被拒后的更新流程（GitRejectedPushUpdateDialog 语义）：标题与说明文案提示该场景 */
   pushRejected?: boolean;
+  /** 更新会话结果（GitUpdateSession 结果面板语义）：非空时对话框呈现结果汇总并关闭「确定」（footer → 关闭） */
+  outcome?: UpdateOutcome | null;
   /** Reset to tracked（GitUpdateOptionsDialog 左下动作）：当前分支跟踪上游丢失时不能回退（该回调缺省时按钮禁用） */
   resetToTracked?: { localBranch: string; upstream: string };
   /** Reset to tracked 回调（确认前往上游硬重置）；缺省不渲染按钮（向后兼容） */
@@ -29,11 +33,14 @@ export function UpdateProjectDialog({
   onCancel,
   confirming,
   pushRejected,
+  outcome,
   resetToTracked,
   onResetToTracked,
   resetting,
 }: UpdateProjectDialogProps): React.ReactNode {
   const [strategy, setStrategy] = useState<'merge' | 'rebase'>('merge');
+  // 结果态：outcome 非空 → 展示汇总面板（footer 关闭而非确定）
+  const hasOutcome = outcome !== undefined && outcome !== null;
 
   /** 复位为默认策略：Modal 默认不卸载子树，取消/提交后重开不能残留上次选择 */
   const reset = (): void => {
@@ -56,7 +63,8 @@ export function UpdateProjectDialog({
       title={pushRejected ? '推送被拒 — 更新项目' : '更新项目'}
       open={open}
       okText="确定"
-      cancelText="取消"
+      cancelText={hasOutcome ? '关闭' : '取消'}
+      okButtonProps={hasOutcome ? { style: { display: 'none' } } : undefined}
       confirmLoading={confirming}
       onOk={submit}
       onCancel={close}
@@ -75,6 +83,23 @@ export function UpdateProjectDialog({
             { value: 'rebase', label: 'rebase：变基（线性历史）' },
           ]}
         />
+        {/* 更新会话结果（GitUpdateSession 结果汇总）：fetched 引用数 + pull 状态 */}
+        {outcome !== undefined && outcome !== null ? (
+          <Flex vertical gap={6} data-testid="update-outcome-panel">
+            <Typography.Text strong>更新结果</Typography.Text>
+            <Typography.Text>
+              fetch 更新 {outcome.fetched.length} 个远程引用
+              {outcome.fetched.length === 0 ? '（无远程更新）' : `：${outcome.fetched.slice(0, 3).join('、')}${outcome.fetched.length > 3 ? ' 等' : ''}`}
+            </Typography.Text>
+            {outcome.pull.status === 'up-to-date' ? (
+              <Alert type="info" showIcon message="已是最新" />
+            ) : outcome.pull.status === 'updated' ? (
+              <Alert type="success" showIcon message="已合入当前分支" />
+            ) : (
+              <Alert type="warning" showIcon message="更新存在冲突" description="请到冲突页解决后完成（继续/中止）" />
+            )}
+          </Flex>
+        ) : null}
         {onResetToTracked !== undefined && resetToTracked !== undefined && (
           <Flex gap={8} align="center" wrap="wrap" style={{ marginTop: 4 }}>
             <Button

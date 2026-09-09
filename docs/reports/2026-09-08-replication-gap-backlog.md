@@ -17,7 +17,7 @@
 | SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
 | 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
-| 页面功能点缺口 | 16 项（分布于 13 个页面） | §2.2 / §2.3 |
+| 页面功能点缺口 | 15 项（分布于 13 个页面） | §2.2 / §2.3 |
 | 导航边缺口 | 8 条 ❌ 可做 + 2 条 🟡 直达（#13 LogPage→DiffPage、#21 右键动作直通）；4 条 ❌ 明确不做另列 | §2.4 |
 | 工程排期项 | 11 项（技术债/硬化） | §2.5 |
 | 可选任务（后置） | 1（分支折叠——依赖过滤 UI + PermanentGraph 类缓存） | §2.9 |
@@ -83,7 +83,7 @@
 
 **PushDialog（2）**：rejected → 自动弹 Update 对话框联动（`GitRejectedPushUpdateDialog` → 更新引擎 → 续推）✅ 已落地（容器编排：rejected 记录 pendingPush → 自动开 Update（pushRejected 文案）→ 更新成功续推；conflicts 引导解决；再 rejected 循环）；force-push 后修复联动（待办）。
 
-**UpdateProjectDialog（1）**：更新会话进度/结果汇总（Java 多仓库会话；Web 单仓库模型下至少做单仓库结果面板）。（修复跟踪分支 Reset to tracked 已落地——左下「Reset to tracked」→ Modal.confirm → `reset --hard <upstream>`；无上游不渲染。）
+**UpdateProjectDialog（0）**：更新会话进度/结果汇总已落地——常规更新后对话框保持打开呈现结果面板（fetched 引用数 + pull 状态：updated 已合入 / up-to-date 已最新 / conflicts 引导冲突页；footer 变「关闭」；推送被拒续推流程闭环不展示面板）。（修复跟踪分支 Reset to tracked 已落地——左下「Reset to tracked」→ Modal.confirm → `reset --hard <upstream>`；无上游不渲染。）
 
 **BlameView（1）**：Show All Affected（受影响提交对话框——需专用查询端点）；行内「差异」（父哈希出 blame `parents` 批量解析，根提交 root=1）与「历史」已落地。
 

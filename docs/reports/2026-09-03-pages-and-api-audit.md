@@ -407,7 +407,7 @@ Update Project——策略化更新入口；对应 `GitUpdateOptionsDialog` / `G
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
 | merge/rebase 策略选择 | ✅ | 默认 merge |
-| 更新会话（进度/结果汇总） | 🟡 | 单仓库一次性结果呈现（fetched + pull 状态）；Java 多仓库会话未做（Web 单仓库模型） |
+| 更新会话（进度/结果汇总） | ✅ | 常规更新后对话框保持打开呈现结果面板（fetched 引用数 + pull 状态：updated 已合入 / up-to-date 已最新 / conflicts 引导冲突页；footer 变「关闭」；推送被拒续推流程闭环不展示面板——`GitUpdateSession` 结果汇总的 Web 单仓库形态） |
 | 修复跟踪分支（Reset to tracked） | ✅ | 左下「Reset to tracked」（本地分支 → 上游文案）→ Modal.confirm（danger）→ `reset {ref: upstream, mode:'hard'}`（丢弃工作区/暂存变更）；无上游（detached/未跟踪）不渲染 |
 
 ### 4.16 BlameView ✅
