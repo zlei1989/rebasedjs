@@ -87,8 +87,8 @@
 | 21 | PatchPanel | P3 | `/repos/:id/patches` | 更多「补丁」 | F-120~F-123（4） | patch | ✅ 4/4 |
 | 22 | ShelfPanel | P3 | `/repos/:id/shelves` | 更多「搁置」 | F-124~F-126（3） | shelf | ✅ 3/3 |
 | 23 | WorktreePanel | P4 | `/repos/:id/worktrees` | 更多「工作树」 | F-127~F-129（3） | worktree | ✅ 3/3 |
-| 24 | SubmodulePanel | P4 | `/repos/:id/submodules` | 更多「子模块」 | F-130~F-131（2） | submodule | 待测 |
-| 25 | IgnoreDialog | P3 | `/repos/:id/ignore` | 更多「忽略」 | F-132~F-133（2） | ignore | 待测 |
+| 24 | SubmodulePanel | P4 | `/repos/:id/submodules` | 更多「子模块」 | F-130~F-131（2） | submodule | ✅ 2/2 |
+| 25 | IgnoreDialog | P3 | `/repos/:id/ignore` | 更多「忽略」 | F-132~F-133（2） | ignore | ✅ 2/2 |
 | 26 | GitHubPanel | P3 | `/repos/:id/github` | 更多「GitHub」（github.com 远程才渲染） | F-134~F-139（6） | github | 待测 |
 | 27 | GitLabPanel | P4 | `/repos/:id/gitlab` | 更多「GitLab」（gitlab.com 远程才渲染） | F-140~F-144（5） | gitlab | 待测 |
 | 28 | GitConsole | P3 | `/repos/:id/console` | 更多「控制台」 | F-145~F-146（2） | console | 待测 |
@@ -428,8 +428,8 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-130 | 子模块状态列表（四态徽标） | 观察列表（含空格/点号路径） | 未初始化/已检出/提交漂移/冲突四态徽标正确（CLI `.gitmodules` 互证） | 待测 | submodule-01.png |
-| F-131 | 子模块更新（init/update） | 行内更新 → 全量（recursive Checkbox） | init/recursive 生效（CLI 互证） | 待测 | submodule-02.png |
+| F-130 | 子模块状态列表（四态徽标） | 观察列表（含空格/点号路径） | 未初始化/已检出/提交漂移/冲突四态徽标正确（CLI `.gitmodules` 互证） | ✅ | submodule-01.png（四态**同屏**实测：`vendor/sub-module`「提交漂移」、`vendor/dir.with.dots`「未初始化」（点号路径）、`vendor/ok-sub`「已检出」、`vendor/conflict-sub`「冲突」；与 `git submodule status` 前缀 `+ / - / 空格 / U` 逐一对应，URL 与短哈希同值。夹具：新增 ok-sub（`protocol.file.allow=always` 越过 file 传输策略）、conflict-sub 用两侧分叉 gitlink 合并产生 U；API 侧返回 `different-commit/uninitialized/checked-out/conflict` 四值） |
+| F-131 | 子模块更新（init/update） | 行内更新 → 全量（recursive Checkbox） | init/recursive 生效（CLI 互证） | ✅ | submodule-02.png（顶部「递归更新」Checkbox 勾选 + 「更新全部」；行内「更 新」作用于 `vendor/dir.with.dots`（未初始化）→ CLI：`submodule status` 由 `-1a70317` 转为 ` 1a70317 (heads/master)`、目录出现 `.git` 与 index.js、`git config` 写入 `submodule.vendor/dir.with.dots.url`；全量更新 → `vendor/sub-module` 由漂移提交 12a7624 归位到 index 记录 8a740f7（`+`→空格），列表同步刷新为「已检出」；已冲突的 `conflict-sub` 保持 U（gitlink 冲突非 update 可解），submodule-02b.png 为勾选态） |
 
 ### 4.25 IgnoreDialog（slug `ignore`；P3）
 
@@ -437,8 +437,8 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-132 | 创建/编辑/模板（双 target） | 双 target 切换 → 模板替换预览（Node/Python/通用）→ 保存 | `.gitignore`/`.git/info/exclude` 写入正确（CLI 文件互证） | 待测 | ignore-01.png |
-| F-133 | 一键忽略文件/目录 | StatusPage 未跟踪行「忽略」→ Modal.confirm | 追加 `/path` 幂等；重复操作不重复写（CLI） | 待测 | ignore-02.png |
+| F-132 | 创建/编辑/模板（双 target） | 双 target 切换 → 模板替换预览（Node/Python/通用）→ 保存 | `.gitignore`/`.git/info/exclude` 写入正确（CLI 文件互证） | ✅ | ignore-01.png（编辑器 Modal：双 target Radio `.gitignore` / `.git/info/exclude`、模板 Select（Node.js/Python/通用）、内容区带行号 Monaco；① `.gitignore` 目标：内容追加 `f132-probe/` 后保存 → CLI 文件尾部出现该行；② 切 `.git/info/exclude` 目标 → 内容区随之载入该文件原文（切换即换文件）→ 选 **Python** 模板 → 内容被替换为 `# Python 字节码与虚拟环境` 起始的模板 → 保存后 CLI 该文件为模板行；两 target 互不影响） |
+| F-133 | 一键忽略文件/目录 | StatusPage 未跟踪行「忽略」→ Modal.confirm | 追加 `/path` 幂等；重复操作不重复写（CLI） | ✅ | ignore-02.png（状态页未跟踪行「忽略」→ 确认框「忽略文件? 将给 .gitignore 追加 /shelf-untracked-new.txt 行」→ 确定后 CLI 末行新增 `/shelf-untracked-new.txt`、该文件从未跟踪列表消失（ignore-02b.png 为确认框态）；**幂等**实测：同一路径再调一次 ignore/add → 200 且 `.gitignore` 中该行计数仍为 1） |
 
 ### 4.26 GitHubPanel（slug `github`；P3）
 
@@ -534,6 +534,7 @@
 | R13 | 2026-09-11 | F-114~F-119（ConflictsPanel 6 行：冲突列表与徽标 / 整侧解决 / 3-way 手合并 / 完成合并 / 跳过 / 状态联动与中止） | ✅ 6（ConflictsPanel 6/6 收官） | 本轮无新缺陷（说明见 §5.12.1）；夹具重建为一次性呈现 AA/UD/UU 四路冲突 + rebase 冲突，每步均与 CLI 互证 |
 | R14 | 2026-09-11 | F-120~F-126（PatchPanel 4 + ShelfPanel 3：补丁三态创建/应用/列表管理/导入搁置；搁置保存/恢复与删除/事件联动） | ✅ 7（两页各自收官：patch 4/4、shelf 3/3） | D-31（补丁重名静默覆盖，把既有补丁截断为 0 字节）修复并复验（见 §5.13）；F-126 用双标签页实测 SSE 事件驱动刷新 |
 | R15 | 2026-09-11 | F-127~F-129（WorktreePanel 3 行：列表徽标 / 创建与路径校验 / 移除·强制移除·清理） | ✅ 3（WorktreePanel 3/3 收官） | D-32（脏工作树在 UI 上无法移除：缺 `--force` 入口）修复并复验（见 §5.14） |
+| R16 | 2026-09-11 | F-130~F-133（SubmodulePanel 2 + IgnoreDialog 2：四态徽标与更新 / 双 target 编辑与模板 / 一键忽略幂等） | ✅ 4（两页各自收官：submodule 2/2、ignore 2/2） | 本轮无新缺陷；子模块四态夹具由 `protocol.file.allow=always` 新增子模块 + 两侧分叉 gitlink 合并构造 |
 
 ### 5.14 R15 缺陷登记（已修复 + 复验）
 
