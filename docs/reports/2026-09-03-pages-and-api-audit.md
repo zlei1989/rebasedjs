@@ -16,10 +16,10 @@
 |------|------|
 | 操作页面/面板（31 个） | **29 ✅ + 2 🟡 等效 = 31/31** |
 | 功能域（36 + 2 可选） | **36/36 落地**（browse 历史快照浏览 2026-09-08 轻量复刻落地，见任务清单 §2.8）；可选 2 项（terminal、local-history）明确不做 |
-| 端点路径 / HTTP 方法 | **102 / 117**（web-next 102 个 route.ts ↔ web-koa repos.ts 117 注册，15 路径双方法，两端完全对称） |
+| 端点路径 / HTTP 方法 | **103 / 118**（web-next 103 个 route.ts ↔ web-koa repos.ts 118 注册，15 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
-| `@rebased/api` 公共出口 | 122 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 70、领域类型/别名 97、SSE 事件 6 种在用、错误码 9 实际产生 / 3 预留（HOOK_FAILED 已消费；CONFLICT 三态承载定档） |
+| `@rebased/api` 公共出口 | 123 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
+| 契约层 | zod schema 71、领域类型/别名 97、SSE 事件 6 种在用、错误码 9 实际产生 / 3 预留（HOOK_FAILED 已消费；CONFLICT 三态承载定档） |
 | 导航边（106 条） | 88 ✅（含等价边）+ 6 🟡 + 8 ➖ + 4 ❌ |
 
 ### 1.2 口径与图例
@@ -160,16 +160,16 @@
 
 ### 3.2 契约层（`@rebased/contracts`）
 
-- **zod schema（64 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff（含 three-way）/settings/config、staging/commit（含 commit/push 组合）、branch/checkout、reset、merge/conflict、stash（含 unstash-as/index）、changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore（含 patch import-shelf name）、github（注释/审查/合并/**行级评论**）、gitlab（评论/讨论/审查/合并/创建）、worktree/submodule——全部被两端路由使用，无闲置。
-- **SSE 事件（6 种在用）**：`log.line`、`diff.chunk`、`repo.state-changed`、`operation.state-changed`（events 首帧双事件）、`refs.changed`（fetch/pull/push 后引用移动，首帧全量基线）、`stream.error`（流内错误帧）。`operation.progress` 未实现（无进度型长任务 UI 面）。
-- **错误码（12 个）**：实际产生 8 个——`REPO_NOT_FOUND`、`NOT_A_GIT_REPO`、`INVALID_QUERY`、`GIT_ERROR`、`INVALID_REF`、`OPERATION_IN_PROGRESS`、`AUTH_FAILED`（远程 401 → 认证重试回路）、`RATE_LIMITED`（GitHub 限流）；预留 4 个——`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`。映射表 `httpStatusFor` 两端共用。
-- **领域类型（89 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
+- **zod schema（71 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff（含 three-way）/settings/config、staging/commit（含 commit/push 组合）、branch/checkout、reset、merge/conflict、stash（含 unstash-as/index）、changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore（含 patch import-shelf name）、github（注释/审查/合并/**行级评论**）、gitlab（评论/讨论/审查/合并/创建）、worktree/submodule、gpg——全部被两端路由使用，无闲置。
+- **SSE 事件（6 种在用）**：`log.line`、`diff.chunk`、`repo.state-changed`、`operation.state-changed`（events 首帧双事件）、`refs.changed`（fetch/pull/push 后引用移动，首帧全量基线）、`stream.error`（流内错误帧）。`operation.progress` 不再新增冗余事件类型——进度由 `operation.state-changed` 携带 step/total 承载（Java `GitRebaseProgress` 逐帧解析在 Web 的等效为轮询态，见任务清单 §2.6）。
+- **错误码（12 个）**：实际产生 9 个——`REPO_NOT_FOUND`、`NOT_A_GIT_REPO`、`INVALID_QUERY`、`GIT_ERROR`、`INVALID_REF`、`OPERATION_IN_PROGRESS`、`AUTH_FAILED`（远程 401 → 认证重试回路）、`RATE_LIMITED`（GitHub 限流）、`HOOK_FAILED`（hook 拒绝 → 422）；预留 3 个——`CONFLICT`（冲突语义由业务三态承载，409 仅供资源类冲突）、`STALE_LOCK`、`CANCELLED`。映射表 `httpStatusFor` 两端共用。
+- **领域类型（97 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
 
 ### 3.3 服务层与使用状态
 
-- `@rebased/api` 公共出口 118 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
+- `@rebased/api` 公共出口 123 函数（38 模块，一功能一文件），全部挂端点或被框架层使用（`getRepoById`/`toServiceError` 为路由装配基础设施）。
 - **未挂端点 0**：`initRepo`/`cloneRepo` 已随 repo 域收尾挂 `/repos/init`、`/repos/clone`（见任务清单 §2.2 完成记录）。
-- **半使用接口 2 个**：`streamDiffEvents`（diff/stream 已订阅未渲染）、`applyHunkStaging`（无 UI 入口）。
+- **半使用接口 0 个**：`streamDiffEvents` 已接 diff/stream 渐进渲染（ui `composite/diff-stream-view.tsx`），`applyHunkStaging` 已接 StatusPage 行内 hunk 选择（见任务清单 §2.1 完成记录）。
 
 ---
 

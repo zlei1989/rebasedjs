@@ -14,8 +14,8 @@
 |------|------|----------|
 | 半使用接口 | 0（diff/stream 分块渲染、staging/hunks 行内选择均已落地，见 §2.1 完成记录） | §2.1 |
 | 未挂端点能力 | 0（`initRepo`/`cloneRepo` 已挂端点，见 §2.2 完成记录） | §2.2 |
-| SSE 事件 | 1（`operation.progress` 未实现） | §2.6 |
-| 错误码预留 | 4（`CONFLICT`、`HOOK_FAILED`、`STALE_LOCK`、`CANCELLED`） | §2.6 |
+| SSE 事件 | 0（`operation.progress` 已满足——进度由 `operation.state-changed` 携带 step/total 承载，不再新增冗余事件类型） | §2.6 |
+| 错误码预留 | 3（`CONFLICT` 三态承载定档、`STALE_LOCK`/`CANCELLED` 保留待底层路径消费；`HOOK_FAILED` 已消费） | §2.6 |
 | 功能域 | 0（browse 历史快照浏览已落地，见 §2.8 完成记录） | §2.8 |
 | 页面功能点缺口 | 0 项（0 页面——§2.3 各域剩余项全部清零；2026-09-21 终核） | §2.2 / §2.3 |
 | 导航边缺口 | 0 条 ❌ 可做（#27 已落地——DiffPage 页头 Prev/Next，committed/日志变更集/分支与工作树差异三入口注入文件组）+ 1 条 🟡 形态（#20 右键分支操作子菜单）；4 条 ❌ 明确不做另列 | §2.4 |
