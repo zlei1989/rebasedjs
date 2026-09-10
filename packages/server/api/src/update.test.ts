@@ -163,6 +163,31 @@ describe('forcePushedUpdate（GitForcePushedBranchUpdateAction 语义）', () =>
     },
   );
 
+  // 冒烟 D-22：本地独有提交里含空提交（--allow-empty 占位）时，git 缺省 --empty=stop 会在该提交处中止，
+  // 修复半途停下并遗留 sequencer 停态；修复后空提交被保留、后续提交继续重放
+  it(
+    '强推修复：本地独有提交含空提交时仍完整重放（空提交保留）',
+    { timeout: RIG_TIMEOUT },
+    async () => {
+      const { repo, localOnly } = makeForcePushedRig();
+      // 在本地两笔提交之间插入一个空提交，并把其后的提交纳入重放清单
+      git(repo, ['commit', '-q', '--allow-empty', '-m', 'local-empty']);
+      writeFileSync(join(repo, 'l3.txt'), 'local3');
+      git(repo, ['add', 'l3.txt']);
+      git(repo, ['commit', '-q', '-m', 'local3']);
+      const allLocal = [...localOnly, git(repo, ['rev-parse', 'HEAD~1']), git(repo, ['rev-parse', 'HEAD'])];
+
+      const r = await forcePushedUpdate(repo);
+
+      expect(r.status).toBe('success');
+      expect(r.applied).toEqual(allLocal);
+      // 重放结束、无遗留操作态
+      expect(git(repo, ['status', '--porcelain'])).toBe('');
+      const subjects = git(repo, ['log', '--format=%s']).split('\n');
+      expect(subjects.slice(0, 5)).toEqual(['local3', 'local-empty', 'local2', 'local1', 'remote-keep']);
+    },
+  );
+
   it(
     '无本地独有提交（远端纯领先）→ updated + applied 空（重置即快进等价）',
     { timeout: RIG_TIMEOUT },

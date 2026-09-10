@@ -34,9 +34,21 @@ async function runPick(cwd: string, args: string[]): Promise<CorePickResult> {
   }
 }
 
-/** 摘樱桃一个或多个提交：git cherry-pick <hash>...（顺序即应用顺序，某步冲突即停） */
-export async function cherryPickCommits(cwd: string, hashes: string[]): Promise<CorePickResult> {
-  return runPick(cwd, ['cherry-pick', ...hashes]);
+/**
+ * 摘樱桃一个或多个提交：git cherry-pick <hash>...（顺序即应用顺序，某步冲突即停）。
+ * opts.keepEmpty：补丁为空的提交（原提交本身即空提交，如 `git commit --allow-empty`；
+ * 或变更已在上游存在）仍保留为提交并继续后续重放。git 缺省 `--empty=stop` 会在首个空提交处中止，
+ * 使「force-push 修复」半途停下并遗留 sequencer 停态（冒烟 D-22：
+ * `fatal: The previous cherry-pick is now empty`，本地分支卡在重放中途）。
+ * 交互式摘樱桃不传此开关：用户摘一个空补丁提交应见到错误，而非静默造出空提交。
+ */
+export async function cherryPickCommits(
+  cwd: string,
+  hashes: string[],
+  opts: { keepEmpty?: boolean } = {},
+): Promise<CorePickResult> {
+  const keepEmptyArg = opts.keepEmpty === true ? ['--empty=keep'] : [];
+  return runPick(cwd, ['cherry-pick', ...keepEmptyArg, ...hashes]);
 }
 
 /** 还原一个或多个提交：git revert <hash>...（顺序即还原顺序，某步冲突即停） */

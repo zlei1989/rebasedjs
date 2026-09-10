@@ -37,6 +37,17 @@ export async function cherryPick(repoPath: string, body: PickBody): Promise<Pick
   return cherryPickCommits(repoPath, body.hashes);
 }
 
+/**
+ * 重放本地独有提交（force-push 修复用）：跳过祖先/空补丁预检并以 `--empty=keep` 执行。
+ * 与交互式摘樱桃的差别是语义性的：此处目标是「把本地独有提交原样搬回新基」，
+ * 本地历史里的空提交（如 --allow-empty 占位提交）应被保留而不是中断整条重放（冒烟 D-22）。
+ */
+export async function replayLocalCommits(repoPath: string, hashes: string[]): Promise<PickOutcome> {
+  await assertNoOperationInProgress(repoPath);
+  await verifyHashes(repoPath, hashes);
+  return cherryPickCommits(repoPath, hashes, { keepEmpty: true });
+}
+
 /** 还原：预检同 cherryPick（不含祖先拦截，理由见文件头）；Revert 提交语义（含冲突继续）由 core 处理 */
 export async function revert(repoPath: string, body: PickBody): Promise<PickOutcome> {
   await assertNoOperationInProgress(repoPath);

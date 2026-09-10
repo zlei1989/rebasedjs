@@ -9,7 +9,7 @@ import type { CheckoutUpdateBody, ForcePushedUpdateOutcome, RebaseOutcome, Updat
 import { checkoutWithUpdate, getStatus, listBranches, listLocalOnlyCommits, resetToRef } from '@rebased/core';
 import { ServiceError } from '@rebased/contracts';
 import { assertNoOperationInProgress } from './operation';
-import { cherryPick } from './pick';
+import { replayLocalCommits } from './pick';
 import { fetchRepo, pullRepo } from './remote';
 
 /** Update Project：fetch 全远程 + 按 strategy 的 pull（merge=git pull / rebase=git pull --rebase） */
@@ -42,7 +42,9 @@ export async function forcePushedUpdate(repoPath: string): Promise<ForcePushedUp
   if (localOnly.length === 0) {
     return { status: 'updated', applied: [] };
   }
-  const pick = await cherryPick(repoPath, { hashes: localOnly });
+  // 重放走 replayLocalCommits（--empty=keep）：本地独有提交里的空提交（--allow-empty 占位等）
+  // 必须被保留，否则 git 在首个空提交处中止，本地分支卡在重放中途（冒烟 D-22）
+  const pick = await replayLocalCommits(repoPath, localOnly);
   return { status: pick.status === 'conflicts' ? 'conflicts' : 'success', applied: localOnly };
 }
 
