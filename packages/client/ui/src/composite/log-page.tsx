@@ -9,10 +9,11 @@
  * 回调全缺省时不渲染「更多」按钮。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
-import { Alert, Button, Dropdown, Flex, Input, Modal, Popconfirm, Skeleton, Typography } from 'antd';
+import { Alert, Button, Dropdown, Flex, Input, Modal, Popconfirm, Skeleton, Switch, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import type { CommitInfo, CommittedEntry, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
+import { EmptyState } from '../base/empty-state';
 import { RepoStatusBar } from '../domain/repo-status-bar';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
@@ -209,6 +210,8 @@ export function LogPage({
   onPushUpToCommit,
   onEditCommit,
 }: LogPageProps): React.ReactNode {
+  // 顶栏/过滤行/详情面板分隔线走主题 token（原 #f0f0f0 硬编码在暗色主题下过亮）
+  const { token } = theme.useToken();
   // 行右键菜单：右键记录 hash（菜单项按 hash 组装），点击项分发对应回调；Modal 输入在菜单项后展开
   const [menuHash, setMenuHash] = useState<string | null>(null);
   const [branchModalOpen, setBranchModalOpen] = useState(false);
@@ -216,6 +219,8 @@ export function LogPage({
   const [branchName, setBranchName] = useState('');
   const [tagName, setTagName] = useState('');
   const [tagMessage, setTagMessage] = useState('');
+  // tag chips 显示开关（默认关，对齐 Java VcsLogApplicationSettings.showTagNames 默认 false）
+  const [showTags, setShowTags] = useState(false);
   // Reword 提交信息输入（GitSingleCommitEditingAction 语义：message 必填——Modal 预填当前主题）
   const [rewordHash, setRewordHash] = useState<string | null>(null);
   const [rewordMessage, setRewordMessage] = useState('');
@@ -329,14 +334,14 @@ export function LogPage({
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #f0f0f0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}>
         {/* 回首页（File→Close Project 语义）：顶栏最左「首页」链接；仅容器注入回调时渲染 */}
         {onGoHome ? (
           <Button type="link" size="small" data-testid="log-go-home" onClick={onGoHome}>
             首页
           </Button>
         ) : null}
-        <span style={{ fontWeight: 600, padding: '4px 8px' }}>{repoName}</span>
+        <span style={{ fontWeight: 600, padding: '4px 8px', whiteSpace: 'nowrap' }}>{repoName}</span>
         <RepoStatusBar status={status} />
         {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
         {operation && onAbortOperation ? (
@@ -433,11 +438,11 @@ export function LogPage({
         ) : null}
       </div>
       {/* 过滤/分页行：仅容器同时注入过滤回调时渲染（过滤受控，Enter/失焦提交防每击键重查）；
-          加载更多按 hasMore 展示（服务端 limit≤500，容器按阶梯放大重查） */}
+          窄屏（≤768）允许换行，避免输入框/开关被压成竖排文字 */}
       {onFiltersChange !== undefined ? (
         <div
           data-testid="log-filter-row"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderBottom: '1px solid #f0f0f0' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}
         >
           <Input
             data-testid="log-filter-author"
@@ -461,6 +466,18 @@ export function LogPage({
             onPressEnter={applyFilters}
             onBlur={applyFilters}
           />
+          {/* tag chips 显示开关（对齐 Java VcsLogApplicationSettings.showTagNames：分支 chips 恒显、tag 默认关可开） */}
+          <Flex align="center" gap={4} style={{ whiteSpace: 'nowrap' }}>
+            <Switch
+              size="small"
+              data-testid="log-show-tags"
+              checked={showTags}
+              onChange={setShowTags}
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              标签
+            </Typography.Text>
+          </Flex>
           {hasMore !== undefined && onLoadMore !== undefined ? (
             <Button
               size="small"
@@ -477,18 +494,29 @@ export function LogPage({
       ) : null}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
-          {/* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
-              antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */}
-          <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
-            <div style={{ height: '100%' }}>
-              <CommitGraph commits={commits} onSelect={onSelectCommit} onContextMenu={setMenuHash} />
-            </div>
-          </Dropdown>
+          {/* 空仓（unborn HEAD，如刚 init）与过滤无命中：显式空态——否则整片空白无法区分「在加载」与「没有提交」 */}
+          {commits.length === 0 ? (
+            <EmptyState title="暂无提交" description="该仓库还没有任何提交，或当前过滤条件没有匹配结果" />
+          ) : (
+            /* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
+               antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */
+            <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
+              <div style={{ height: '100%' }}>
+                <CommitGraph
+                  commits={commits}
+                  onSelect={onSelectCommit}
+                  onContextMenu={setMenuHash}
+                  showTags={showTags}
+                  selectedHash={selectedCommit?.hash ?? null}
+                />
+              </div>
+            </Dropdown>
+          )}
         </div>
         {selectedCommit ? (
           <div
             data-testid="commit-details"
-            style={{ width: 320, flexShrink: 0, borderLeft: '1px solid #f0f0f0', overflow: 'auto' }}
+            style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${token.colorSplit}`, overflow: 'auto' }}
           >
             <CommitDetailsPanel
               commit={selectedCommit}
@@ -597,7 +625,7 @@ export function LogPage({
         {changesLoading ? (
           <Skeleton active />
         ) : changesError !== undefined && changesError !== null ? (
-          <Alert type="error" showIcon message={changesError} />
+          <Alert type="error" showIcon title={changesError} />
         ) : changesEntry === undefined || changesEntry === null ? (
           <Typography.Text type="secondary">暂无变更文件</Typography.Text>
         ) : (

@@ -5,7 +5,7 @@ import { SettingsPage } from './settings-page';
 
 /** 测试设置工厂：补全 SettingsState 必填字段 */
 function makeSettings(): SettingsState {
-  return { logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [] };
+  return { logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [], theme: 'dark' };
 }
 
 /** 测试配置视图工厂：user.name 有 local 覆盖，user.email 仅全局生效值，其余键未设置 */

@@ -23,6 +23,7 @@ import {
   Tag,
   Tooltip,
   Typography,
+  theme,
 } from 'antd';
 import { CheckOutlined, DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
 import type { BranchAction, BranchList, BranchRef, BranchWorkingDiff, CheckoutAction, TagEntry, TagList } from '@rebased/contracts';
@@ -81,12 +82,13 @@ function UpstreamInfo({ branch }: { branch: BranchRef }): React.ReactNode {
   );
 }
 
-/** 已合并图标：mergedIntoHead=true 时绿色对勾，Tooltip"已合并" */
+/** 已合并图标：mergedIntoHead=true 时绿色对勾，Tooltip"已合并"（色值走主题 colorSuccess，暗/亮一致） */
 function MergedIcon({ branch }: { branch: BranchRef }): React.ReactNode {
+  const { token } = theme.useToken();
   if (!branch.mergedIntoHead) return null;
   return (
     <Tooltip title="已合并">
-      <CheckOutlined data-testid={`merged-icon-${branch.name}`} style={{ color: '#52c41a' }} />
+      <CheckOutlined data-testid={`merged-icon-${branch.name}`} style={{ color: token.colorSuccess }} />
     </Tooltip>
   );
 }
@@ -697,7 +699,7 @@ export function BranchPanel({
         {workingDiffLoading ? (
           <Skeleton active />
         ) : workingDiffError !== undefined && workingDiffError !== null ? (
-          <Alert type="error" showIcon message={workingDiffError} />
+          <Alert type="error" showIcon title={workingDiffError} />
         ) : workingDiffData === undefined || workingDiffData === null ? (
           <Typography.Text type="secondary">暂无差异（工作树与分支一致）</Typography.Text>
         ) : (

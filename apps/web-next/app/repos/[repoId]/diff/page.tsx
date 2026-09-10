@@ -34,15 +34,17 @@ export default function Page({
   searchParams,
 }: {
   params: Promise<{ repoId: string }>;
-  searchParams: Promise<{ file?: string; from?: string; to?: string; renameFrom?: string; root?: string; three?: string; files?: string }>;
+  searchParams: Promise<{ file?: string; from?: string; to?: string; renameFrom?: string; root?: string; three?: string; files?: string; staged?: string }>;
 }): React.ReactNode {
   const { repoId } = use(params);
-  const { file = '', from, to, renameFrom, root, three, files: filesRaw } = use(searchParams);
+  const { file = '', from, to, renameFrom, root, three, files: filesRaw, staged: stagedRaw } = use(searchParams);
   const files = useMemo(() => parseFilesParam(filesRaw), [filesRaw]);
   const router = useRouter();
   const isRoot = root === '1';
   const isThreeWay = three === '1';
-  const [staged, setStaged] = useState(false);
+  // staged 初值来自查询参数（StatusPage 行双击按该行所属分组带入 staged=1——三态映射的入口语义）；
+  // 后续切换仍由页内 Segmented 驱动本地态，不回写 URL
+  const [staged, setStaged] = useState(stagedRaw === '1');
   const { data: versions, error } = useFileDiff(repoId, file, staged, isRoot ? undefined : from, isRoot ? undefined : to);
   // 三版本数据（?three=1 时启用；与 useFileDiff 并存——SWR 键不同互不干扰）
   const { data: threeWayVersions, error: threeWayError } = useFileThreeWay(repoId, isThreeWay ? file : '');

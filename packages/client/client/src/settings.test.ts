@@ -6,8 +6,8 @@ import type { GitExecutableInfo, GpgConfigBody, GpgConfigView, SettingsState } f
 import { useGitExecutableInfo, useGpgConfig, useSettings, useSetGpgConfig } from './settings';
 import { freshCache } from './testing/fresh-cache';
 
-const INITIAL: SettingsState = { logInEditor: false, recentRepoIds: [], protectedBranchPatterns: [] };
-const UPDATED: SettingsState = { logInEditor: true, recentRepoIds: ['r1'], protectedBranchPatterns: [] };
+const INITIAL: SettingsState = { logInEditor: false, recentRepoIds: [], protectedBranchPatterns: [], theme: 'dark' };
+const UPDATED: SettingsState = { logInEditor: true, recentRepoIds: ['r1'], protectedBranchPatterns: [], theme: 'light' };
 
 afterEach(() => {
   vi.unstubAllGlobals();

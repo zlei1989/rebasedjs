@@ -21,6 +21,7 @@ import {
   Tabs,
   Tag,
   Typography,
+  theme,
 } from 'antd';
 import type {
   BranchRef,
@@ -106,6 +107,8 @@ function MrRow({
   selected: boolean;
   onSelect: (iid: number) => void;
 }): React.ReactNode {
+  // 选中底色走主题 token（明亮 #e6f4ff / 暗色 #111a2c），不再硬编码明亮专用色
+  const { token } = theme.useToken();
   return (
     <Flex
       data-testid={`gitlab-mr-row-${mr.iid}`}
@@ -114,7 +117,7 @@ function MrRow({
       style={{
         padding: '4px 8px',
         cursor: 'pointer',
-        backgroundColor: selected ? '#e6f4ff' : undefined,
+        backgroundColor: selected ? token.controlItemBgActive : undefined,
       }}
       onClick={() => onSelect(mr.iid)}
     >

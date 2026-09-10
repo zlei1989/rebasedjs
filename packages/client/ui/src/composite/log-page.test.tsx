@@ -58,6 +58,16 @@ describe('LogPage', () => {
     expect(screen.getByText('合并中')).toBeInTheDocument();
   });
 
+  // 冒烟 F-015：tag chips 默认关（对齐 showTagNames 默认 false），过滤行开关打开后出现
+  it('过滤行「标签」开关切换 tag chips 显示', () => {
+    const tagged: CommitInfo[] = [makeCommit({ hash: 't1', refs: ['main', 'tag: v1.0'], message: '带标签' })];
+    render(<LogPage repoName="alpha" status={status} commits={tagged} filters={{}} onFiltersChange={() => {}} />);
+    expect(screen.getByTestId('ref-chip-main')).toBeInTheDocument();
+    expect(screen.queryByText('v1.0')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('log-show-tags'));
+    expect(screen.getByText('v1.0')).toBeInTheDocument();
+  });
+
   it('缺 onAbortOperation 时不渲染操作条', () => {
     render(<LogPage repoName="alpha" status={status} commits={commits} operation={{ kind: 'merge' }} />);
     expect(screen.queryByText('合并中')).not.toBeInTheDocument();

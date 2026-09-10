@@ -12,27 +12,36 @@ beforeAll(() => {
 });
 
 describe('settings', () => {
-  it('默认 logInEditor=true，recentRepoIds 为空，保护分支模式为空列表', () => {
-    expect(getSettings()).toEqual({ logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [] });
+  it('默认 logInEditor=true，recentRepoIds 为空，保护分支模式为空列表，主题为暗色', () => {
+    expect(getSettings()).toEqual({ logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [], theme: 'dark' });
   });
 
   it('updateSettings 部分更新并持久化（保护分支模式独立补丁）', () => {
     updateSettings({ logInEditor: false });
     expect(getSettings().logInEditor).toBe(false);
     updateSettings({ recentRepoIds: ['r1'] });
-    expect(getSettings()).toEqual({ logInEditor: false, recentRepoIds: ['r1'], protectedBranchPatterns: [] });
+    expect(getSettings()).toEqual({ logInEditor: false, recentRepoIds: ['r1'], protectedBranchPatterns: [], theme: 'dark' });
     updateSettings({ protectedBranchPatterns: ['^main$', '^release/'] });
     expect(getSettings().protectedBranchPatterns).toEqual(['^main$', '^release/']);
   });
 
-  it('旧配置缺 protectedBranchPatterns → 归一化补空列表', () => {
+  it('主题补丁写入并持久化（light/dark 二值）', () => {
+    updateSettings({ theme: 'light' });
+    expect(getSettings().theme).toBe('light');
+    // 与既有补丁合并而非重置其他字段
+    expect(getSettings().logInEditor).toBe(false);
+    updateSettings({ theme: 'dark' });
+    expect(getSettings().theme).toBe('dark');
+  });
+
+  it('旧配置缺 protectedBranchPatterns/theme → 归一化补空列表与暗色', () => {
     // 之前轮次的配置文件没有该字段（settings 残留旧形状）
     writeFileSync(
       join(configDir, 'config.json'),
       JSON.stringify({ repos: [], settings: { logInEditor: true, recentRepoIds: [] } }),
       'utf8',
     );
-    expect(getSettings()).toEqual({ logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [] });
+    expect(getSettings()).toEqual({ logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [], theme: 'dark' });
     // 清除测试残留，恢复默认
     writeFileSync(join(configDir, 'config.json'), JSON.stringify({ repos: [], settings: { logInEditor: true, recentRepoIds: [] } }), 'utf8');
   });

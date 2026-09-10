@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CommitInfo } from '@rebased/contracts';
 import { CommitGraph } from './commit-graph';
+import { colorForRef } from '../graph-layout/color';
 
 /** 测试提交工厂：补全 CommitInfo 必填字段，按需覆盖 */
 function makeCommit(overrides: Partial<CommitInfo> & { hash: string }): CommitInfo {
@@ -58,9 +59,31 @@ describe('CommitGraph', () => {
     expect(screen.getByText('v1.0')).toBeInTheDocument();
   });
 
+  // 冒烟 F-010：分支 chip 底色 = colorForRef(分支名)（与图车道同源、按名稳定），tag chip 不参与
+  it('分支 chip 底色取 ref 名 hash 色板，同名稳定异名相异', () => {
+    const withRefs: CommitInfo[] = [
+      makeCommit({ hash: 'r1', refs: ['main', 'feature'], message: '双分支' }),
+    ];
+    render(<CommitGraph commits={withRefs} />);
+    expect(screen.getByTestId('ref-chip-main')).toHaveStyle({ backgroundColor: colorForRef('main') });
+    expect(screen.getByTestId('ref-chip-feature')).toHaveStyle({ backgroundColor: colorForRef('feature') });
+    expect(colorForRef('main')).not.toBe(colorForRef('feature'));
+  });
+
   it('空提交列表不渲染行', () => {
     render(<CommitGraph commits={[]} />);
     expect(screen.queryAllByTestId('commit-graph-row')).toHaveLength(0);
+  });
+
+  // 冒烟 F-021：?select=<hash> 深链与点击选中均需行级选中态（否则「选中哪一行」无从辨认）
+  it('selectedHash 命中的行带选中底色，其余行无底色', () => {
+    render(<CommitGraph commits={commits} selectedHash="c2" />);
+    const rows = screen.getAllByTestId('commit-graph-row');
+    const c2 = rows.find((r) => r.textContent?.includes('第二笔提交'));
+    const c1 = rows.find((r) => r.textContent?.includes('初始提交'));
+    expect(c2).toHaveAttribute('data-selected', 'true');
+    expect(c1).not.toHaveAttribute('data-selected');
+    expect(c1).toHaveStyle({ backgroundColor: 'rgba(0, 0, 0, 0)' });
   });
 
   /** ≥5 行分支合并图：c5 合并主线 c4 与侧支 c2b（含 c5→c2 跨行长边），c2b 落第二 lane */

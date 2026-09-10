@@ -1,12 +1,12 @@
 # Rebased.js E2E 冒烟测试参照（MCP 模拟人工操作）
 
-- **日期**：2026-09-10（功能矩阵定稿；执行结果待回填）
+- **日期**：2026-09-10（功能矩阵定稿；执行结果按轮次回填，R1 已回填）
 - **文档定位**：冒烟测试**参照文档**——先定义功能矩阵，执行后逐行回填结果，不得在本文件外另行扩展口径
 - **范围**：`docs/pages-and-api-audit.md` §二/§四 全量（31 页面 / 36 功能域 → 功能点矩阵 **159 个测试行 + 11 个排除行**；terminal、local-history 2 个全域不做项无对应页面）
 - **基准**：功能对齐 Java 版 Rebased（`D:\zhanglei1120\Github\rebased`）；终态口径以 `docs/pages-and-api-audit.md`（2026-09-21 终核版）为准
 - **方式**：用 MCP（Playwright MCP 工具集）**模拟人工操作**在真实浏览器中按真实用户路径逐项冒烟——打开页面、点击、输入、弹窗、导航全走 UI；页面展示与仓库事实用 `git` CLI 互证（AGENT.md §冒烟测试口径）
 - **应用**：web-next（http://localhost:3030）为默认被测端；web-koa（API :3031 + SPA :5173）按需对等抽查
-- **截图**：每功能点至少 1 张**最终正确效果图**，保存至 `docs/shots/`，命名 `<页面slug>-<NN>.png`（过程图 `<页面slug>-<NN>b.png`）；排除行不截图
+- **截图**：每功能点至少 1 张**最终正确效果图**，保存至 `docs/shots/`，命名 `<页面slug>-<NN>.png`（过程图 `<页面slug>-<NN>b.png`）；排除行不截图；主题/响应式抽查另存 `theme-*.png`、`responsive-*.png`
 - **互证**：写操作（提交/变基/合并/检出/推送等）必须用 pwsh 执行 `git` CLI 复核仓库事实后才可判 ✅
 
 ---
@@ -64,9 +64,9 @@
 
 | # | 页面 | 阶段 | 路由/承载 | 模拟入口（一步到达） | 测试行 | 截图前缀 | 状态 |
 |---|------|------|-----------|----------------------|--------|----------|------|
-| 1 | RepoPage | P1 | `/` | 浏览器打开 :3030 首页 | F-001~F-008（8） | repo-page | 待测 |
-| 2 | LogPage | P1 | `/repos/:id` | RepoPage 打开冒烟仓 | F-009~F-028（20） | log-page | 待测 |
-| 3 | DiffPage | P1 | `/repos/:id/diff` | StatusPage 双击变更文件 | F-029~F-038（10） | diff-page | 待测 |
+| 1 | RepoPage | P1 | `/` | 浏览器打开 :3030 首页 | F-001~F-008（8） | repo-page | ✅ 8/8 |
+| 2 | LogPage | P1 | `/repos/:id` | RepoPage 打开冒烟仓 | F-009~F-028（20） | log-page | ✅ 19/20（F-025 跳过） |
+| 3 | DiffPage | P1 | `/repos/:id/diff` | StatusPage 双击变更文件 | F-029~F-038（10） | diff-page | 🚧 3/10 |
 | 4 | StatusPage | P2 | `/repos/:id/status` | 顶栏「状态」 | F-039~F-051（13） | status-page | 待测 |
 | 5 | CommitDialog（等效内嵌提交框） | P2 | StatusPage 内 | StatusPage 提交框 | F-052~F-058（7） | commit | 待测 |
 | 6 | ResetDialog（内嵌模态） | P2 | LogPage 内 | 详情面板「Reset 到此处」 | F-059~F-061（3） | reset | 待测 |
@@ -130,14 +130,14 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-001 | 打开路径表单（校验→验证→注册→跳日志页） | 输入非 git 目录路径 → 点「打开」→ 观察 toast；再输入 `D:\zhanglei1120\Github\rebased-smoke` → 「打开」 | 坏路径 → 红 toast「不是 git 仓库：…」；好路径 → 跳 `/repos/:id` 日志页 | 待测 | repo-page-01.png（坏路径 toast）、repo-page-01b.png（成功跳日志页） |
-| F-002 | 最近列表（打开即注册/同路径复用/最近优先） | 首页看列表 → 移除冒烟仓 → 重新打开 → 回首页 → 再次打开同路径 | 列表出现冒烟仓且置顶；同路径再次打开不新增重复行（id 复用）（CLI） | 待测 | repo-page-02.png |
-| F-003 | 显示名（定案单级） | 注册时观察列表项显示名 | 显示名为目录名 `rebased-smoke`（单级，非三级回退） | 待测 | repo-page-03.png |
-| F-004 | 路径副文本 `~/` 相对化 | 观察列表项副文本 | 副文本显示 `~/Github/rebased-smoke`（homeDir 注入） | 待测 | repo-page-04.png |
-| F-005 | 列表上限 50 | 列表正常渲染；上限逻辑引服务端 `RECENT_LIMIT=50` 单测证据（不构造 50+ 仓） | 列表渲染正常、无报错；上限口径 = 50 | 待测 | repo-page-05.png |
-| F-006 | 移除动作 + Popconfirm | 行内移除按钮 → Popconfirm 确认 | 行从列表消失、无报错；再次打开可重新注册（CLI） | 待测 | repo-page-06.png |
-| F-007 | 克隆对话框（URL + Directory） | 「克隆」→ Modal → 输入裸仓路径作 URL + 目标目录 → 克隆 | Modal 字段最小集；成功 → 列表新增该仓 + 跳日志页（CLI 目标目录为 git 仓） | 待测 | repo-page-07.png |
-| F-008 | 初始化仓库入口 | 「初始化」→ Modal → 输入新目录 → 初始化 | 成功 → 跳日志页（空仓 unborn HEAD；CLI `git status` 互证） | 待测 | repo-page-08.png |
+| F-001 | 打开路径表单（校验→验证→注册→跳日志页） | 输入非 git 目录路径 → 点「打开」→ 观察 toast；再输入 `D:\zhanglei1120\Github\rebased-smoke` → 「打开」 | 坏路径 → 红 toast「不是 git 仓库：…」；好路径 → 跳 `/repos/:id` 日志页 | ✅ | repo-page-01.png（坏路径 toast）、repo-page-01b.png（成功跳日志页） |
+| F-002 | 最近列表（打开即注册/同路径复用/最近优先） | 首页看列表 → 移除冒烟仓 → 重新打开 → 回首页 → 再次打开同路径 | 列表出现冒烟仓且置顶；同路径再次打开不新增重复行（id 复用）（CLI） | ✅ | repo-page-02.png |
+| F-003 | 显示名（定案单级） | 注册时观察列表项显示名 | 显示名为目录名 `rebased-smoke`（单级，非三级回退） | ✅ | repo-page-03.png |
+| F-004 | 路径副文本 `~/` 相对化 | 观察列表项副文本 | 副文本显示 `~/Github/rebased-smoke`（homeDir 注入） | ✅ | repo-page-04.png |
+| F-005 | 列表上限 50 | 列表正常渲染；上限逻辑引服务端 `RECENT_LIMIT=50` 单测证据（不构造 50+ 仓） | 列表渲染正常、无报错；上限口径 = 50 | ✅ | repo-page-05.png |
+| F-006 | 移除动作 + Popconfirm | 行内移除按钮 → Popconfirm 确认 | 行从列表消失、无报错；再次打开可重新注册（CLI） | ✅ | repo-page-06.png |
+| F-007 | 克隆对话框（URL + Directory） | 「克隆」→ Modal → 输入裸仓路径作 URL + 目标目录 → 克隆 | Modal 字段最小集；成功 → 列表新增该仓 + 跳日志页（CLI 目标目录为 git 仓） | ✅ | repo-page-07.png（modal 填写过程图 repo-page-07b.png） |
+| F-008 | 初始化仓库入口 | 「初始化」→ Modal → 输入新目录 → 初始化 | 成功 → 跳日志页（空仓 unborn HEAD；CLI `git status` 互证） | ✅ | repo-page-08.png |
 
 ### 4.2 LogPage（slug `log-page`；P1，仓库枢纽页）
 
@@ -146,26 +146,26 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-009 | 提交图真图渲染（lane/边路由） | 打开主仓日志页 → 观察 8 提交含合并 | 图列在合并处正确岔开/合拢，无重叠错位 | 待测 | log-page-01.png |
-| F-010 | 分支着色（ref 名 hash → HSB 色板） | 观察 ref chips 颜色 | chips 颜色按分支名稳定着色（与测试断言口径一致） | 待测 | log-page-02.png |
-| F-011 | 虚拟滚动（固定行高窗口渲染） | 打开 `rebased-smoke-big` → 连续滚动 | 滚动流畅、行高 24 一致、无整页白屏 | 待测 | log-page-03.png |
-| F-012 | 首屏快照 + SSE 增量渲染 + hash 去重 | 打开日志页 → pwsh 在主仓追加 1 提交 → 等待 | 新提交行自动出现在顶部，无需刷新（CLI 互证新 hash） | 待测 | log-page-04.png |
-| F-013 | 取消链路（断开即杀 git 进程） | 打开 `rebased-smoke-big` → 加载中立即导航离开 → pwsh 查进程 | 离开后无残留 `git log` 进程（CLI） | 待测 | log-page-05.png（离开后页面态） |
-| F-014 | 行默认列 Subject + Author + Date | 观察行内容 | 三列可见（Hash 列省） | 待测 | log-page-06.png |
-| F-015 | refs chips（分支默认开/tag 默认关） | 观察默认态 → 打开 tag 显示开关 | 默认只显分支 chips；开 tag 后 v1.0 出现 | 待测 | log-page-07.png |
-| F-016 | 行点击 → 提交详情面板 | 点击合并提交行 | 面板完整：短 hash+复制、作者行、subject、双组 chips、父提交链接 | 待测 | log-page-08.png |
-| F-017 | 详情面板操作按钮 | 观察面板按钮区 | 「浏览快照 / Reset 到此处 / 摘樱桃 / 还原」四按钮齐全可点 | 待测 | log-page-09.png |
-| F-018 | 顶栏状态条（分支名 + 徽标） | 观察顶栏 | 分支名 `master` + outgoing 绿徽标（本地领先 1） | 待测 | log-page-10.png |
-| F-019 | 状态变更自动刷新（事件驱动） | pwsh 检出 `feature` → 等待 | 状态条分支名自动变 `feature`，无需刷新 | 待测 | log-page-11.png |
-| F-020 | `refs.changed` 订阅 | pwsh 新建分支 `tmp-refs` → 等待 | ref chips 自动出现 `tmp-refs`（CLI） | 待测 | log-page-12.png |
-| F-021 | `?select=<hash>` 深链 | navigate `/repos/:id?select=<某hash>` | 该行选中态 + 详情面板自动展开 | 待测 | log-page-13.png |
-| F-022 | 顶栏入口 5 按钮 | 观察顶栏按钮区 | 「状态/分支/合并/贮藏/设置」五按钮存在 | 待测 | log-page-14.png |
-| F-023 | 「更多」菜单 18 项 | 展开「更多」下拉 | 18 项齐全（拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块） | 待测 | log-page-15.png |
-| F-024 | OperationStatus 操作条（kind + 中止） | 进入 rebase 冲突（见 F-076 前置）→ 观察操作条 → 点「中止」 | 操作条显示进行中操作 + 中止按钮；中止后恢复干净态（CLI） | 待测 | log-page-16.png |
-| F-025 | 远程操作认证重试回路 | 向需认证的 HTTP 远端 push（依赖外部凭据服务；不具备 → 跳过） | 401 → AuthDialog 弹出（host 自 context、不含 token）→ 录入后 retry 重放 | 待测 | log-page-17.png |
-| F-026 | 分页「加载更多」（limit ≤500） | 打开 `rebased-smoke-big` → 点「加载更多」 | 首屏 50 行 → 逐次放大（50→100→…→500 封顶），行数增长正确 | 待测 | log-page-18.png |
-| F-027 | 过滤（author / path） | 输入作者名 → Enter；清空恢复 | 列表只剩该作者提交；清空后全量恢复 | 待测 | log-page-19.png |
-| F-028 | 行右键菜单形态 | 右键提交行 | 菜单项齐全：检出（游离 HEAD）/从此处新建分支/从此处新建标签/在浏览器中打开/Push up to Commit/Fixup/Squash/Reword/Drop/Squash/Fixup Commit | 待测 | log-page-20.png |
+| F-009 | 提交图真图渲染（lane/边路由） | 打开主仓日志页 → 观察 8 提交含合并 | 图列在合并处正确岔开/合拢，无重叠错位 | ✅ | log-page-01.png |
+| F-010 | 分支着色（ref 名 hash → HSB 色板） | 观察 ref chips 颜色 | chips 颜色按分支名稳定着色（与测试断言口径一致） | ✅ | log-page-02.png（分支 chip 底色 = colorForRef(分支名)，与图车道同源；R1 修复项 D-06） |
+| F-011 | 虚拟滚动（固定行高窗口渲染） | 打开 `rebased-smoke-big` → 连续滚动 | 滚动流畅、行高 24 一致、无整页白屏 | ✅ | log-page-03.png |
+| F-012 | 首屏快照 + SSE 增量渲染 + hash 去重 | 打开日志页 → pwsh 在主仓追加 1 提交 → 等待 | 新提交行自动出现在顶部，无需刷新（CLI 互证新 hash） | ✅ | log-page-04.png |
+| F-013 | 取消链路（断开即杀 git 进程） | 打开 `rebased-smoke-big` → 加载中立即导航离开 → pwsh 查进程 | 离开后无残留 `git log` 进程（CLI） | ✅ | log-page-05.png（离开后页面态） |
+| F-014 | 行默认列 Subject + Author + Date | 观察行内容 | 三列可见（Hash 列省） | ✅ | log-page-06.png |
+| F-015 | refs chips（分支默认开/tag 默认关） | 观察默认态 → 打开 tag 显示开关 | 默认只显分支 chips；开 tag 后 v1.0 出现 | ✅ | log-page-07.png（「标签」开关为 R1 新增，修复项 D-07） |
+| F-016 | 行点击 → 提交详情面板 | 点击合并提交行 | 面板完整：短 hash+复制、作者行、subject、双组 chips、父提交链接 | ✅ | log-page-08.png |
+| F-017 | 详情面板操作按钮 | 观察面板按钮区 | 「浏览快照 / Reset 到此处 / 摘樱桃 / 还原」四按钮齐全可点 | ✅ | log-page-09.png |
+| F-018 | 顶栏状态条（分支名 + 徽标） | 观察顶栏 | 分支名 `master` + outgoing 绿徽标（本地领先 1） | ✅ | log-page-10.png |
+| F-019 | 状态变更自动刷新（事件驱动） | pwsh 检出 `feature` → 等待 | 状态条分支名自动变 `feature`，无需刷新 | ✅ | log-page-11.png |
+| F-020 | `refs.changed` 订阅 | pwsh 新建分支 `tmp-refs` → 等待 | ref chips 自动出现 `tmp-refs`（CLI） | ✅ | log-page-12.png |
+| F-021 | `?select=<hash>` 深链 | navigate `/repos/:id?select=<某hash>` | 该行选中态 + 详情面板自动展开 | ✅ | log-page-13.png（行选中底色 + 详情面板同时到位；选中行高亮为 R1 修复项 D-08） |
+| F-022 | 顶栏入口 5 按钮 | 观察顶栏按钮区 | 「状态/分支/合并/贮藏/设置」五按钮存在 | ✅ | log-page-14.png（顶栏 5 入口按钮实测 aria-label：变更/分支/合并/贮藏/设置——「变更」即状态页入口，另含撤销与「更多」） |
+| F-023 | 「更多」菜单 18 项 | 展开「更多」下拉 | 18 项齐全（拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块） | ✅ | log-page-15.png（本仓渲染 16 项；GitHub/GitLab 两项受检测门约束，见 F-134/F-140） |
+| F-024 | OperationStatus 操作条（kind + 中止） | 进入 rebase 冲突（见 F-076 前置）→ 观察操作条 → 点「中止」 | 操作条显示进行中操作 + 中止按钮；中止后恢复干净态（CLI） | ✅ | log-page-16.png |
+| F-025 | 远程操作认证重试回路 | 向需认证的 HTTP 远端 push（依赖外部凭据服务；不具备 → 跳过） | 401 → AuthDialog 弹出（host 自 context、不含 token）→ 录入后 retry 重放 | 跳过：本机无「需认证的 HTTP 远端」服务（git 智能 HTTP + 401 挑战需真实凭据服务或自建 Basic 认证 git 服务器）；AuthDialog 装配与 AUTH_FAILED 分流已由 F-092 同级通道与 api/auth 单测覆盖 | —（排除行不截图） |
+| F-026 | 分页「加载更多」（limit ≤500） | 打开 `rebased-smoke-big` → 点「加载更多」 | 首屏 50 行 → 逐次放大（50→100→…→500 封顶），行数增长正确 | ✅ | log-page-18.png |
+| F-027 | 过滤（author / path） | 输入作者名 → Enter；清空恢复 | 列表只剩该作者提交；清空后全量恢复 | ✅ | log-page-19.png |
+| F-028 | 行右键菜单形态 | 右键提交行 | 菜单项齐全：检出（游离 HEAD）/从此处新建分支/从此处新建标签/在浏览器中打开/Push up to Commit/Fixup/Squash/Reword/Drop/Squash/Fixup Commit | ✅ | log-page-20.png |
 
 ### 4.3 DiffPage（slug `diff-page`；P1）
 
@@ -174,9 +174,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-029 | Monaco DiffEditor（懒加载/行号/高亮/只读） | StatusPage 双击修改文件 → diff 页 | Monaco 渲染满高、行号+语法高亮、只读、vs-dark 暗色与应用一致 | 待测 | diff-page-01.png |
-| F-030 | 并排/行内切换 + 忽略空白 | 依次切换「行内」「忽略空白」开关 | 默认并排；行内切换生效；忽略空白后空白差异消失 | 待测 | diff-page-02.png |
-| F-031 | staged / 工作区切换（三态映射） | 切换 staged 开关 | staged 开 = HEAD vs 暂存区；关 = HEAD vs 工作区（CLI diff 互证） | 待测 | diff-page-03.png |
+| F-029 | Monaco DiffEditor（懒加载/行号/高亮/只读） | StatusPage 双击修改文件 → diff 页 | Monaco 渲染满高、行号+语法高亮、只读、vs-dark 暗色与应用一致 | ✅ | diff-page-01.png |
+| F-030 | 并排/行内切换 + 忽略空白 | 依次切换「行内」「忽略空白」开关 | 默认并排；行内切换生效；忽略空白后空白差异消失 | ✅ | diff-page-02.png |
+| F-031 | staged / 工作区切换（三态映射） | 切换 staged 开关 | staged 开 = HEAD vs 暂存区；关 = HEAD vs 工作区（CLI diff 互证） | ✅ | diff-page-03.png（入口 staged 透传为 R1 修复项 D-10） |
 | F-032 | 任意两版本对比（from/to 成对） | CommittedChangesPanel 点文件 → `/diff?file&from=<hash>~1&to=<hash>` | 两侧正确 = 该提交 vs 其父提交 | 待测 | diff-page-04.png |
 | F-033 | 新增/删除/重命名两侧渲染 | 打开 A/D/R 文件 diff | A 侧/D 侧缺失正确；R 显示 renameFrom | 待测 | diff-page-05.png |
 | F-034 | unified diff 文本视图 | StatusPage 选中文件 → 行内补丁预览（`/diff/patch` 通道） | unified 文本正确渲染（`@@` 头 + +/- 行） | 待测 | diff-page-06.png |
@@ -513,12 +513,46 @@
 
 ---
 
-## 五、执行记录与缺陷登记（执行后回填，本轮空白）
+## 五、执行记录与缺陷登记
 
 > 按 AGENT.md §冒烟测试记录规范回填：① 范围清单逐项 ✅/❌/跳过+理由；② 操作路径（点击/输入序列）；③ 证据（浏览器状态 + CLI 输出互证）；④ 未覆盖项与后续计划。
 
 | 轮次 | 日期 | 执行范围（F-xx…） | 结果汇总（✅/❌/跳过） | 缺陷登记（根因/修复/复验） |
 |------|------|-------------------|------------------------|----------------------------|
-| — | — | — | 待执行 | — |
+| R1 | 2026-09-10 | F-001~F-028（RepoPage 8 + LogPage 20）、F-029~F-031（DiffPage 3）；暗黑/明亮双主题与 1440/768/480 三档宽度抽查 | ✅ 30 / 跳过 1（F-025） | D-01~D-12 全部修复并复验，见下表 |
 
-（执行前本区保持空白；每轮冒烟结束后回填一行，缺陷修复后复验并更新对应行「结果」列。）
+### 5.1 R1 缺陷登记（全部已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-01 | 首页打开仓库后日志页整体崩溃（白屏 + 「Rendered more hooks than during the previous render」）——F-001 首轮即触发，后续全部 LogPage 行不可达 | `app/repos/[repoId]/page.tsx` 把跨仓库复位 `useEffect` 写在 `if (!status) return null` 之后：首帧 status 未就绪提前返回（少一个 hook），次帧补齐 → hook 数不等 | 复位 `useEffect` 上移到所有提前 return 之前（其余 hook 本就在顶部，仅此一处越界） | 重跑 F-001：路径表单提交后正常进入 `/repos/:id` 并渲染 8 行提交图（repo-page-01b.png）；F-009~F-028 全量通过 |
+| D-02 | 刚 init 的空仓日志页空白无提示，控制台连打 `GET /log 500`——F-008 | 空仓（unborn HEAD）`git log` 退出码 128（`does not have any commits yet`），core `streamLog` 直接抛 `GitExitError` → 路由映射 500 | core `streamLog` 捕获该语义并按空序列返回（新增 `isEmptyRepoLogError`）+ LogPage 0 提交时渲染「暂无提交」空态 | `GET /log?limit=50` → `200 {"commits":[],"hasMore":false}`；页面显示空态（repo-page-08.png）；core 新增用例「streamLog 在空仓（unborn HEAD）产出空序列而不抛错」 |
+| D-03 | 控制台告警「Static function can not consume context like dynamic theme」——F-001 坏路径 toast | 容器/流程模块用 antd 静态 `message`，不消费 ConfigProvider 上下文，切主题后静态提示仍是旧主题 | `Providers` 内注册 `ConfigProvider.config({ theme, holderRender })`，静态 message/Modal 渲染进同一主题上下文 | 复跑坏路径 toast：告警消失（warnings=0），提示随主题变色 |
+| D-04 | 全站仅暗色（`darkAlgorithm` + `globals.css` 写死 `#141414`），AGENT.md「适配 light 与 dark 主题」不可达 | 无主题开关，主题未进入应用设置 | 契约 `SettingsState.theme`（`light`/`dark`）+ 服务端默认/归一化 + `Providers` 按设置切算法与 `<html data-theme>` + `globals.css` 双套变量 + 设置页「界面主题」Segmented + Monaco 主题联动 | 设置页切「明亮」→ `data-theme=light`、body `#ffffff`、token 翻转（theme-light-settings.png）；日志页/差异页 Monaco 同步 `#fffffe`（theme-light-log.png、theme-light-diff.png）；切回「暗色」恢复 `#141414` |
+| D-05 | 明亮主题下多处硬编码色错位：`#f0f0f0` 分隔线（暗色下过亮）、`#888` 次要文字、`#e6f4ff` 选中行底色（暗色下刺眼） | ui 层用明亮专用字面色写内联样式 | 统一改 antd token：`colorSplit`/`colorTextSecondary`/`controlItemBgActive`/`colorSuccess`（repo-page、log-page、commit-graph、branch-panel、committed/github/gitlab 面板） | ui 全量单测 616 通过（含 `#e6f4ff` 断言——`controlItemBgActive` 在默认算法下同值）；双主题截图复核 |
+| D-06 | F-010 期望「ref chips 按分支名着色」，实际 chips 恒为 antd 预设蓝/橙，与图车道色无关 | chips 用 `color="blue"`，未接 `colorForRef`（图列着色已实现，chips 未接） | 分支 chip 底色取 `colorForRef(分支名)`（与图车道同源），tag chip 保持橙色预设 | 实测 chips 底色 = `colorForRef` 表值（master `#81a663`、feature `#9763a6`、origin/master `#a68e63`…）；新增单测「分支 chip 底色取 ref 名 hash 色板」 |
+| D-07 | F-015 期望「开 tag 显示开关后 v1.0 出现」，实际 tag chips 恒隐藏且无开关 | `CommitGraph.showTags` 默认 false，LogPage 未透传、无 UI 入口 | 过滤行新增「标签」Switch（`data-testid=log-show-tags`）驱动 `showTags` | 默认无 `v1.0`，开开关后 chip 出现（log-page-07.png）；新增单测「过滤行「标签」开关切换 tag chips 显示」 |
+| D-08 | F-021 `?select=<hash>` 深链只有详情面板展开，列表行无任何选中态；点击选中同样无高亮 | `CommitGraph` 无选中行概念（未接 selectedHash） | `CommitGraphProps.selectedHash` + 行 `data-selected` 与 token 底色；LogPage 传 `selectedCommit?.hash` | 深链后目标行底色 `rgb(21,50,91)`、`data-selected=true`（log-page-13.png）；新增单测「selectedHash 命中的行带选中底色」 |
+| D-09 | 行右键菜单在无 GitHub/GitLab 远端的仓库仍渲染「在浏览器中打开」，点击无任何反应（死控件） | 容器无条件注入 `onOpenInBrowser`，回调内部才判空 remote | 改为仅当检测到 github/gitlab 远程时注入该回调（ui 层「回调不注入即隐藏」约定） | 复跑 F-028：无托管远端仓不再渲染该项，其余 14 项齐全（log-page-20.png） |
+| D-10 | 双击「已暂存」分组行进入 diff 页后停在「工作区」模式，看不到该行暂存差异（F-031 三态映射入口断裂） | StatusPage 容器丢弃 ui 传入的 `staged` 第二参；diff 页 `staged` 恒为 `useState(false)`，也不读查询参数 | 两端容器把行分组的 staged 透传为 `&staged=1`；两端 diff 页以 `staged` 查询参数为初值 | `?file=src/util.ts&staged=1` → 选中「已暂存」且渲染 4 处差异（diff-page-03.png），CLI `git diff --cached --stat` 同值；web-next/web-koa 同步修改 |
+| D-11 | diff 页控制台告警「Could not create web worker(s). Falling back to loading web worker code in main thread」——diff 计算压在 UI 线程，大 diff 易卡 | 未装配 `MonacoEnvironment.getWorker` | `monaco-lazy` 模块级装配 `getWorker`（`new Worker(new URL('monaco-editor/esm/vs/editor/editor.worker.js', import.meta.url), { type: 'module' })`，打包器产出独立 worker chunk） | 复跑 diff 页：告警消失，改为 `WorkerBasedDocumentDiffProvider` 计算；diff 渲染与装饰数不变 |
+| D-12 | 窄屏（≤768）挤压：顶栏仓库名折行、过滤行「标签」文字被压成竖排 | 顶栏/过滤行无 `flex-wrap`，标签文本无 `nowrap` | 顶栏与过滤行加 `flexWrap: 'wrap'`、仓库名与标签文本加 `whiteSpace: 'nowrap'`、首页路径行加 `wrap` 且输入框 `flex:1;minWidth:200` | 1440/768/480 三档截图（responsive-768-log.png、responsive-480-log.png）复核不再折行/竖排 |
+| D-13 | 控制台告警「[antd: Alert] `message` is deprecated. Please use `title` instead」（antd v6） | 5 处 `<Alert message=…>` 沿用 v5 属性名 | 全部迁移为 `title=`（branch-panel/log-page/settings-page/status-page/update-project-dialog）；`description` 语义不动 | ui 相关 198 用例通过，告警消失 |
+
+### 5.2 R1 夹具与流程纠偏（非产品缺陷，记入以免后续轮次重复踩坑）
+
+| 编号 | 现象 | 处置 |
+|------|------|------|
+| P-01 | 主仓 master 未设 upstream → 状态条不显示 outgoing 徽标（F-018 前置缺失） | `scripts/smoke-setup.ps1` 增加 `branch --set-upstream-to=origin/master|origin/feature`；当场对既有冒烟仓补设 |
+| P-02 | F-004 期望副文本 `~/Github/rebased-smoke`，而冒烟仓在 `D:`、主目录在 `C:`，`~/` 相对化按目录边界判定后正确地不生效 | 建目录联接 `C:\Users\zhanglei1120\Github\rebased-smoke` → `D:\…\rebased-smoke`，以 home 下路径注册复核（repo-page-04.png 同时展示「home 下 → `~/Github/rebased-smoke`」与「非 home 下 → 原样绝对路径」两种正确形态） |
+| P-03 | F-019 需 CLI 切分支，但工作区脏（夹具使然）导致 `git checkout feature` 被拒 | 改为 `git checkout -b <同内容分支>`（同提交无覆盖风险）验证「状态变更自动刷新」，再 `checkout master` 复原；夹具工作区未被破坏 |
+| P-04 | F-012 CLI 追加提交时 `git commit`（无 pathspec）把已暂存的夹具条目（重命名/新增/util 修改）一并提交，暂存分组被清空 | 判定为**冒烟操作失误**（非产品缺陷）：已用 `git mv` + `git add` 重建「暂存三态」夹具（R/A/M）；后续轮次 CLI 追加提交一律带 `-- <pathspec>` |
+| P-05 | 冒烟仓构造脚本首版 `Git` 函数与 `git` 可执行文件同名 → 递归调用（call depth overflow）；`git worktree remove` 误对主工作树执行 | 函数改名 `Invoke-Git`；清理阶段仅对附属工作树执行 remove。脚本 `scripts/smoke-setup.ps1` 现可一键重建全部冒烟仓（主仓 8 提交含合并、2 处 stash、预置 worktree、A/D/R 工作区态、冲突仓、320 提交大仓、浅克隆仓、裸远端、非 git/空目录） |
+
+### 5.3 R1 未覆盖项与后续计划
+
+- **F-025（认证重试回路）跳过**：本机无「需认证的 HTTP 远端」（需 git 智能 HTTP + 401 挑战或自建 Basic 认证 git 服务器）；AuthDialog 装配、`AUTH_FAILED` 分流（host 自 context、不含 token）已由 api/auth 单测与 F-092 同级通道覆盖。后续若搭建本地认证 git 服务器再补测。
+- **F-032~F-038（DiffPage 余下 7 行）**：两版本对比、A/D/R 两侧渲染、unified patch 预览、大 diff 分块流、折叠/上下文行数、三版本、与分支比较——下一轮按矩阵继续。
+- **F-039 起（StatusPage 及之后 28 个页面）**：尚未执行；夹具已就绪（修改/暂存/新增/删除/重命名 + 未跟踪 + 忽略 + CRLF）。
+- **断点（复现用）**：主仓 id `18726c5c-f4b2-499d-ac82-6eac8f46ec26`（D:\zhanglei1120\Github\rebased-smoke）；冲突仓 id `82168d54-37c4-45a6-b98d-89f515bcbda5`（当前干净，F-075/F-114 前需重新制造冲突）；大仓 id `7649bb35-612f-4949-9974-d498d68fb19d`。
+- **回归基线**：`pnpm typecheck` 全绿；`pnpm test` 全绿（core 226 / api 367 / ui 616 / client + web-next 174 / web-koa 174）。

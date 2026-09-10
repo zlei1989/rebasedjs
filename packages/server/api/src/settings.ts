@@ -4,9 +4,13 @@ import { ServiceError } from '@rebased/contracts';
 import type { GitExecutableInfo, SettingsPatch, SettingsState } from '@rebased/contracts';
 import { loadConfig, saveConfig } from './lib/config-store';
 
-/** 归一化视图：旧配置文件缺 protectedBranchPatterns 时补空列表（服务端保证字段存在） */
+/** 归一化视图：旧配置文件缺 protectedBranchPatterns 时补空列表、缺 theme 时补暗色（服务端保证字段存在） */
 function normalizeSettings(settings: SettingsState): SettingsState {
-  return { ...settings, protectedBranchPatterns: settings.protectedBranchPatterns ?? [] };
+  return {
+    ...settings,
+    protectedBranchPatterns: settings.protectedBranchPatterns ?? [],
+    theme: settings.theme ?? 'dark',
+  };
 }
 
 export function getSettings(): SettingsState {

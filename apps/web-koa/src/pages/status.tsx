@@ -192,8 +192,11 @@ export function RepoStatusPage(): React.ReactNode {
         onHunkStaging={onHunkStaging}
         hunkActing={hunkActing}
         onSelectPatch={(path, staged) => setPatchSel({ path, staged })}
-        // 跳既有 diff 页（仅带 file 参数；staged 切换在 diff 页内完成）
-        onOpenDiff={(path) => navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}`)}
+        // 跳既有 diff 页：按行所属分组带入 staged（已暂存行 → staged=1，否则页内默认工作区），
+        // 否则双击已暂存行会落到「工作区 vs HEAD」而看不到该行的暂存差异
+        onOpenDiff={(path, staged) =>
+          navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}${staged ? '&staged=1' : ''}`)
+        }
         // 三版本对比（HEAD/暂存/工作区三侧）：跳 diff 页 three=1 模式
         onOpenThreeWay={(path) => navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&three=1`)}
         // 一键忽略（仅未跟踪行渲染忽略按钮）：Modal.confirm 确认 → addIgnore（追加 /<path> 到 .gitignore）→

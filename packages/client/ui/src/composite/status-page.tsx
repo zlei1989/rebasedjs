@@ -549,7 +549,7 @@ function CommitCard({
             type="warning"
             showIcon
             data-testid="crlf-warning"
-            message={`即将提交的文件含 CRLF 行尾符（${crlfFiles.slice(0, 3).join('、')}${crlfFiles.length > 3 ? ` 等 ${crlfFiles.length} 个` : ''}）；core.autocrlf 未按建议设置，建议修复后提交`}
+            title={`即将提交的文件含 CRLF 行尾符（${crlfFiles.slice(0, 3).join('、')}${crlfFiles.length > 3 ? ` 等 ${crlfFiles.length} 个` : ''}）；core.autocrlf 未按建议设置，建议修复后提交`}
           />
         ) : null}
         <Input.TextArea

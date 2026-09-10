@@ -1,10 +1,10 @@
 /**
- * 设置页：应用设置（logInEditor 开关）+ 仓库 Git 配置（白名单键逐行：生效值展示 + local 覆盖输入 + 保存）+ GPG 提交签名（可选卡片）。
+ * 设置页：应用设置（logInEditor 开关 + 界面主题 dark/light）+ 仓库 Git 配置（白名单键逐行：生效值展示 + local 覆盖输入 + 保存）+ GPG 提交签名（可选卡片）。
  *  账户卡片为可选第三张卡：仅在注入 accounts/回调时渲染（向后兼容）；token 本体不下行，仅展示掩码 tokenPreview。
  * 纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
  */
 import { useState } from 'react';
-import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Skeleton, Select, Switch, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Typography } from 'antd';
 import type {
   AccountBody,
   AccountDeleteBody,
@@ -231,7 +231,7 @@ function GpgConfigModal({
             type="warning"
             showIcon
             data-testid="gpg-no-keys"
-            message="未找到可用的 gpg 密钥"
+            title="未找到可用的 gpg 密钥"
             description="gpg --list-secret-keys 无结果或 gpg 不可用；请先在系统配置签名密钥（gpg.program 可指定 gpg 程序路径）"
           />
         )}
@@ -316,12 +316,27 @@ export function SettingsPage({
     <Flex vertical gap={16} style={{ padding: 16, maxWidth: 720 }}>
       <Card title="应用设置">
         {settings ? (
-          <Flex align="center" gap={8}>
-            <Switch
-              checked={settings.logInEditor}
-              onChange={(checked) => onPatchSettings({ logInEditor: checked })}
-            />
-            <Typography.Text>在编辑器中查看提交日志</Typography.Text>
+          <Flex vertical gap={12}>
+            <Flex align="center" gap={8}>
+              <Switch
+                checked={settings.logInEditor}
+                onChange={(checked) => onPatchSettings({ logInEditor: checked })}
+              />
+              <Typography.Text>在编辑器中查看提交日志</Typography.Text>
+            </Flex>
+            {/* 界面主题：暗色/明亮二选一，写入应用设置后由 Providers 全站生效（含 Monaco 与 body 底色） */}
+            <Flex align="center" gap={8}>
+              <Segmented
+                data-testid="theme-segmented"
+                value={settings.theme}
+                options={[
+                  { label: '暗色', value: 'dark' },
+                  { label: '明亮', value: 'light' },
+                ]}
+                onChange={(value) => onPatchSettings({ theme: value as 'light' | 'dark' })}
+              />
+              <Typography.Text>界面主题</Typography.Text>
+            </Flex>
           </Flex>
         ) : (
           <Skeleton active />
@@ -361,7 +376,7 @@ export function SettingsPage({
               type="warning"
               showIcon
               data-testid="git-executable-error"
-              message="未检测到可用的 git 可执行文件"
+              title="未检测到可用的 git 可执行文件"
               description="请安装 Git 并确保 git 命令在服务进程的 PATH 环境中可执行（git --version 可正常运行）"
             />
           )}

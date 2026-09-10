@@ -194,7 +194,7 @@ describe('web-koa REST 端点', () => {
   it('settings 端点：GET 返回默认设置，PUT 局部更新后回读生效', async () => {
     const beforeRes = await fetch(`${base}/api/settings`);
     expect(beforeRes.status).toBe(200);
-    expect(await beforeRes.json()).toEqual({ logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [] });
+    expect(await beforeRes.json()).toEqual({ logInEditor: true, recentRepoIds: [], protectedBranchPatterns: [], theme: 'dark' });
 
     const res = await fetch(`${base}/api/settings`, {
       method: 'PUT',

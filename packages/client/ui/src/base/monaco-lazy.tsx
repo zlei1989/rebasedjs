@@ -9,6 +9,21 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import * as monaco from 'monaco-editor';
 import type { MonacoDiffInnerProps } from './monaco-diff-view';
 
+/**
+ * Monaco Web Worker 装配（模块级一次性）：
+ * 不装配时 Monaco 无法创建 worker，退化为「主线程计算 diff」——控制台报
+ * 「Could not create web worker(s). Falling back to loading web worker code in main thread」，
+ * 大 diff（数百行）会把 diff 计算压在 UI 线程上造成卡顿。
+ * 打包器（Next/Turbopack、Vite）均支持 `new Worker(new URL(<specifier>, import.meta.url))`：
+ * 由打包器产出独立 worker chunk 并给出可解析 URL；MonacoEnvironment 是 Monaco 约定的全局注入点
+ * （类型由 monaco-editor 自带的全局声明提供，此处只赋值不重复声明）。
+ */
+if (typeof window !== 'undefined' && window.MonacoEnvironment === undefined) {
+  window.MonacoEnvironment = {
+    getWorker: () => new Worker(new URL('monaco-editor/esm/vs/editor/editor.worker.js', import.meta.url), { type: 'module' }),
+  };
+}
+
 /** 普通单编辑器模式 props：value 受控，onChange 回传用户编辑后的全文 */
 export interface MonacoEditorInnerProps {
   value: string;
@@ -22,6 +37,27 @@ export interface MonacoEditorInnerProps {
 /** monaco-lazy 默认导出组件 props：diff 模式与普通模式二选一 */
 export type MonacoLazyProps = MonacoDiffInnerProps | MonacoEditorInnerProps;
 
+/**
+ * 当前应用主题对应的 Monaco 内置主题名。
+ * 应用主题是全局单例（Providers 写到 <html data-theme>），编辑器不重复接收 props 传递；
+ * 首帧（data-theme 尚未写入）按暗色兜底——与 Providers 的默认口径一致。
+ */
+export function appMonacoTheme(): 'vs-dark' | 'light' {
+  if (typeof document === 'undefined') return 'vs-dark';
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'vs-dark';
+}
+
+/**
+ * 订阅 <html data-theme> 变化：主题切换时调 monaco.editor.setTheme（Monaco 主题为全局态，
+ * 一处设置即可覆盖本页所有编辑器/差异视图），返回取消订阅函数。
+ */
+function observeAppTheme(onChange: (theme: 'vs-dark' | 'light') => void): () => void {
+  if (typeof MutationObserver === 'undefined') return () => {};
+  const observer = new MutationObserver(() => onChange(appMonacoTheme()));
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  return () => observer.disconnect();
+}
+
 /** loader 注入点：返回带默认导出编辑器组件的模块（测试可注入 mock 模块绕过真实 monaco）。
  *  默认导出刻意用函数签名而非 ComponentType：函数参数逆变，可同时满足 diff/普通两种调用方 */
 export type MonacoLazyLoader = () => Promise<{ default: (props: MonacoLazyProps) => ReactNode }>;
@@ -34,12 +70,15 @@ function DiffEditor({ original, modified, language = 'plaintext', options }: Mon
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const editor = monaco.editor.createDiffEditor(container, { readOnly: true, theme: 'vs-dark', ...options });
+    const editor = monaco.editor.createDiffEditor(container, { readOnly: true, theme: appMonacoTheme(), ...options });
     const originalModel = monaco.editor.createModel(original, language);
     const modifiedModel = monaco.editor.createModel(modified, language);
     editor.setModel({ original: originalModel, modified: modifiedModel });
     editorRef.current = editor;
+    // 主题切换（设置页改 dark/light）后跟随：Monaco 主题是全局态，setTheme 一次覆盖全部实例
+    const unsubscribe = observeAppTheme((theme) => monaco.editor.setTheme(theme));
     return () => {
+      unsubscribe();
       editor.dispose();
       originalModel.dispose();
       modifiedModel.dispose();
@@ -71,13 +110,16 @@ function PlainEditor({ value, language = 'plaintext', readOnly = false, onChange
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const editor = monaco.editor.create(container, { value, language, readOnly, theme: 'vs-dark', ...options });
+    const editor = monaco.editor.create(container, { value, language, readOnly, theme: appMonacoTheme(), ...options });
     // 内容变化（用户输入）时回传最新全文；下方受控 setValue 会带回同值，由调用方状态去重
     const subscription = editor.onDidChangeModelContent(() => {
       onChangeRef.current?.(editor.getValue());
     });
     editorRef.current = editor;
+    // 主题切换跟随（同 DiffEditor）
+    const unsubscribe = observeAppTheme((theme) => monaco.editor.setTheme(theme));
     return () => {
+      unsubscribe();
       subscription.dispose();
       editor.getModel()?.dispose();
       editor.dispose();

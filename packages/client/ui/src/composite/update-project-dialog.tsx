@@ -92,11 +92,11 @@ export function UpdateProjectDialog({
               {outcome.fetched.length === 0 ? '（无远程更新）' : `：${outcome.fetched.slice(0, 3).join('、')}${outcome.fetched.length > 3 ? ' 等' : ''}`}
             </Typography.Text>
             {outcome.pull.status === 'up-to-date' ? (
-              <Alert type="info" showIcon message="已是最新" />
+              <Alert type="info" showIcon title="已是最新" />
             ) : outcome.pull.status === 'updated' ? (
-              <Alert type="success" showIcon message="已合入当前分支" />
+              <Alert type="success" showIcon title="已合入当前分支" />
             ) : (
-              <Alert type="warning" showIcon message="更新存在冲突" description="请到冲突页解决后完成（继续/中止）" />
+              <Alert type="warning" showIcon title="更新存在冲突" description="请到冲突页解决后完成（继续/中止）" />
             )}
           </Flex>
         ) : null}

@@ -51,6 +51,8 @@ export const settingsPatchSchema = z.object({
   recentRepoIds: z.array(z.string()).optional(),
   /** 保护分支模式列表：正则语法由服务端校验（非法 → INVALID_QUERY） */
   protectedBranchPatterns: z.array(z.string()).optional(),
+  /** 界面主题：仅接受 light/dark，其余值 → 400（zod 校验） */
+  theme: z.enum(['light', 'dark']).optional(),
 });
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 

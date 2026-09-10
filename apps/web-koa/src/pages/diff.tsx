@@ -40,7 +40,9 @@ export function RepoDiffPage(): React.ReactNode {
   const isRoot = searchParams.get('root') === '1';
   const isThreeWay = searchParams.get('three') === '1';
   const files = useMemo(() => parseFilesParam(searchParams.get('files')), [searchParams]);
-  const [staged, setStaged] = useState(false);
+  // staged 初值来自查询参数（StatusPage 行双击按该行所属分组带入 staged=1——三态映射的入口语义）；
+  // 后续切换仍由页内 Segmented 驱动本地态，不回写 URL
+  const [staged, setStaged] = useState(searchParams.get('staged') === '1');
   const { data: versions, error } = useFileDiff(repoId, file, staged, isRoot ? undefined : from, isRoot ? undefined : to);
   // 三版本数据（?three=1 时启用；与 useFileDiff 并存——SWR 键不同互不干扰）
   const { data: threeWayVersions, error: threeWayError } = useFileThreeWay(repoId, isThreeWay ? file : '');

@@ -90,4 +90,14 @@ describe('log 原语', () => {
     expect(commits[1].message).toBe('a\n| b');
     expect(commits[1].graph).toBe('*');
   });
+
+  // 冒烟 F-008 复现：刚 init 的空仓（unborn HEAD）git log 退出码 128，
+  // 修复前整条 /log 接口 500、日志页空白无提示；修复后应为空序列（页面走空态）
+  it('streamLog 在空仓（unborn HEAD）产出空序列而不抛错', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const commits = [];
+    for await (const c of streamLog(repo, { maxCount: 50 })) commits.push(c);
+    expect(commits).toEqual([]);
+  });
 });

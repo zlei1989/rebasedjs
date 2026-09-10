@@ -61,12 +61,17 @@ export interface FileThreeVersions {
   working: string;
 }
 
+/** 主题模式：dark=暗色（默认，对齐 IDEA 暗色观感）、light=明亮（AGENT.md 要求同时适配两套主题） */
+export type ThemeMode = 'light' | 'dark';
+
 export interface SettingsState {
   logInEditor: boolean;
   recentRepoIds: string[];
   /** 保护分支模式（GitVcsPanel.protectedBranchesRow 语义：正则列表，匹配剥远程名的分支名；
    *  匹配分支上的已推送提交不可重写——isCommitPublishedBlocking 消费点；服务端保证字段存在） */
   protectedBranchPatterns: string[];
+  /** 界面主题（服务端持久化，浏览器端 ConfigProvider 与 body 底色共同消费；服务端保证字段存在） */
+  theme: ThemeMode;
 }
 
 /** GPG 可用密钥（GitGpgConfigUtils.parseSecretKeys 语义）：id 为 KeyID（sec 记录字段 5），description 为 uid 字段 10 */

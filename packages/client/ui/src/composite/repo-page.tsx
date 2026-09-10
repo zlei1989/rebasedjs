@@ -8,7 +8,7 @@
  * 纯 props 驱动：ui 不调接口，repos/onOpen/onClone/onInit/onRemove/homeDir 由调用方容器注入 hooks 数据。
  */
 import { useMemo, useState } from 'react';
-import { Button, Flex, Input, Modal, Popconfirm } from 'antd';
+import { Button, Flex, Input, Modal, Popconfirm, theme } from 'antd';
 import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SettingOutlined, SwitcherOutlined } from '@ant-design/icons';
 import type { RepoInfo } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -151,6 +151,8 @@ export function RepoPage({
   initializing,
   onOpenSettings,
 }: RepoPageProps): React.ReactNode {
+  // 分隔线与副文本走主题 token（原 #f0f0f0/#888 是明亮专用硬编码，暗色主题下过亮）
+  const { token } = theme.useToken();
   const [openPath, setOpenPath] = useState('');
   const [cloneOpen, setCloneOpen] = useState(false);
   const [initOpen, setInitOpen] = useState(false);
@@ -175,12 +177,13 @@ export function RepoPage({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16, maxWidth: 720 }}>
-      <Flex gap={8} align="center">
+      <Flex gap={8} align="center" wrap>
         <Input
           placeholder="仓库路径"
           value={openPath}
           onChange={(e) => setOpenPath(e.target.value)}
           onPressEnter={submitOpen}
+          style={{ minWidth: 200, flex: 1 }}
         />
         <Button type="primary" icon={<FolderOpenOutlined />} onClick={submitOpen}>
           打开
@@ -223,12 +226,12 @@ export function RepoPage({
                 alignItems: 'center',
                 gap: 8,
                 padding: '8px 4px',
-                borderBottom: '1px solid #f0f0f0',
+                borderBottom: `1px solid ${token.colorSplit}`,
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600 }}>{repo.name}</div>
-                <div style={{ color: '#888', fontSize: 12 }}>{relativeToHome(repo.path, homeDir)}</div>
+                <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>{relativeToHome(repo.path, homeDir)}</div>
               </div>
               {onRemove ? (
                 <Popconfirm title="移除该仓库？" okText="确定" cancelText="取消" onConfirm={() => onRemove(repo.id)}>

@@ -2,7 +2,7 @@
  * log 流式解析：--graph + 自定义分隔符。
  * 记录帧 = <graph列>\x01<7 字段以 \x1f 分隔>\x02；\x02 为记录边界，支持多行 message。
  */
-import { streamGit } from './exec';
+import { GitExitError, streamGit } from './exec';
 
 const FIELD_SEP = '\x1f';
 const PREFIX_SEP = '\x01';
@@ -94,7 +94,18 @@ export async function* frameRecords(chunks: AsyncIterable<string> | Iterable<str
   if (buffer.trim().length > 0) yield buffer;
 }
 
-/** 流式产出提交（逐条解析，不整库读入内存；分页用 --skip） */
+/**
+ * 空仓（unborn HEAD）判定：仓库刚 init 且尚无任何提交时，git log 以退出码 128 失败——
+ * 语义是「没有提交」而非命令出错，调用方应视作空列表（否则空仓日志页/流式订阅整体 500）。
+ * 覆盖 git 的两种措辞：`your current branch 'x' does not have any commits yet`（当前分支未诞生）、
+ * `bad default revision 'HEAD'`（游离/无默认 revision 的旧版措辞）。
+ */
+export function isEmptyRepoLogError(err: unknown): boolean {
+  if (!(err instanceof GitExitError)) return false;
+  return /does not have any commits yet/.test(err.stderr) || /bad default revision/.test(err.stderr);
+}
+
+/** 流式产出提交（逐条解析，不整库读入内存；分页用 --skip）；空仓（unborn HEAD）产出空序列而非抛错 */
 export async function* streamLog(repoPath: string, opts: StreamLogOptions = {}): AsyncIterable<CoreCommit> {
   const args = ['log', '--graph', '--date-order', `--format=${PREFIX_SEP}%H${FIELD_SEP}%h${FIELD_SEP}%P${FIELD_SEP}%an${FIELD_SEP}%ae${FIELD_SEP}%aI${FIELD_SEP}%D${FIELD_SEP}%B${RECORD_SEP}`];
   if (opts.range) args.push(opts.range);
@@ -103,7 +114,13 @@ export async function* streamLog(repoPath: string, opts: StreamLogOptions = {}):
   if (opts.author) args.push(`--author=${opts.author}`);
   if (opts.path) args.push('--', opts.path);
 
-  for await (const record of frameRecords(streamGit(args, { cwd: repoPath, signal: opts.signal }))) {
-    yield parseLogRecord(record);
+  try {
+    for await (const record of frameRecords(streamGit(args, { cwd: repoPath, signal: opts.signal }))) {
+      yield parseLogRecord(record);
+    }
+  } catch (err) {
+    // 空仓容错：失败发生在任何记录产出之前（git log 启动即失败），此处直接吞掉即等价于空历史
+    if (isEmptyRepoLogError(err)) return;
+    throw err;
   }
 }

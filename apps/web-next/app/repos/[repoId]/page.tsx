@@ -389,10 +389,10 @@ export default function Page({
         }
       });
   };
-  // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
-  if (!status) return null;
   // 容器态跨仓库复位（§2.5 createOpen 硬化）：仓库切换时清空选择/对话框/认证重试等容器持有的状态——
-  // ui 层内嵌 Modal 已由 <LogPage key={repoId}> 重挂载复位，此处兜底容器自身状态（选中提交、push-up-to、打开对话框等）
+  // ui 层内嵌 Modal 已由 <LogPage key={repoId}> 重挂载复位，此处兜底容器自身状态（选中提交、push-up-to、打开对话框等）。
+  // 必须注册在下方任何提前 return 之前：首帧 status 未就绪会提前返回，若本 hook 在其后则两次渲染 hook 数不等
+  // → React「Rendered more hooks than during the previous render」崩溃（F-001 冒烟实测）。
   useEffect(() => {
     setSelectedHash(select ?? null);
     setPushUpToHash(null);
@@ -406,6 +406,8 @@ export default function Page({
     setPath('');
     setLimit(50);
   }, [repoId]);
+  // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
+  if (!status) return null;
   // 分支对比视图（?compare=<branch>）：双 range 查询就绪前不渲染（compareA/B 为 null key 条件拉取）
   if (compareBranch !== null) {
     if (compareA === undefined || compareB === undefined) return null;
@@ -538,16 +540,21 @@ export default function Page({
             .then(() => void message.success(`已创建标签 ${name}`))
             .catch(onError);
         }}
-        onOpenInBrowser={(hash) => {
-          // 托管平台提交页链接：GitHub/GitLab 域检测（status 已挂载）；两者皆无 → 不渲染菜单项（回调不注入即隐藏）
-          const gh = githubStatus?.repo;
-          if (gh !== undefined) {
-            window.open(`https://github.com/${gh.owner}/${gh.name}/commit/${hash}`, '_blank', 'noopener');
-            return;
+        // 托管平台提交页链接：GitHub/GitLab 域检测（status 已挂载）；两者皆无 → 不注入回调（菜单项随之隐藏，
+        // 避免渲染出点了没反应的死控件——与 ui 层「回调不注入即隐藏」约定一致）
+        {...(githubStatus?.repo !== undefined || gitlabStatus?.repo !== undefined
+          ? {
+            onOpenInBrowser: (hash: string) => {
+              const gh = githubStatus?.repo;
+              if (gh !== undefined) {
+                window.open(`https://github.com/${gh.owner}/${gh.name}/commit/${hash}`, '_blank', 'noopener');
+                return;
+              }
+              const gl = gitlabStatus?.repo;
+              if (gl !== undefined) window.open(`https://gitlab.com/${gl.owner}/${gl.name}/-/commit/${hash}`, '_blank', 'noopener');
+            },
           }
-          const gl = gitlabStatus?.repo;
-          if (gl !== undefined) window.open(`https://gitlab.com/${gl.owner}/${gl.name}/-/commit/${hash}`, '_blank', 'noopener');
-        }}
+          : {})}
       />
       {/* 变基对话框：双模式状态机（简单 → useRebase；交互 → base 驱动 todo 重取 + useInteractiveRebase 提交）；
           取消即复位（RebaseDialog 内部状态自行复位，base 归空使 useRebaseTodo 挂 null key 停止重取） */}

@@ -6,7 +6,7 @@
  *  纯受控（page/selectedHash + 各回调）；ui 不调接口，数据与回调由调用方容器注入。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Typography } from 'antd';
+import { Button, Card, Flex, Typography, theme } from 'antd';
 import { CaretDownOutlined, CaretRightOutlined, FolderOutlined } from '@ant-design/icons';
 import type { CommittedEntry, CommittedFileStatus, CommittedPage } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -86,6 +86,8 @@ function CommitRow({
   selected: boolean;
   onSelectCommit?: (hash: string) => void;
 }): React.ReactNode {
+  // 选中底色走主题 token（controlItemBgActive：明亮 #e6f4ff / 暗色 #111a2c），不再硬编码明亮专用色
+  const { token } = theme.useToken();
   return (
     <Flex
       data-testid={`committed-entry-${index}`}
@@ -94,7 +96,7 @@ function CommitRow({
       style={{
         padding: '4px 8px',
         cursor: onSelectCommit ? 'pointer' : undefined,
-        backgroundColor: selected ? '#e6f4ff' : undefined,
+        backgroundColor: selected ? token.controlItemBgActive : undefined,
       }}
       onClick={() => onSelectCommit?.(entry.hash)}
     >
