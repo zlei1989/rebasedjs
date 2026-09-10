@@ -49,9 +49,9 @@ export function RepoWorktreesPage(): React.ReactNode {
             .then(() => void message.success('工作树已创建'))
             .catch(onError);
         }}
-        onRemove={(path) => {
-          // 裁定：单参不带 force（工作树有未合并变更时先处理，force 仅终端使用）
-          removeWorktree({ path })
+        onRemove={(path, force) => {
+          // force 缺省 false（安全默认）：工作树内有未提交改动时 git 拒绝移除，用户在行内确认框勾选「强制移除（--force）」后再删
+          removeWorktree({ path, force: force === true })
             .then(() => void message.success('工作树已移除'))
             .catch(onError);
         }}

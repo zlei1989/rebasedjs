@@ -86,7 +86,7 @@
 | 20 | ConflictsPanel | P2 | `/repos/:id/conflicts` | 制造冲突自动跳入 / 操作条「去解决冲突」 | F-114~F-119（6） | conflicts | ✅ 6/6 |
 | 21 | PatchPanel | P3 | `/repos/:id/patches` | 更多「补丁」 | F-120~F-123（4） | patch | ✅ 4/4 |
 | 22 | ShelfPanel | P3 | `/repos/:id/shelves` | 更多「搁置」 | F-124~F-126（3） | shelf | ✅ 3/3 |
-| 23 | WorktreePanel | P4 | `/repos/:id/worktrees` | 更多「工作树」 | F-127~F-129（3） | worktree | 待测 |
+| 23 | WorktreePanel | P4 | `/repos/:id/worktrees` | 更多「工作树」 | F-127~F-129（3） | worktree | ✅ 3/3 |
 | 24 | SubmodulePanel | P4 | `/repos/:id/submodules` | 更多「子模块」 | F-130~F-131（2） | submodule | 待测 |
 | 25 | IgnoreDialog | P3 | `/repos/:id/ignore` | 更多「忽略」 | F-132~F-133（2） | ignore | 待测 |
 | 26 | GitHubPanel | P3 | `/repos/:id/github` | 更多「GitHub」（github.com 远程才渲染） | F-134~F-139（6） | github | 待测 |
@@ -417,9 +417,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-127 | 工作树列表 | 观察列表 | path/branch/detached 徽标 +「当前」标记（CLI `worktree list` 互证） | 待测 | worktree-01.png |
-| F-128 | 工作树创建 | 创建 Modal → 互斥 Radio（关联已有/新分支） | 创建成功；仓库内/嵌套路径被阻止（CLI） | 待测 | worktree-02.png |
-| F-129 | 移除 / 清理 | 行内移除（`--force` 支持）→ prune | 移除与清理正确（CLI） | 待测 | worktree-03.png |
+| F-127 | 工作树列表 | 观察列表 | path/branch/detached 徽标 +「当前」标记（CLI `worktree list` 互证） | ✅ | worktree-01.png（三行与 CLI `git worktree list` 逐项一致：主工作树「当前」绿标 + `rebase-topic` + e7c67a8；`rebased-smoke-wt` + `wt-branch` + 79e9129；另建分离头工作树 → 「分离」橙标 + 3e9cca6（CLI 显示 `(detached HEAD)`）） |
+| F-128 | 工作树创建 | 创建 Modal → 互斥 Radio（关联已有/新分支） | 创建成功；仓库内/嵌套路径被阻止（CLI） | ✅ | worktree-02.png（Modal：路径输入 + 「关联已有分支/创建新分支」互斥 Radio（切换后分支输入 testid 随之变为 `worktree-create-new-branch`）；新建 `rebased-smoke-wt-new` + 新分支 `wt-new-branch` → toast「工作树已创建」、列表 3→4；CLI：`worktree list` 出现 `[wt-new-branch]`、`git branch` 出现该分支、目录已填充；**仓库内嵌套路径**（`…\rebased-smoke\nested-wt`）→ 「路径无效：…」被拒） |
+| F-129 | 移除 / 清理 | 行内移除（`--force` 支持）→ prune | 移除与清理正确（CLI） | ✅ | worktree-03.png（脏工作树（README 有未提交改动）移除：不带 force → 「移除工作树失败：fatal: … contains modified or untracked files, use --force to delete it」；在确认框勾选「强制移除（--force）」（worktree-03b.png 为确认框态）→ toast「工作树已移除」、CLI `worktree list` 少一行且目录已删；「确定清理失效工作树？」→ 手工删目录造成的 prunable 条目被清掉（CLI 复核）、列表回到 2 行。注：force 勾选框为本轮补的 UI 入口，见 §5.14 D-32） |
 
 ### 4.24 SubmodulePanel（slug `submodule`；P4）
 
@@ -533,6 +533,13 @@
 | R12 | 2026-09-11 | F-111~F-113（SearchPanel 3 行：grep/pickaxe 双模式与非法正则、结果→日志、分支快速搜索） | ✅ 3（SearchPanel 3/3 收官） | D-30（非法正则抛内部 `git log` 命令行原文给用户）修复并复验（见 §5.12）；两模式结果均与 CLI 逐条互证 |
 | R13 | 2026-09-11 | F-114~F-119（ConflictsPanel 6 行：冲突列表与徽标 / 整侧解决 / 3-way 手合并 / 完成合并 / 跳过 / 状态联动与中止） | ✅ 6（ConflictsPanel 6/6 收官） | 本轮无新缺陷（说明见 §5.12.1）；夹具重建为一次性呈现 AA/UD/UU 四路冲突 + rebase 冲突，每步均与 CLI 互证 |
 | R14 | 2026-09-11 | F-120~F-126（PatchPanel 4 + ShelfPanel 3：补丁三态创建/应用/列表管理/导入搁置；搁置保存/恢复与删除/事件联动） | ✅ 7（两页各自收官：patch 4/4、shelf 3/3） | D-31（补丁重名静默覆盖，把既有补丁截断为 0 字节）修复并复验（见 §5.13）；F-126 用双标签页实测 SSE 事件驱动刷新 |
+| R15 | 2026-09-11 | F-127~F-129（WorktreePanel 3 行：列表徽标 / 创建与路径校验 / 移除·强制移除·清理） | ✅ 3（WorktreePanel 3/3 收官） | D-32（脏工作树在 UI 上无法移除：缺 `--force` 入口）修复并复验（见 §5.14） |
+
+### 5.14 R15 缺陷登记（已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-32 | 工作树内有未提交改动时，行内「移除」只会失败：toast「移除工作树失败：fatal: '…' contains modified or untracked files, use --force to delete it」——界面**没有任何 force 入口**，用户被卡住只能去终端；而 F-129 明确要求「行内移除（`--force` 支持）」 | 后端链路早已支持 force（契约 `worktreeRemoveBodySchema.force`、api/core 透传 `git worktree remove --force`），但 ui 层当年按「force 仅终端使用」的裁定只传单参 path，容器也未接 force——能力在最后一跳断掉 | ui `WorktreeRow` 的移除确认框增加「强制移除（--force）」勾选框（默认不勾，安全默认不变；`data-testid=worktree-force-<path>`），`onRemove(path, force)`；web-next 与 web-koa 容器透传 `{ path, force: force === true }` | 复跑 F-129：不加 force → 明确报错且工作树保留；勾选 force → toast「工作树已移除」、CLI `worktree list` 少一行、目录已删（worktree-03.png/03b.png）；ui 用例由「单参不携带 force」改为「默认 onRemove(path,false)」+ 新增「勾选后 onRemove(path,true）」，worktree-panel 16/16 通过 |
 
 ### 5.13 R14 缺陷登记（已修复 + 复验）
 

@@ -8,7 +8,7 @@
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Radio, Tag, Typography } from 'antd';
+import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Radio, Tag, Typography } from 'antd';
 import type { WorktreeCreateBody, WorktreeEntry, WorktreeList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 
@@ -37,8 +37,10 @@ function WorktreeRow({
   wt: WorktreeEntry;
   current: boolean;
   acting?: boolean;
-  onRemove: (path: string) => void;
+  onRemove: (path: string, force?: boolean) => void;
 }): React.ReactNode {
+  // 强制移除开关：默认关闭（安全默认）；勾选后带 force 调 onRemove（git worktree remove --force，丢弃其中的未提交改动）
+  const [force, setForce] = useState(false);
   return (
     <Flex data-testid={`worktree-row-${wt.path}`} align="center" gap={8} style={{ padding: '4px 0' }}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
@@ -66,7 +68,25 @@ function WorktreeRow({
         title={`确定移除工作树 ${wt.path}？`}
         okText="确定"
         cancelText="取消"
-        onConfirm={() => onRemove(wt.path)}
+        description={
+          <Flex vertical gap={4}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              工作树内有未提交改动时需勾选强制移除（其中的改动将被丢弃）
+            </Typography.Text>
+            <Checkbox
+              data-testid={`worktree-force-${wt.path}`}
+              checked={force}
+              onChange={(e) => setForce(e.target.checked)}
+            >
+              强制移除（--force）
+            </Checkbox>
+          </Flex>
+        }
+        onConfirm={() => {
+          const useForce = force;
+          setForce(false);
+          onRemove(wt.path, useForce);
+        }}
       >
         <Button size="small" data-testid={`worktree-remove-${wt.path}`} disabled={acting}>
           移除

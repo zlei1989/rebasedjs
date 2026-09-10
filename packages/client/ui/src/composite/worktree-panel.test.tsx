@@ -152,14 +152,22 @@ describe('WorktreePanel 创建 Modal', () => {
 });
 
 describe('WorktreePanel 行内移除', () => {
-  it('「移除」Popconfirm 确认后以单参 path 调 onRemove（不携带 force）', async () => {
+  it('「移除」Popconfirm 确认后调 onRemove(path, false)：默认不带 force（安全默认）', async () => {
     const { callbacks } = renderPanel();
     fireEvent.click(screen.getByTestId('worktree-remove-C:/repo-wt'));
     expect(await screen.findByText('确定移除工作树 C:/repo-wt？')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
     expect(callbacks.onRemove).toHaveBeenCalledTimes(1);
-    expect(callbacks.onRemove).toHaveBeenCalledWith('C:/repo-wt');
-    expect(callbacks.onRemove.mock.calls[0]).toHaveLength(1);
+    expect(callbacks.onRemove).toHaveBeenCalledWith('C:/repo-wt', false);
+  });
+
+  // 回归（F-129）：脏工作树用 git 原语必然被拒，此前 UI 无 force 入口，用户只能去终端
+  it('勾选「强制移除（--force）」后确认：onRemove(path, true)', async () => {
+    const { callbacks } = renderPanel();
+    fireEvent.click(screen.getByTestId('worktree-remove-C:/repo-wt'));
+    fireEvent.click(await screen.findByTestId('worktree-force-C:/repo-wt'));
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(callbacks.onRemove).toHaveBeenCalledWith('C:/repo-wt', true);
   });
 });
 
