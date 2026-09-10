@@ -44,10 +44,26 @@ export async function resolveGitExecutableInfo(): Promise<{ exec: string; versio
 const EXEC_LOG_CAP = 200;
 /** 仓库级缓冲上限（LRU 淘汰）：Web 长驻进程打开仓库逐增，防 Map 无界增长（§2.5 硬化） */
 const EXEC_LOG_DIRS_LIMIT = 64;
-const execLogByCwd = new Map<string, ExecLogEntry[]>();
+
+/**
+ * 执行日志缓冲挂在 globalThis 上（D-34）：Next dev 下每个路由各自成 chunk、模块注册表互不相通——
+ * 模块级 Map 会导致「A 路由跑的 git 命令，B 路由（控制台页）看不到」，页面恒显示「暂无命令记录」。
+ * 经 Symbol.for 挂全局后，同进程内所有模块实例共享同一份缓冲（生产单进程语义一致）。
+ */
+const EXEC_LOG_STORE_KEY = Symbol.for('rebased.core.execLogStore');
+function execLogStore(): Map<string, ExecLogEntry[]> {
+  const holder = globalThis as unknown as Record<symbol, unknown>;
+  let store = holder[EXEC_LOG_STORE_KEY] as Map<string, ExecLogEntry[]> | undefined;
+  if (store === undefined) {
+    store = new Map<string, ExecLogEntry[]>();
+    holder[EXEC_LOG_STORE_KEY] = store;
+  }
+  return store;
+}
 
 /** LRU 提升 + 超限淘汰：访问（写/读）即删后重插置尾；超限删最旧（Map 迭代序 = 插入序） */
 function touchExecLogCwd(cwd: string): void {
+  const execLogByCwd = execLogStore();
   const list = execLogByCwd.get(cwd);
   if (list !== undefined) execLogByCwd.delete(cwd);
   while (execLogByCwd.size >= EXEC_LOG_DIRS_LIMIT) {
@@ -79,6 +95,7 @@ function stripSensitivePairs(args: string[]): string[] {
 
 function recordExec(cwd: string, finalArgs: string[], exitCode: number, durationMs: number, stderr: string): void {
   touchExecLogCwd(cwd);
+  const execLogByCwd = execLogStore();
   let list = execLogByCwd.get(cwd);
   if (list === undefined) {
     list = [];
@@ -93,7 +110,7 @@ function recordExec(cwd: string, finalArgs: string[], exitCode: number, duration
 export function getExecLog(cwd: string, limit: number): ExecLogEntry[] {
   if (limit <= 0) return [];
   touchExecLogCwd(cwd);
-  return (execLogByCwd.get(cwd) ?? []).slice(-limit);
+  return (execLogStore().get(cwd) ?? []).slice(-limit);
 }
 
 export class GitExitError extends Error {

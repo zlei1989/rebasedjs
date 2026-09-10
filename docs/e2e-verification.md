@@ -91,7 +91,7 @@
 | 25 | IgnoreDialog | P3 | `/repos/:id/ignore` | 更多「忽略」 | F-132~F-133（2） | ignore | ✅ 2/2 |
 | 26 | GitHubPanel | P3 | `/repos/:id/github` | 更多「GitHub」（github.com 远程才渲染） | F-134~F-139（6） | github | ✅ 2/6（F-136~F-139 跳过：需真实 github.com 仓库 + PAT） |
 | 27 | GitLabPanel | P4 | `/repos/:id/gitlab` | 更多「GitLab」（gitlab.com 远程才渲染） | F-140~F-144（5） | gitlab | ✅ 1/5（F-141~F-144 跳过：需真实 gitlab.com 项目 + PAT） |
-| 28 | GitConsole | P3 | `/repos/:id/console` | 更多「控制台」 | F-145~F-146（2） | console | 待测 |
+| 28 | GitConsole | P3 | `/repos/:id/console` | 更多「控制台」 | F-145~F-146（2） | console | ✅ 2/2 |
 | 29 | QuickActionsMenu（等效聚合） | P2+ | 顶栏 5 按钮 + 更多菜单 18 项 | 顶栏按钮区 | F-147~F-148（2） | quick-actions | 待测 |
 | 30 | SettingsPage | P1/P2 | `/repos/:id/settings` | 顶栏「设置」 | F-149~F-155（7） | settings | 待测 |
 | 31 | BrowsePanel | P4 | `/repos/:id/browse?rev=` | 详情面板「浏览快照」 | F-156~F-159（4） | browse | 待测 |
@@ -474,8 +474,8 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-145 | git 命令输出展示（环形缓冲 + token 剥离） | 打开控制台 → 观察列表 → 刷新 | 列表（时间/args/退出码/耗时/stderr 尾）齐全；`extraheader` 明文不存在（token 剥离） | 待测 | console-01.png |
-| F-146 | 输出折叠（`-c key=value`） | 观察含 `-c` 的条目 | 整对参数折叠为 `-c …` 占位 | 待测 | console-02.png |
+| F-145 | git 命令输出展示（环形缓冲 + token 剥离） | 打开控制台 → 观察列表 → 刷新 | 列表（时间/args/退出码/耗时/stderr 尾）齐全；`extraheader` 明文不存在（token 剥离） | ✅ | console-01.png（先跑若干操作再进页面：每行含 时间 + args + 退出码 + 耗时 + 失败行的 stderr 尾（如 `fetch authed2` 行显示 `128 | 1.3 s | fatal: Cannot prompt because user interactivity has been disabled…`）；**token 剥离**：配置 127.0.0.1 令牌后执行带认证注入的 fetch，条目中不含 `extraheader` 字样、页面文本不含 token 明文。注：首轮页面恒「暂无命令记录」，为本轮修复项 D-34） |
+| F-146 | 输出折叠（`-c key=value`） | 观察含 `-c` 的条目 | 整对参数折叠为 `-c …` 占位 | ✅ | console-02.png（所有含 `-c` 的条目均显示为 `--no-pager -c … <子命令> …`：`status --porcelain=v2 -z --branch`、`for-each-ref --format=…`、`worktree list --porcelain` 等；API 原始 args 中 `-c` 与 `core.pager=cat` 成对存在，仅 UI 呈现折叠 + 敏感对整体剥离） |
 
 ### 4.29 QuickActionsMenu（slug `quick-actions`；P2+，等效聚合）
 
@@ -536,12 +536,14 @@
 | R15 | 2026-09-11 | F-127~F-129（WorktreePanel 3 行：列表徽标 / 创建与路径校验 / 移除·强制移除·清理） | ✅ 3（WorktreePanel 3/3 收官） | D-32（脏工作树在 UI 上无法移除：缺 `--force` 入口）修复并复验（见 §5.14） |
 | R16 | 2026-09-11 | F-130~F-133（SubmodulePanel 2 + IgnoreDialog 2：四态徽标与更新 / 双 target 编辑与模板 / 一键忽略幂等） | ✅ 4（两页各自收官：submodule 2/2、ignore 2/2） | 本轮无新缺陷；子模块四态夹具由 `protocol.file.allow=always` 新增子模块 + 两侧分叉 gitlink 合并构造 |
 | R17 | 2026-09-11 | F-134~F-135（GitHubPanel 检测门 + 账户认证降级卡）、F-140（GitLabPanel 同口径）+ F-136~F-139 / F-141~F-144 边界核实 | ✅ 3 / 跳过 8（缺真实托管仓库与 PAT） | D-33（认证降级卡文案与实况不符：无令牌却提示「令牌无效或已过期」）修复并复验（见 §5.15）；github.com 经假 PAT 实测可达（返回 `Bad credentials`） |
+| R18 | 2026-09-11 | F-145~F-146（GitConsole 2 行：命令记录展示与 token 剥离、`-c` 成对折叠） | ✅ 2（GitConsole 2/2 收官） | D-34（执行日志缓冲为模块级 Map，dev 下路由间不共享 → 控制台恒空）修复并复验（见 §5.15） |
 
 ### 5.15 R17 缺陷登记（已修复 + 复验）
 
 | 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
 |------|----------------|------|------|------|
 | D-33 | GitHub/GitLab 面板的认证降级卡文案与实况不符：**从未配置过令牌**时也提示「令牌无效或已过期，请到设置中重新配置。」——服务端 `prs` 明确返回「未配置 GitHub 令牌，请在设置中添加」，两处口径矛盾，用户被误导去排查「过期」 | 两端容器把 AUTH_FAILED 一律渲染成固定说明文案，丢弃了服务端 message（该 message 已区分「未配置令牌」与「令牌无效/认证失败」两种成因） | 容器改用服务端 message 作为 description（`prsError.message`，空则回落原通用文案），保留「去设置」动作 | 复跑 F-135：无令牌 → 卡显示「未配置 GitHub 令牌，请在设置中添加」（github-02.png）；录入假 PAT 后重检测 → 卡显示「GitHub 认证失败：Bad credentials」（成因切换正确）。F-140 同口径复核 GitLab 侧（gitlab-01.png） |
+| D-34 | Git 控制台页恒显示「暂无命令记录」——无论此前在界面里执行多少 git 操作（状态页/分支页/远程 fetch 等），列表始终为空；同进程的 `/api/repos/:id/console` 也返回 `[]` | core 的执行日志缓冲是**模块级** `Map`（`execLogByCwd`）；Next dev（Turbopack）为每个路由单独产出 chunk、模块注册表彼此独立 → 「A 路由跑的 git 命令」写进 A 的 Map，「控制台路由」读的是自己那份空 Map，两者永不相见（生产单进程语义下才会共享） | 缓冲改为挂在 `globalThis`（`Symbol.for('rebased.core.execLogStore')` 键）的进程级单例，`touchExecLogCwd`/`recordExec`/`getExecLog` 统一经 `execLogStore()` 取用；LRU 上限与逐条语义不变 | 复跑 F-145/F-146：跑一次 `/status`+`/branches` 后 `/console` 立即返回 10 条记录（此前恒 `[]`），页面列表齐全（时间/args/退出码/耗时/stderr 尾）且 `-c` 成对折叠、token 无明文（console-01.png / console-02.png）；core exec 用例 17/17 通过（含 LRU 淘汰与 limit 截断） |
 
 ### 5.14 R15 缺陷登记（已修复 + 复验）
 
