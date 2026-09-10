@@ -38,7 +38,7 @@ export const baseConfig: Linter.Config[] = [
 ];
 
 function boundaryMessage(pkg: PackageName, name: string): string {
-  return `[分层边界] ${pkg} 禁止 import ${name}（见 docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md §3.3）`;
+  return `[分层边界] ${pkg} 禁止 import ${name}（见 docs/architecture-design.md §3.3）`;
 }
 
 /**

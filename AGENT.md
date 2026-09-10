@@ -11,7 +11,7 @@
 
 ## 目录
 
-monorepo：2 个下游应用 + 服务端/客户端两层，职责严格分离（设计见 `docs/superpowers/specs/2026-09-01-rebasedjs-architecture-design.md`）：
+monorepo：2 个下游应用 + 服务端/客户端两层，职责严格分离（架构见 `docs/architecture-design.md`）：
 
 rebasedjs/
 ├── apps/
@@ -84,7 +84,7 @@ rebasedjs/
 - **提交身份靠 `testing/setup.ts` 环境变量**；禁止 `git config user.name/email`
 - **纯函数测试标 `// @vitest-environment node`**，组件测试才用 jsdom
 - **web-koa/web-next 新用例并入对应域文件**，不新增/合并大套件
-- 改夹具后跑对应包看 Duration；全量回归预算 ~6 分钟（机制详见 docs 架构设计 6.1）
+- 改夹具后跑对应包看 Duration；全量回归预算 ~6 分钟（机制详见 `docs/architecture-design.md` §4.2 测试性能基线）
 
 ## 技术栈
 
