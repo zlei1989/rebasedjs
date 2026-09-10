@@ -100,13 +100,14 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         </Button>
       </Flex>
       {isAuthFailed(prsError) ? (
-        /* prs 加载失败 AUTH_FAILED：提示卡 + 去设置链接（替代面板，避免无数据渲染） */
+        /* prs 加载失败 AUTH_FAILED：提示卡 + 去设置链接（替代面板，避免无数据渲染）。
+           描述取服务端 message（区分「未配置令牌」与「令牌无效」两种成因，避免误导），缺失时回落通用文案（D-33） */
         <Alert
           type="error"
           showIcon
           data-testid="github-auth-failed"
           message="GitHub 认证失败"
-          description="令牌无效或已过期，请到设置中重新配置。"
+          description={(prsError instanceof Error && prsError.message !== '' ? prsError.message : '令牌无效或已过期，请到设置中重新配置。')}
           action={
             <Button size="small" onClick={() => router.push(`/repos/${repoId}/settings`)}>
               去设置

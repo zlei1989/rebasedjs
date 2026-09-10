@@ -89,8 +89,8 @@
 | 23 | WorktreePanel | P4 | `/repos/:id/worktrees` | 更多「工作树」 | F-127~F-129（3） | worktree | ✅ 3/3 |
 | 24 | SubmodulePanel | P4 | `/repos/:id/submodules` | 更多「子模块」 | F-130~F-131（2） | submodule | ✅ 2/2 |
 | 25 | IgnoreDialog | P3 | `/repos/:id/ignore` | 更多「忽略」 | F-132~F-133（2） | ignore | ✅ 2/2 |
-| 26 | GitHubPanel | P3 | `/repos/:id/github` | 更多「GitHub」（github.com 远程才渲染） | F-134~F-139（6） | github | 待测 |
-| 27 | GitLabPanel | P4 | `/repos/:id/gitlab` | 更多「GitLab」（gitlab.com 远程才渲染） | F-140~F-144（5） | gitlab | 待测 |
+| 26 | GitHubPanel | P3 | `/repos/:id/github` | 更多「GitHub」（github.com 远程才渲染） | F-134~F-139（6） | github | ✅ 2/6（F-136~F-139 跳过：需真实 github.com 仓库 + PAT） |
+| 27 | GitLabPanel | P4 | `/repos/:id/gitlab` | 更多「GitLab」（gitlab.com 远程才渲染） | F-140~F-144（5） | gitlab | ✅ 1/5（F-141~F-144 跳过：需真实 gitlab.com 项目 + PAT） |
 | 28 | GitConsole | P3 | `/repos/:id/console` | 更多「控制台」 | F-145~F-146（2） | console | 待测 |
 | 29 | QuickActionsMenu（等效聚合） | P2+ | 顶栏 5 按钮 + 更多菜单 18 项 | 顶栏按钮区 | F-147~F-148（2） | quick-actions | 待测 |
 | 30 | SettingsPage | P1/P2 | `/repos/:id/settings` | 顶栏「设置」 | F-149~F-155（7） | settings | 待测 |
@@ -447,12 +447,12 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-134 | 检测门（远程形态才渲染） | 在非 github 仓看「更多」→ 再看 github 远程仓 | 非 github 仓不渲染该项；github.com 远程仓渲染 | 待测 | github-01.png |
-| F-135 | 账户/token 认证 + 降级卡 | 打开面板（无令牌）→ 观察 → Settings 账户卡片录 PAT | 检测三态（远程+令牌）正确；无令牌 → 提示卡「去设置」；录 PAT 后回面板重检测 | 待测 | github-02.png |
-| F-136 | PR 列表/详情/时间线/评论 | 真实远端 → 列表点击选中 → 详情 + 时间线 tab → 发评论 | 时间线 issue comments + review summaries 合并（旧→新）；空评论拦截 | 待测 | github-03.png |
-| F-137 | PR 审查（approve/request changes） | 详情内审查 | reviewDecision 徽标正确 | 待测 | github-04.png |
-| F-138 | PR diff 视图 + 行级评论 | 文件行级视图 → 逐 hunk 观察 → 行级评论（新侧行号 Select + 发送） | 逐 hunk 两侧 MonacoDiffView + 绝对行号头行；评论线程按 hunk 挂靠并落地 | 待测 | github-05.png |
-| F-139 | 三种合并策略 + 检出 PR 分支 | merge/squash/rebase 各测 → 检出 PR | 三策略合并正确（warning 路径）；检出 = fetch `+refs/pull/N/head` + `checkoutNewBranch('pr-N')`（CLI） | 待测 | github-06.png |
+| F-134 | 检测门（远程形态才渲染） | 在非 github 仓看「更多」→ 再看 github 远程仓 | 非 github 仓不渲染该项；github.com 远程仓渲染 | ✅ | github-01.png（`rebased-smoke-clone` 加 github.com 远程后，「更多」菜单出现「GitHub 面板」（17 项）；主仓（本地 file 远程）菜单 16 项、**无**该项（github-01b.png）；`GET …/github/status` 返回 `{detected:true, repo:{owner:'example', name:'rebased-smoke', remoteUrl:'https://github.com/example/rebased-smoke.git'}}`） |
+| F-135 | 账户/token 认证 + 降级卡 | 打开面板（无令牌）→ 观察 → Settings 账户卡片录 PAT | 检测三态（远程+令牌）正确；无令牌 → 提示卡「去设置」；录 PAT 后回面板重检测 | ✅ | github-02.png（无令牌：卡「GitHub 认证失败 / 未配置 GitHub 令牌，请在设置中添加」+「去设置」；服务端 `GET …/github/prs` → 401 `AUTH_FAILED` 同文案）→ 点「去设置」→ 设置页「添加账户」（主机 `github.com` + 令牌）→ 「账户已保存」，账户行显示脱敏 `smok***` → 回面板**重检测**：卡片变为「GitHub 认证失败：Bad credentials」（说明令牌已被读取并真的打到 github.com，失败点从「未配置」前移到凭据本身）。冒烟后已删除该临时账户。注：卡片文案首轮为固定「令牌无效或已过期」，与无令牌实况不符，为本轮修复项 D-33） |
+| F-136 | PR 列表/详情/时间线/评论 | 真实远端 → 列表点击选中 → 详情 + 时间线 tab → 发评论 | 时间线 issue comments + review summaries 合并（旧→新）；空评论拦截 | 跳过：需**真实 github.com 仓库 + 有效 PAT**（本机无可用凭据；夹具远程 `example/rebased-smoke` 不存在，录假 PAT 后 github 返回 `Bad credentials`）。PR 列表/详情/时间线/评论的端点与映射由 api/github 单测覆盖 | — |
+| F-137 | PR 审查（approve/request changes） | 详情内审查 | reviewDecision 徽标正确 | 跳过：同 F-136（需真实 PR 与写权限 PAT） | — |
+| F-138 | PR diff 视图 + 行级评论 | 文件行级视图 → 逐 hunk 观察 → 行级评论（新侧行号 Select + 发送） | 逐 hunk 两侧 MonacoDiffView + 绝对行号头行；评论线程按 hunk 挂靠并落地 | 跳过：同 F-136；HunkDiffView 的 hunk 解析/行级挂靠由 ui（github-panel.test.tsx）与 api 单测覆盖 | — |
+| F-139 | 三种合并策略 + 检出 PR 分支 | merge/squash/rebase 各测 → 检出 PR | 三策略合并正确（warning 路径）；检出 = fetch `+refs/pull/N/head` + `checkoutNewBranch('pr-N')`（CLI） | 跳过：同 F-136。检出通道的 git 侧（`fetchRemote` 带 `+refs/pull/N/head` → `FETCH_HEAD` 指向目标提交）已在 core 单测实测（见 F-090 定制 refspec 同源能力） | — |
 
 ### 4.27 GitLabPanel（slug `gitlab`；P4）
 
@@ -461,11 +461,11 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-140 | 检测门 + 账户认证 | 非 gitlab 仓 vs gitlab 远程仓入口；无令牌降级卡 | 检测门与降级卡同 GitHub 口径 | 待测 | gitlab-01.png |
-| F-141 | MR 创建/列表/详情/评论 | 新建 MR Modal（源/目标分支 + 标题 + 描述）→ 列表四徽标 → 详情时间线 → 评论 | 各环节正确；时间线 notes+reviews 合并 | 待测 | gitlab-02.png |
-| F-142 | MR diff 视图 + 行级讨论 | 行级视图 → 行级讨论（position new_path/new_line） | 与 GitHub 共用 HunkDiffView；讨论锚点与提交落地 | 待测 | gitlab-03.png |
-| F-143 | MR 审查 / 合并 | approve/request changes → merge（squash?） | 三映射端点正确；reviewState 徽标；合并成功 | 待测 | gitlab-04.png |
-| F-144 | MR 检出 | 检出 MR | fetch `refs/merge-requests/:iid/head` + `checkoutNewBranch('mr-N')`（CLI） | 待测 | gitlab-05.png |
+| F-140 | 检测门 + 账户认证 | 非 gitlab 仓 vs gitlab 远程仓入口；无令牌降级卡 | 检测门与降级卡同 GitHub 口径 | ✅ | gitlab-01.png（`rebased-smoke-big` 加 gitlab.com 远程后菜单出现「GitLab 面板」；无令牌 → 「GitLab 认证失败 / 未配置 GitLab 令牌，请在设置中添加 / 去设置」——与 GitHub 同口径，文案同样取自服务端 message（D-33 修复后）） |
+| F-141 | MR 创建/列表/详情/评论 | 新建 MR Modal（源/目标分支 + 标题 + 描述）→ 列表四徽标 → 详情时间线 → 评论 | 各环节正确；时间线 notes+reviews 合并 | 跳过：需**真实 gitlab.com 项目 + 有效 PAT**（同 F-136 边界；夹具远程 `example/rebased-smoke` 不存在）。MR 端点与 notes/reviews 合并映射由 api/gitlab 单测覆盖 | — |
+| F-142 | MR diff 视图 + 行级讨论 | 行级视图 → 行级讨论（position new_path/new_line） | 与 GitHub 共用 HunkDiffView；讨论锚点与提交落地 | 跳过：同 F-141；共用 HunkDiffView 的渲染由 ui 单测覆盖 | — |
+| F-143 | MR 审查 / 合并 | approve/request changes → merge（squash?） | 三映射端点正确；reviewState 徽标；合并成功 | 跳过：同 F-141 | — |
+| F-144 | MR 检出 | 检出 MR | fetch `refs/merge-requests/:iid/head` + `checkoutNewBranch('mr-N')`（CLI） | 跳过：同 F-141。检出通道的 git 侧已由 core 单测实测（`fetchRemote` + `refs/merge-requests/:iid/head`，见 gitlab.ts 同款调用） | — |
 
 ### 4.28 GitConsole（slug `console`；P3）
 
@@ -535,6 +535,13 @@
 | R14 | 2026-09-11 | F-120~F-126（PatchPanel 4 + ShelfPanel 3：补丁三态创建/应用/列表管理/导入搁置；搁置保存/恢复与删除/事件联动） | ✅ 7（两页各自收官：patch 4/4、shelf 3/3） | D-31（补丁重名静默覆盖，把既有补丁截断为 0 字节）修复并复验（见 §5.13）；F-126 用双标签页实测 SSE 事件驱动刷新 |
 | R15 | 2026-09-11 | F-127~F-129（WorktreePanel 3 行：列表徽标 / 创建与路径校验 / 移除·强制移除·清理） | ✅ 3（WorktreePanel 3/3 收官） | D-32（脏工作树在 UI 上无法移除：缺 `--force` 入口）修复并复验（见 §5.14） |
 | R16 | 2026-09-11 | F-130~F-133（SubmodulePanel 2 + IgnoreDialog 2：四态徽标与更新 / 双 target 编辑与模板 / 一键忽略幂等） | ✅ 4（两页各自收官：submodule 2/2、ignore 2/2） | 本轮无新缺陷；子模块四态夹具由 `protocol.file.allow=always` 新增子模块 + 两侧分叉 gitlink 合并构造 |
+| R17 | 2026-09-11 | F-134~F-135（GitHubPanel 检测门 + 账户认证降级卡）、F-140（GitLabPanel 同口径）+ F-136~F-139 / F-141~F-144 边界核实 | ✅ 3 / 跳过 8（缺真实托管仓库与 PAT） | D-33（认证降级卡文案与实况不符：无令牌却提示「令牌无效或已过期」）修复并复验（见 §5.15）；github.com 经假 PAT 实测可达（返回 `Bad credentials`） |
+
+### 5.15 R17 缺陷登记（已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-33 | GitHub/GitLab 面板的认证降级卡文案与实况不符：**从未配置过令牌**时也提示「令牌无效或已过期，请到设置中重新配置。」——服务端 `prs` 明确返回「未配置 GitHub 令牌，请在设置中添加」，两处口径矛盾，用户被误导去排查「过期」 | 两端容器把 AUTH_FAILED 一律渲染成固定说明文案，丢弃了服务端 message（该 message 已区分「未配置令牌」与「令牌无效/认证失败」两种成因） | 容器改用服务端 message 作为 description（`prsError.message`，空则回落原通用文案），保留「去设置」动作 | 复跑 F-135：无令牌 → 卡显示「未配置 GitHub 令牌，请在设置中添加」（github-02.png）；录入假 PAT 后重检测 → 卡显示「GitHub 认证失败：Bad credentials」（成因切换正确）。F-140 同口径复核 GitLab 侧（gitlab-01.png） |
 
 ### 5.14 R15 缺陷登记（已修复 + 复验）
 
