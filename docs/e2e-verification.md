@@ -92,7 +92,7 @@
 | 26 | GitHubPanel | P3 | `/repos/:id/github` | 更多「GitHub」（github.com 远程才渲染） | F-134~F-139（6） | github | ✅ 2/6（F-136~F-139 跳过：需真实 github.com 仓库 + PAT） |
 | 27 | GitLabPanel | P4 | `/repos/:id/gitlab` | 更多「GitLab」（gitlab.com 远程才渲染） | F-140~F-144（5） | gitlab | ✅ 1/5（F-141~F-144 跳过：需真实 gitlab.com 项目 + PAT） |
 | 28 | GitConsole | P3 | `/repos/:id/console` | 更多「控制台」 | F-145~F-146（2） | console | ✅ 2/2 |
-| 29 | QuickActionsMenu（等效聚合） | P2+ | 顶栏 5 按钮 + 更多菜单 18 项 | 顶栏按钮区 | F-147~F-148（2） | quick-actions | 待测 |
+| 29 | QuickActionsMenu（等效聚合） | P2+ | 顶栏 5 按钮 + 更多菜单 18 项 | 顶栏按钮区 | F-147~F-148（2） | quick-actions | ✅ 2/2 |
 | 30 | SettingsPage | P1/P2 | `/repos/:id/settings` | 顶栏「设置」 | F-149~F-155（7） | settings | 待测 |
 | 31 | BrowsePanel | P4 | `/repos/:id/browse?rev=` | 详情面板「浏览快照」 | F-156~F-159（4） | browse | 待测 |
 
@@ -483,8 +483,8 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-147 | 分支快捷弹窗（等效 = 顶栏「分支」） | 顶栏「分支」→ 分支页 | 等效承载可达（同 branch-01 证据；本行截顶栏入口态） | 待测 | quick-actions-01.png |
-| F-148 | 操作聚合（等效 = 顶栏 + 更多菜单 + 操作条） | 展开顶栏按钮区 + 更多菜单 | 5 按钮 + 18 项全量入口聚合在位（同 log-page-14/15 证据；本行截聚合展开态） | 待测 | quick-actions-02.png |
+| F-147 | 分支快捷弹窗（等效 = 顶栏「分支」） | 顶栏「分支」→ 分支页 | 等效承载可达（同 branch-01 证据；本行截顶栏入口态） | ✅ | quick-actions-01.png（LogPage 顶栏入口态；点顶栏「分支」（`button[aria-label="分支"]`）→ 直达 `/repos/:id/branches`（等价承载可用）；分支页功能证据见 branch-01/02.png（F-062 起）） |
+| F-148 | 操作聚合（等效 = 顶栏 + 更多菜单 + 操作条） | 展开顶栏按钮区 + 更多菜单 | 5 按钮 + 18 项全量入口聚合在位（同 log-page-14/15 证据；本行截聚合展开态） | ✅ | quick-actions-02.png（同屏聚合：顶栏动作按钮 撤销最近提交/变更/分支/合并/贮藏（另 首页/设置/更多 工具位）+ 「更多」展开 17 项——溯源/历史/已提交/搜索/变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略/GitHub 面板/工作树/子模块；菜单项随宿主检测增减：无托管远端 16 项、github.com 远程 17 项、gitlab.com 远程 17 项，故 18 为含两种托管面板的全集上限）+ 操作进行中时的 LogPage 操作条（见 conflicts-06.png） |
 
 ### 4.30 SettingsPage（slug `settings`；P1/P2）
 
@@ -537,6 +537,7 @@
 | R16 | 2026-09-11 | F-130~F-133（SubmodulePanel 2 + IgnoreDialog 2：四态徽标与更新 / 双 target 编辑与模板 / 一键忽略幂等） | ✅ 4（两页各自收官：submodule 2/2、ignore 2/2） | 本轮无新缺陷；子模块四态夹具由 `protocol.file.allow=always` 新增子模块 + 两侧分叉 gitlink 合并构造 |
 | R17 | 2026-09-11 | F-134~F-135（GitHubPanel 检测门 + 账户认证降级卡）、F-140（GitLabPanel 同口径）+ F-136~F-139 / F-141~F-144 边界核实 | ✅ 3 / 跳过 8（缺真实托管仓库与 PAT） | D-33（认证降级卡文案与实况不符：无令牌却提示「令牌无效或已过期」）修复并复验（见 §5.15）；github.com 经假 PAT 实测可达（返回 `Bad credentials`） |
 | R18 | 2026-09-11 | F-145~F-146（GitConsole 2 行：命令记录展示与 token 剥离、`-c` 成对折叠） | ✅ 2（GitConsole 2/2 收官） | D-34（执行日志缓冲为模块级 Map，dev 下路由间不共享 → 控制台恒空）修复并复验（见 §5.15） |
+| R19 | 2026-09-11 | F-147~F-148（QuickActions 等效聚合 2 行：顶栏分支入口、顶栏+更多菜单+操作条聚合） | ✅ 2（QuickActions 2/2 收官） | 本轮无新缺陷；菜单项数随宿主检测（16/17 项，18 为含两种托管面板的上限）已在行内说明 |
 
 ### 5.15 R17 缺陷登记（已修复 + 复验）
 
