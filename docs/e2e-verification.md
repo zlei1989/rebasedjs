@@ -76,9 +76,9 @@
 | 10 | StashPanel | P2 | `/repos/:id/stashes` | 顶栏「贮藏」 | F-081~F-085（5） | stash | ✅ 5/5 |
 | 11 | TagPanel | P3 | `/repos/:id/tags` | 更多「标签」 | F-086~F-088（3） | tag | ✅ 3/3 |
 | 12 | RemotePanel | P3 | `/repos/:id/remotes` | 更多「远程管理」 | F-089~F-092（4） | remote | ✅ 4/4 |
-| 13 | PushDialog（内嵌模态） | P3 | LogPage 内 | 更多「推送」 | F-093~F-095（3） | push | 待测 |
-| 14 | PullDialog（内嵌模态） | P3 | LogPage 内 | 更多「拉取」 | F-096~F-097（2） | pull | 待测 |
-| 15 | UpdateProjectDialog（内嵌模态） | P3 | LogPage 内 | 更多「更新项目」 | F-098~F-100（3） | update | 待测 |
+| 13 | PushDialog（内嵌模态） | P3 | LogPage 内 | 更多「推送」 | F-093~F-095（3） | push | ✅ 3/3 |
+| 14 | PullDialog（内嵌模态） | P3 | LogPage 内 | 更多「拉取」 | F-096~F-097（2） | pull | ✅ 2/2 |
+| 15 | UpdateProjectDialog（内嵌模态） | P3 | LogPage 内 | 更多「更新项目」 | F-098~F-100（3） | update | ✅ 3/3 |
 | 16 | BlameView | P3 | `/repos/:id/blame` | 更多「溯源」→ 页内输路径 | F-101~F-104（4） | blame | 待测 |
 | 17 | HistoryPanel | P3 | `/repos/:id/history` | 更多「历史」→ 页内输路径 | F-105~F-107（3） | history | 待测 |
 | 18 | CommittedChangesPanel | P3 | `/repos/:id/committed` | 更多「已提交」 | F-108~F-110（3） | committed | 待测 |
@@ -312,9 +312,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-093 | push（远程/分支选择、setUpstream/forceWithLease） | 推送 Modal → 选远程 + 分支输入 → 默认勾 setUpstream → 推送 | 推送成功 + 上游设置落盘（CLI 远端互证） | 待测 | push-01.png |
-| F-094 | rejected push → 自动 Update 联动 | 分叉场景推送 → 观察自动弹 Update（merge/rebase）→ 选 merge | 更新成功自动续推原推送体；conflicts 引导解决（CLI） | 待测 | push-02.png |
-| F-095 | push tags / force-push 后修复（通道验证） | 验证两通道可达：TagPanel 推送全部、BranchPanel force-push 修复 | 两通道各自完成（证据同 tag-03/branch-09；本行截等效通道完成态） | 待测 | push-03.png |
+| F-093 | push（远程/分支选择、setUpstream/forceWithLease） | 推送 Modal → 选远程 + 分支输入 → 默认勾 setUpstream → 推送 | 推送成功 + 上游设置落盘（CLI 远端互证） | ✅ | push-01.png（Modal 选 origin、分支预填 `rebase-topic`、`set-upstream` 默认勾选；CLI：远端新建 `rebase-topic`=143857d 与本地 HEAD 同 SHA、`branch.rebase-topic.remote=origin` + `merge=refs/heads/rebase-topic` 落盘、`status -sb` 显示 `## rebase-topic...origin/rebase-topic`；push-01b.png 为 Modal 态） |
+| F-094 | rejected push → 自动 Update 联动 | 分叉场景推送 → 观察自动弹 Update（merge/rebase）→ 选 merge | 更新成功自动续推原推送体；conflicts 引导解决（CLI） | ✅ | push-02.png（远端侧/本地侧各一笔后推送 → 弹「推送被拒 — 更新项目」（merge 默认 / rebase 可选 / Reset to tracked）→ 选 merge → toast「更新并推送完成」；CLI：本地 HEAD = 远端 = 6266d7e、生成合并提交 `Merge branch 'rebase-topic' of …`、两侧文件均在、与上游同步；push-02b.png 为被拒弹窗态）。冲突引导见 F-114~F-119 |
+| F-095 | push tags / force-push 后修复（通道验证） | 验证两通道可达：TagPanel 推送全部、BranchPanel force-push 修复 | 两通道各自完成（证据同 tag-03/branch-09；本行截等效通道完成态） | ✅ | push-03.png（本行真跑 force-with-lease：amend 合并提交改写历史后勾「force-with-lease：安全强推」推送 → toast「推送完成」、CLI 远端 `rebase-topic` 由 6266d7e 改为 8021511 与本地一致；push-03b.png 为勾选态）。标签通道证据 tag-03.png（F-088）、分支面板强推修复通道证据 branch-09.png（F-070） |
 
 ### 4.14 PullDialog（slug `pull`；P3，内嵌模态）
 
@@ -322,8 +322,8 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-096 | pull（远程/分支选择、rebase 选项） | 拉取 Modal → 选远程/分支 → 勾 rebase → 拉取 | 拉取成功合入；rebase 模式生效（CLI 互证） | 待测 | pull-01.png |
-| F-097 | fetch 全远程 / fetch spec 定制（通道验证） | 验证承载通道：RemotePanel 顶部 fetch 全部 + spec 定制 | 通道完成（同 remote-02 证据；本行截 RemotePanel fetch 成功态） | 待测 | pull-02.png |
+| F-096 | pull（远程/分支选择、rebase 选项） | 拉取 Modal → 选远程/分支 → 勾 rebase → 拉取 | 拉取成功合入；rebase 模式生效（CLI 互证） | ✅ | pull-01.png（origin + 勾「使用 rebase 而非 merge」→ 拉取；CLI：历史变线性——本地提交被重写为 `a061385` 并置于远端提交 `993fb81` 之上、未新增合并提交、`status` 仅剩 ahead 1；pull-01b.png 为 Modal 勾选态） |
+| F-097 | fetch 全远程 / fetch spec 定制（通道验证） | 验证承载通道：RemotePanel 顶部 fetch 全部 + spec 定制 | 通道完成（同 remote-02 证据；本行截 RemotePanel fetch 成功态） | ✅ | pull-02.png（本行截 RemotePanel「Fetch 全部」成功态：toast「fetch 完成，更新 1 个引用」；CLI：UI fetch 建立 `origin/fetch-probe-r10` 且与远端同 SHA 3baf7cb）。定制 spec 通道证据 remote-02.png/remote-02b.png（F-090） |
 
 ### 4.15 UpdateProjectDialog（slug `update`；P3，内嵌模态）
 
@@ -331,9 +331,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-098 | merge/rebase 策略选择 | 打开更新对话框 → 观察策略选项 | 二选一、默认 merge | 待测 | update-01.png |
-| F-099 | 更新会话（进度/结果汇总） | 执行更新 → 观察结果面板 | fetched 引用数 + pull 状态（updated 已合入/up-to-date 已最新）汇总；footer 变「关闭」 | 待测 | update-02.png |
-| F-100 | Reset to tracked | 左下「Reset to tracked」→ Modal.confirm（danger） | reset --hard upstream、丢弃工作区/暂存（CLI）；无上游不渲染 | 待测 | update-03.png |
+| F-098 | merge/rebase 策略选择 | 打开更新对话框 → 观察策略选项 | 二选一、默认 merge | ✅ | update-01.png（「更新项目」对话框：merge 默认选中、rebase 可选，附说明「fetch 全部远程后合入当前分支」与「Reset to tracked：rebase-topic → origin/rebase-topic」） |
+| F-099 | 更新会话（进度/结果汇总） | 执行更新 → 观察结果面板 | fetched 引用数 + pull 状态（updated 已合入/up-to-date 已最新）汇总；footer 变「关闭」 | ✅ | update-02.png（「更新结果」面板：`fetch 更新 1 个远程引用：refs/remotes/origin/rebase-topic` + 「已合入当前分支」，footer 变「关 闭」；CLI：生成合并提交 fbb9c83、远端提交 e7c67a8 成为本地祖先）。up-to-date 变体亦实测：「fetch 更新 0 个远程引用（无远程更新）」+「已是最新」 |
+| F-100 | Reset to tracked | 左下「Reset to tracked」→ Modal.confirm（danger） | reset --hard upstream、丢弃工作区/暂存（CLI）；无上游不渲染 | ✅ | update-03.png（危险确认框「Reset 到上游分支？将丢弃 rebase-topic 的工作区/暂存变更，硬重置到 origin/rebase-topic；此操作不可恢复」→ 确定；CLI：HEAD=e7c67a8=上游、README 探针行消失、`local-side.txt` 回到提交版、`status` 仅剩未跟踪）。无上游不渲染：`rebased-smoke-big`（master 无 upstream）打开同一对话框时按钮与说明均缺失（实测） |
 
 ### 4.16 BlameView（slug `blame`；P3）
 
@@ -527,6 +527,7 @@
 | R6 | 2026-09-11 | F-081~F-085（StashPanel 5 行：save 三选项 / pop·apply·drop / 转分支 / Unstash As… / 查看差异） | ✅ 5（StashPanel 5/5 收官） | D-24（贮藏冲突无理由提示）、D-25（「查看差异」弹窗正文恒空白）修复并复验（见 §5.9）；环境说明 E-01（Next dev 代码框多字节 panic） |
 | R7 | 2026-09-11 | F-086~F-088（TagPanel 3 行：创建轻量/附注、删除本地/远程、推送单个/全部） | ✅ 3（TagPanel 3/3 收官） | D-26（缺省远程未解析：删除远程 500 ssh 空 host）、D-27（推送单个 500 且远程类动作无成功回执）修复并复验（见 §5.10）；夹具：file:// 裸远端 `D:\zhanglei1120\Github\smoke-remote` |
 | R8 | 2026-09-11 | F-089~F-092（RemotePanel 4 行：远程 CRUD / fetch 三形态 / shallow·unshallow / 401 认证回路） | ✅ 4（RemotePanel 4/4 收官） | D-28（审计声称既有、实际缺失的 fetch refspec 与 unshallow 入口）、D-29（解除浅克隆后徽标不刷新）修复并复验（见 §5.11）；F-092 用本地恒 401 服务（`http://127.0.0.1:9418`）触发真实认证回路 |
+| R9 | 2026-09-11 | F-093~F-100（PushDialog 3 + PullDialog 2 + UpdateProjectDialog 3：推送/上游设置/强推/被拒自动更新；拉取与 rebase；更新策略·结果汇总·Reset to tracked） | ✅ 8（三页各自收官：push 3/3、pull 2/2、update 3/3） | 本轮无新缺陷；夹具：由 `rebased-smoke-other` 推送远端侧提交制造分叉与领先态，`rebase-topic` 经 F-093 建立上游（后续需要「无上游」形态时改用 rebased-smoke-big） |
 
 ### 5.1 R1 缺陷登记（全部已修复 + 复验）
 
