@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GitExitError } from '@rebased/core';
+import { hasMergeCommitInRange as coreHasMergeCommitInRange } from '@rebased/core';
 import { applyAutosquash, checkoutRebase, commitEdit, getRebaseTodo, rebaseBranch, runInteractiveRebaseService } from './rebase';
 import { updateSettings } from './settings';
 import { instantiateFixture } from './testing/fixture';
@@ -344,6 +345,33 @@ describe('commitEdit（单提交编辑直通：reword/drop）', () => {
 
     const rootErr = await commitEdit(repo, { hash: root, action: 'squash' }).catch((e: unknown) => e);
     expect(rootErr).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('父提交') });
+  });
+
+  // 冒烟 D-23：区间含合并提交时交互式 todo 会写入 `pick <merge>`，git 拒绝
+  // （'pick' does not accept merge commits）并留下半程 rebase 状态；预检须显式拒绝且不留状态
+  it('区间含合并提交 → INVALID_QUERY 且不留半程 rebase 状态', async () => {
+    const repo = instantiate(baseTwoTemplate);
+    // 造合并：从 base 拉 side 分支一笔，master 再一笔，随后 --no-ff 合并
+    const branch = git(repo, ['symbolic-ref', 'HEAD', '--short']).trim();
+    git(repo, ['checkout', '-q', '-b', 'side', baseTwoHash]);
+    writeFileSync(join(repo, 'side.txt'), 'side');
+    git(repo, ['add', 'side.txt']);
+    git(repo, ['commit', '-q', '-m', 'side-commit']);
+    git(repo, ['checkout', '-q', branch]);
+    writeFileSync(join(repo, 'main.txt'), 'main');
+    git(repo, ['add', 'main.txt']);
+    git(repo, ['commit', '-q', '-m', 'main-commit']);
+    git(repo, ['merge', '-q', '--no-ff', '-m', 'merge-side', 'side']);
+    const headBefore = git(repo, ['rev-parse', 'HEAD']).trim();
+
+    // baseTwoHash 位于合并之下 → 其区间含合并提交
+    const err = await commitEdit(repo, { hash: baseTwoHash, action: 'drop' }).catch((e: unknown) => e);
+
+    expect(err).toMatchObject({ code: 'INVALID_QUERY', message: expect.stringContaining('合并提交') });
+    // 未动手：HEAD 未变、无 rebase 半程状态
+    expect(git(repo, ['rev-parse', 'HEAD']).trim()).toBe(headBefore);
+    expect(git(repo, ['status', '--porcelain']).trim()).toBe('');
+    expect(await coreHasMergeCommitInRange(repo, baseTwoHash)).toBe(true);
   });
 });
 

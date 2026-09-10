@@ -7,6 +7,8 @@ import {
   autosquashCommit,
   checkoutWithRebase,
   editCommitAction,
+  editCommitBase,
+  hasMergeCommitInRange,
   GitExitError,
   headCommit,
   isAncestorCommit,
@@ -110,6 +112,15 @@ export async function commitEdit(repoPath: string, body: CommitEditBody): Promis
     if (!(await verifyCommitish(repoPath, `${body.hash}^`))) {
       throw new ServiceError('INVALID_QUERY', 'squash/fixup 目标须有父提交（当前分支历史内）');
     }
+  }
+  // 区间含合并提交 → 显式拒绝：交互式变基 todo 不接受对合并提交的 pick，
+  // 交给 git 会在 rebase 启动后以 `'pick' does not accept merge commits` 失败并留下半程 rebase 状态（冒烟 D-23）
+  const base = await editCommitBase(repoPath, body.hash, body.action);
+  if (await hasMergeCommitInRange(repoPath, base)) {
+    throw new ServiceError(
+      'INVALID_QUERY',
+      `目标提交区间内含合并提交（${body.hash} 之上存在 merge），单提交编辑暂不支持；如需重写请先处理该合并提交`,
+    );
   }
   return editCommitAction(repoPath, body);
 }

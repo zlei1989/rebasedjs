@@ -52,7 +52,7 @@ export { addRemote, checkoutWithUpdate, fetchRemote, isShallowRepo, listLocalOnl
 export type { CorePushOutcome, CoreRemote } from './remote';
 export { diffRefsSnapshots, takeRefsSnapshot } from './refs';
 export type { RefsSnapshot } from './refs';
-export { autosquashCommit, checkoutWithRebase, continueRebase, editCommitAction, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
+export { autosquashCommit, checkoutWithRebase, continueRebase, editCommitAction, editCommitBase, hasMergeCommitInRange, listTodoCommits, rebaseOnto, runInteractiveRebase, skipRebase } from './rebase';
 export { getGpgCommitConfig, listSecretGpgKeys, parseGpgCommand, parseSecretKeyLines, setGpgCommitConfig } from './gpg';
 export type { CoreRebaseResult } from './rebase';
 export { cherryPickCommits, continuePick, isAncestor, revertCommits, skipPick } from './pick';

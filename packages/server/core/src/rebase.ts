@@ -208,28 +208,45 @@ async function historyOldToNew(cwd: string): Promise<{ hash: string; subject: st
 }
 
 /**
+ * 单提交编辑的变基基（base）计算（供执行与上层预检共用，口径唯一）：
+ * squash/fixup 并入父提交 → base = 父的父（父为根提交时 '--root'）；reword/drop → base = 目标^（根提交时 '--root'）。
+ * action=squash|fixup 且目标无父 → 抛错（上层预检先行拦截）。
+ */
+export async function editCommitBase(cwd: string, hash: string, action: 'reword' | 'drop' | 'squash' | 'fixup'): Promise<string> {
+  const hashHasParent = await revHasParent(cwd, hash);
+  if (action === 'squash' || action === 'fixup') {
+    if (!hashHasParent) throw new Error('根提交无父提交，不可 squash/fixup');
+    return (await revHasParent(cwd, `${hash}^`)) ? `${hash}^^` : '--root';
+  }
+  return hashHasParent ? `${hash}^` : '--root';
+}
+
+/**
+ * 区间内是否含合并提交（base..HEAD；base='--root' 为全量历史）：
+ * 交互式变基的 todo 只能对非合并提交用 pick/…；把合并提交写进 todo 会被 git 拒绝
+ * （`error: 'pick' does not accept merge commits` + `invalid line N`），
+ * 且失败发生在 rebase 启动后——仓库停在半程 rebase、todo 非法（冒烟 D-23）。
+ * 故上层在动手前先以本函数判定并显式拒绝，绝不留半程状态。
+ */
+export async function hasMergeCommitInRange(cwd: string, base: string): Promise<boolean> {
+  const range = base === '--root' ? ['HEAD'] : [`${base}..HEAD`];
+  const { stdout } = await runGit(['log', '--merges', '--format=%H', ...range], { cwd });
+  return stdout.split('\n').some((line) => line.trim() !== '');
+}
+
+/**
  * 单提交编辑直通（GitSingleCommitEditingAction 语义：Reword/Squash/Fixup/Drop 提交）： * - reword：base=<hash>^，todo 首行 reword + GIT_EDITOR 消息 shim 写入新信息（message 必填）；
  * - drop：base=<hash>^，todo 该行 drop；
  * - squash/fixup（并入父提交）：base=<父>^（父为根提交时 --root），todo = [pick 父, squash|fixup hash, pick 其余...]；
  *   squash 的消息编辑器走 git 默认（合并信息；未注入 message 保持默认交互语义的确定性落盘）。
  * 根提交 reword/drop（--root）、根提交的 squash/fixup（无父 → 上层预检拒绝）。
- * 冲突 → 'conflicts'（rebase 冲突态交冲突页）。
+ * 冲突 → 'conflicts'（rebase 冲突态交冲突页）；区间含合并提交 → 上层预检拒绝（见 hasMergeCommitInRange）。
  */
 export async function editCommitAction(
   cwd: string,
   opts: { hash: string; action: 'reword' | 'drop' | 'squash' | 'fixup'; message?: string },
 ): Promise<CoreRebaseResult> {
-  const hashHasParent = await revHasParent(cwd, opts.hash);
-  let base: string;
-  if (opts.action === 'squash' || opts.action === 'fixup') {
-    if (hashHasParent) {
-      base = (await revHasParent(cwd, `${opts.hash}^`)) ? `${opts.hash}^^` : '--root';
-    } else {
-      throw new Error('根提交无父提交，不可 squash/fixup');
-    }
-  } else {
-    base = hashHasParent ? `${opts.hash}^` : '--root';
-  }
+  const base = await editCommitBase(cwd, opts.hash, opts.action);
   const commits = base === '--root' ? await historyOldToNew(cwd) : await listTodoCommits(cwd, base);
   const entries: { hash: string; action: string }[] = [];
   for (const c of commits) {
