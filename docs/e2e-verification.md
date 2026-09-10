@@ -83,7 +83,7 @@
 | 17 | HistoryPanel | P3 | `/repos/:id/history` | 更多「历史」→ 页内输路径 | F-105~F-107（3） | history | ✅ 3/3 |
 | 18 | CommittedChangesPanel | P3 | `/repos/:id/committed` | 更多「已提交」 | F-108~F-110（3） | committed | ✅ 3/3 |
 | 19 | SearchPanel | P3 | `/repos/:id/search` | 更多「搜索」 | F-111~F-113（3） | search | ✅ 3/3 |
-| 20 | ConflictsPanel | P2 | `/repos/:id/conflicts` | 制造冲突自动跳入 / 操作条「去解决冲突」 | F-114~F-119（6） | conflicts | 待测 |
+| 20 | ConflictsPanel | P2 | `/repos/:id/conflicts` | 制造冲突自动跳入 / 操作条「去解决冲突」 | F-114~F-119（6） | conflicts | ✅ 6/6 |
 | 21 | PatchPanel | P3 | `/repos/:id/patches` | 更多「补丁」 | F-120~F-123（4） | patch | 待测 |
 | 22 | ShelfPanel | P3 | `/repos/:id/shelves` | 更多「搁置」 | F-124~F-126（3） | shelf | 待测 |
 | 23 | WorktreePanel | P4 | `/repos/:id/worktrees` | 更多「工作树」 | F-127~F-129（3） | worktree | 待测 |
@@ -383,12 +383,12 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-114 | 冲突文件列表 + 类型徽标 + 目录分组 | 观察列表 | stages 组合类型徽标正确；按目录子标题分组（带计数） | 待测 | conflicts-01.png |
-| F-115 | 整侧解决（ours/theirs/delete） | 行内 ours → 另文件 theirs → 另文件 delete | 对应侧禁用逻辑正确；解决后 CLI 互证 | 待测 | conflicts-02.png |
-| F-116 | 3-way 手动合并（MergeView） | 「手动合并」→ 全屏 Modal | 左 ours/右 theirs/底部结果编辑；保存 manual 策略（CLI） | 待测 | conflicts-03.png |
-| F-117 | 完成合并（continue 泛化） | 全部解决 → 「完成合并」 | merge/rebase/cherry-pick/revert 共用 continue → 回日志页（CLI） | 待测 | conflicts-04.png |
-| F-118 | 跳过（skip） | rebase 冲突 → 底部「跳过」（Popconfirm） | 丢弃当前变更继续后续（CLI）；merge 无 skip 按钮 | 待测 | conflicts-05.png |
-| F-119 | 合并状态联动 | 观察进行中提示与操作条 | 进行中提示页内可见；中止入口在 LogPage 操作条 | 待测 | conflicts-06.png |
+| F-114 | 冲突文件列表 + 类型徽标 + 目录分组 | 观察列表 | stages 组合类型徽标正确；按目录子标题分组（带计数） | ✅ | conflicts-01.png（夹具四类冲突一次呈现：「冲突文件（4）」按「根目录（4）」分组；徽标与 `git status` 完全对应——`双方修改`=UU shared.txt/manual-merge.txt、`对方删除/我方修改`=UD deleted-by-them.txt、`双方新增`=AA both-added.txt；UD 行的「用他们的」禁用并额外提供「删除该文件」） |
+| F-115 | 整侧解决（ours/theirs/delete） | 行内 ours → 另文件 theirs → 另文件 delete | 对应侧禁用逻辑正确；解决后 CLI 互证 | ✅ | conflicts-02.png（shared.txt「用我们的」→ CLI 落盘 `master side`、脱离未合并；both-added.txt「用他们的」→ `feature version`；deleted-by-them.txt「删除该文件」（Popconfirm「确认以删除解决该冲突？」）→ 文件删除且暂存为 `D`；列表 4→1，`git diff --name-only --diff-filter=U` 同步收缩） |
+| F-116 | 3-way 手动合并（MergeView） | 「手动合并」→ 全屏 Modal | 左 ours/右 theirs/底部结果编辑；保存 manual 策略（CLI） | ✅ | conflicts-03.png（「手动合并：manual-merge.txt」全屏 Modal：左「当前分支」ours=line1~3 master、右「合并来源」theirs=line1~3 feature、底部「合并结果」可编辑（Monaco）；编辑为 `line1 master / line2 feature / line3 resolved-by-hand` 后「保存」→ CLI 落盘逐行一致且该路径脱离未合并） |
+| F-117 | 完成合并（continue 泛化） | 全部解决 → 「完成合并」 | merge/rebase/cherry-pick/revert 共用 continue → 回日志页（CLI） | ✅ | conflicts-04.png（冲突清零后「完成合并」可点 → 自动回日志页；CLI：生成合并提交 `05a16f7 Merge branch 'feature'`、`.git/MERGE_HEAD` 清除、`status` 干净、四项解决结果全部保留（shared=master side / both-added=feature version / manual=手动合并内容 / deleted-by-them 仍不存在）） |
+| F-118 | 跳过（skip） | rebase 冲突 → 底部「跳过」（Popconfirm） | 丢弃当前变更继续后续（CLI）；merge 无 skip 按钮 | ✅ | conflicts-05.png（变基冲突时面板底部为「跳 过」+「继续变基」；点「跳过」→ 确认框「跳过当前提交（其变更将被丢弃）？」→ CLI：`.git/rebase-merge` 清除、feature 落到 master 提交 f98ecc6、被跳过提交（`feat(feature): 后续改动（rebase 将冲突）`）已从历史消失、shared.txt 为 master 版本、工作区干净）。对照：F-114~F-117 的 merge 冲突态**无**「跳过」按钮（仅「完成合并」） |
+| F-119 | 合并状态联动 | 观察进行中提示与操作条 | 进行中提示页内可见；中止入口在 LogPage 操作条 | ✅ | conflicts-06.png（LogPage 顶栏：橙色状态片「变基中（第 1/1 步）」+ 红色「中 止」按钮；点中止 → 确认框「确定中止当前操作？工作区将回到操作前状态」→ CLI：rebase 状态清除、分支回到 feature、shared.txt 恢复 `feature again`、工作区干净。冲突页内的提示随操作类型变化：「合并进行中：解决全部冲突后点击「完成合并」；中止请返回日志页操作条。」/「变基进行中：解决全部冲突后点击「继续变基」；…」（conflicts-01.png / conflicts-05.png）） |
 
 ### 4.21 PatchPanel（slug `patch`；P3）
 
@@ -531,9 +531,15 @@
 | R10 | 2026-09-11 | F-101~F-104（BlameView 4 行：注解列表 / 三联动 / 受影响文件 / previousLineno 边界）+ F-025 补测（认证重试回路，用本地 401 服务解除原「跳过」） | ✅ 5（BlameView 4/4 收官；LogPage 20/20） | 本轮无新缺陷；每行均与 CLI（`blame`/`blame --line-porcelain`/`show --name-status`）逐项互证 |
 | R11 | 2026-09-11 | F-105~F-110（HistoryPanel 3 + CommittedChangesPanel 3：文件历史 / --follow 跟随 / 版本 diff 联动；提交浏览与分页 / 目录树 / diff 联动） | ✅ 6（两页各自收官：history 3/3、committed 3/3） | 本轮无新缺陷；F-108 分页在 321 提交的大仓实测 50→100；P3 观察（不改）：溯源/历史页的页内路径输入不回写 URL（`?file=` 仅作入口深链），刷新后回到入口态 |
 | R12 | 2026-09-11 | F-111~F-113（SearchPanel 3 行：grep/pickaxe 双模式与非法正则、结果→日志、分支快速搜索） | ✅ 3（SearchPanel 3/3 收官） | D-30（非法正则抛内部 `git log` 命令行原文给用户）修复并复验（见 §5.12）；两模式结果均与 CLI 逐条互证 |
+| R13 | 2026-09-11 | F-114~F-119（ConflictsPanel 6 行：冲突列表与徽标 / 整侧解决 / 3-way 手合并 / 完成合并 / 跳过 / 状态联动与中止） | ✅ 6（ConflictsPanel 6/6 收官） | 本轮无新缺陷（说明见 §5.12.1）；夹具重建为一次性呈现 AA/UD/UU 四路冲突 + rebase 冲突，每步均与 CLI 互证 |
 
 ### 5.12 R12 缺陷登记（已修复 + 复验）
 
+#### 5.12.1 R13 执行说明（ConflictsPanel，无新缺陷）
+
+- **夹具**：`rebased-smoke-conflict` 重建为「一次呈现四类冲突」：基底含 `shared.txt`/`deleted-by-them.txt`/`manual-merge.txt`（→ UU/UD），`both-added.txt` 不入基底（两侧各自新增 → AA）；master 侧改为 master 版内容、feature 侧改为 feature 版并删除 `deleted-by-them.txt`，`git merge --no-edit feature` 得到 `AA/UD/UU/UU` 四路冲突。
+- **rebase 侧**：另造「master 与 feature 改同一行」的分叉 → `git rebase master` 得 UU 冲突，用于 F-118 跳过与 F-119 中止。
+- **观察（不改）**：手动合并 Modal 内 Monaco 会在并发计算差异被中断时向控制台打 `no diff result available` / `Canceled: Canceled`，Next dev 浮层因此亮起「1 Issue」角标；编辑与保存功能不受影响（本轮实测保存内容逐行正确）。这是 Monaco worker 生命周期噪声（dev 浮层可见性放大），非产品缺陷。
 | 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
 |------|----------------|------|------|------|
 | D-30 | 提交搜索输入非法正则（`[unclosed`）后，界面直接显示内部命令行原文：「git 命令失败：git log --grep=[unclosed -i --format=%H%x00… --max-count=50 退出码 128：fatal: command line, '[unclosed': Unmatched [ or [^」——用户看不懂，且暴露服务端命令细节——F-111 | api `searchCommitsService` 本意是把非法正则映射为 `INVALID_QUERY`，但判定依赖 stderr 含英文串 `Invalid regular expression`；git 对本例的措辞是 `Unmatched [ or [^`，判定失配 → 落到 GIT_ERROR（500）原样透出 | api 层在调用 git 之前用 JS `new RegExp(q)` 预校验（`mode==='grep'`；pickaxe 为 `-S` 字面量语义，不校验），非法即 `INVALID_QUERY`「搜索表达式不是合法的正则表达式：<原文>」；同时把 stderr 特征串兜底扩为多种措辞（`Invalid regular expression`/`Unmatched [`/`Unmatched (`/`bracket expression`/`Invalid range end`），覆盖 JS 接受而 POSIX ERE 拒绝的写法 | 复跑 F-111：同一输入 → 面板红字「搜索表达式不是合法的正则表达式：[unclosed」（search-01b.png）；合法模式不受影响（grep `smoke` 9 条、pickaxe `staged-only` 1 条，均与 CLI 一致，search-01.png）；api 用例改为双写法（`[`、`[unclosed`）+ 新增「pickaxe 不校验、按字面量返回空结果」，7/7 通过 |
