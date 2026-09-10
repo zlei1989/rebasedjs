@@ -13,7 +13,7 @@ export interface ThreeWayViewProps {
   loader?: MonacoDiffLoader;
 }
 
-/** 单段：标题 + MonacoDiffView（height 固定弹性填充） */
+/** 单段：标题 + MonacoDiffView（height 固定弹性填充）；两侧文本相同 → 标题行标注「无差异」 */
 function CompareSegment({
   title,
   before,
@@ -27,11 +27,20 @@ function CompareSegment({
   loader?: MonacoDiffLoader;
   testId: string;
 }): React.ReactNode {
+  // 该维无差异（如仅工作区改动 → HEAD 与暂存区相同）：显式标注，避免空 diff 被误读为「正在加载」
+  const identical = before === after;
   return (
     <Flex vertical gap={4} style={{ flex: 1, minHeight: 0 }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        {title}
-      </Typography.Text>
+      <Flex align="center" gap={8}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {title}
+        </Typography.Text>
+        {identical ? (
+          <Typography.Text type="secondary" italic data-testid={`${testId}-identical`} style={{ fontSize: 12 }}>
+            无差异
+          </Typography.Text>
+        ) : null}
+      </Flex>
       <div data-testid={testId} style={{ flex: 1, minHeight: 120 }}>
         <MonacoDiffView original={before} modified={after} options={{ readOnly: true }} loader={loader} />
       </div>

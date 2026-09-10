@@ -142,6 +142,41 @@ describe('diff 功能', () => {
       .rejects.toMatchObject({ code: 'INVALID_QUERY' });
   });
 
+  // 冒烟 F-033 复现：工作区已删除（D）的文件此前直读磁盘抛 ENOENT → 路由 500「内部错误」，diff 页整页打不开；
+  // 修复后按 `git diff HEAD -- path` 语义取「新侧为空串」，页面渲染为「原文 → 空」
+  it('getFileVersions 工作区模式：工作区已删除的文件 → after 空串（不再 500）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'gone.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    rmSync(join(repo, 'gone.txt'));
+    const v = await getFileVersions(repo, { file: 'gone.txt', staged: false });
+    expect(v).toEqual({ before: 'v1', after: '' });
+  });
+
+  it('getFileVersions 工作区模式：HEAD 无、工作区有（未跟踪/新增）→ before 空串', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    writeFileSync(join(repo, 'fresh.txt'), 'new');
+    const v = await getFileVersions(repo, { file: 'fresh.txt', staged: false });
+    expect(v).toEqual({ before: '', after: 'new' });
+  });
+
+  it('getFileThreeVersions：工作区已删除的文件 → working 空串（不再 500）', async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'gone.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    rmSync(join(repo, 'gone.txt'));
+    const three = await getFileThreeVersions(repo, { file: 'gone.txt' });
+    expect(three).toEqual({ head: 'v1', staged: 'v1', working: '' });
+  });
+
   it('file 为绝对路径时抛 INVALID_QUERY（防工作区直读逃逸仓库根）', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);

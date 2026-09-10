@@ -70,7 +70,9 @@ function DiffEditor({ original, modified, language = 'plaintext', options }: Mon
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const editor = monaco.editor.createDiffEditor(container, { readOnly: true, theme: appMonacoTheme(), ...options });
+    // automaticLayout：容器尺寸变化（窗口缩放/侧栏开合/详情面板出现）时经 ResizeObserver 自动重排；
+    // 缺省 false 时编辑器只在创建时量一次尺寸——冒烟实测窄屏创建后放大到 1440 仍是 320px 宽（右侧大片空白）
+    const editor = monaco.editor.createDiffEditor(container, { readOnly: true, theme: appMonacoTheme(), automaticLayout: true, ...options });
     const originalModel = monaco.editor.createModel(original, language);
     const modifiedModel = monaco.editor.createModel(modified, language);
     editor.setModel({ original: originalModel, modified: modifiedModel });
@@ -110,7 +112,7 @@ function PlainEditor({ value, language = 'plaintext', readOnly = false, onChange
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const editor = monaco.editor.create(container, { value, language, readOnly, theme: appMonacoTheme(), ...options });
+    const editor = monaco.editor.create(container, { value, language, readOnly, theme: appMonacoTheme(), automaticLayout: true, ...options });
     // 内容变化（用户输入）时回传最新全文；下方受控 setValue 会带回同值，由调用方状态去重
     const subscription = editor.onDidChangeModelContent(() => {
       onChangeRef.current?.(editor.getValue());

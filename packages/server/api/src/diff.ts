@@ -67,13 +67,19 @@ function isMissingPathAtRev(err: unknown): boolean {
   );
 }
 
-/** from/to 定提交对比的单侧读取：该侧无此路径（新增 A / 删除 D / 重命名目标 R 均有一侧缺失）时返回 ''——
- *  与 `git diff A B -- path` 语义一致（文件仅在 B 侧 → 全新增；仅在 A 侧 → 全删除；两侧同 → 常规对比） */
+/**
+ * 单侧读取（缺失即空串）：
+ *  - git show 侧缺失：该 rev/index 上无此路径（新增 A / 删除 D / 重命名任一侧缺失），
+ *    stderr 形如 `path 'x' exists on disk, but not in 'HEAD'` / `does not exist in ...`；
+ *  - 工作区侧缺失：文件已被删除（readFileSync ENOENT）——`git diff HEAD -- path` 语义下 D 状态即「新侧为空」，
+ *    修复前此处直抛 fs 错误，路由映射成 500「内部错误」，删除文件的 diff 页整体打不开（冒烟 F-033 实测）。
+ */
 async function readFileOrMissing(repoPath: string, file: string, rev: string | undefined): Promise<string> {
   try {
     return await readFileAtRev(repoPath, { file, rev });
   } catch (err) {
     if (isMissingPathAtRev(err)) return '';
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return '';
     throw err;
   }
 }
@@ -88,23 +94,24 @@ export async function getFileVersions(repoPath: string, query: DiffQuery, opts: 
     ]);
     return { before, after };
   }
-  const before = await readFileAtRev(repoPath, { file: query.file, rev: 'HEAD' });
+  // 工作区/暂存三态：两侧均按「缺失即空串」读取（删除的新增文件、未跟踪文件、已删除文件都不再 500）
+  const before = await readFileOrMissing(repoPath, query.file, 'HEAD');
   const after = query.staged
-    ? await readFileAtRev(repoPath, { file: query.file, rev: '' })
-    : await readFileAtRev(repoPath, { file: query.file });
+    ? await readFileOrMissing(repoPath, query.file, '')
+    : await readFileOrMissing(repoPath, query.file, undefined);
   return { before, after };
 }
 
 /** 三版本对比：HEAD / 暂存区（:file）/ 工作区三侧全文（GitStageCompareThreeVersionsAction 语义）；
- *  路径预检沿 assertValidQuery 的文件边界规则（越界 → INVALID_QUERY）。 */
+ *  路径预检沿 assertValidQuery 的文件边界规则（越界 → INVALID_QUERY）；单侧缺失（如未跟踪/已删除）→ 该侧空串。 */
 export async function getFileThreeVersions(repoPath: string, query: ThreeWayQuery): Promise<FileThreeVersions> {
   if (query.file.split(/[\\/]/).includes('..') || isAbsolute(query.file)) {
     throw new ServiceError('INVALID_QUERY', 'diff 查询 file 必须是仓库内相对路径');
   }
   const [head, staged, working] = await Promise.all([
-    readFileAtRev(repoPath, { file: query.file, rev: 'HEAD' }),
-    readFileAtRev(repoPath, { file: query.file, rev: '' }),
-    readFileAtRev(repoPath, { file: query.file }),
+    readFileOrMissing(repoPath, query.file, 'HEAD'),
+    readFileOrMissing(repoPath, query.file, ''),
+    readFileOrMissing(repoPath, query.file, undefined),
   ]);
   return { head, staged, working };
 }

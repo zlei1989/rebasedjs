@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileBlame } from './blame';
+import { fileBlame, parentHashesOf } from './blame';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -103,5 +103,22 @@ describe('blame 原语', () => {
     expect(lines[1].hash).toBe(h2);
     expect(lines[1].dateIso).toBe('2026-01-01T10:00:00+08:00');
     expect(lines[1].dateIso).toBe(git(repo, 'log', '-1', '--format=%aI', h2));
+  });
+
+  // 冒烟 D-18 复现：工作区存在未提交改动时，git blame 对未提交行输出零哈希伪提交，
+  // 修复前 parentHashesOf 把它传给 git log → `fatal: bad object 0000…` 退出码 128 → blame 页 500
+  it('未提交行（零哈希）不进入 git log 参数，父哈希按空列表返回', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commitFile(repo, 'f.txt', 'alpha\nbeta', 'first');
+    writeFileSync(join(repo, 'f.txt'), 'alpha\nbeta\nGAMMA');
+    const lines = await fileBlame(repo, 'f.txt');
+    const zero = lines.find((l) => /^0{40}$/.test(l.hash));
+    expect(zero).toBeDefined();
+    const parents = await parentHashesOf(repo, [...new Set(lines.map((l) => l.hash))]);
+    expect(parents[zero!.hash]).toEqual([]);
+    // 其余真实提交仍解析出父哈希
+    const head = git(repo, 'rev-parse', 'HEAD');
+    expect(parents[head]).toEqual([]);
   });
 });

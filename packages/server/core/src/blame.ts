@@ -111,11 +111,24 @@ export async function fileBlame(cwd: string, file: string, rev?: string): Promis
   return parseBlamePorcelain(stdout);
 }
 
-/** 批量取提交父哈希：git log --no-walk --format=%H%x00%P <hash…>（blame 结果去重置 hash 一次取全量，供 diff 导航与根提交降级） */
+/** blame 零哈希：`git blame` 对「工作区未提交行」输出的边界伪提交（40/64 个 0），仓库中不存在该对象 */
+const ZERO_HASH_RE = /^0{40,64}$/;
+
+/**
+ * 批量取提交父哈希：git log --no-walk --format=%H%x00%P <hash…>（blame 结果去重置 hash 一次取全量，供 diff 导航与根提交降级）。
+ * 零哈希（未提交行）必须剔除后再传给 git：`git log --no-walk … 0000…` 会以
+ * `fatal: bad object 0000000000000000000000000000000000000000` 退出码 128 整体失败，
+ * 使人有任何未提交行时 blame 页 500 打不开（冒烟 D-18）；这些行没有父提交，直接给空父列表。
+ */
 export async function parentHashesOf(cwd: string, hashes: string[]): Promise<Record<string, string[]>> {
   const result: Record<string, string[]> = {};
   if (hashes.length === 0) return result;
-  const { stdout } = await runGit(['log', '--no-walk', '--format=%H%x00%P', ...hashes], { cwd });
+  const realHashes = hashes.filter((h) => !ZERO_HASH_RE.test(h));
+  for (const h of hashes) {
+    if (ZERO_HASH_RE.test(h)) result[h] = [];
+  }
+  if (realHashes.length === 0) return result;
+  const { stdout } = await runGit(['log', '--no-walk', '--format=%H%x00%P', ...realHashes], { cwd });
   for (const line of stdout.split('\n')) {
     const sep = line.indexOf('\0');
     if (sep <= 0) continue;
