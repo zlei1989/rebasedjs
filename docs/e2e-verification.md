@@ -84,8 +84,8 @@
 | 18 | CommittedChangesPanel | P3 | `/repos/:id/committed` | 更多「已提交」 | F-108~F-110（3） | committed | ✅ 3/3 |
 | 19 | SearchPanel | P3 | `/repos/:id/search` | 更多「搜索」 | F-111~F-113（3） | search | ✅ 3/3 |
 | 20 | ConflictsPanel | P2 | `/repos/:id/conflicts` | 制造冲突自动跳入 / 操作条「去解决冲突」 | F-114~F-119（6） | conflicts | ✅ 6/6 |
-| 21 | PatchPanel | P3 | `/repos/:id/patches` | 更多「补丁」 | F-120~F-123（4） | patch | 待测 |
-| 22 | ShelfPanel | P3 | `/repos/:id/shelves` | 更多「搁置」 | F-124~F-126（3） | shelf | 待测 |
+| 21 | PatchPanel | P3 | `/repos/:id/patches` | 更多「补丁」 | F-120~F-123（4） | patch | ✅ 4/4 |
+| 22 | ShelfPanel | P3 | `/repos/:id/shelves` | 更多「搁置」 | F-124~F-126（3） | shelf | ✅ 3/3 |
 | 23 | WorktreePanel | P4 | `/repos/:id/worktrees` | 更多「工作树」 | F-127~F-129（3） | worktree | 待测 |
 | 24 | SubmodulePanel | P4 | `/repos/:id/submodules` | 更多「子模块」 | F-130~F-131（2） | submodule | 待测 |
 | 25 | IgnoreDialog | P3 | `/repos/:id/ignore` | 更多「忽略」 | F-132~F-133（2） | ignore | 待测 |
@@ -396,10 +396,10 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-120 | 创建补丁（unified diff 三态导出） | 创建 Modal → 依次工作区/暂存/提交区间三态 | 列表出现补丁；三态内容正确（CLI 文件互证） | 待测 | patch-01.png |
-| F-121 | 应用补丁（check 先行） | 应用已有补丁 → 再测空补丁 | `git apply --check` 先行；应用成功；空补丁 no-op；失败诚实报错 | 待测 | patch-02.png |
-| F-122 | 补丁列表管理 | 观察列表 → 删除（Popconfirm）→ 重名创建 | 名/大小/时间齐全；删除成功；重名 → INVALID_QUERY 提示 | 待测 | patch-03.png |
-| F-123 | 导入补丁到搁置 | 行内「导入搁置」 | 成功跳 `/shelves`，同名搁置存补丁全文（CLI） | 待测 | patch-04.png |
+| F-120 | 创建补丁（unified diff 三态导出） | 创建 Modal → 依次工作区/暂存/提交区间三态 | 列表出现补丁；三态内容正确（CLI 文件互证） | ✅ | patch-01.png（三态各建一枚：`f120-worktree` 424 B = CLI `git diff HEAD`「2 files changed, 2 insertions(+), 1 deletion(-)」；`f120-staged` 180 B 只含 `local-side.txt`（=`git diff --cached`）；`f120-range` 334 B = `git diff HEAD~2 HEAD`（`remote-side2.txt` 新增 + `local-side2.txt`）；Modal 内「工作区/暂存/提交区间」三选一，提交区间展开起点/终点输入） |
+| F-121 | 应用补丁（check 先行） | 应用已有补丁 → 再测空补丁 | `git apply --check` 先行；应用成功；空补丁 no-op；失败诚实报错 | ✅ | patch-02.png（重置工作区后应用 `f120-worktree` → 两文件改动完整回写（stat 与建补丁时同值）；**二次应用** → 400 `INVALID_QUERY`「补丁无法应用：error: patch failed: README.md:3」且工作区零变更（check 先行）；空补丁 `f121-empty`（0 B）→ 应用 200 no-op、状态不变） |
+| F-122 | 补丁列表管理 | 观察列表 → 删除（Popconfirm）→ 重名创建 | 名/大小/时间齐全；删除成功；重名 → INVALID_QUERY 提示 | ✅ | patch-03.png（列表四项均带名称/大小/时间；「确定删除补丁 f121-empty？」→ 文件消失；重名建 `f120-worktree` → toast「补丁已存在：f120-worktree」且原补丁字节数不变。注：首轮重名**静默覆盖**把既有补丁截成 0 字节，为本轮修复项 D-31） |
+| F-123 | 导入补丁到搁置 | 行内「导入搁置」 | 成功跳 `/shelves`，同名搁置存补丁全文（CLI） | ✅ | patch-04.png（点 `f120-worktree`「导入搁置」→ 提示「已导入搁置：f120-worktree」并跳 `/repos/:id/shelves`；CLI：`shelves/<repoId>/f120-worktree/patch.diff` 424 B 与补丁同字节数、首行 `diff --git a/README.md`，列表显示「0 个未跟踪」） |
 
 ### 4.22 ShelfPanel（slug `shelf`；P3）
 
@@ -407,9 +407,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-124 | 搁置保存（工作区+暂存+未跟踪随档） | 保存 Modal 输入名 | 列表出现搁置；内容含工作区+暂存 diff + 未跟踪文件（CLI） | 待测 | shelf-01.png |
-| F-125 | 恢复 / 删除 | 行内 restore → 再 drop（Popconfirm） | 恢复回写工作区；同名冲突不覆盖；删除成功（CLI） | 待测 | shelf-02.png |
-| F-126 | Unshelve 联动 | restore 后回 StatusPage | 工作区变更自动进入状态页（events 刷新） | 待测 | shelf-03.png |
+| F-124 | 搁置保存（工作区+暂存+未跟踪随档） | 保存 Modal 输入名 | 列表出现搁置；内容含工作区+暂存 diff + 未跟踪文件（CLI） | ✅ | shelf-01.png（保存 Modal 输入 `f124-shelf` → 列表新增「4 个未跟踪」；CLI：存档 `shelves/<repoId>/f124-shelf/` 含 `patch.diff`（424 B，含工作区 README 改动 + 暂存 local-side 改动，与 `git diff HEAD --stat` 同值）与 `untracked/`（crlf.txt、shelf-untracked-new.txt、stash-untracked-probe.txt、scratch/todo.md 四份原件）；搁置语义为**快照复制**（保存后工作区保持不动，与 IntelliJ 搁置一致）） |
+| F-125 | 恢复 / 删除 | 行内 restore → 再 drop（Popconfirm） | 恢复回写工作区；同名冲突不覆盖；删除成功（CLI） | ✅ | shelf-02.png（「确定恢复搁置 f124-shelf？」→ CLI：README/local-side 改动回写；**同名不覆盖**两重实测：① 工作区已有同样改动时 → 400「补丁无法应用：error: patch failed: README.md:3」（check 先行，零变更）；② 未跟踪同名文件（crlf.txt 已被我改成 `MODIFIED AFTER SHELF`）→ 恢复后内容保持我的修改、未被存档覆盖；「确定删除搁置 f124-shelf？」→ 目录移除，列表 3→2） |
+| F-126 | Unshelve 联动 | restore 后回 StatusPage | 工作区变更自动进入状态页（events 刷新） | ✅ | shelf-03.png（双标签实测事件刷新：标签 1 停在 `/status`（显示「已暂存（0）/未跟踪（4）」，无 README 条目）→ 标签 0 在 `/shelves` 执行恢复 → **未刷新**标签 1 即出现 `README.md`、`local-side.txt` 两条变更——SSE `status.changed` 推送生效） |
 
 ### 4.23 WorktreePanel（slug `worktree`；P4）
 
@@ -532,6 +532,13 @@
 | R11 | 2026-09-11 | F-105~F-110（HistoryPanel 3 + CommittedChangesPanel 3：文件历史 / --follow 跟随 / 版本 diff 联动；提交浏览与分页 / 目录树 / diff 联动） | ✅ 6（两页各自收官：history 3/3、committed 3/3） | 本轮无新缺陷；F-108 分页在 321 提交的大仓实测 50→100；P3 观察（不改）：溯源/历史页的页内路径输入不回写 URL（`?file=` 仅作入口深链），刷新后回到入口态 |
 | R12 | 2026-09-11 | F-111~F-113（SearchPanel 3 行：grep/pickaxe 双模式与非法正则、结果→日志、分支快速搜索） | ✅ 3（SearchPanel 3/3 收官） | D-30（非法正则抛内部 `git log` 命令行原文给用户）修复并复验（见 §5.12）；两模式结果均与 CLI 逐条互证 |
 | R13 | 2026-09-11 | F-114~F-119（ConflictsPanel 6 行：冲突列表与徽标 / 整侧解决 / 3-way 手合并 / 完成合并 / 跳过 / 状态联动与中止） | ✅ 6（ConflictsPanel 6/6 收官） | 本轮无新缺陷（说明见 §5.12.1）；夹具重建为一次性呈现 AA/UD/UU 四路冲突 + rebase 冲突，每步均与 CLI 互证 |
+| R14 | 2026-09-11 | F-120~F-126（PatchPanel 4 + ShelfPanel 3：补丁三态创建/应用/列表管理/导入搁置；搁置保存/恢复与删除/事件联动） | ✅ 7（两页各自收官：patch 4/4、shelf 3/3） | D-31（补丁重名静默覆盖，把既有补丁截断为 0 字节）修复并复验（见 §5.13）；F-126 用双标签页实测 SSE 事件驱动刷新 |
+
+### 5.13 R14 缺陷登记（已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-31 | 用已存在的名字创建补丁时**不报错也不提示，直接覆盖**——冒烟中把已有 334 B 的 `f120-range` 覆盖成 0 字节（当时工作区恰好无变更），既有存档内容就此丢失——F-122 期望「重名 → INVALID_QUERY 提示」 | api `createPatch` 按注释即为「同名覆盖更新」：`writeFileSync` 无条件写入，无重名预检；而同层搁置（shelf save/import）与标签（tag create）均已在重名时抛 `INVALID_QUERY`「…已存在」，补丁为唯一例外 | `createPatch` 先判 `existsSync(<name>.patch)` → `ServiceError('INVALID_QUERY', '补丁已存在：<name>')`（沿搁置 `搁置已存在` 约定；空 diff 照常创建 0 字节文件的行为保持不变） | 复跑 F-122：同名创建 → toast「补丁已存在：f120-worktree」且原补丁字节数不变（patch-03.png）；api 用例由「同名覆盖」改写为「重名创建：INVALID_QUERY 且原补丁内容分毫不动」，patch 用例 14/14 通过 |
 
 ### 5.12 R12 缺陷登记（已修复 + 复验）
 

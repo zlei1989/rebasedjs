@@ -250,13 +250,22 @@ describe('patch 功能', () => {
     expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('v1');
   });
 
-  it('同名覆盖：以新 diff 内容更新补丁文件', async () => {
+  // 回归（D-31）：重名此前静默覆盖（冒烟里把已有补丁截成 0 字节）——改为 INVALID_QUERY（沿搁置 save 约定）
+  it('重名创建：INVALID_QUERY 且原补丁内容分毫不动', async () => {
     const repo = await repoWithCommit('a.txt', 'v1');
     writeFileSync(join(repo, 'a.txt'), 'v2');
     await createPatch(repo, { name: 'p' });
+    const file = join(await patchesDir(repo), 'p.patch');
+    const original = readFileSync(file, 'utf8');
+    expect(original).toContain('+v2');
+
     execFileSync('git', ['-C', repo, 'checkout', '--', 'a.txt']);
     writeFileSync(join(repo, 'a.txt'), 'v3');
-    await createPatch(repo, { name: 'p' });
-    expect(readFileSync(join(await patchesDir(repo), 'p.patch'), 'utf8')).toContain('+v3');
+    await expect(createPatch(repo, { name: 'p' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '补丁已存在：p',
+    });
+    // 原补丁未被截断/覆盖
+    expect(readFileSync(file, 'utf8')).toBe(original);
   });
 });

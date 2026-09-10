@@ -87,11 +87,15 @@ export async function getPatches(repoPath: string): Promise<PatchList> {
   return { patches: listPatches(patchesDirOf(repoPath)) };
 }
 
-/** 创建补丁：diff 全文写入 <name>.patch（空 diff 照常创建 0 字节文件；同名覆盖更新），返回刷新列表。
+/** 创建补丁：diff 全文写入 <name>.patch（空 diff 照常创建 0 字节文件）；重名 → INVALID_QUERY（D-31）。
+ *  重名不得静默覆盖：同名补丁可能已有内容，覆盖即数据丢失（搁置 save/import 同约定：`搁置已存在`）。
  *  unborn HEAD（空仓库）：工作区模式经 collectWorkingDiff 两段拼接（staged → `git diff --cached`）。 */
 export async function createPatch(repoPath: string, body: PatchCreateBody): Promise<PatchList> {
   assertValidEntryName(body.name, '补丁');
   const dir = patchesDirOf(repoPath);
+  if (existsSync(join(dir, `${body.name}.patch`))) {
+    throw new ServiceError('INVALID_QUERY', `补丁已存在：${body.name}`, { context: { name: body.name } });
+  }
   let text: string;
   if (body.from === undefined && body.to === undefined && (await isUnbornHead(repoPath))) {
     text = body.staged
