@@ -1,4 +1,4 @@
-# Rebased.js E2E 冒烟测试参照（MCP 模拟人工操作）
+﻿# Rebased.js E2E 冒烟测试参照（MCP 模拟人工操作）
 
 - **日期**：2026-09-10（功能矩阵定稿；执行结果按轮次回填，R1 已回填）
 - **文档定位**：冒烟测试**参照文档**——先定义功能矩阵，执行后逐行回填结果，不得在本文件外另行扩展口径
@@ -545,7 +545,7 @@
 
 - **主题**：明亮主题下复核本轮新增页面——冲突页/子模块/快照浏览/补丁/工作树（`theme-light-conflicts.png`、`theme-light-submodules.png`、`theme-light-browse.png`、`theme-light-patches.png`、`theme-light-worktrees.png`），均 `data-theme=light` + body `#ffffff`、无暗色残留；连同 R1 的 `theme-light-log/diff/settings.png` 覆盖三类渲染面（列表 / Monaco / 表单）。复核后已切回暗色。
 - **响应式**：768 与 480 两档复核日志页与设置页（`responsive-768-light-log.png`、`responsive-480-light-log.png`、`responsive-768-light-settings.png`）——顶栏按钮与过滤行按 `flex-wrap` 折行、提交主题省略号截断、详情面板纵向堆叠，`documentElement.scrollWidth` 均未超出视口（无横向滚动）。
-- **截图账目**：`docs/shots/` 共 175 张，文档引用 167 个文件名**全部存在**；跨文件 SHA256 无重复；无未被引用的孤儿截图。
+- **截图账目**：`docs/shots/` 共 183 张，文档引用 175 个文件名**全部存在**；跨文件 SHA256 无重复；无未被引用的孤儿截图。
 
 **全量收官（R21 末）**：159 行 F-001~F-159 = ✅ 150 / 跳过 9（F-136~F-139、F-141~F-144 共 8 行缺真实托管仓库与 PAT；F-056 的 gpg 分支）；31 个页面全部走到收官状态。缺陷累计 D-01~D-34（全部修复并复验）+ 环境说明 E-01。
 
