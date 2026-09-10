@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { StashEntry, StashList } from '@rebased/contracts';
 import { StashPanel } from './stash-panel';
@@ -147,22 +147,45 @@ describe('StashPanel Unstash As / 查看差异', () => {
     expect(screen.queryByTestId('unstash-as-0')).not.toBeInTheDocument();
   });
 
-  it('查看差异：点击行打开 Modal 渲染 patch 文本；loading/error 态', async () => {
+  // 回归（D-25）：diffIndex 由容器持有（与 useStashDiff 拉取键同源）。面板曾自持该状态，
+  // 结果「弹窗开了但容器从未拉数据」——正文恒空白；故此处断言点击只回传下标，开关随 diffIndex 变化。
+  it('查看差异：点击行回传下标（容器据此拉取），Modal 开关随 diffIndex 受控；loading/error 态', async () => {
+    const onOpenDiff = vi.fn();
+    const onCloseDiff = vi.fn();
     const { rerender } = render(
       <StashPanel
         stashes={makeList([makeStash({ index: 0 })])}
         onAction={vi.fn()}
+        diffIndex={null}
+        onOpenDiff={onOpenDiff}
+        onCloseDiff={onCloseDiff}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('stash-diff-0'));
+    expect(onOpenDiff).toHaveBeenCalledWith(0);
+    expect(screen.queryByRole('dialog', { name: '贮藏差异：stash@{0}' })).not.toBeInTheDocument();
+
+    // 容器回填 diffIndex → Modal 打开并呈现 loading
+    rerender(
+      <StashPanel
+        stashes={makeList([makeStash({ index: 0 })])}
+        onAction={vi.fn()}
+        diffIndex={0}
+        onOpenDiff={onOpenDiff}
+        onCloseDiff={onCloseDiff}
         stashDiff={null}
         diffLoading
       />,
     );
-    fireEvent.click(screen.getByTestId('stash-diff-0'));
     expect(await screen.findByTestId('stash-diff-loading')).toBeInTheDocument();
 
     rerender(
       <StashPanel
         stashes={makeList([makeStash({ index: 0 })])}
         onAction={vi.fn()}
+        diffIndex={0}
+        onOpenDiff={onOpenDiff}
+        onCloseDiff={onCloseDiff}
         stashDiff={{ index: 0, patch: 'diff --git a/a.txt b/a.txt\n@@ -1 +1 @@\n-v1\n+v2\n' }}
         diffLoading={false}
       />,
@@ -170,8 +193,28 @@ describe('StashPanel Unstash As / 查看差异', () => {
     expect(screen.getByTestId('stash-diff-text')).toHaveTextContent('+v2');
 
     rerender(
-      <StashPanel stashes={makeList([makeStash({ index: 0 })])} onAction={vi.fn()} stashDiff={null} diffLoading={false} diffError="贮藏不存在" />,
+      <StashPanel
+        stashes={makeList([makeStash({ index: 0 })])}
+        onAction={vi.fn()}
+        diffIndex={0}
+        onOpenDiff={onOpenDiff}
+        onCloseDiff={onCloseDiff}
+        stashDiff={null}
+        diffLoading={false}
+        diffError="贮藏不存在"
+      />,
     );
     expect(screen.getByTestId('stash-diff-error')).toHaveTextContent('贮藏不存在');
+
+    // 关闭按钮回传容器（onCloseDiff），由容器把 diffIndex 置 null（面板不自持开关状态）
+    const diffDialog = screen.getByRole('dialog', { name: '贮藏差异：stash@{0}' });
+    fireEvent.click(within(diffDialog).getByRole('button', { name: 'Close' }));
+    expect(onCloseDiff).toHaveBeenCalled();
+    // 注：关闭后的可见性不做断言——jsdom 不结束 antd 关闭动效（DOM 常驻），该路径由浏览器端 E2E（F-085）覆盖
+  });
+
+  it('未传 onOpenDiff 时不渲染「查看差异」按钮', () => {
+    render(<StashPanel stashes={makeList([makeStash({ index: 0 })])} onAction={vi.fn()} />);
+    expect(screen.queryByTestId('stash-diff-0')).not.toBeInTheDocument();
   });
 });

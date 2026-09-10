@@ -111,6 +111,40 @@ describe('stash 功能', () => {
     });
   });
 
+  // 冒烟 D-24：apply 遇冲突此前只透出「退出码 1」（git 把 needs merge 写 stdout），
+  // UI 无从下手且工作区已被写入冲突标记；现按冲突态给出 CONFLICT(409) + 明确指引
+  it('apply 三方冲突 → CONFLICT 且提示冲突文件与去处（不再是裸「退出码 1」）', async () => {
+    const repo = instantiate(baseTemplate);
+    // 贮藏基线：a.txt = stashed-version（相对提交后的 HEAD 是改动）
+    writeFileSync(join(repo, 'a.txt'), 'stashed-version');
+    await applyStashAction(repo, { action: 'save' });
+    expect(execFileSync('git', ['-C', repo, 'status', '--porcelain'], { encoding: 'utf8' }).trim()).toBe('');
+    // HEAD 前进成另一版本 → apply 时三方合并冲突（工作区本身干净，走合并而非「拒绝覆盖」分支）
+    writeFileSync(join(repo, 'a.txt'), 'main-version');
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-am', 'main change']);
+
+    const err = await applyStashAction(repo, { action: 'apply', index: 0 }).catch((e: unknown) => e);
+
+    expect(err).toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringContaining('应用贮藏存在冲突（1 个文件：a.txt）'),
+    });
+    // 未合并条目确实留在索引中（用户可经冲突页解决）
+    expect(execFileSync('git', ['-C', repo, 'diff', '--name-only', '--diff-filter=U'], { encoding: 'utf8' }).trim()).toBe('a.txt');
+  });
+
+  it('apply 被本地改动拒绝（非冲突）→ 失败提示带 git 原因首行，而非裸「退出码 1」', async () => {
+    const repo = instantiate(baseTemplate);
+    writeFileSync(join(repo, 'a.txt'), 'stashed-version');
+    await applyStashAction(repo, { action: 'save' });
+    writeFileSync(join(repo, 'a.txt'), 'dirty-working-copy');
+
+    const err = await applyStashAction(repo, { action: 'apply', index: 0 }).catch((e: unknown) => e);
+
+    expect(err).toMatchObject({ code: 'GIT_ERROR', message: expect.stringMatching(/应用贮藏失败：.+/) });
+    expect(String((err as Error).message)).not.toBe('git 命令失败：git stash apply stash@{0} 退出码 1');
+  });
+
   it('save→apply→drop 轮转，返回刷新列表', async () => {
     const repo = instantiate(baseTemplate);
     writeFileSync(join(repo, 'a.txt'), 'v2');

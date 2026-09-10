@@ -1,4 +1,5 @@
 /** 贮藏功能：core 贮藏原语 → contracts 形状；写操作前预检（save 取 status、其余校验 index），操作后返回刷新列表。 */
+import { GitExitError, listConflictedPaths } from '@rebased/core';
 import {
   applyStash,
   checkoutBranch,
@@ -38,6 +39,36 @@ async function requireStashIndex(repoPath: string, index: number): Promise<void>
   }
 }
 
+/**
+ * 贮藏应用类操作（apply / pop / unstashAs）的失败收口：
+ * 两类失败此前都以裸 GitExitError 透出，UI 只见「退出码 1」而无原因（冒烟 D-24）：
+ *  1) 冲突：`git stash apply` 在目标文件已被改动时写入冲突标记并非 0 退出
+ *     （git 把 `path: needs merge` 打到 stdout），工作区已变脏，用户无从下手；
+ *  2) 未跟踪文件占用：`git stash pop` 恢复 -u 贮藏的未跟踪文件时若同名文件已存在，
+ *     git 报 `xxx already exists, no checkout`——需明确告知原因与处置（先移走/提交该文件）。
+ * 冲突 → CONFLICT(409) + 冲突页指引；其余失败把 git 的首行可读原因并入提示。
+ */
+async function runStashRestoreGuarded(repoPath: string, run: () => Promise<void>, verb: string): Promise<void> {
+  try {
+    await run();
+  } catch (err) {
+    const conflicts = await listConflictedPaths(repoPath);
+    if (conflicts.length > 0) {
+      const head = conflicts.slice(0, 3).map((c) => c.path).join('、');
+      // 用 CONFLICT(409) 而非 GIT_ERROR(500)：语义正确（可恢复的用户态，非服务端故障），
+      // 且避免走「未预期异常 → 500 → Next dev 错误覆盖层渲染中文源码行」的脆弱路径
+      throw new ServiceError(
+        'CONFLICT',
+        `应用贮藏存在冲突（${conflicts.length} 个文件：${head}${conflicts.length > 3 ? ' 等' : ''}），请到冲突页解决后完成`,
+      );
+    }
+    const detail = err instanceof GitExitError
+      ? `${err.stdout}\n${err.stderr}`.split('\n').map((l) => l.trim()).find((l) => l !== '')
+      : undefined;
+    throw new ServiceError('GIT_ERROR', `${verb}失败${detail === undefined ? '' : `：${detail}`}`);
+  }
+}
+
 /** 贮藏写操作分派：save 前预检工作区改动；apply/pop/drop/branch 前校验 index；返回刷新列表 */
 export async function applyStashAction(repoPath: string, action: StashAction): Promise<StashList> {
   switch (action.action) {
@@ -47,11 +78,11 @@ export async function applyStashAction(repoPath: string, action: StashAction): P
       break;
     case 'apply':
       await requireStashIndex(repoPath, action.index);
-      await applyStash(repoPath, action.index);
+      await runStashRestoreGuarded(repoPath, () => applyStash(repoPath, action.index), '应用贮藏');
       break;
     case 'pop':
       await requireStashIndex(repoPath, action.index);
-      await popStash(repoPath, action.index);
+      await runStashRestoreGuarded(repoPath, () => popStash(repoPath, action.index), '弹出贮藏');
       break;
     case 'drop':
       await requireStashIndex(repoPath, action.index);
@@ -69,7 +100,7 @@ export async function applyStashAction(repoPath: string, action: StashAction): P
 export async function unstashAs(repoPath: string, body: StashUnstashAsBody): Promise<StashList> {
   await requireStashIndex(repoPath, body.index);
   await checkoutBranch(repoPath, body.branch);
-  await applyStash(repoPath, body.index);
+  await runStashRestoreGuarded(repoPath, () => applyStash(repoPath, body.index), '应用贮藏');
   return getStashes(repoPath);
 }
 

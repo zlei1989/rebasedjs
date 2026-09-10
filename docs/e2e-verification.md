@@ -73,7 +73,7 @@
 | 7 | BranchPanel | P2 | `/repos/:id/branches` | 顶栏「分支」 | F-062~F-072（11） | branch | ✅ 11/11 |
 | 8 | MergeDialog（页面化） | P2 | `/repos/:id/merge` | 顶栏「合并」 | F-073~F-075（3） | merge | ✅ 3/3 |
 | 9 | RebaseDialog（内嵌模态） | P3 | LogPage 内 | 更多「变基」 | F-076~F-080（5） | rebase | ✅ 5/5 |
-| 10 | StashPanel | P2 | `/repos/:id/stashes` | 顶栏「贮藏」 | F-081~F-085（5） | stash | 待测 |
+| 10 | StashPanel | P2 | `/repos/:id/stashes` | 顶栏「贮藏」 | F-081~F-085（5） | stash | ✅ 5/5 |
 | 11 | TagPanel | P3 | `/repos/:id/tags` | 更多「标签」 | F-086~F-088（3） | tag | 待测 |
 | 12 | RemotePanel | P3 | `/repos/:id/remotes` | 更多「远程管理」 | F-089~F-092（4） | remote | 待测 |
 | 13 | PushDialog（内嵌模态） | P3 | LogPage 内 | 更多「推送」 | F-093~F-095（3） | push | 待测 |
@@ -279,11 +279,11 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-081 | stash save（message/-u/--keep-index） | 页内保存 Modal → 填 message → 勾 includeUntracked/keepIndex | stash 入列，选项生效（CLI `stash list`/`stash show` 互证） | 待测 | stash-01.png |
-| F-082 | pop / apply / drop | 行内 pop → 再 apply → drop（Popconfirm） | 行为正确（pop 移除、apply 保留、drop 删除；CLI 互证） | 待测 | stash-02.png |
-| F-083 | stash as branch | 行「转分支」Modal → 执行 | 新分支出现且 stash 消费（CLI `branch` 互证） | 待测 | stash-03.png |
-| F-084 | Unstash As 对话框 | 行「Unstash As…」→ 选目标本地分支 → 执行 | 检出目标分支 + apply，不 drop（CLI） | 待测 | stash-04.png |
-| F-085 | 查看差异 | 行「查看差异」Modal | `git stash show -p` unified 补丁正确展示 | 待测 | stash-05.png |
+| F-081 | stash save（message/-u/--keep-index） | 页内保存 Modal → 填 message → 勾 includeUntracked/keepIndex | stash 入列，选项生效（CLI `stash list`/`stash show` 互证） | ✅ | stash-01.png（说明填 `smoke-stash-f081`；勾「包含未跟踪文件」+「保持暂存区」；CLI：`stash@{0}: On rebase-topic: smoke-stash-f081`、`show --stat` 含未跟踪文件、暂存区 `M  lx.txt` 保持不动） |
+| F-082 | pop / apply / drop | 行内 pop → 再 apply → drop（Popconfirm） | 行为正确（pop 移除、apply 保留、drop 删除；CLI 互证） | ✅ | stash-02.png（apply 后列表仍 3 条；pop 弹确认「确定弹出 stash@{0}？弹出后将移除该贮藏」→ 3→2 且工作区落盘；drop 直接删除不入工作区，CLI 逐次互证） |
+| F-083 | stash as branch | 行「转分支」Modal → 执行 | 新分支出现且 stash 消费（CLI `branch` 互证） | ✅ | stash-03.png（分支名 `stash-branch-f083`；CLI：`* stash-branch-f083` 已检出、`stash list` 清空（贮藏被消费）、工作区出现贮藏内容） |
+| F-084 | Unstash As 对话框 | 行「Unstash As…」→ 选目标本地分支 → 执行 | 检出目标分支 + apply，不 drop（CLI） | ✅ | stash-04.png（选 `unstash-target` → 顶部绿条「已检出 unstash-target 并应用贮藏」；CLI：HEAD=`unstash-target`、README.md `+unstash-as-probe-line`、`stash list` 仍 2 条（未 drop）；stash-04b.png 为对话框选分支过程；注：目标分支与贮藏基点不一致时走 409 冲突提示且贮藏保留，见 §5.9 D-25 备注） |
+| F-085 | 查看差异 | 行「查看差异」Modal | `git stash show -p` unified 补丁正确展示 | ✅ | stash-05.png（「贮藏差异：stash@{1}」Modal 全文补丁；与 CLI `git stash show -p stash@{1}` 逐行一致：`index 4143312..536c2d6`、hunk `@@ -3,3 +3,4 @@`、`+stash-diff-probe-line`；修复 D-25 前此处正文恒空白） |
 
 ### 4.11 TagPanel（slug `tag`；P3）
 
@@ -524,6 +524,7 @@
 | R3 | 2026-09-10 | F-059~F-061（ResetDialog 3）+ F-062~F-068（BranchPanel 7） | ✅ 10（ResetDialog 3/3、BranchPanel 7/11） | D-19~D-21 修复并复验（见 §5.4）；F-069~F-072 待续 |
 | R4 | 2026-09-10 | F-069~F-072（BranchPanel 余下 4 行）+ F-073~F-075（MergeDialog 3 行） | ✅ 7（BranchPanel 11/11、MergeDialog 3/3 收官） | D-22 修复并复验（见 §5.7）；远端分叉/新分支由 rebased-smoke-other 克隆构造；冲突仓停在 merge 冲突态供 F-114~F-119 复用 |
 | R5 | 2026-09-10 | F-076~F-080（RebaseDialog 5 行：onto/交互式 todo/continue·skip·abort/auto-squash/单提交编辑四动作） | ✅ 5（RebaseDialog 5/5 收官） | D-23 修复并复验（见 §5.8）；夹具纠偏 P-11（右键定位竞态） |
+| R6 | 2026-09-11 | F-081~F-085（StashPanel 5 行：save 三选项 / pop·apply·drop / 转分支 / Unstash As… / 查看差异） | ✅ 5（StashPanel 5/5 收官） | D-24（贮藏冲突无理由提示）、D-25（「查看差异」弹窗正文恒空白）修复并复验（见 §5.9）；环境说明 E-01（Next dev 代码框多字节 panic） |
 
 ### 5.1 R1 缺陷登记（全部已修复 + 复验）
 
@@ -563,10 +564,23 @@
 
 | D-17 | blame 页整体报「git 命令失败 …`git log --no-walk` 退出码 128：fatal: bad object 0000…0000」——F-051「注解」入口 | `git blame` 对**工作区未提交行**输出零哈希伪提交（"Not Committed Yet"），`parentHashesOf` 未过滤即作为 `git log --no-walk <hash…>` 参数 → 任何含未提交改动的文件都 blame 失败（500） | `parentHashesOf` 先剔除零哈希（40/64 位全 0）并对这些行直接返回空父列表，仅把真实提交交给 git | `GET /blame?file=src/app.ts` → 200：未提交行 `hash=000…0`、author `Not Committed Yet`、`parents: []`，其余行父哈希正常；core 新增用例「未提交行（零哈希）不进入 git log 参数」 |
 ### 5.8 R5 缺陷登记（已修复 + 复验）
-
 | 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
 |------|----------------|------|------|------|
 | D-23 | 对「位于合并提交之下」的历史提交执行单提交编辑（drop/squash/fixup/reword）→ 整页跳冲突页但**无任何冲突**，仓库卡在半程 rebase：`.git/rebase-merge` 残留且 todo 非法（`error: 'pick' does not accept merge commits` + `invalid line 4`），用户无法继续也无法理解原因——F-080 | `editCommitAction` 用 `git rebase -i` + 自备 todo 重放区间内全部提交，一律写 `pick`；区间含合并提交时 git 拒绝 `pick <merge>`，而失败发生在 rebase 启动之后 | core 抽出 `editCommitBase`（基计算口径唯一）与 `hasMergeCommitInRange`（`git log --merges <base>..HEAD`）；api `commitEdit` 在动手前判定并抛 `INVALID_QUERY`「目标提交区间内含合并提交…单提交编辑暂不支持」 | 修复前：报错 + 半程状态（实测）；修复后：同一动作给出明确中文提示且仓库分毫未动（HEAD/状态/无 `.git/rebase-merge`）；api 新增用例「区间含合并提交 → INVALID_QUERY 且不留半程 rebase 状态」 |
+
+### 5.9 R6 缺陷登记（已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-24 | 贮藏「应用/弹出」遇冲突时只弹一句「退出码 1」，不说明原因、不指出冲突文件；工作区已被写入冲突标记，用户既不知发生了什么也不知该动哪些文件（pop 遇未跟踪文件同名时更只报 `crlf.txt already exists, no checkout`）——F-082/F-084 路径 | api `stashAction`/`unstashAs` 直接透传 core 的 `GitExitError`，冲突（apply 非零退出但已落冲突标记）与普通 git 失败混为一类，只带退出码 | api `stash.ts` 新增 `runStashRestoreGuarded`：捕获后先查 `git diff --name-only --diff-filter=U`，有冲突文件 → `CONFLICT(409)`「应用贮藏产生冲突：<路径列表>」；否则 `GIT_ERROR` 并附 git 首行可读原因（去掉 `退出码 N` 噪声） | 复跑贮藏冲突场景：toast 显示中文冲突提示与文件路径（此前为 `[object Object]`，已随 `.map(c => c.path)` 修正）；api stash 用例 13 通过（新增冲突/非冲突分流断言）；正常路径不受影响（F-084 成功路径绿条「已检出 unstash-target 并应用贮藏」） |
+| D-25 | 贮藏行「查看差异」弹出 Modal 后**正文恒为空白**（无补丁、无 loading、无错误），且全程不发任何 `GET …/stashes/:index/diff` 请求——F-085 首轮实测 | `StashPanel` 自持 `diffIndex` 局部状态（点击行 → `setDiffIndex` 开窗），而容器另有一份 `diffIndex` 状态才驱动 `useStashDiff` 条件拉取；两份状态互不相通，容器那份永远是 `null` → 弹窗开着但没人拉数据，`stashDiff/diffLoading/diffError` 全为空故渲染 `null` | ui 层改为受控：`StashPanelProps` 增加 `diffIndex`/`onOpenDiff(index)`/`onCloseDiff()` 并删除面板内自持状态；web-next 与 web-koa 两个容器均传 `diffIndex={diffIndex}` `onOpenDiff={setDiffIndex}` `onCloseDiff={() => setDiffIndex(null)}`（拉取键与开关状态同源） | 复跑 F-085：`GET /api/repos/…/stashes/1/diff` 200，Modal 内 `stash-diff-text` 全文补丁与 CLI `git stash show -p stash@{1}` 逐行一致（stash-05.png）；ui 用例重写为「点击只回传下标（未持有 diffIndex 时不开窗）→ 回填后 loading → patch → error → 关闭按钮回传容器」并新增「未传 onOpenDiff 时不渲染按钮」 |
+
+**环境说明**
+
+| 编号 | 现象 | 处置 |
+|------|------|------|
+| E-01 | 冒烟中 Next dev server（16.2.7 Turbopack）曾整体崩溃：Rust panic `end byte index 93 is not a char boundary`（`next-code-frame/src/highlight.rs:1011`）——为**含中文的源码行**渲染 500 错误代码框时按字节切分多字节字符 | 与产品代码无关（dev-only 报错渲染路径）；重启 `pnpm dev` 后恢复。副作用：崩溃/重启期间浏览器标签的 HMR 连接损坏，页面只剩 SSR 外壳（`.ant-app` 无子节点、`body.innerText` 为空），表现为「白屏但接口全 200」——**处置：关闭标签重新导航**即可（另注：用 `127.0.0.1:3030` 访问时 HMR WebSocket 握手失败，须用 `http://localhost:3030`） |
+
 ### 5.7 R4 缺陷登记（已修复 + 复验）
 
 | 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |

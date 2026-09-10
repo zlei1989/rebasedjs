@@ -60,6 +60,9 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         }}
         unstashingAs={unstashingAs}
         branches={branches?.branches ?? []}
+        diffIndex={diffIndex}
+        onOpenDiff={setDiffIndex}
+        onCloseDiff={() => setDiffIndex(null)}
         stashDiff={stashDiff ?? null}
         diffLoading={diffLoading}
         diffError={diffError?.message ?? null}

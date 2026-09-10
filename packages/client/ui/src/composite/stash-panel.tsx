@@ -27,6 +27,12 @@ export interface StashPanelProps {
   diffError?: string | null;
   /** 查看差异进行中 */
   diffActing?: boolean;
+  /** 当前查看差异的贮藏下标（容器持有：与拉取键同源，面板不再自持状态，避免「弹窗开了但没人拉数据」）；null/undefined 表示未打开 */
+  diffIndex?: number | null;
+  /** 查看差异回调（提供时行内渲染「查看差异」） */
+  onOpenDiff?: (index: number) => void;
+  /** 关闭查看差异 Modal */
+  onCloseDiff?: () => void;
   acting?: boolean;
 }
 
@@ -210,13 +216,16 @@ export function StashPanel({
   stashDiff,
   diffLoading,
   diffError,
+  diffIndex,
+  onOpenDiff,
+  onCloseDiff,
   acting,
 }: StashPanelProps): React.ReactNode {
   const [branchTarget, setBranchTarget] = useState<StashEntry | null>(null);
   const [unstashTarget, setUnstashTarget] = useState<StashEntry | null>(null);
   const [unstashBranch, setUnstashBranch] = useState<string | undefined>(undefined);
-  const [diffIndex, setDiffIndex] = useState<number | null>(null);
   const localBranches = (branches ?? []).filter((b) => !b.remote);
+  const diffOpen = diffIndex !== undefined && diffIndex !== null;
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
@@ -233,7 +242,7 @@ export function StashPanel({
                 onAction={onAction}
                 onBranch={setBranchTarget}
                 onUnstashAs={onUnstashAs === undefined ? undefined : setUnstashTarget}
-                onOpenDiff={(stash) => setDiffIndex(stash.index)}
+                onOpenDiff={onOpenDiff === undefined ? undefined : (stash) => onOpenDiff(stash.index)}
               />
             ))}
           </Flex>
@@ -275,13 +284,13 @@ export function StashPanel({
           />
         </Flex>
       </Modal>
-      {/* 查看差异 Modal：git stash show -p 的 unified 补丁（数据由容器按 diffIndex 条件拉取） */}
+      {/* 查看差异 Modal：git stash show -p 的 unified 补丁（数据由容器按 diffIndex 条件拉取；开关状态也由容器持有） */}
       <Modal
-        title={`贮藏差异：stash@{${diffIndex === null ? '' : diffIndex}}`}
-        open={diffIndex !== null}
+        title={`贮藏差异：stash@{${diffIndex ?? ''}}`}
+        open={diffOpen}
         footer={null}
         width={720}
-        onCancel={() => setDiffIndex(null)}
+        onCancel={() => onCloseDiff?.()}
       >
         {diffLoading ? (
           <Spin data-testid="stash-diff-loading" />

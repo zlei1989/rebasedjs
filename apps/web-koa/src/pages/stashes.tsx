@@ -58,6 +58,9 @@ export function RepoStashesPage(): React.ReactNode {
         }}
         unstashingAs={unstashingAs}
         branches={branches?.branches ?? []}
+        diffIndex={diffIndex}
+        onOpenDiff={setDiffIndex}
+        onCloseDiff={() => setDiffIndex(null)}
         stashDiff={stashDiff ?? null}
         diffLoading={diffLoading}
         diffError={diffError?.message ?? null}
