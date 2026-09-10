@@ -68,7 +68,7 @@
 | 2 | LogPage | P1 | `/repos/:id` | RepoPage 打开冒烟仓 | F-009~F-028（20） | log-page | ✅ 19/20（F-025 跳过） |
 | 3 | DiffPage | P1 | `/repos/:id/diff` | StatusPage 双击变更文件 | F-029~F-038（10） | diff-page | ✅ 10/10 |
 | 4 | StatusPage | P2 | `/repos/:id/status` | 顶栏「状态」 | F-039~F-051（13） | status-page | ✅ 13/13 |
-| 5 | CommitDialog（等效内嵌提交框） | P2 | StatusPage 内 | StatusPage 提交框 | F-052~F-058（7） | commit | 🚧 1/7（F-057） |
+| 5 | CommitDialog（等效内嵌提交框） | P2 | StatusPage 内 | StatusPage 提交框 | F-052~F-058（7） | commit | ✅ 7/7（F-056 的 gpg 分支跳过） |
 | 6 | ResetDialog（内嵌模态） | P2 | LogPage 内 | 详情面板「Reset 到此处」 | F-059~F-061（3） | reset | 待测 |
 | 7 | BranchPanel | P2 | `/repos/:id/branches` | 顶栏「分支」 | F-062~F-072（11） | branch | 待测 |
 | 8 | MergeDialog（页面化） | P2 | `/repos/:id/merge` | 顶栏「合并」 | F-073~F-075（3） | merge | 待测 |
@@ -213,13 +213,13 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-052 | 提交（信息必填/身份预检） | 未配身份仓提交 → 观察引导；主仓填 message 提交 | 未配身份 → 引导去设置页提示；正常提交成功（CLI） | 待测 | commit-01.png |
-| F-053 | amend（改上次提交） | 勾选 amend + 新 message → 提交 | 上次提交 message 被替换、无新提交（CLI log 互证） | 待测 | commit-02.png |
-| F-054 | sign-off / 跳过 hooks | 勾选 sign-off 提交 | log 见 Signed-off-by；noVerify 经 hook 仓验证（可跳过+理由） | 待测 | commit-03.png |
-| F-055 | amend 历史提交（amend 到…） | 提交框「amend 到…」下拉选目标 → 提交 | 目标提交信息重写、中间提交重放（CLI log 互证） | 待测 | commit-04.png |
-| F-056 | GPG 签名 / commit template | 设置页配 `commit.template` 等白名单键 → 提交 | 提交链路正常不受扰（CLI config 互证；gpg 签名依赖本机密钥，否则跳过） | 待测 | commit-05.png |
+| F-052 | 提交（信息必填/身份预检） | 未配身份仓提交 → 观察引导；主仓填 message 提交 | 未配身份 → 引导去设置页提示；正常提交成功（CLI） | ✅ | commit-01.png（未配身份仓提交 → 红提示「未配置 user.name 或 user.email，请先在设置页配置」；主仓随后提交 c7b9f6d 成功） | |
+| F-053 | amend（改上次提交） | 勾选 amend + 新 message → 提交 | 上次提交 message 被替换、无新提交（CLI log 互证） | ✅ | commit-02.png（勾 amend + 新信息 → `git log -1` 信息被替换、提交数不变、新暂存内容并入该提交） | |
+| F-054 | sign-off / 跳过 hooks | 勾选 sign-off 提交 | log 见 Signed-off-by；noVerify 经 hook 仓验证（可跳过+理由） | ✅ | commit-03.png（勾 signOff → 提交体含 `Signed-off-by: Smoke Tester <smoke@example.com>`；noVerify：装 pre-commit hook 后无勾选被拒（退出码 1 + hook stderr），勾选后提交成功） | |
+| F-055 | amend 历史提交（amend 到…） | 提交框「amend 到…」下拉选目标 → 提交 | 目标提交信息重写、中间提交重放（CLI log 互证） | ✅ | commit-04.png（「amend 到…」候选＝未发布提交；选最老候选提交 → 目标信息重写、其间 3 个提交重放为新 hash、staged 改动并入目标提交） | |
+| F-056 | GPG 签名 / commit template | 设置页配 `commit.template` 等白名单键 → 提交 | 提交链路正常不受扰（CLI config 互证；gpg 签名依赖本机密钥，否则跳过） | ⏭ 跳过（gpg 部分）｜✅（template 部分） | 本机无 gpg（`gpg --version` 不存在）→ 签名提交跳过；已完成：设置页写 `commit.template = .gitmessage`（CLI `git config --local` 互证）后提交链路正常（e034fd3） | |
 | F-057 | CRLF 提示（三选 Modal） | Windows 下暂存 CRLF 文件 → 点提交 | 内联警告 + 三选 Modal（修复并提交/原样提交/取消）；非 Windows 跳过+理由 | ✅ | commit-06.png（Windows 下暂存 CRLF 文件点提交 → 三选 Modal「检测到 CRLF 行尾符」；选「原样提交」后提交落盘） | |
-| F-058 | commit & push（提交并推送） | 提交框「提交并推送」 | commit 先落盘 → push 当前分支上游；pushed/up-to-date/rejected 三态提示正确（CLI 远端互证） | 待测 | commit-07.png |
+| F-058 | commit & push（提交并推送） | 提交框「提交并推送」 | commit 先落盘 → push 当前分支上游；pushed/up-to-date/rejected 三态提示正确（CLI 远端互证） | ✅ | commit-07.png（「提交并推送」→ 本地 800cf2a 与裸远端 HEAD 同 hash，`rev-list --left-right --count` = 0/0，提示「已提交并推送」） | |
 
 ### 4.6 ResetDialog（slug `reset`；P2）
 
@@ -520,7 +520,7 @@
 | 轮次 | 日期 | 执行范围（F-xx…） | 结果汇总（✅/❌/跳过） | 缺陷登记（根因/修复/复验） |
 |------|------|-------------------|------------------------|----------------------------|
 | R1 | 2026-09-10 | F-001~F-028（RepoPage 8 + LogPage 20）、F-029~F-031（DiffPage 3）；暗黑/明亮双主题与 1440/768/480 三档宽度抽查 | ✅ 30 / 跳过 1（F-025） | D-01~D-12 全部修复并复验，见下表 |
-| R2 | 2026-09-10 | F-032~F-038（DiffPage 余下 7 行）+ F-039~F-051（StatusPage 13 行）+ F-057（CRLF 三选 Modal） | ✅ 21（DiffPage 10/10、StatusPage 13/13） | D-14~D-17 修复并复验（见 §5.4）；夹具纠偏 P-06~P-08（见 §5.5） |
+| R2 | 2026-09-10 | F-032~F-038（DiffPage 7）+ F-039~F-051（StatusPage 13）+ F-052~F-058（CommitDialog 7） | ✅ 27 / 跳过 0.5（F-056 的 gpg 分支） | D-14~D-17 修复并复验（见 §5.4）；夹具纠偏 P-06~P-10（见 §5.5） |
 
 ### 5.1 R1 缺陷登记（全部已修复 + 复验）
 
