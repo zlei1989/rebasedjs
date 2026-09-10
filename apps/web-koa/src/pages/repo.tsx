@@ -385,7 +385,22 @@ export function RepoPage(): React.ReactNode {
       });
   };
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
-  if (!status) return null;  // 分支对比视图（?compare=<branch>）：双 range 查询就绪前不渲染（compareA/B 为 null key 条件拉取）
+  if (!status) return null;
+  // 容器态跨仓库复位（§2.5 createOpen 硬化）：仓库切换时清空选择/对话框/认证重试等容器持有的状态——
+  // ui 层内嵌 Modal 已由 <LogPage key={repoId}> 重挂载复位，此处兜底容器自身状态（选中提交、push-up-to、打开对话框等）
+  useEffect(() => {
+    setSelectedHash(select ?? null);
+    setPushUpToHash(null);
+    setOpenDialog(null);
+    setRebaseOpen(false);
+    setResetTarget(null);
+    setAuthRetry(null);
+    setUpdateOutcome(null);
+    setChangesHash('');
+    setAuthor('');
+    setPath('');
+    setLimit(50);
+  }, [repoId]);  // 分支对比视图（?compare=<branch>）：双 range 查询就绪前不渲染（compareA/B 为 null key 条件拉取）
   if (compareBranch !== null) {
     if (compareA === undefined || compareB === undefined) return null;
     return (
@@ -400,7 +415,10 @@ export function RepoPage(): React.ReactNode {
   }
   return (
     <>
+      {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载 LogPage——内嵌 Modal（创建分支/标签/Reword）与
+          行右键菜单状态随之复位，不会跨仓库残留（§2.5 createOpen 硬化） */}
       <LogPage
+        key={repoId}
         repoName={repos?.find((r) => r.id === repoId)?.name ?? repoId}
         status={status}
         commits={commits}

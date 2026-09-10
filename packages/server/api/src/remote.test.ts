@@ -292,6 +292,16 @@ describe('认证回路', () => {
     expect(buildAuthConfig('/tmp/bare.git', 'tok123')).toEqual([]);
   });
 
+  it('buildAuthConfig GitLab 域硬化：gitlab.com → Basic base64("oauth2:token")（GitLab 不识别 Bearer）；其余 host 维持 Bearer', () => {
+    expect(buildAuthConfig('https://gitlab.com/z/user/repo.git', 'glpat-xyz')).toEqual([
+      `http.https://gitlab.com.extraHeader=Authorization: Basic ${Buffer.from('oauth2:glpat-xyz', 'utf8').toString('base64')}`,
+    ]);
+    // 大小写/默认端口变体仍命中 gitlab.com
+    expect(buildAuthConfig('https://GitLab.com:443/z/r.git', 'tok')).toEqual([
+      `http.https://gitlab.com.extraHeader=Authorization: Basic ${Buffer.from('oauth2:tok', 'utf8').toString('base64')}`,
+    ]);
+  });
+
   it('findToken 按规范化 host 取回明文 token；未存 → null；不经 index 公共出口', () => {
     upsertAccount({ host: 'GitHub.com', account: 'alice', token: 'ghp_secret_find' });
     expect(findToken('github.com')).toBe('ghp_secret_find');

@@ -112,7 +112,12 @@ export async function createWorktree(repoPath: string, body: WorktreeCreateBody)
       baseReal.startsWith(createdReal + sep) ||
       list.some((w) => w !== created && createdReal.startsWith(realPathOf(w.path) + sep));
     if (invalid) {
-      await coreRemoveWorktree(repoPath, created.path, { force: true });
+      // 回滚失败也包 gitFailure（§2.5 硬化）：add 已成功——回滚失败时条目可能残留，500 语义如实传出
+      try {
+        await coreRemoveWorktree(repoPath, created.path, { force: true });
+      } catch (error) {
+        throw gitFailure('回滚无效工作树失败（条目可能残留）', error);
+      }
       throw new ServiceError('INVALID_QUERY', `路径无效：${body.path}`);
     }
   }

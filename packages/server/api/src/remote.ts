@@ -55,6 +55,9 @@ export function isAuthFailure(stderr: string): boolean {
  * 注入节 authority = 远程 URL 本体的完整 host——注入键 ≠ 查找键，勿混用。
  * 仅 http/https 远程有注入意义；scp 式 ssh、本地路径等返回空数组。
  * 进程参数可见性为已知接受面（见 core exec.ts buildArgs 注释）。
+ * GitLab git-over-HTTP 硬化（§2.5）：gitlab.com 域不注入 Bearer（GitLab 不识别）——
+ * 改注入 `Authorization: Basic base64("oauth2:<token>")`（官方 `https://oauth2:TOKEN@` 的等价头形式）；
+ * 其余 host 维持 Bearer（GitHub/私有平台）。
  */
 export function buildAuthConfig(remoteUrl: string, token: string): string[] {
   let url: URL;
@@ -64,7 +67,11 @@ export function buildAuthConfig(remoteUrl: string, token: string): string[] {
     return [];
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return [];
-  return [`http.${url.protocol}//${url.host}.extraHeader=Authorization: Bearer ${token}`];
+  const header =
+    url.host === 'gitlab.com'
+      ? `Authorization: Basic ${Buffer.from(`oauth2:${token}`, 'utf8').toString('base64')}`
+      : `Authorization: Bearer ${token}`;
+  return [`http.${url.protocol}//${url.host}.extraHeader=${header}`];
 }
 
 /**
