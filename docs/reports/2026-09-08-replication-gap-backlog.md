@@ -123,7 +123,7 @@
 
 ### 2.5 工程排期项（11 项，随批消化）
 
-gitlab checkout Bearer 注入 hardening（真机验证 + core 层改 Basic/PRIVATE-TOKEN）；web-next 空/非法 JSON body 500 与 koa 400 全局评估→✅ 已落地（两端 handleApiError SyntaxError → 400，见 §2.6）；createOpen 跨仓库保持打开；worktree 回滚失败包 gitFailure；resolveSubmodulePath 白名单；core vitest `fileParallelism`→✅（外部提交 5ac5fb0 已调并行度与夹具模板化，见 core vitest.config）；unborn HEAD 建补丁/搁置→✅ 已落地（core `isUnbornHead`/`collectWorkingDiff`——空仓库两段拼接（`git diff --cached` vs 空树 + `git diff` vs 索引）；patch.createPatch 工作区模式 unborn 分支 + 单测、shelf.saveShelf 同源复用 + 单测）；execLogByCwd 仓库级淘汰；面板 key `kind+id`；addIgnore path 字符集收紧；存档名 `.`/`..` 边界统一→✅ 已落地（`assertValidEntryName` 补丁/搁置共用：禁空名/`.`/`..`/`/`与`\`——Windows 反斜杠即分隔符注入，逃逸名由「按不存在处理」收紧为 INVALID_QUERY；core +2、api +3 单测）。
+gitlab checkout Bearer 注入 hardening（真机验证 + core 层改 Basic/PRIVATE-TOKEN）；createOpen 跨仓库保持打开；worktree 回滚失败包 gitFailure；resolveSubmodulePath 白名单→✅ 已落地（path 必须解析在仓库根内——`.gitmodules` 声明 `../x` 越界 → 拒绝「子模块路径越界」；core +1 单测）；core vitest `fileParallelism`→✅（外部提交 5ac5fb0 已调并行度与夹具模板化，见 core vitest.config）；unborn HEAD 建补丁/搁置→✅ 已落地（core `isUnbornHead`/`collectWorkingDiff`——空仓库两段拼接（`git diff --cached` vs 空树 + `git diff` vs 索引）；patch.createPatch 工作区模式 unborn 分支 + 单测、shelf.saveShelf 同源复用 + 单测）；execLogByCwd 仓库级淘汰→✅ 已落地（LRU：目录上限 64，写/读访问提升，超限逐出最久未访问；core +1 单测（70 目录验证淘汰与重访提升））；面板 key `kind+id`→✅ 已落地（GitHub/GitLab 时间线行 key 改为 `${entry.kind}-${entry.id}`——跨类型事件 id 域独立，防 React key 碰撞）；addIgnore path 字符集收紧→✅ 已落地（换行/回车/控制字符 → INVALID_QUERY「忽略路径不合法」——防经 path 注入多行 .gitignore 规则；api +1 单测）；存档名 `.`/`..` 边界统一→✅ 已落地（`assertValidEntryName` 补丁/搁置共用：禁空名/`.`/`..`/`/`与`\`——Windows 反斜杠即分隔符注入，逃逸名由「按不存在处理」收紧为 INVALID_QUERY；core +2、api +3 单测）。
 
 ### 2.6 功能域与契约 —— ✅ 完成记录（2026-09-21 收尾）
 

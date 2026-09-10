@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { IgnoreAddBody, IgnoreContents, IgnorePutBody, IgnoreTemplate } from '@rebased/contracts';
+import { ServiceError, type IgnoreAddBody, type IgnoreContents, type IgnorePutBody, type IgnoreTemplate } from '@rebased/contracts';
 
 /** 忽略目标：gitignore = 仓库根 .gitignore；exclude = .git/info/exclude */
 type IgnoreTarget = 'gitignore' | 'exclude';
@@ -45,8 +45,12 @@ export async function putIgnore(repoPath: string, body: IgnorePutBody): Promise<
 /**
  * 追加 '/<path>' 行（path 原样、不转义）到 .gitignore（契约固定 target=.gitignore）：
  * 文件不存在则创建；末尾无换行先补换行；幂等判定 = 文件逐行 trim 后等于 /<path> 则视为已存在、不重复追加。
+ * 字符集收紧（§2.5）：路径含换行/回车/控制字符 → INVALID_QUERY（防经 path 注入多行 .gitignore 规则）。
  */
 export async function addIgnore(repoPath: string, body: IgnoreAddBody): Promise<IgnoreContents> {
+  if (/[\r\n\0\u0001-\u001f]/.test(body.path)) {
+    throw new ServiceError('INVALID_QUERY', '忽略路径不合法：不能包含换行或控制字符');
+  }
   const file = ignoreFileOf(repoPath, 'gitignore');
   const line = `/${body.path}`;
   const before = existsSync(file) ? readFileSync(file, 'utf8') : '';

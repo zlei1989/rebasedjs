@@ -42,7 +42,21 @@ export async function resolveGitExecutableInfo(): Promise<{ exec: string; versio
 
 /** 环形缓冲容量：每个仓库（按 cwd 键控）最多保留最近 200 条 */
 const EXEC_LOG_CAP = 200;
+/** 仓库级缓冲上限（LRU 淘汰）：Web 长驻进程打开仓库逐增，防 Map 无界增长（§2.5 硬化） */
+const EXEC_LOG_DIRS_LIMIT = 64;
 const execLogByCwd = new Map<string, ExecLogEntry[]>();
+
+/** LRU 提升 + 超限淘汰：访问（写/读）即删后重插置尾；超限删最旧（Map 迭代序 = 插入序） */
+function touchExecLogCwd(cwd: string): void {
+  const list = execLogByCwd.get(cwd);
+  if (list !== undefined) execLogByCwd.delete(cwd);
+  while (execLogByCwd.size >= EXEC_LOG_DIRS_LIMIT) {
+    const oldest = execLogByCwd.keys().next().value;
+    if (oldest === undefined) break;
+    execLogByCwd.delete(oldest);
+  }
+  if (list !== undefined) execLogByCwd.set(cwd, list);
+}
 
 function tail500(text: string): string {
   return text.length > 500 ? text.slice(text.length - 500) : text;
@@ -64,6 +78,7 @@ function stripSensitivePairs(args: string[]): string[] {
 }
 
 function recordExec(cwd: string, finalArgs: string[], exitCode: number, durationMs: number, stderr: string): void {
+  touchExecLogCwd(cwd);
   let list = execLogByCwd.get(cwd);
   if (list === undefined) {
     list = [];
@@ -73,10 +88,11 @@ function recordExec(cwd: string, finalArgs: string[], exitCode: number, duration
   if (list.length > EXEC_LOG_CAP) list.shift();
 }
 
-/** 按 cwd 键控的环形缓冲（cap 200/仓库）；runGit/streamGit 成功与失败均记录（失败含非零退出；spawn 失败 exitCode -1）
+/** 按 cwd 键控的环形缓冲（cap 200/仓库；目录上限 64 LRU）；runGit/streamGit 成功与失败均记录（失败含非零退出；spawn 失败 exitCode -1）
  *  limit 截断：返回最近 limit 条（旧→新）。 */
 export function getExecLog(cwd: string, limit: number): ExecLogEntry[] {
   if (limit <= 0) return [];
+  touchExecLogCwd(cwd);
   return (execLogByCwd.get(cwd) ?? []).slice(-limit);
 }
 

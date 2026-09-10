@@ -162,6 +162,12 @@ describe('submodule 原语', () => {
     expect(list[0].commitSha).toBe(gitlinkSha);
   });
 
+  it('resolveSubmodulePath 白名单硬化：.gitmodules 声明越界路径 → 拒绝（git submodule 只应作用于仓库内）', { timeout: 180_000 }, async () => {
+    const { super: superRepo } = instantiateRig(defaultRig!);
+    git(superRepo, ['config', '-f', '.gitmodules', 'submodule.sub.path', '../evil']);
+    await expect(updateSubmodules(superRepo, { name: 'sub' })).rejects.toThrow(/越界/);
+  });
+
   it('fresh clone（未 init）→ 条目 status=uninitialized 且带 gitlink sha', { timeout: 180_000 }, async () => {
     const { super: superRepo, gitlinkSha } = instantiateRig(defaultRig!);
     const clone = superRepo + '-clone';

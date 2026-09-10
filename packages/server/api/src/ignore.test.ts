@@ -73,6 +73,16 @@ describe('ignore 功能', () => {
     expect(existsSync(join(r, '.gitignore'))).toBe(true);
   });
 
+  it('addIgnore 字符集收紧：path 含换行/回车/控制字符 → INVALID_QUERY（防注入多行规则，§2.5 硬化）', async () => {
+    const r = repo();
+    for (const path of ['a\nnode_modules/\n', 'a\rb', '\u0001x']) {
+      const err = await addIgnore(r, { path }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: 'INVALID_QUERY', message: '忽略路径不合法：不能包含换行或控制字符' });
+    }
+    // 未被注入：文件不存在（首例即拒绝）
+    expect(existsSync(join(r, '.gitignore'))).toBe(false);
+  });
+
   it('getIgnoreTemplates：内建 Node / Python / 通用 三模板（内容可供直接落盘）', () => {
     const templates = getIgnoreTemplates();
     expect(templates.map((t) => t.id)).toEqual(['node', 'python', 'general']);

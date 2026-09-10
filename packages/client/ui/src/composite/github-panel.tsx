@@ -408,7 +408,7 @@ function PrDetailBlock({
               ) : (
                 <Flex vertical>
                   {timeline.entries.map((entry) => (
-                    <TimelineRow key={entry.id} entry={entry} />
+                    <TimelineRow key={`${entry.kind}-${entry.id}`} entry={entry} />
                   ))}
                 </Flex>
               ),

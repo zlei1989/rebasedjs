@@ -10,7 +10,6 @@ const dirs: string[] = [];
 
 describe('runGit', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
-
   it('在真实仓库执行 git 命令', async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
@@ -229,5 +228,27 @@ describe('getExecLog 环形缓冲', () => {
 
     const log = getExecLog(repo, 10);
     expect(log.map((e) => e.exitCode)).toEqual([0, 128]);
+  });
+
+  it('execLogByCwd 仓库级 LRU 淘汰：目录上限 64，最久未访问的仓库缓冲先被逐出（§2.5 硬化）', { timeout: 180_000 }, async () => {
+    // 70 个仓库目录各执行一次（执行密集；每目录 1 spawn）
+    const dirs70: string[] = [];
+    try {
+      for (let i = 0; i < 70; i++) {
+        const d = createTmpRepo();
+        dirs70.push(d);
+        await runGit(['rev-parse', '--is-inside-work-tree'], { cwd: d });
+      }
+      // 全部访问后：仅保留最近 64 个（前 6 个被逐出）
+      expect(getExecLog(dirs70[0], 5)).toEqual([]);
+      expect(getExecLog(dirs70[1], 5)).toEqual([]);
+      expect(getExecLog(dirs70[69], 5)).toHaveLength(1);
+      // 重新访问旧目录 → 该目录重新记账（LRU 提升），最旧的其他目录被逐出
+      await runGit(['rev-parse', '--is-inside-work-tree'], { cwd: dirs70[0] });
+      expect(getExecLog(dirs70[0], 5)).toHaveLength(1);
+      expect(getExecLog(dirs70[2], 5)).toEqual([]);
+    } finally {
+      dirs70.forEach((d) => cleanupTmpRepo(d));
+    }
   });
 });

@@ -9,7 +9,7 @@
  * - 子模块名在配置键 `submodule.<name>.path` 中逐字保留大小写（可含空格/点）。
  */
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { GitExitError, runGit } from './exec';
 
 export interface SubmoduleEntry {
@@ -110,11 +110,17 @@ export async function listSubmodules(cwd: string): Promise<SubmoduleEntry[]> {
   return mergeSubmoduleStatuses(entries, statusRaw);
 }
 
-/** name → path：从 .gitmodules 精确（大小写敏感）匹配子模块名；未知 name 直接抛错，不把错误名传给 git */
+/** name → path：从 .gitmodules 精确（大小写敏感）匹配子模块名；未知 name 直接抛错，不把错误名传给 git。
+ *  白名单硬化：path 必须解析在仓库根内（`.gitmodules` 声明 `../x` 类越界路径 → 拒绝——git submodule 只应作用于仓库内）。 */
 async function resolveSubmodulePath(cwd: string, name: string): Promise<string> {
   const { stdout } = await runGit(['config', '-f', '.gitmodules', '--get-regexp', CONFIG_KEYS_RE], { cwd });
   const entry = parseSubmodulesConfig(stdout).find((e) => e.name === name);
   if (entry === undefined) throw new Error(`updateSubmodules: 未知子模块名 ${name}`);
+  const root = resolve(cwd);
+  const target = resolve(join(root, entry.path));
+  if (target !== root && !target.startsWith(root + sep)) {
+    throw new Error(`updateSubmodules: 子模块路径越界 ${name}（${entry.path}）`);
+  }
   return entry.path;
 }
 
