@@ -13,7 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 export function RepoRemotesPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
-  const { data: remotes } = useRemotes(repoId);
+  const { data: remotes, mutate: mutateRemotes } = useRemotes(repoId);
   const { trigger: remoteAction, isMutating: acting } = useRemoteAction(repoId);
   const { trigger: fetchTrigger, isMutating: fetching } = useFetch(repoId);
   // 操作失败统一以服务端中文 message 提示，避免未捕获 rejection
@@ -38,7 +38,36 @@ export function RepoRemotesPage(): React.ReactNode {
         onFetch={(remote) => {
           // fetch 结果仅作提示（更新 N 个引用）；引用/状态变化经 refs.changed 等事件推送刷新
           fetchTrigger(remote !== undefined ? { remote } : undefined)
-            .then((result) => void message.success(`fetch 完成，更新 ${result.updatedRefs.length} 个引用`))
+            .then((result) => {
+              void message.success(`fetch 完成，更新 ${result.updatedRefs.length} 个引用`);
+              // fetch 响应带 fetch 后的 shallow 状态 → 回写远程列表缓存（解除浅克隆后徽标立即消失，D-28）
+              void mutateRemotes(
+                (prev) => (prev === undefined ? prev : { ...prev, shallow: result.shallow }),
+                { revalidate: false },
+              );
+            })
+            .catch(onError);
+        }}
+        onFetchSpec={(remote, refspec) => {
+          fetchTrigger({ remote, refspec })
+            .then((result) => {
+              void message.success(`fetch 完成，更新 ${result.updatedRefs.length} 个引用`);
+              void mutateRemotes(
+                (prev) => (prev === undefined ? prev : { ...prev, shallow: result.shallow }),
+                { revalidate: false },
+              );
+            })
+            .catch(onError);
+        }}
+        onUnshallow={(remote) => {
+          fetchTrigger({ remote, unshallow: true })
+            .then((result) => {
+              void message.success('已解除浅克隆（历史已补全）');
+              void mutateRemotes(
+                (prev) => (prev === undefined ? prev : { ...prev, shallow: result.shallow }),
+                { revalidate: false },
+              );
+            })
             .catch(onError);
         }}
         acting={acting || fetching}

@@ -149,10 +149,20 @@ export async function applyRemoteAction(repoPath: string, action: RemoteAction):
   return getRemotes(repoPath);
 }
 
-/** fetch：remote 缺省拉全部远程；返回发生移动的引用列表（走认证回路）+ fetch 后浅克隆状态（shallow 识别徽标） */
+/** fetch：remote 缺省拉全部远程；支持定制 refspec 与 --unshallow（解除浅克隆）。
+ *  返回发生移动的引用列表（走认证回路）+ fetch 后浅克隆状态（shallow 识别徽标）。 */
 export async function fetchRepo(repoPath: string, body: FetchBody): Promise<FetchResult> {
+  // refspec 与 --all 互斥（core 同判）：给出 refspec 却没点名远程时按缺省远程解析，避免落到 git 的用法报错
+  if (body.refspec !== undefined && body.remote === undefined) {
+    throw new ServiceError('INVALID_QUERY', '定制 refspec 需要同时指定远程', { context: {} });
+  }
   const { updatedRefs } = await withAuth(repoPath, body.remote, (extraConfig) =>
-    fetchRemote(repoPath, { remote: body.remote, extraConfig }),
+    fetchRemote(repoPath, {
+      remote: body.remote,
+      refspec: body.refspec,
+      unshallow: body.unshallow,
+      extraConfig,
+    }),
   );
   return { updatedRefs, shallow: await isShallowRepo(repoPath) };
 }

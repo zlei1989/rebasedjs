@@ -163,6 +163,32 @@ describe('fetchRemote', () => {
       expect(git(repo, ['rev-parse', '--verify', 'FETCH_HEAD'])).toBe(target);
     },
   );
+
+  // 解除浅克隆（F-091）：--unshallow 与 --all 互斥，故未点名远程时按 defaultRemoteName 解析
+  it(
+    'unshallow：浅克隆仓补全历史，isShallowRepo 由 true 转 false',
+    { timeout: RIG_TIMEOUT },
+    async () => {
+      const { bare, defaultBranch } = instantiateRig();
+      pushRemoteCommit(bare, defaultBranch, 'deep.txt', 'deep');
+      const shallow = track(createTmpDir('rebased-core-shallow-'));
+      // 本地路径需显式 file:// 才会走「浅克隆」传输（与夹具一致）
+      execFileSync('git', ['clone', '-q', '--depth', '1', `file://${bare.replace(/\\/g, '/')}`, shallow]);
+      expect(await isShallowRepo(shallow)).toBe(true);
+
+      await fetchRemote(shallow, { unshallow: true });
+      expect(await isShallowRepo(shallow)).toBe(false);
+      // 历史已补全：远端分支的完整历史可见（不再是深度 1）
+      const count = Number(git(shallow, ['rev-list', '--count', `origin/${defaultBranch}`]));
+      expect(count).toBeGreaterThan(1);
+    },
+  );
+
+  it('unshallow：仓库无远程 → 可读中文报错（不落到 git 用法错误）', { timeout: RIG_TIMEOUT }, async () => {
+    const repo = track(createTmpDir('rebased-core-noremote-'));
+    git(repo, ['init', '-q']);
+    await expect(fetchRemote(repo, { unshallow: true })).rejects.toThrow(/未配置远程/);
+  });
 });
 
 describe('pullRemote', () => {

@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { findToken, upsertAccount } from './auth';
 import * as apiIndex from './index';
 import {
@@ -168,6 +168,46 @@ describe('fetch/pull/push 三状态', () => {
       expect(JSON.stringify(await getRemotes(repo))).not.toContain(LEAK_TOKEN);
     },
   );
+
+  it(
+    '定制 refspec：fetchRepo 拉取指定引用（FETCH_HEAD 指向目标提交，GitHub PR 检出同源能力）',
+    { timeout: RIG_TIMEOUT },
+    async () => {
+      const { repo, bare } = makeRemoteRig();
+      // 复刻 core 用例：refs/pull/7/head 指向与远端分支尖不同的提交
+      const other = join(dirname(bare), `other-${Date.now()}`);
+      execFileSync('git', ['clone', '-q', bare, other]);
+      writeFileSync(join(other, 'pr.txt'), 'pr-content');
+      execFileSync('git', ['-C', other, 'add', 'pr.txt']);
+      execFileSync('git', ['-C', other, '-c', 'user.name=t', '-c', 'user.email=t@e', 'commit', '-q', '-m', 'pr commit']);
+      const target = execFileSync('git', ['-C', other, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+      execFileSync('git', ['-C', other, 'push', '-q', 'origin', 'HEAD:refs/pull/7/head']);
+
+      const res = await fetchRepo(repo, { remote: 'origin', refspec: '+refs/pull/7/head' });
+      expect(res.updatedRefs).toEqual([]);
+      expect(execFileSync('git', ['-C', repo, 'rev-parse', 'FETCH_HEAD'], { encoding: 'utf8' }).trim()).toBe(target);
+    },
+  );
+
+  it('定制 refspec 未点名远程 → INVALID_QUERY（refspec 与 --all 互斥）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo } = makeRemoteRig();
+    await expect(fetchRepo(repo, { refspec: '+refs/heads/*:refs/remotes/origin/*' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: expect.stringContaining('需要同时指定远程') as unknown as string,
+    });
+  });
+
+  it('解除浅克隆：unshallow 后 shallow 徽标数据源翻转为 false', { timeout: RIG_TIMEOUT }, async () => {
+    const { bare, defaultBranch } = makeRemoteRig();
+    pushRemoteCommit(bare, defaultBranch, 'deep.txt', 'deep');
+    const shallow = join(dirname(bare), `shallow-${Date.now()}`);
+    execFileSync('git', ['clone', '-q', '--depth', '1', `file://${bare.replace(/\\/g, '/')}`, shallow]);
+    expect((await getRemotes(shallow)).shallow).toBe(true);
+
+    const res = await fetchRepo(shallow, { unshallow: true });
+    expect(res.shallow).toBe(false);
+    expect((await getRemotes(shallow)).shallow).toBe(false);
+  });
 
   it(
     '对端新提交 → pullRepo updated（工作区同步）；再次 pull → up-to-date',

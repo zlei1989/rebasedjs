@@ -113,3 +113,45 @@ describe('RemotePanel fetch', () => {
     expect(onFetch).toHaveBeenCalledWith();
   });
 });
+
+describe('RemotePanel 定制 refspec / 解除浅克隆', () => {
+  it('未传 onFetchSpec 时不渲染「定制 Fetch…」入口', () => {
+    render(<RemotePanel remotes={REMOTES} {...makeHandlers()} />);
+    expect(screen.queryByTestId('fetch-spec-button')).not.toBeInTheDocument();
+  });
+
+  it('定制 Fetch：选远程 + 填 refspec 后以 (remote, refspec) 回调', async () => {
+    const onFetchSpec = vi.fn();
+    render(<RemotePanel remotes={REMOTES} onAction={vi.fn()} onFetch={vi.fn()} onFetchSpec={onFetchSpec} />);
+    fireEvent.click(screen.getByTestId('fetch-spec-button'));
+    // 未选远程/未填 refspec 时确定禁用
+    expect(screen.getByRole('button', { name: /确\s*定/ })).toBeDisabled();
+
+    fireEvent.mouseDown(screen.getByTestId('fetch-spec-remote'));
+    const options = await screen.findAllByText('upstream');
+    fireEvent.click(options[options.length - 1]);
+    fireEvent.change(screen.getByTestId('fetch-spec-refspec'), {
+      target: { value: '  +refs/pull/7/head:refs/remotes/origin/pr-7  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }));
+    expect(onFetchSpec).toHaveBeenCalledWith('upstream', '+refs/pull/7/head:refs/remotes/origin/pr-7');
+  });
+
+  it('shallow 时渲染「解除浅克隆」并按首个远程名回调；未传 onUnshallow 则不渲染', () => {
+    const onUnshallow = vi.fn();
+    const { unmount } = render(
+      <RemotePanel
+        remotes={{ remotes: REMOTES.remotes, shallow: true }}
+        onAction={vi.fn()}
+        onFetch={vi.fn()}
+        onUnshallow={onUnshallow}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('unshallow-button'));
+    expect(onUnshallow).toHaveBeenCalledWith('origin');
+    unmount();
+
+    render(<RemotePanel remotes={{ remotes: REMOTES.remotes, shallow: true }} {...makeHandlers()} />);
+    expect(screen.queryByTestId('unshallow-button')).not.toBeInTheDocument();
+  });
+});

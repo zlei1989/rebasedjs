@@ -235,7 +235,13 @@ export const remoteActionSchema = z.discriminatedUnion('action', [
 export type RemoteAction = z.infer<typeof remoteActionSchema>;
 
 /** fetch 请求体：remote 缺省表示全部远程 */
-export const fetchBodySchema = z.object({ remote: z.string().optional() });
+export const fetchBodySchema = z.object({
+  remote: z.string().optional(),
+  /** 定制 refspec（如 `+refs/pull/7/head:refs/remotes/origin/pr-7`）：需与 remote 同时给出（git 侧与 --all 互斥） */
+  refspec: z.string().min(1).optional(),
+  /** 解除浅克隆（git fetch --unshallow）：浅克隆仓的历史截断徽标据此消失 */
+  unshallow: z.boolean().optional(),
+});
 export type FetchBody = z.infer<typeof fetchBodySchema>;
 
 /** pull 请求体：remote 缺省取当前分支上游；rebase 对应 git pull --rebase */

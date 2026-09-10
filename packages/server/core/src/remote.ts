@@ -30,8 +30,14 @@ const TRANSFER_TIMEOUT_MS = 120_000;
  *  例如 push 空 ref 删除远程标签时缺远程，git 会把 `:refs/tags/x` 当成仓库地址去连 ssh，
  *  报出 `ssh: connect to host  port 22` 这类用户无法理解的错误（见 D-26）。 */
 export async function defaultRemoteName(cwd: string): Promise<string | undefined> {
-  const branch = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd })).stdout.trim();
-  if (branch !== 'HEAD') {
+  // 空仓（unborn HEAD）下 rev-parse --abbrev-ref HEAD 退出码 1——远程解析不应因此失败，按「无当前分支」处理
+  let branch: string | undefined;
+  try {
+    branch = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd })).stdout.trim();
+  } catch {
+    branch = undefined;
+  }
+  if (branch !== undefined && branch !== 'HEAD') {
     try {
       const { stdout } = await runGit(['config', '--get', `branch.${branch}.remote`], { cwd });
       const name = stdout.trim();
@@ -87,19 +93,35 @@ export async function setRemoteUrl(cwd: string, name: string, url: string): Prom
  */
 export async function fetchRemote(
   cwd: string,
-  opts: { remote?: string; refspec?: string; extraConfig?: string[]; timeoutMs?: number },
+  opts: { remote?: string; refspec?: string; unshallow?: boolean; extraConfig?: string[]; timeoutMs?: number },
 ): Promise<{ updatedRefs: string[] }> {
   if (opts.refspec !== undefined && opts.remote === undefined) {
     throw new Error('fetchRemote: refspec 需要显式 remote（refspec 与 --all 互斥）');
   }
   const before = await takeRefsSnapshot(cwd);
   const args = ['fetch'];
-  if (opts.remote !== undefined) args.push(opts.remote);
-  else args.push('--all');
-  if (opts.refspec !== undefined) args.push(opts.refspec);
+  if (opts.unshallow === true) {
+    // --unshallow 与 --all 语义互斥：解除浅克隆必须点名远程（缺省按 defaultRemoteName 解析，见 D-26 同源口径）
+    const remote = opts.remote ?? (await requireDefaultRemoteFor(cwd, '解除浅克隆'));
+    args.push('--unshallow', remote);
+    if (opts.refspec !== undefined) args.push(opts.refspec);
+  } else {
+    if (opts.remote !== undefined) args.push(opts.remote);
+    else args.push('--all');
+    if (opts.refspec !== undefined) args.push(opts.refspec);
+  }
   await runGit(args, { cwd, extraConfig: opts.extraConfig, timeoutMs: opts.timeoutMs ?? TRANSFER_TIMEOUT_MS });
   const after = await takeRefsSnapshot(cwd);
   return { updatedRefs: diffRefsSnapshots(before, after) };
+}
+
+/** 解析缺省远程名；解析不到时抛可读中文错误（避免落到 git 的「refspec 当仓库地址」报错） */
+async function requireDefaultRemoteFor(cwd: string, what: string): Promise<string> {
+  const remote = await defaultRemoteName(cwd);
+  if (remote === undefined) {
+    throw new Error(`仓库未配置远程，无法${what}`);
+  }
+  return remote;
 }
 
 /** HEAD 哈希（无提交的空仓库返回 null） */

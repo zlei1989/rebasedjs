@@ -75,7 +75,7 @@
 | 9 | RebaseDialog（内嵌模态） | P3 | LogPage 内 | 更多「变基」 | F-076~F-080（5） | rebase | ✅ 5/5 |
 | 10 | StashPanel | P2 | `/repos/:id/stashes` | 顶栏「贮藏」 | F-081~F-085（5） | stash | ✅ 5/5 |
 | 11 | TagPanel | P3 | `/repos/:id/tags` | 更多「标签」 | F-086~F-088（3） | tag | ✅ 3/3 |
-| 12 | RemotePanel | P3 | `/repos/:id/remotes` | 更多「远程管理」 | F-089~F-092（4） | remote | 待测 |
+| 12 | RemotePanel | P3 | `/repos/:id/remotes` | 更多「远程管理」 | F-089~F-092（4） | remote | ✅ 4/4 |
 | 13 | PushDialog（内嵌模态） | P3 | LogPage 内 | 更多「推送」 | F-093~F-095（3） | push | 待测 |
 | 14 | PullDialog（内嵌模态） | P3 | LogPage 内 | 更多「拉取」 | F-096~F-097（2） | pull | 待测 |
 | 15 | UpdateProjectDialog（内嵌模态） | P3 | LogPage 内 | 更多「更新项目」 | F-098~F-100（3） | update | 待测 |
@@ -301,10 +301,10 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-089 | 远程添加/删除/编辑 | 添加新远程 → 编辑 setUrl（同写 fetch/push）→ 删除（Popconfirm） | 各操作正确（CLI `remote -v` 互证） | 待测 | remote-01.png |
-| F-090 | fetch（spec/全远程/单远程） | 顶部 fetch 全部 → 行内单远程 → 定制 spec | updatedRefs 展示 + `refs.changed` 推送列表刷新（CLI） | 待测 | remote-02.png |
-| F-091 | shallow 识别 / unshallow | 打开 `rebased-smoke-shallow` 远程页 → 观察徽标 → unshallow | 顶部「浅克隆（历史截断）」徽标；unshallow 后消失（CLI） | 待测 | remote-03.png |
-| F-092 | HTTPS 认证对话框 / token 存储 | 向需认证远端操作触发 401（依赖外部凭据服务；否则跳过） | AuthDialog 弹出 → token 写回账户存储 → retry 重放成功 | 待测 | remote-04.png |
+| F-089 | 远程添加/删除/编辑 | 添加新远程 → 编辑 setUrl（同写 fetch/push）→ 删除（Popconfirm） | 各操作正确（CLI `remote -v` 互证） | ✅ | remote-01.png（添加 `smoke-aux` → `file://…/smoke-remote-aux`，编辑改为 `…-aux2`；CLI 逐步互证：`remote -v` 出现双行（fetch/push 同改写）、删除确认「确定删除远程 smoke-aux？」后仅剩 origin） |
+| F-090 | fetch（spec/全远程/单远程） | 顶部 fetch 全部 → 行内单远程 → 定制 spec | updatedRefs 展示 + `refs.changed` 推送列表刷新（CLI） | ✅ | remote-02.png（「Fetch 全部」→ toast「fetch 完成，更新 1 个引用」，CLI：`origin/fetch-probe-r8` 与远端 SHA 一致（d97318b）；行内单远程 → 「更新 0 个引用」；「定制 Fetch…」refspec `+refs/pull/9/head:refs/remotes/origin/pr-9` → CLI 建立 `origin/pr-9` 且与远端 `refs/pull/9/head` 同 SHA；分支页已显示新远端分支，remote-02b.png 为定制 Modal）。注：定制 spec 入口为本轮新增（审计声称「既有」但契约/UI 实缺，见 §5.11 D-28） |
+| F-091 | shallow 识别 / unshallow | 打开 `rebased-smoke-shallow` 远程页 → 观察徽标 → unshallow | 顶部「浅克隆（历史截断）」徽标；unshallow 后消失（CLI） | ✅ | remote-03b.png（浅克隆态：橙色「浅克隆（历史截断）」徽标 + 「解除浅克隆」按钮）→ remote-03.png（点击后 toast「已解除浅克隆（历史已补全）」、徽标即时消失）；CLI：`rev-parse --is-shallow-repository` true→false、`rev-list --count` 1→17。注：徽标消失依赖 fetch 响应 shallow 回写缓存（本轮修复，见 §5.11 D-29） |
+| F-092 | HTTPS 认证对话框 / token 存储 | 向需认证远端操作触发 401（依赖外部凭据服务；否则跳过） | AuthDialog 弹出 → token 写回账户存储 → retry 重放成功 | ✅ | remote-04.png（本地 401 服务 `http://127.0.0.1:9418/auth.git`：拉取该远程 → 401 → 「需要认证」对话框（主机预填 `127.0.0.1`）→ 填账户/令牌 → 「保存并重试」；CLI：`config.json` 的 `auth.accounts` 落盘 `{host:127.0.0.1, account:smoke-tester, token:…}`；401 服务日志显示重放请求携 `Authorization: Bearer smoke-token-f092`（token 注入端到端证据））。边界：服务恒 401，故「重放成功」以「重放确实发生且携带新凭据」为证，端到端成功需真实可认证 git 服务（与 F-025 同一边界）；冒烟后已删除该临时账户与远程 |
 
 ### 4.13 PushDialog（slug `push`；P3，内嵌模态）
 
@@ -526,6 +526,7 @@
 | R5 | 2026-09-10 | F-076~F-080（RebaseDialog 5 行：onto/交互式 todo/continue·skip·abort/auto-squash/单提交编辑四动作） | ✅ 5（RebaseDialog 5/5 收官） | D-23 修复并复验（见 §5.8）；夹具纠偏 P-11（右键定位竞态） |
 | R6 | 2026-09-11 | F-081~F-085（StashPanel 5 行：save 三选项 / pop·apply·drop / 转分支 / Unstash As… / 查看差异） | ✅ 5（StashPanel 5/5 收官） | D-24（贮藏冲突无理由提示）、D-25（「查看差异」弹窗正文恒空白）修复并复验（见 §5.9）；环境说明 E-01（Next dev 代码框多字节 panic） |
 | R7 | 2026-09-11 | F-086~F-088（TagPanel 3 行：创建轻量/附注、删除本地/远程、推送单个/全部） | ✅ 3（TagPanel 3/3 收官） | D-26（缺省远程未解析：删除远程 500 ssh 空 host）、D-27（推送单个 500 且远程类动作无成功回执）修复并复验（见 §5.10）；夹具：file:// 裸远端 `D:\zhanglei1120\Github\smoke-remote` |
+| R8 | 2026-09-11 | F-089~F-092（RemotePanel 4 行：远程 CRUD / fetch 三形态 / shallow·unshallow / 401 认证回路） | ✅ 4（RemotePanel 4/4 收官） | D-28（审计声称既有、实际缺失的 fetch refspec 与 unshallow 入口）、D-29（解除浅克隆后徽标不刷新）修复并复验（见 §5.11）；F-092 用本地恒 401 服务（`http://127.0.0.1:9418`）触发真实认证回路 |
 
 ### 5.1 R1 缺陷登记（全部已修复 + 复验）
 
@@ -589,7 +590,16 @@
 | D-26 | 标签行「删除远程」确认后整条操作失败：`git push :refs/tags/v9.9.9-smoke 退出码 128：ssh: connect to host  port 22: Connection refused`——对端标签纹丝不动，用户看到一条连「空主机」的 ssh 报错——F-087 | 删除远程标签走 `git push :refs/tags/<name>`（push 空 ref）。远程名只在调用方显式给出时才拼进参数，而 UI 三个按钮一律不传 `remote`，于是 git 收到单个参数 `:refs/tags/<name>` 后按「位置参数 = 仓库地址」解析，把它当成 URL（空 host）去连 ssh | core 新增 `defaultRemoteName`（分支 `branch.<name>.remote` → 约定 `origin` → 唯一远程，解析不到给可读中文错）；`deleteRemoteTag` 改用 `git push <remote> --delete refs/tags/<name>`（显式远程 + `--delete` 语义，不再依赖位置参数猜测）；api `resolveRemote` 统一解析并交给 `withAuth`（认证注入同样需要远程名），无远程 → `INVALID_QUERY`「仓库未配置远程…」 | 复跑 F-087：确认框后 toast「已删除远程标签 v9.9.9-smoke」，`ls-remote --tags origin` 清空而本地标签保留（tag-02.png）；core 新增 3 用例（缺省解析删除成功／无远程可读报错／`defaultRemoteName` 三级回退）、api 新增 2 用例（UI 真实调用形态删除成功／无远程 → INVALID_QUERY） |
 | D-27 | 标签行「推送」确认后 500：`git push refs/tags/v9.9.9-smoke 退出码 128：fatal: 'refs/tags/v9.9.9-smoke' does not appear to be a git repository`（当前分支无上游时必现）；另外「推送」「推送全部」「删除远程」成功后界面**毫无反馈**——本地列表本来就不变，用户无法判断是否生效——F-088 | 同 D-26 的「远程名未解析」根因（`pushTag`/`pushAllTags` 同样只在显式传 remote 时才拼远程名），只是报错形态不同；反馈缺失则是两个容器只注册了失败提示（`message.error`），远程类动作没有成功回执 | core `pushTag`/`pushAllTags` 同样经 `requireDefaultRemote` 解析（推送到分支上游或 origin）；api `resolveRemote` 复用于 push/pushAll/deleteRemote；web-next 与 web-koa 容器对 `push`/`pushAll`/`deleteRemote` 增加成功回执（「标签推送完成：x」「全部标签推送完成」「已删除远程标签 x」） | 复跑 F-088：单推 → toast「标签推送完成：v9.9.9-smoke」且 `ls-remote` 仅该标签；「推送全部」→ toast「全部标签推送完成」且 `ls-remote` = v1.0 + v9.9.9-smoke（tag-03.png）；core 新增 2 用例（无上游分支缺省推送成功／无远程可读报错）、api 新增 1 用例（无上游 + 不传 remote 推送成功） |
 
+### 5.11 R8 缺陷登记（已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-28 | 审计文档称「远程 CRUD（含 fetch spec/unshallow）」且「unshallow 经 fetch 端点既有」，实际全链路皆无入口：契约 `fetchBodySchema` 只有 `remote`、api 不透传 refspec/unshallow、ui 无任何定制 spec 或解除浅克隆控件——F-090 的「定制 spec」与 F-091 的「unshallow 后徽标消失」在界面上无从触发 | core `fetchRemote` 本就支持 `refspec`；但契约→api→client→ui 四层未打通，审计按 core 能力误记为产品能力 | 契约 `fetchBodySchema` 增 `refspec`（非空）与 `unshallow`；api `fetchRepo` 透传两者并在「给 refspec 未给远程」时抛 `INVALID_QUERY`（refspec 与 `--all` 互斥）；core `fetchRemote` 支持 `--unshallow`（未点名远程时按 `defaultRemoteName` 解析，与 D-26 同源口径）；ui RemotePanel 增「定制 Fetch…」Modal（远程 Select + refspec 输入，缺回调不渲染）与「解除浅克隆」按钮 | F-090：定制 refspec `+refs/pull/9/head:refs/remotes/origin/pr-9` → CLI 建立 `origin/pr-9` 且与远端 `refs/pull/9/head` 同 SHA（remote-02.png/02b.png）；F-091：CLI `is-shallow-repository` true→false、提交数 1→17（remote-03.png/03b.png）；用例：contracts +3（schema 接受/拒绝）、core +2（unshallow 成功/无远程可读报错）、api +3（定制 refspec、refspec 缺远程 → INVALID_QUERY、unshallow 后 shallow 翻转为 false）、ui +4（定制 Modal 回调与禁用态、解除按钮回调与缺省隐藏） |
+| D-29 | 「解除浅克隆」执行成功（CLI 已 `is-shallow-repository=false`）后，页面橙色「浅克隆（历史截断）」徽标与按钮**仍在**，需刷新页面才消失——F-091 期望「unshallow 后消失」 | fetch 响应体本就带回 fetch 后的 `shallow` 状态，但两个远端页容器只把结果做成 toast，未回写 `useRemotes` 缓存；而仪表盘式徽标数据源正是该缓存的 `shallow` 字段（远程配置本身不产 watcher 事件，等不到自动重验证） | web-next 与 web-koa 容器取用 `useRemotes` 的 `mutate`，在 fetch/定制 fetch/unshallow 成功后以响应体的 `shallow` 回写缓存（`revalidate: false`，不再多发一次请求） | 复跑 F-091：点击后徽标**即时**消失、按钮随条件卸载（remote-03.png），CLI 同步 false；再次造浅克隆复现前置态仍显示徽标（remote-03b.png） |
+| — | **P3 说明（非缺陷，本轮登记不改）**：401 认证重试回路（AuthDialog + upsertAccount + 重放）目前只在日志页容器装配；远程管理页的 fetch 遇 401 时仅弹「认证失败，请配置该主机的访问令牌」提示（可去设置页存令牌后重试），不弹 AuthDialog。F-092 按行内路径（日志页「拉取」）验证通过，此处记为后续统一装配的 P3 缺口 | | | |
+
 ### 5.7 R4 缺陷登记（已修复 + 复验）
+
 
 | 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
 |------|----------------|------|------|------|

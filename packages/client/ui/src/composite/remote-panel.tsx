@@ -1,12 +1,13 @@
 /**
  * 远程面板（对照 Java GitConfigureRemotesDialog + 远程操作聚合）：
- *  顶部工具条（添加远程 + fetch 全部）；
+ *  顶部工具条（添加远程 + fetch 全部 + 定制 fetch…——refspec 需点名远程，见契约 fetchBody.refspec）；
  *  远程列表（空态 EmptyState）：行 = name + fetchUrl + 操作（fetch/编辑/删除——删除走 Popconfirm）；
+ *  浅克隆徽标 + 「解除浅克隆」（git fetch --unshallow，成功后徽标消失）；
  *  添加远程 Modal（name+url 双输入）；编辑远程 Modal（单 url 输入，预填当前 fetchUrl，契约 setUrl 同时改写 fetch/push URL）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Input, Modal, Popconfirm, Select, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { RemoteAction, RemoteInfo, RemoteList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -15,6 +16,10 @@ export interface RemotePanelProps {
   remotes: RemoteList;
   onAction: (a: RemoteAction) => void;
   onFetch: (remote?: string) => void;
+  /** 定制 refspec fetch（refspec 必填、远程必选——契约侧与 --all 互斥）；缺省不渲染「定制 Fetch…」 */
+  onFetchSpec?: (remote: string, refspec: string) => void;
+  /** 解除浅克隆（git fetch --unshallow）；缺省不渲染「解除浅克隆」 */
+  onUnshallow?: (remote: string) => void;
   acting?: boolean;
 }
 
@@ -159,8 +164,69 @@ function RemoteRow({
   );
 }
 
-export function RemotePanel({ remotes, onAction, onFetch, acting }: RemotePanelProps): React.ReactNode {
+/** 定制 refspec fetch Modal：远程必选（Select）+ refspec 必填（Input）；关闭复位 */
+function FetchSpecModal({
+  open,
+  remotes,
+  acting,
+  onSubmit,
+  onClose,
+}: {
+  open: boolean;
+  remotes: RemoteInfo[];
+  acting?: boolean;
+  onSubmit: (remote: string, refspec: string) => void;
+  onClose: () => void;
+}): React.ReactNode {
+  const [remote, setRemote] = useState<string | undefined>(undefined);
+  const [refspec, setRefspec] = useState('');
+
+  const close = (): void => {
+    setRemote(undefined);
+    setRefspec('');
+    onClose();
+  };
+
+  return (
+    <Modal
+      title="定制 Fetch（refspec）"
+      open={open}
+      okText="确定"
+      cancelText="取消"
+      confirmLoading={acting}
+      okButtonProps={{ disabled: remote === undefined || refspec.trim() === '' }}
+      onOk={() => {
+        if (remote === undefined || refspec.trim() === '') return;
+        onSubmit(remote, refspec.trim());
+        close();
+      }}
+      onCancel={close}
+    >
+      <Flex vertical gap={12}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          按 refspec 拉取指定引用（如 +refs/pull/7/head:refs/remotes/origin/pr-7）；refspec 需指定远程。
+        </Typography.Text>
+        <Select
+          data-testid="fetch-spec-remote"
+          placeholder="选择远程"
+          value={remote}
+          options={remotes.map((r) => ({ value: r.name, label: r.name }))}
+          onChange={setRemote}
+        />
+        <Input
+          data-testid="fetch-spec-refspec"
+          placeholder="refspec（如 +refs/heads/*:refs/remotes/origin/*）"
+          value={refspec}
+          onChange={(e) => setRefspec(e.target.value)}
+        />
+      </Flex>
+    </Modal>
+  );
+}
+
+export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshallow, acting }: RemotePanelProps): React.ReactNode {
   const [addOpen, setAddOpen] = useState(false);
+  const [specOpen, setSpecOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<RemoteInfo | null>(null);
 
   return (
@@ -178,15 +244,30 @@ export function RemotePanel({ remotes, onAction, onFetch, acting }: RemotePanelP
         <Button data-testid="fetch-all-button" loading={acting} onClick={() => onFetch()}>
           Fetch 全部
         </Button>
+        {onFetchSpec !== undefined && (
+          <Button data-testid="fetch-spec-button" onClick={() => setSpecOpen(true)}>
+            定制 Fetch…
+          </Button>
+        )}
       </Flex>
 
       <Card size="small" title={`远程列表（${remotes.remotes.length}）`}>
-        {/* shallow 识别徽标：浅克隆仓库提示（unshallow 能力经 fetch 端点） */}
+        {/* shallow 识别徽标 + 解除浅克隆：浅克隆仓库提示，解除走 fetch --unshallow（成功后徽标随之消失） */}
         {remotes.shallow && (
-          <Flex style={{ marginBottom: 8 }}>
+          <Flex align="center" gap={8} style={{ marginBottom: 8 }} wrap>
             <Tag color="orange" data-testid="shallow-badge">
               浅克隆（历史截断）
             </Tag>
+            {onUnshallow !== undefined && (
+              <Button
+                size="small"
+                data-testid="unshallow-button"
+                loading={acting}
+                onClick={() => onUnshallow(remotes.remotes[0]?.name ?? '')}
+              >
+                解除浅克隆
+              </Button>
+            )}
           </Flex>
         )}
         {remotes.remotes.length === 0 ? (
@@ -212,6 +293,15 @@ export function RemotePanel({ remotes, onAction, onFetch, acting }: RemotePanelP
         onAction={onAction}
         onClose={() => setAddOpen(false)}
       />
+      {onFetchSpec !== undefined && (
+        <FetchSpecModal
+          open={specOpen}
+          remotes={remotes.remotes}
+          acting={acting}
+          onSubmit={onFetchSpec}
+          onClose={() => setSpecOpen(false)}
+        />
+      )}
       {/* 编辑 Modal 以 key 按目标重挂载：切换编辑对象时 url 初始值随之刷新为对应 fetchUrl */}
       {editTarget !== null && (
         <EditRemoteModal

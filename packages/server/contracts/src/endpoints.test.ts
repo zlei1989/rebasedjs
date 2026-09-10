@@ -507,8 +507,17 @@ describe('fetchBodySchema（fetch 请求体）', () => {
     expect(fetchBodySchema.parse({})).toEqual({});
     expect(fetchBodySchema.parse({ remote: 'origin' })).toEqual({ remote: 'origin' });
   });
-  it('拒绝非字符串 remote', () => {
+  it('接受 refspec 与 unshallow（F-090 定制 spec / F-091 解除浅克隆）', () => {
+    expect(fetchBodySchema.parse({ remote: 'origin', refspec: '+refs/pull/7/head' })).toEqual({
+      remote: 'origin',
+      refspec: '+refs/pull/7/head',
+    });
+    expect(fetchBodySchema.parse({ remote: 'origin', unshallow: true })).toEqual({ remote: 'origin', unshallow: true });
+  });
+  it('拒绝非字符串 remote / 空 refspec / 非布尔 unshallow', () => {
     expect(() => fetchBodySchema.parse({ remote: 1 })).toThrow();
+    expect(() => fetchBodySchema.parse({ remote: 'origin', refspec: '' })).toThrow();
+    expect(() => fetchBodySchema.parse({ remote: 'origin', unshallow: 'yes' })).toThrow();
   });
 });
 
