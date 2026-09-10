@@ -4,6 +4,7 @@
  * 并以 P3-A 的 120s 传输超时兜底（防网络停滞类挂起，见 remote.ts 同款注释）。
  */
 import { GitExitError, runGit } from './exec';
+import { defaultRemoteName } from './remote';
 
 export interface CoreTag {
   name: string;
@@ -14,6 +15,15 @@ export interface CoreTag {
 
 /** 传输操作统一超时兜底（与 remote.ts 同源策略）：120s */
 const TRANSFER_TIMEOUT_MS = 120_000;
+
+/** 解析缺省远程名；解析不到时抛可读中文错误（避免落到 git 的「refspec 当仓库地址」报错） */
+async function requireDefaultRemote(cwd: string, what: string): Promise<string> {
+  const remote = await defaultRemoteName(cwd);
+  if (remote === undefined) {
+    throw new Error(`仓库未配置远程，无法${what}`);
+  }
+  return remote;
+}
 
 /**
  * 标签列表：git for-each-ref --format=%(refname:short)%00%(objectname)%00%(subject)%00%(objecttype) refs/tags。
@@ -62,9 +72,10 @@ export async function pushTag(
   cwd: string,
   opts: { name: string; remote?: string; extraConfig?: string[] },
 ): Promise<{ status: 'pushed' | 'rejected' | 'up-to-date' }> {
-  const args = ['push'];
-  if (opts.remote !== undefined) args.push(opts.remote);
-  args.push(`refs/tags/${opts.name}`);
+  // remote 缺省时按 defaultRemoteName 解析：不点名远程时 git 会把 refspec 当仓库地址
+  // （`fatal: 'refs/tags/x' does not appear to be a git repository`，当前分支无上游时必现——D-26/D-27）
+  const remote = opts.remote ?? (await requireDefaultRemote(cwd, `推送标签 ${opts.name}`));
+  const args = ['push', remote, `refs/tags/${opts.name}`];
   try {
     const { stdout, stderr } = await runGit(args, {
       cwd,
@@ -88,9 +99,8 @@ export async function pushAllTags(
   cwd: string,
   opts: { remote?: string; extraConfig?: string[] },
 ): Promise<{ status: 'pushed' | 'rejected' | 'up-to-date' }> {
-  const args = ['push'];
-  if (opts.remote !== undefined) args.push(opts.remote);
-  args.push('--tags');
+  const remote = opts.remote ?? (await requireDefaultRemote(cwd, '推送全部标签'));
+  const args = ['push', remote, '--tags'];
   try {
     const { stdout, stderr } = await runGit(args, {
       cwd,
@@ -107,15 +117,19 @@ export async function pushAllTags(
 }
 
 /**
- * 删除远程标签：git push <remote> :refs/tags/<name>（push 空 ref 即删除对端标签）。
+ * 删除远程标签：git push <remote> --delete refs/tags/<name>（push 空 ref 即删除对端标签）。
+ * remote 缺省时按 defaultRemoteName 解析（分支上游 → origin → 唯一远程），解析不到则给可读报错——
+ * 不能让 git 把 `:refs/tags/<name>` 当仓库地址（D-26：报成 `ssh: connect to host  port 22`）。
  * 远程不存在/认证失败原样抛 GitExitError（api 层 withAuth 认证回路处理）。
  */
 export async function deleteRemoteTag(
   cwd: string,
   opts: { name: string; remote?: string; extraConfig?: string[] },
 ): Promise<void> {
-  const args = ['push'];
-  if (opts.remote !== undefined) args.push(opts.remote);
-  args.push(`:refs/tags/${opts.name}`);
-  await runGit(args, { cwd, extraConfig: opts.extraConfig, timeoutMs: TRANSFER_TIMEOUT_MS });
+  const remote = opts.remote ?? (await requireDefaultRemote(cwd, `删除远程标签 ${opts.name}`));
+  await runGit(['push', remote, '--delete', `refs/tags/${opts.name}`], {
+    cwd,
+    extraConfig: opts.extraConfig,
+    timeoutMs: TRANSFER_TIMEOUT_MS,
+  });
 }

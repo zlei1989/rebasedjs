@@ -34,7 +34,15 @@ export function RepoTagsPage(): React.ReactNode {
         key={repoId}
         tags={tags}
         onAction={(action) => {
-          tagAction(action).catch(onError);
+          tagAction(action)
+            .then(() => {
+              // 远程类动作不改本地列表（「删除远程」后列表原样、「推送」成功后也只是远端多一条）——
+              // 无回执会让用户以为点击没生效，故明确提示（D-27）
+              if (action.action === 'deleteRemote') void message.success(`已删除远程标签 ${action.name}`);
+              else if (action.action === 'push') void message.success(`标签推送完成：${action.name}`);
+              else if (action.action === 'pushAll') void message.success('全部标签推送完成');
+            })
+            .catch(onError);
         }}
         acting={acting}
       />

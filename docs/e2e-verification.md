@@ -74,7 +74,7 @@
 | 8 | MergeDialog（页面化） | P2 | `/repos/:id/merge` | 顶栏「合并」 | F-073~F-075（3） | merge | ✅ 3/3 |
 | 9 | RebaseDialog（内嵌模态） | P3 | LogPage 内 | 更多「变基」 | F-076~F-080（5） | rebase | ✅ 5/5 |
 | 10 | StashPanel | P2 | `/repos/:id/stashes` | 顶栏「贮藏」 | F-081~F-085（5） | stash | ✅ 5/5 |
-| 11 | TagPanel | P3 | `/repos/:id/tags` | 更多「标签」 | F-086~F-088（3） | tag | 待测 |
+| 11 | TagPanel | P3 | `/repos/:id/tags` | 更多「标签」 | F-086~F-088（3） | tag | ✅ 3/3 |
 | 12 | RemotePanel | P3 | `/repos/:id/remotes` | 更多「远程管理」 | F-089~F-092（4） | remote | 待测 |
 | 13 | PushDialog（内嵌模态） | P3 | LogPage 内 | 更多「推送」 | F-093~F-095（3） | push | 待测 |
 | 14 | PullDialog（内嵌模态） | P3 | LogPage 内 | 更多「拉取」 | F-096~F-097（2） | pull | 待测 |
@@ -291,9 +291,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-086 | 创建标签（含附注） | 创建 Modal → name + ref（默认 HEAD）→ message 非空即附注 | 列表出现新标签；附注/轻量区分正确（CLI `tag` 互证） | 待测 | tag-01.png |
-| F-087 | 删除标签（本地/远程） | 行内 Popconfirm 删除本地 → 再测「删除远程」 | 本地删除成功；删除远程 = push 空 ref（CLI 远端互证） | 待测 | tag-02.png |
-| F-088 | 推送标签（单个/全部） | 行内推送单个 → 页头「推送全部」（Popconfirm） | 远端出现标签（CLI `ls-remote` 互证）；认证回路正常 | 待测 | tag-03.png |
+| F-086 | 创建标签（含附注） | 创建 Modal → name + ref（默认 HEAD）→ message 非空即附注 | 列表出现新标签；附注/轻量区分正确（CLI `tag` 互证） | ✅ | tag-01.png（建附注标签 `v9.9.9-smoke`（附注行带「附注」徽标 + 附注全文）与轻量标签 `v9.9.9-light`（ref 填 `HEAD~2`）；CLI：`for-each-ref` 显示前者 `tag`→143857d（=HEAD）、后者 `commit`→c76050f（=HEAD~2），`tag -l -n` 附注正文一致；tag-01b.png 为创建对话框填写态） |
+| F-087 | 删除标签（本地/远程） | 行内 Popconfirm 删除本地 → 再测「删除远程」 | 本地删除成功；删除远程 = push 空 ref（CLI 远端互证） | ✅ | tag-02.png（本地删 `v9.9.9-light` → 列表 3→2、CLI `tag -l` 同步；「删除远程」确认框「确定从远程删除标签 v9.9.9-smoke？」→ toast「已删除远程标签 v9.9.9-smoke」、`ls-remote --tags origin` 清空而本地标签保留。注：首轮此处 500（D-26），修复后复验通过） |
+| F-088 | 推送标签（单个/全部） | 行内推送单个 → 页头「推送全部」（Popconfirm） | 远端出现标签（CLI `ls-remote` 互证）；认证回路正常 | ✅ | tag-03.png（单推 `v9.9.9-smoke` → toast「标签推送完成：v9.9.9-smoke」、远端仅该标签；「推送全部标签到远程仓库？」→ toast「全部标签推送完成」、`ls-remote --tags origin` = v1.0 + v9.9.9-smoke。注：首轮单推 500（D-27），修复后复验通过；本机为 file:// 裸远端，认证回路（token 注入）由 F-092 同级通道与 api 单测覆盖） |
 
 ### 4.12 RemotePanel（slug `remote`；P3）
 
@@ -525,6 +525,7 @@
 | R4 | 2026-09-10 | F-069~F-072（BranchPanel 余下 4 行）+ F-073~F-075（MergeDialog 3 行） | ✅ 7（BranchPanel 11/11、MergeDialog 3/3 收官） | D-22 修复并复验（见 §5.7）；远端分叉/新分支由 rebased-smoke-other 克隆构造；冲突仓停在 merge 冲突态供 F-114~F-119 复用 |
 | R5 | 2026-09-10 | F-076~F-080（RebaseDialog 5 行：onto/交互式 todo/continue·skip·abort/auto-squash/单提交编辑四动作） | ✅ 5（RebaseDialog 5/5 收官） | D-23 修复并复验（见 §5.8）；夹具纠偏 P-11（右键定位竞态） |
 | R6 | 2026-09-11 | F-081~F-085（StashPanel 5 行：save 三选项 / pop·apply·drop / 转分支 / Unstash As… / 查看差异） | ✅ 5（StashPanel 5/5 收官） | D-24（贮藏冲突无理由提示）、D-25（「查看差异」弹窗正文恒空白）修复并复验（见 §5.9）；环境说明 E-01（Next dev 代码框多字节 panic） |
+| R7 | 2026-09-11 | F-086~F-088（TagPanel 3 行：创建轻量/附注、删除本地/远程、推送单个/全部） | ✅ 3（TagPanel 3/3 收官） | D-26（缺省远程未解析：删除远程 500 ssh 空 host）、D-27（推送单个 500 且远程类动作无成功回执）修复并复验（见 §5.10）；夹具：file:// 裸远端 `D:\zhanglei1120\Github\smoke-remote` |
 
 ### 5.1 R1 缺陷登记（全部已修复 + 复验）
 
@@ -580,6 +581,13 @@
 | 编号 | 现象 | 处置 |
 |------|------|------|
 | E-01 | 冒烟中 Next dev server（16.2.7 Turbopack）曾整体崩溃：Rust panic `end byte index 93 is not a char boundary`（`next-code-frame/src/highlight.rs:1011`）——为**含中文的源码行**渲染 500 错误代码框时按字节切分多字节字符 | 与产品代码无关（dev-only 报错渲染路径）；重启 `pnpm dev` 后恢复。副作用：崩溃/重启期间浏览器标签的 HMR 连接损坏，页面只剩 SSR 外壳（`.ant-app` 无子节点、`body.innerText` 为空），表现为「白屏但接口全 200」——**处置：关闭标签重新导航**即可（另注：用 `127.0.0.1:3030` 访问时 HMR WebSocket 握手失败，须用 `http://localhost:3030`） |
+
+### 5.10 R7 缺陷登记（已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-26 | 标签行「删除远程」确认后整条操作失败：`git push :refs/tags/v9.9.9-smoke 退出码 128：ssh: connect to host  port 22: Connection refused`——对端标签纹丝不动，用户看到一条连「空主机」的 ssh 报错——F-087 | 删除远程标签走 `git push :refs/tags/<name>`（push 空 ref）。远程名只在调用方显式给出时才拼进参数，而 UI 三个按钮一律不传 `remote`，于是 git 收到单个参数 `:refs/tags/<name>` 后按「位置参数 = 仓库地址」解析，把它当成 URL（空 host）去连 ssh | core 新增 `defaultRemoteName`（分支 `branch.<name>.remote` → 约定 `origin` → 唯一远程，解析不到给可读中文错）；`deleteRemoteTag` 改用 `git push <remote> --delete refs/tags/<name>`（显式远程 + `--delete` 语义，不再依赖位置参数猜测）；api `resolveRemote` 统一解析并交给 `withAuth`（认证注入同样需要远程名），无远程 → `INVALID_QUERY`「仓库未配置远程…」 | 复跑 F-087：确认框后 toast「已删除远程标签 v9.9.9-smoke」，`ls-remote --tags origin` 清空而本地标签保留（tag-02.png）；core 新增 3 用例（缺省解析删除成功／无远程可读报错／`defaultRemoteName` 三级回退）、api 新增 2 用例（UI 真实调用形态删除成功／无远程 → INVALID_QUERY） |
+| D-27 | 标签行「推送」确认后 500：`git push refs/tags/v9.9.9-smoke 退出码 128：fatal: 'refs/tags/v9.9.9-smoke' does not appear to be a git repository`（当前分支无上游时必现）；另外「推送」「推送全部」「删除远程」成功后界面**毫无反馈**——本地列表本来就不变，用户无法判断是否生效——F-088 | 同 D-26 的「远程名未解析」根因（`pushTag`/`pushAllTags` 同样只在显式传 remote 时才拼远程名），只是报错形态不同；反馈缺失则是两个容器只注册了失败提示（`message.error`），远程类动作没有成功回执 | core `pushTag`/`pushAllTags` 同样经 `requireDefaultRemote` 解析（推送到分支上游或 origin）；api `resolveRemote` 复用于 push/pushAll/deleteRemote；web-next 与 web-koa 容器对 `push`/`pushAll`/`deleteRemote` 增加成功回执（「标签推送完成：x」「全部标签推送完成」「已删除远程标签 x」） | 复跑 F-088：单推 → toast「标签推送完成：v9.9.9-smoke」且 `ls-remote` 仅该标签；「推送全部」→ toast「全部标签推送完成」且 `ls-remote` = v1.0 + v9.9.9-smoke（tag-03.png）；core 新增 2 用例（无上游分支缺省推送成功／无远程可读报错）、api 新增 1 用例（无上游 + 不传 remote 推送成功） |
 
 ### 5.7 R4 缺陷登记（已修复 + 复验）
 

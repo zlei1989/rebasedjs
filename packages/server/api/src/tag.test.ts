@@ -148,10 +148,24 @@ describe('applyTagAction', () => {
     await applyTagAction(repo, { action: 'create', name: 't1', ref: branch });
     await applyTagAction(repo, { action: 'create', name: 't2', ref: branch });
 
-    const after = await applyTagAction(repo, { action: 'pushAll', remote: 'origin' });
+    // UI 真实调用形态：pushAll 不带 remote → 服务层解析缺省远程（回归 D-27）
+    const after = await applyTagAction(repo, { action: 'pushAll' });
     expect(after.tags.map((t) => t.name)).toEqual(['t1', 't2']);
     expect(git(bare, ['rev-parse', 'refs/tags/t1']).trim()).toBe(head);
     expect(git(bare, ['rev-parse', 'refs/tags/t2']).trim()).toBe(head);
+  });
+
+  it('push 未传 remote 且分支无上游：解析缺省远程后推送成功（UI 真实调用形态，回归 D-27）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, branch } = makeRemoteRig();
+    const head = git(repo, ['rev-parse', 'HEAD']).trim();
+    // 复刻冒烟仓形态：只有 origin 远程，当前分支没有 upstream
+    git(repo, ['config', '--unset', `branch.${branch}.remote`]);
+    git(repo, ['config', '--unset', `branch.${branch}.merge`]);
+    await applyTagAction(repo, { action: 'create', name: 'v1', ref: branch });
+
+    const after = await applyTagAction(repo, { action: 'push', name: 'v1' });
+    expect(after.tags.map((t) => t.name)).toEqual(['v1']);
+    expect(git(bare, ['rev-parse', 'refs/tags/v1']).trim()).toBe(head);
   });
 
   it('deleteRemote 删除对端标签：裸仓库 refs/tags 消失且本地列表不变', { timeout: RIG_TIMEOUT }, async () => {
@@ -166,9 +180,26 @@ describe('applyTagAction', () => {
     expect(() => git(bare, ['rev-parse', '--verify', 'refs/tags/v1'])).toThrow();
   });
 
-  it('deleteRemote 无远程：git 报错透出（GIT_ERROR 折叠）', { timeout: RIG_TIMEOUT }, async () => {
+  it('deleteRemote 无远程：明确 INVALID_QUERY（不再把 :refs/tags/x 当仓库地址去连 ssh）', { timeout: RIG_TIMEOUT }, async () => {
     const repo = instantiate(baseTemplate);
     await applyTagAction(repo, { action: 'create', name: 'v1' });
-    await expect(applyTagAction(repo, { action: 'deleteRemote', name: 'v1' })).rejects.toBeInstanceOf(Error);
+    // 回归（D-26）：UI 从不传 remote，旧实现跑 `git push :refs/tags/v1` → 500「ssh: connect to host  port 22」
+    await expect(applyTagAction(repo, { action: 'deleteRemote', name: 'v1' })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: expect.stringContaining('未配置远程') as unknown as string,
+    });
+    // 本地标签未被牵连
+    expect((await getTags(repo)).tags.map((t) => t.name)).toEqual(['v1']);
+  });
+
+  it('deleteRemote 未传 remote：按缺省远程解析并对端删除（UI 真实调用形态）', { timeout: RIG_TIMEOUT }, async () => {
+    const { repo, bare, branch } = makeRemoteRig();
+    await applyTagAction(repo, { action: 'create', name: 'v1', ref: branch });
+    await applyTagAction(repo, { action: 'push', name: 'v1', remote: 'origin' });
+    expect(git(bare, ['rev-parse', '--verify', 'refs/tags/v1']).trim()).toMatch(/^[0-9a-f]{40}$/);
+
+    const after = await applyTagAction(repo, { action: 'deleteRemote', name: 'v1' });
+    expect(after.tags.map((t) => t.name)).toEqual(['v1']);
+    expect(() => git(bare, ['rev-parse', '--verify', 'refs/tags/v1'])).toThrow();
   });
 });

@@ -25,6 +25,26 @@ export interface CoreRemote {
  */
 const TRANSFER_TIMEOUT_MS = 120_000;
 
+/** 缺省远程名（git 自身口径的显式化）：① 当前分支配置的 branch.<name>.remote；② 约定缺省 origin；③ 唯一远程。
+ *  均无 → undefined（由调用方给可读提示）。需要「必须点名远程」的命令用它收口：
+ *  例如 push 空 ref 删除远程标签时缺远程，git 会把 `:refs/tags/x` 当成仓库地址去连 ssh，
+ *  报出 `ssh: connect to host  port 22` 这类用户无法理解的错误（见 D-26）。 */
+export async function defaultRemoteName(cwd: string): Promise<string | undefined> {
+  const branch = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd })).stdout.trim();
+  if (branch !== 'HEAD') {
+    try {
+      const { stdout } = await runGit(['config', '--get', `branch.${branch}.remote`], { cwd });
+      const name = stdout.trim();
+      if (name !== '') return name;
+    } catch {
+      // 未配置上游远程（git config 退出码 1）→ 落到下述约定
+    }
+  }
+  const names = (await listRemotes(cwd)).map((r) => r.name);
+  if (names.includes('origin')) return 'origin';
+  return names.length === 1 ? names[0] : undefined;
+}
+
 /** 远程列表：git remote -v 解析（同名 fetch/push 两行聚合；缺 push 行时 pushUrl=fetchUrl） */
 export async function listRemotes(cwd: string): Promise<CoreRemote[]> {
   const { stdout } = await runGit(['remote', '-v'], { cwd });
