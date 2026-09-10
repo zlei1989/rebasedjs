@@ -82,7 +82,7 @@
 | 16 | BlameView | P3 | `/repos/:id/blame` | 更多「溯源」→ 页内输路径 | F-101~F-104（4） | blame | ✅ 4/4 |
 | 17 | HistoryPanel | P3 | `/repos/:id/history` | 更多「历史」→ 页内输路径 | F-105~F-107（3） | history | ✅ 3/3 |
 | 18 | CommittedChangesPanel | P3 | `/repos/:id/committed` | 更多「已提交」 | F-108~F-110（3） | committed | ✅ 3/3 |
-| 19 | SearchPanel | P3 | `/repos/:id/search` | 更多「搜索」 | F-111~F-113（3） | search | 待测 |
+| 19 | SearchPanel | P3 | `/repos/:id/search` | 更多「搜索」 | F-111~F-113（3） | search | ✅ 3/3 |
 | 20 | ConflictsPanel | P2 | `/repos/:id/conflicts` | 制造冲突自动跳入 / 操作条「去解决冲突」 | F-114~F-119（6） | conflicts | 待测 |
 | 21 | PatchPanel | P3 | `/repos/:id/patches` | 更多「补丁」 | F-120~F-123（4） | patch | 待测 |
 | 22 | ShelfPanel | P3 | `/repos/:id/shelves` | 更多「搁置」 | F-124~F-126（3） | shelf | 待测 |
@@ -372,9 +372,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-111 | 提交搜索（grep / pickaxe） | 双模式 Segmented 各搜一次；输入非法正则 | 结果列表正确；非法正则 → 400 提示 | 待测 | search-01.png |
-| F-112 | 结果 → 日志页 | 点结果行 | 跳 `?select=<hash>` 且该行选中 | 待测 | search-02.png |
-| F-113 | 分支快速搜索 | 输入即滤本地分支 → 点行 | 检出并回日志页（quickswitch）；当前分支仅导航（CLI） | 待测 | search-03.png |
+| F-111 | 提交搜索（grep / pickaxe） | 双模式 Segmented 各搜一次；输入非法正则 | 结果列表正确；非法正则 → 400 提示 | ✅ | search-01.png（「信息 grep」搜 `smoke` → 9 条，与 CLI `git log --grep=smoke` 的 9 条**逐条一致**；切「内容 pickaxe」搜 `staged-only` → 1 条 `5ef1039`，与 CLI `git log -S'staged-only'` 一致；非法正则 `[unclosed` → 面板红字「搜索表达式不是合法的正则表达式：[unclosed」（search-01b.png）。注：该提示为首轮修复项 D-30，修复前抛的是 `git log --grep=[ … 退出码 128` 内部命令行原文） |
+| F-112 | 结果 → 日志页 | 点结果行 | 跳 `?select=<hash>` 且该行选中 | ✅ | search-02.png（点 `143857d chore(smoke): linear-X（F-080）` → `/repos/:id?select=143857dbbb94fd6291184f8e28875592a54329c9`，目标行 `data-selected=true` 且详情可见） |
+| F-113 | 分支快速搜索 | 输入即滤本地分支 → 点行 | 检出并回日志页（quickswitch）；当前分支仅导航（CLI） | ✅ | search-03.png（输 `fetch` → 列表即时滤为 `fetch-probe-local` 一项；点击 → 回日志页且 CLI `rev-parse --abbrev-ref HEAD` = `fetch-probe-local`（已检出）、状态条显示 `## fetch-probe-local...origin/fetch-probe [ahead 6, behind 1]`；再点当前分支项 → 仅导航无副作用（HEAD 不变、无报错）。冒烟后已切回 `rebase-topic`） |
 
 ### 4.20 ConflictsPanel（slug `conflicts`；P2）
 
@@ -530,6 +530,13 @@
 | R9 | 2026-09-11 | F-093~F-100（PushDialog 3 + PullDialog 2 + UpdateProjectDialog 3：推送/上游设置/强推/被拒自动更新；拉取与 rebase；更新策略·结果汇总·Reset to tracked） | ✅ 8（三页各自收官：push 3/3、pull 2/2、update 3/3） | 本轮无新缺陷；夹具：由 `rebased-smoke-other` 推送远端侧提交制造分叉与领先态，`rebase-topic` 经 F-093 建立上游（后续需要「无上游」形态时改用 rebased-smoke-big） |
 | R10 | 2026-09-11 | F-101~F-104（BlameView 4 行：注解列表 / 三联动 / 受影响文件 / previousLineno 边界）+ F-025 补测（认证重试回路，用本地 401 服务解除原「跳过」） | ✅ 5（BlameView 4/4 收官；LogPage 20/20） | 本轮无新缺陷；每行均与 CLI（`blame`/`blame --line-porcelain`/`show --name-status`）逐项互证 |
 | R11 | 2026-09-11 | F-105~F-110（HistoryPanel 3 + CommittedChangesPanel 3：文件历史 / --follow 跟随 / 版本 diff 联动；提交浏览与分页 / 目录树 / diff 联动） | ✅ 6（两页各自收官：history 3/3、committed 3/3） | 本轮无新缺陷；F-108 分页在 321 提交的大仓实测 50→100；P3 观察（不改）：溯源/历史页的页内路径输入不回写 URL（`?file=` 仅作入口深链），刷新后回到入口态 |
+| R12 | 2026-09-11 | F-111~F-113（SearchPanel 3 行：grep/pickaxe 双模式与非法正则、结果→日志、分支快速搜索） | ✅ 3（SearchPanel 3/3 收官） | D-30（非法正则抛内部 `git log` 命令行原文给用户）修复并复验（见 §5.12）；两模式结果均与 CLI 逐条互证 |
+
+### 5.12 R12 缺陷登记（已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-30 | 提交搜索输入非法正则（`[unclosed`）后，界面直接显示内部命令行原文：「git 命令失败：git log --grep=[unclosed -i --format=%H%x00… --max-count=50 退出码 128：fatal: command line, '[unclosed': Unmatched [ or [^」——用户看不懂，且暴露服务端命令细节——F-111 | api `searchCommitsService` 本意是把非法正则映射为 `INVALID_QUERY`，但判定依赖 stderr 含英文串 `Invalid regular expression`；git 对本例的措辞是 `Unmatched [ or [^`，判定失配 → 落到 GIT_ERROR（500）原样透出 | api 层在调用 git 之前用 JS `new RegExp(q)` 预校验（`mode==='grep'`；pickaxe 为 `-S` 字面量语义，不校验），非法即 `INVALID_QUERY`「搜索表达式不是合法的正则表达式：<原文>」；同时把 stderr 特征串兜底扩为多种措辞（`Invalid regular expression`/`Unmatched [`/`Unmatched (`/`bracket expression`/`Invalid range end`），覆盖 JS 接受而 POSIX ERE 拒绝的写法 | 复跑 F-111：同一输入 → 面板红字「搜索表达式不是合法的正则表达式：[unclosed」（search-01b.png）；合法模式不受影响（grep `smoke` 9 条、pickaxe `staged-only` 1 条，均与 CLI 一致，search-01.png）；api 用例改为双写法（`[`、`[unclosed`）+ 新增「pickaxe 不校验、按字面量返回空结果」，7/7 通过 |
 
 ### 5.1 R1 缺陷登记（全部已修复 + 复验）
 

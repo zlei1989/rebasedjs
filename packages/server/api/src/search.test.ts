@@ -85,12 +85,25 @@ describe('searchCommitsService 服务', () => {
     expect(hits).toEqual([]);
   });
 
-  // 非法正则：grep 按正则交给 git（`[`/`fix(` 等）→ git 128 'Invalid regular expression'
-  // → INVALID_QUERY（调用方输入问题），而非 GIT_ERROR 500（终审 Minor）
-  it('grep 非法正则：INVALID_QUERY 搜索表达式不是合法的正则表达式', { timeout: 30000 }, async () => {
+  // 非法正则：grep 按正则交给 git（`[`/`fix(` 等）→ 先在 api 层 JS RegExp 预校验收口为 INVALID_QUERY
+  //（调用方输入问题），而非把 `git log --grep=[ … 退出码 128` 内部命令行原文抛给用户（D-30）
+  it('grep 非法正则：INVALID_QUERY 且提示带原始表达式（含未闭合括号等写法）', { timeout: 30000 }, async () => {
     const { repo } = buildSearchRepo();
 
-    await expect(searchCommitsService(repo, { q: '[', mode: 'grep', limit: 10 }))
-      .rejects.toMatchObject({ code: 'INVALID_QUERY', message: '搜索表达式不是合法的正则表达式' });
+    await expect(searchCommitsService(repo, { q: '[', mode: 'grep', limit: 10 })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '搜索表达式不是合法的正则表达式：[',
+    });
+    // 实测冒烟里触发的写法（`[unclosed` → git `Unmatched [ or [^`）：同样在动 git 之前收口
+    await expect(searchCommitsService(repo, { q: '[unclosed', mode: 'grep', limit: 10 })).rejects.toMatchObject({
+      code: 'INVALID_QUERY',
+      message: '搜索表达式不是合法的正则表达式：[unclosed',
+    });
+  });
+
+  it('pickaxe 模式不做正则校验：`[unclosed` 按字面量搜索 → 空结果而非报错（-S 语义）', { timeout: 30000 }, async () => {
+    const { repo } = buildSearchRepo();
+
+    await expect(searchCommitsService(repo, { q: '[unclosed', mode: 'pickaxe', limit: 10 })).resolves.toEqual([]);
   });
 });
