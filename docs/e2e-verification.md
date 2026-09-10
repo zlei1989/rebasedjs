@@ -65,7 +65,7 @@
 | # | 页面 | 阶段 | 路由/承载 | 模拟入口（一步到达） | 测试行 | 截图前缀 | 状态 |
 |---|------|------|-----------|----------------------|--------|----------|------|
 | 1 | RepoPage | P1 | `/` | 浏览器打开 :3030 首页 | F-001~F-008（8） | repo-page | ✅ 8/8 |
-| 2 | LogPage | P1 | `/repos/:id` | RepoPage 打开冒烟仓 | F-009~F-028（20） | log-page | ✅ 19/20（F-025 跳过） |
+| 2 | LogPage | P1 | `/repos/:id` | RepoPage 打开冒烟仓 | F-009~F-028（20） | log-page | ✅ 20/20 |
 | 3 | DiffPage | P1 | `/repos/:id/diff` | StatusPage 双击变更文件 | F-029~F-038（10） | diff-page | ✅ 10/10 |
 | 4 | StatusPage | P2 | `/repos/:id/status` | 顶栏「状态」 | F-039~F-051（13） | status-page | ✅ 13/13 |
 | 5 | CommitDialog（等效内嵌提交框） | P2 | StatusPage 内 | StatusPage 提交框 | F-052~F-058（7） | commit | ✅ 7/7（F-056 的 gpg 分支跳过） |
@@ -162,7 +162,7 @@
 | F-022 | 顶栏入口 5 按钮 | 观察顶栏按钮区 | 「状态/分支/合并/贮藏/设置」五按钮存在 | ✅ | log-page-14.png（顶栏 5 入口按钮实测 aria-label：变更/分支/合并/贮藏/设置——「变更」即状态页入口，另含撤销与「更多」） |
 | F-023 | 「更多」菜单 18 项 | 展开「更多」下拉 | 18 项齐全（拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块） | ✅ | log-page-15.png（本仓渲染 16 项；GitHub/GitLab 两项受检测门约束，见 F-134/F-140） |
 | F-024 | OperationStatus 操作条（kind + 中止） | 进入 rebase 冲突（见 F-076 前置）→ 观察操作条 → 点「中止」 | 操作条显示进行中操作 + 中止按钮；中止后恢复干净态（CLI） | ✅ | log-page-16.png |
-| F-025 | 远程操作认证重试回路 | 向需认证的 HTTP 远端 push（依赖外部凭据服务；不具备 → 跳过） | 401 → AuthDialog 弹出（host 自 context、不含 token）→ 录入后 retry 重放 | 跳过：本机无「需认证的 HTTP 远端」服务（git 智能 HTTP + 401 挑战需真实凭据服务或自建 Basic 认证 git 服务器）；AuthDialog 装配与 AUTH_FAILED 分流已由 F-092 同级通道与 api/auth 单测覆盖 | —（排除行不截图） |
+| F-025 | 远程操作认证重试回路 | 向需认证的 HTTP 远端 push（依赖外部凭据服务；不具备 → 跳过） | 401 → AuthDialog 弹出（host 自 context、不含 token）→ 录入后 retry 重放 | ✅ | remote-04.png（补测：本地起恒 401 的 git smart-http 服务 `http://127.0.0.1:9418` 作为远程，日志页「拉取」触发 → 401 `AUTH_FAILED` → 「需要认证」对话框（主机自 `context.host` 预填 127.0.0.1、界面不含 token）→ 填账户/令牌 →「保存并重试」；401 服务日志显示重放请求携 `Authorization: Bearer …`，凭据落盘 `config.json` → `auth.accounts`。与 F-092 同一次实测） |
 | F-026 | 分页「加载更多」（limit ≤500） | 打开 `rebased-smoke-big` → 点「加载更多」 | 首屏 50 行 → 逐次放大（50→100→…→500 封顶），行数增长正确 | ✅ | log-page-18.png |
 | F-027 | 过滤（author / path） | 输入作者名 → Enter；清空恢复 | 列表只剩该作者提交；清空后全量恢复 | ✅ | log-page-19.png |
 | F-028 | 行右键菜单形态 | 右键提交行 | 菜单项齐全：检出（游离 HEAD）/从此处新建分支/从此处新建标签/在浏览器中打开/Push up to Commit/Fixup/Squash/Reword/Drop/Squash/Fixup Commit | ✅ | log-page-20.png |
