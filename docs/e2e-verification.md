@@ -408,7 +408,7 @@
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
 | F-124 | 搁置保存（工作区+暂存+未跟踪随档） | 保存 Modal 输入名 | 列表出现搁置；内容含工作区+暂存 diff + 未跟踪文件（CLI） | ✅ | shelf-01.png（保存 Modal 输入 `f124-shelf` → 列表新增「4 个未跟踪」；CLI：存档 `shelves/<repoId>/f124-shelf/` 含 `patch.diff`（424 B，含工作区 README 改动 + 暂存 local-side 改动，与 `git diff HEAD --stat` 同值）与 `untracked/`（crlf.txt、shelf-untracked-new.txt、stash-untracked-probe.txt、scratch/todo.md 四份原件）；搁置语义为**快照复制**（保存后工作区保持不动，与 IntelliJ 搁置一致）） |
-| F-125 | 恢复 / 删除 | 行内 restore → 再 drop（Popconfirm） | 恢复回写工作区；同名冲突不覆盖；删除成功（CLI） | ✅ | shelf-02.png（「确定恢复搁置 f124-shelf？」→ CLI：README/local-side 改动回写；**同名不覆盖**两重实测：① 工作区已有同样改动时 → 400「补丁无法应用：error: patch failed: README.md:3」（check 先行，零变更）；② 未跟踪同名文件（crlf.txt 已被我改成 `MODIFIED AFTER SHELF`）→ 恢复后内容保持我的修改、未被存档覆盖；「确定删除搁置 f124-shelf？」→ 目录移除，列表 3→2） |
+| F-125 | 恢复 / 删除 | 行内 restore → 再 drop（Popconfirm） | 恢复回写工作区；同名冲突不覆盖；删除成功（CLI） | ✅ | shelf-02.png（`确定恢复搁置 f124-shelf？` 确认框态见 shelf-02b.png；CLI：README/local-side 改动回写；**同名不覆盖**两重实测：① 工作区已有同样改动时 → 400「补丁无法应用：error: patch failed: README.md:3」（check 先行，零变更）；② 未跟踪同名文件（crlf.txt 已被我改成 `MODIFIED AFTER SHELF`）→ 恢复后内容保持我的修改、未被存档覆盖；「确定删除搁置 f124-shelf？」→ 目录移除，列表 3→2） |
 | F-126 | Unshelve 联动 | restore 后回 StatusPage | 工作区变更自动进入状态页（events 刷新） | ✅ | shelf-03.png（双标签实测事件刷新：标签 1 停在 `/status`（显示「已暂存（0）/未跟踪（4）」，无 README 条目）→ 标签 0 在 `/shelves` 执行恢复 → **未刷新**标签 1 即出现 `README.md`、`local-side.txt` 两条变更——SSE `status.changed` 推送生效） |
 
 ### 4.23 WorktreePanel（slug `worktree`；P4）
@@ -418,7 +418,7 @@
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
 | F-127 | 工作树列表 | 观察列表 | path/branch/detached 徽标 +「当前」标记（CLI `worktree list` 互证） | ✅ | worktree-01.png（三行与 CLI `git worktree list` 逐项一致：主工作树「当前」绿标 + `rebase-topic` + e7c67a8；`rebased-smoke-wt` + `wt-branch` + 79e9129；另建分离头工作树 → 「分离」橙标 + 3e9cca6（CLI 显示 `(detached HEAD)`）） |
-| F-128 | 工作树创建 | 创建 Modal → 互斥 Radio（关联已有/新分支） | 创建成功；仓库内/嵌套路径被阻止（CLI） | ✅ | worktree-02.png（Modal：路径输入 + 「关联已有分支/创建新分支」互斥 Radio（切换后分支输入 testid 随之变为 `worktree-create-new-branch`）；新建 `rebased-smoke-wt-new` + 新分支 `wt-new-branch` → toast「工作树已创建」、列表 3→4；CLI：`worktree list` 出现 `[wt-new-branch]`、`git branch` 出现该分支、目录已填充；**仓库内嵌套路径**（`…\rebased-smoke\nested-wt`）→ 「路径无效：…」被拒） |
+| F-128 | 工作树创建 | 创建 Modal → 互斥 Radio（关联已有/新分支） | 创建成功；仓库内/嵌套路径被阻止（CLI） | ✅ | worktree-02.png（Modal 态见 worktree-02b.png：路径输入 + 「关联已有分支/创建新分支」互斥 Radio（切换后分支输入 testid 随之变为 `worktree-create-new-branch`）；新建 `rebased-smoke-wt-new` + 新分支 `wt-new-branch` → toast「工作树已创建」、列表 3→4；CLI：`worktree list` 出现 `[wt-new-branch]`、`git branch` 出现该分支、目录已填充；**仓库内嵌套路径**（`…\rebased-smoke\nested-wt`）→ 「路径无效：…」被拒） |
 | F-129 | 移除 / 清理 | 行内移除（`--force` 支持）→ prune | 移除与清理正确（CLI） | ✅ | worktree-03.png（脏工作树（README 有未提交改动）移除：不带 force → 「移除工作树失败：fatal: … contains modified or untracked files, use --force to delete it」；在确认框勾选「强制移除（--force）」（worktree-03b.png 为确认框态）→ toast「工作树已移除」、CLI `worktree list` 少一行且目录已删；「确定清理失效工作树？」→ 手工删目录造成的 prunable 条目被清掉（CLI 复核）、列表回到 2 行。注：force 勾选框为本轮补的 UI 入口，见 §5.14 D-32） |
 
 ### 4.24 SubmodulePanel（slug `submodule`；P4）
@@ -541,6 +541,12 @@
 | R20 | 2026-09-11 | F-149~F-155（SettingsPage 7 行：应用设置读写 / git 配置 9 键 / 账户令牌 / config-store 重启持久化 / git 可执行文件 / GPG 配置 / 保护分支与联动拦截） | ✅ 7（SettingsPage 7/7 收官） | 本轮无新缺陷；F-152 真杀进程重启后复查，F-155 用「已推送提交 Reword」实测联动拦截 |
 | R21 | 2026-09-11 | F-156~F-159（BrowsePanel 4 行：文件树 / 只读查看与二进制 / 降级边界 / 入口与回边） | ✅ 4（BrowsePanel 4/4 收官） | 本轮无新缺陷；树与内容均与 `ls-tree -r` / `show <rev>:<file>` 互证，越界与绝对路径均被 `INVALID_QUERY` 拦下 |
 
+**收官复核（R21 末）**
+
+- **主题**：明亮主题下复核本轮新增页面——冲突页/子模块/快照浏览/补丁/工作树（`theme-light-conflicts.png`、`theme-light-submodules.png`、`theme-light-browse.png`、`theme-light-patches.png`、`theme-light-worktrees.png`），均 `data-theme=light` + body `#ffffff`、无暗色残留；连同 R1 的 `theme-light-log/diff/settings.png` 覆盖三类渲染面（列表 / Monaco / 表单）。复核后已切回暗色。
+- **响应式**：768 与 480 两档复核日志页与设置页（`responsive-768-light-log.png`、`responsive-480-light-log.png`、`responsive-768-light-settings.png`）——顶栏按钮与过滤行按 `flex-wrap` 折行、提交主题省略号截断、详情面板纵向堆叠，`documentElement.scrollWidth` 均未超出视口（无横向滚动）。
+- **截图账目**：`docs/shots/` 共 175 张，文档引用 167 个文件名**全部存在**；跨文件 SHA256 无重复；无未被引用的孤儿截图。
+
 **全量收官（R21 末）**：159 行 F-001~F-159 = ✅ 150 / 跳过 9（F-136~F-139、F-141~F-144 共 8 行缺真实托管仓库与 PAT；F-056 的 gpg 分支）；31 个页面全部走到收官状态。缺陷累计 D-01~D-34（全部修复并复验）+ 环境说明 E-01。
 
 ### 5.15 R17 缺陷登记（已修复 + 复验）
@@ -588,7 +594,7 @@
 | D-09 | 行右键菜单在无 GitHub/GitLab 远端的仓库仍渲染「在浏览器中打开」，点击无任何反应（死控件） | 容器无条件注入 `onOpenInBrowser`，回调内部才判空 remote | 改为仅当检测到 github/gitlab 远程时注入该回调（ui 层「回调不注入即隐藏」约定） | 复跑 F-028：无托管远端仓不再渲染该项，其余 14 项齐全（log-page-20.png） |
 | D-10 | 双击「已暂存」分组行进入 diff 页后停在「工作区」模式，看不到该行暂存差异（F-031 三态映射入口断裂） | StatusPage 容器丢弃 ui 传入的 `staged` 第二参；diff 页 `staged` 恒为 `useState(false)`，也不读查询参数 | 两端容器把行分组的 staged 透传为 `&staged=1`；两端 diff 页以 `staged` 查询参数为初值 | `?file=src/util.ts&staged=1` → 选中「已暂存」且渲染 4 处差异（diff-page-03.png），CLI `git diff --cached --stat` 同值；web-next/web-koa 同步修改 |
 | D-11 | diff 页控制台告警「Could not create web worker(s). Falling back to loading web worker code in main thread」——diff 计算压在 UI 线程，大 diff 易卡 | 未装配 `MonacoEnvironment.getWorker` | `monaco-lazy` 模块级装配 `getWorker`（`new Worker(new URL('monaco-editor/esm/vs/editor/editor.worker.js', import.meta.url), { type: 'module' })`，打包器产出独立 worker chunk） | 复跑 diff 页：告警消失，改为 `WorkerBasedDocumentDiffProvider` 计算；diff 渲染与装饰数不变 |
-| D-12 | 窄屏（≤768）挤压：顶栏仓库名折行、过滤行「标签」文字被压成竖排 | 顶栏/过滤行无 `flex-wrap`，标签文本无 `nowrap` | 顶栏与过滤行加 `flexWrap: 'wrap'`、仓库名与标签文本加 `whiteSpace: 'nowrap'`、首页路径行加 `wrap` 且输入框 `flex:1;minWidth:200` | 1440/768/480 三档截图（responsive-768-log.png、responsive-480-log.png）复核不再折行/竖排 |
+| D-12 | 窄屏（≤768）挤压：顶栏仓库名折行、过滤行「标签」文字被压成竖排 | 顶栏/过滤行无 `flex-wrap`，标签文本无 `nowrap` | 顶栏与过滤行加 `flexWrap: 'wrap'`、仓库名与标签文本加 `whiteSpace: 'nowrap'`、首页路径行加 `wrap` 且输入框 `flex:1;minWidth:200` | 1440/768/480 三档截图（responsive-768-log.png、responsive-480-log.png、差异页同档 responsive-768-diff.png）复核不再折行/竖排 |
 | D-13 | 控制台告警「[antd: Alert] `message` is deprecated. Please use `title` instead」（antd v6） | 5 处 `<Alert message=…>` 沿用 v5 属性名 | 全部迁移为 `title=`（branch-panel/log-page/settings-page/status-page/update-project-dialog）；`description` 语义不动 | ui 相关 198 用例通过，告警消失 |
 
 ### 5.2 R1 夹具与流程纠偏（非产品缺陷，记入以免后续轮次重复踩坑）
