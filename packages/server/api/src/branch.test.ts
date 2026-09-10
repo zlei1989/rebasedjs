@@ -46,8 +46,27 @@ describe('branch 功能', () => {
     expect(list.recent).toEqual([base, 'feature']);
   });
 
-  it('applyBranchAction create→delete force→rename→setUpstream 轮转，返回刷新列表', async () => {
+  // 冒烟 D-20：被 worktree 检出的分支 git 拒绝删除，列表须标记出来供清理入口排除
+  it('getBranches 标记 checkedOutInWorktree：worktree 占用的分支为 true，其余不标', async () => {
     const repo = repoWithCommit();
+    const base = defaultBranch(repo);
+    const wtPath = `${repo}-wt`;
+    dirs.push(wtPath);
+    execFileSync('git', ['-C', repo, 'worktree', 'add', '-q', wtPath, '-b', 'wt-branch']);
+
+    const list = await getBranches(repo);
+    const wt = list.branches.find((b) => b.name === 'wt-branch');
+    const cur = list.branches.find((b) => b.name === base);
+    // 附加工作树持有的分支：标记为 true（清理入口据此排除，避免「承诺可清理却必然失败」）
+    expect(wt?.checkedOutInWorktree).toBe(true);
+    expect(wt?.current).toBe(false);
+    // 主工作树当前分支同样出现在 git worktree list 中（标记 true），但其 current 为 true，
+    // 清理候选本就以 !current 排除，故两者共同保证候选集只含真正可删分支
+    expect(cur?.current).toBe(true);
+    expect(cur?.mergedIntoHead).toBe(true);
+  });
+
+  it('applyBranchAction create→delete force→rename→setUpstream 轮转，返回刷新列表', async () => {    const repo = repoWithCommit();
     const base = defaultBranch(repo);
 
     // create：刷新列表含新分支

@@ -84,7 +84,15 @@ async function readFileOrMissing(repoPath: string, file: string, rev: string | u
   }
 }
 
-/** 单文件两侧全文：staged→HEAD vs 暂存区；工作区→HEAD vs 工作区；from/to→两侧版本（单侧缺失 → 空串）。 */
+/**
+ * 单文件两侧全文：
+ *  - from/to 成对 → 两侧版本（单侧缺失 → 空串）；
+ *  - from-only → **分支 vs 工作树**（GitShowDiffWithRefAction 语义，BranchPanel「与工作树差异」入口）：
+ *    左侧取 from 指定引用、右侧取工作区；
+ *  - 否则 → 工作区模式：HEAD vs 工作区（staged 时 HEAD vs 暂存区）。
+ *  修复记录（冒烟 D-21）：此前 from-only 与工作区模式共用 `HEAD` 作左侧，忽略 from，
+ *  导致「与工作树差异」打开的文件 diff 实际是 HEAD vs 工作区（分叉文件显示 0 处差异，与 CLI 相悖）。
+ */
 export async function getFileVersions(repoPath: string, query: DiffQuery, opts: { signal?: AbortSignal } = {}): Promise<FileVersions> {
   assertValidQuery(query);
   if (query.from !== undefined && query.to !== undefined) {
@@ -94,8 +102,8 @@ export async function getFileVersions(repoPath: string, query: DiffQuery, opts: 
     ]);
     return { before, after };
   }
-  // 工作区/暂存三态：两侧均按「缺失即空串」读取（删除的新增文件、未跟踪文件、已删除文件都不再 500）
-  const before = await readFileOrMissing(repoPath, query.file, 'HEAD');
+  // from-only = 分支 vs 工作树；无 from = HEAD vs 工作区/暂存区。两侧均按「缺失即空串」读取
+  const before = await readFileOrMissing(repoPath, query.file, query.from ?? 'HEAD');
   const after = query.staged
     ? await readFileOrMissing(repoPath, query.file, '')
     : await readFileOrMissing(repoPath, query.file, undefined);

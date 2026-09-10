@@ -145,6 +145,10 @@ export interface BranchRef {
   behind: number;
   hash: string;
   mergedIntoHead: boolean;
+  /** 该分支已被某个 worktree 检出（含主工作树；git branch -d 会以 "used by worktree" 拒绝删除）；
+   *  可选：旧数据/未查询 worktree 时为 undefined（按 false 处理）。「清理已合并」须排除这些分支
+   *  （主工作树那条另由 current 排除），否则计数承诺可清理却必然失败（冒烟 D-20） */
+  checkedOutInWorktree?: boolean;
   lastCommitIso: string;
 }
 

@@ -69,8 +69,8 @@
 | 3 | DiffPage | P1 | `/repos/:id/diff` | StatusPage 双击变更文件 | F-029~F-038（10） | diff-page | ✅ 10/10 |
 | 4 | StatusPage | P2 | `/repos/:id/status` | 顶栏「状态」 | F-039~F-051（13） | status-page | ✅ 13/13 |
 | 5 | CommitDialog（等效内嵌提交框） | P2 | StatusPage 内 | StatusPage 提交框 | F-052~F-058（7） | commit | ✅ 7/7（F-056 的 gpg 分支跳过） |
-| 6 | ResetDialog（内嵌模态） | P2 | LogPage 内 | 详情面板「Reset 到此处」 | F-059~F-061（3） | reset | 待测 |
-| 7 | BranchPanel | P2 | `/repos/:id/branches` | 顶栏「分支」 | F-062~F-072（11） | branch | 待测 |
+| 6 | ResetDialog（内嵌模态） | P2 | LogPage 内 | 详情面板「Reset 到此处」 | F-059~F-061（3） | reset | ✅ 3/3 |
+| 7 | BranchPanel | P2 | `/repos/:id/branches` | 顶栏「分支」 | F-062~F-072（11） | branch | 🚧 7/11 |
 | 8 | MergeDialog（页面化） | P2 | `/repos/:id/merge` | 顶栏「合并」 | F-073~F-075（3） | merge | 待测 |
 | 9 | RebaseDialog（内嵌模态） | P3 | LogPage 内 | 更多「变基」 | F-076~F-080（5） | rebase | 待测 |
 | 10 | StashPanel | P2 | `/repos/:id/stashes` | 顶栏「贮藏」 | F-081~F-085（5） | stash | 待测 |
@@ -227,9 +227,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-059 | Reset soft / mixed / hard | 详情面板「Reset 到此处」→ 依次三模式执行 | 各模式行为正确（soft 留暂存/mixed 留工作区/hard 全清；CLI 互证） | 待测 | reset-01.png |
-| F-060 | Reset Current Branch to Here（等价入口） | 详情面板按钮 → 内嵌模态弹出 | 模态正常弹出（右键菜单形态未做，面板按钮为等价入口） | 待测 | reset-02.png |
-| F-061 | Undo Commit | 顶栏 Popconfirm → 确认 | soft reset HEAD~1，改动回暂存区（CLI） | 待测 | reset-03.png |
+| F-059 | Reset soft / mixed / hard | 详情面板「Reset 到此处」→ 依次三模式执行 | 各模式行为正确（soft 留暂存/mixed 留工作区/hard 全清；CLI 互证） | ✅ | reset-01.png（soft/mixed/hard 三模式依次执行：soft 后 `M  README.md`、mixed 后 ` M README.md`、hard 后工作区干净且 README 回 HEAD 版本；hard 前有「我了解 hard 将丢弃未提交改动」勾选门） | |
+| F-060 | Reset Current Branch to Here（等价入口） | 详情面板按钮 → 内嵌模态弹出 | 模态正常弹出（右键菜单形态未做，面板按钮为等价入口） | ✅ | reset-02.png（详情面板「Reset 当前分支到此处」→ 内嵌模态：目标短 hash+主题 + 三模式单选） | |
+| F-061 | Undo Commit | 顶栏 Popconfirm → 确认 | soft reset HEAD~1，改动回暂存区（CLI） | ✅ | reset-03.png（顶栏 Popconfirm「将撤销最近提交并保留改动到暂存区」→ HEAD 回退且 .gitmessage 回到暂存区 `A `） | |
 
 ### 4.7 BranchPanel（slug `branch`；P2）
 
@@ -238,13 +238,13 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-062 | 分组（本地/远程/最近检出/标签）与过滤 | 观察四组 → 文本过滤 → 「仅看已合并」开关 | 四组正确；过滤与已合并开关生效 | 待测 | branch-01.png |
-| F-063 | 行内信息（current/上游徽标/已合并图标） | 观察各分支行 | current 标记、ahead/behind 徽标、已合并绿勾正确 | 待测 | branch-02.png |
-| F-064 | 创建/删除/重命名/设上游 | 新建 Modal（起始点 + 检出开关）→ 删除（未合并 Popconfirm force 提示）→ 重命名 → 设上游 | 各操作 CLI `branch` 互证 | 待测 | branch-03.png |
-| F-065 | 检出三态（既有/新建并检出/detached） | 检出既有分支 → 新建并检出 → 标签行「检出」（detached） | 三态切换正确（CLI HEAD 互证） | 待测 | branch-04.png |
-| F-066 | 查找已合并 / 清理已合并与过时分支 | 开「仅看已合并」→ 「清理已合并（N）」批量删除 | 批量删除非当前已合并分支（CLI 互证） | 待测 | branch-05.png |
-| F-067 | 与当前分支比较 | 行「比较」→ 日志页对比视图 | 双 range 双向提交差异；「当前」分支禁用 | 待测 | branch-06.png |
-| F-068 | 与工作树差异 | 行菜单「与工作树差异」→ 差异 Modal → 文件行 | 清单含未提交变更、R/C 带 renameFrom；文件行 → `/diff?from=<分支>` | 待测 | branch-07.png |
+| F-062 | 分组（本地/远程/最近检出/标签）与过滤 | 观察四组 → 文本过滤 → 「仅看已合并」开关 | 四组正确；过滤与已合并开关生效 | ✅ | branch-01.png（四组：最近检出 3 / 本地 7 / 远程 2 / 标签 1；文本过滤 feat → 1/3、1/7、1/2；仅看已合并 → 本地 6/7、远程 2/2（远程过滤为 R3 修复项 D-19）） | |
+| F-063 | 行内信息（current/上游徽标/已合并图标） | 观察各分支行 | current 标记、ahead/behind 徽标、已合并绿勾正确 | ✅ | branch-02.png（当前标记 master/当前；上游徽标 origin/master ↑4；已合并绿勾覆盖 6 个本地 + 2 个远程，未合并 diverge-test 无勾） | |
+| F-064 | 创建/删除/重命名/设上游 | 新建 Modal（起始点 + 检出开关）→ 删除（未合并 Popconfirm force 提示）→ 重命名 → 设上游 | 各操作 CLI `branch` 互证 | ✅ | branch-03.png（创建 smoke-created@diverge-test → 重命名 smoke-renamed → 设上游 feature→origin/feature → 删除：未合并分支 Popconfirm「该分支未合并，删除将使用强制删除」，四步 CLI 互证） | |
+| F-065 | 检出三态（既有/新建并检出/detached） | 检出既有分支 → 新建并检出 → 标签行「检出」（detached） | 三态切换正确（CLI HEAD 互证） | ✅ | branch-04.png（三态检出：既有 diverge-test → HEAD=diverge-test；新建并检出 smoke-new-checkout 入最近检出；标签 v1.0 检出 → `## HEAD (no branch)` 且指向 9f0af92） | |
+| F-066 | 查找已合并 / 清理已合并与过时分支 | 开「仅看已合并」→ 「清理已合并（N）」批量删除 | 批量删除非当前已合并分支（CLI 互证） | ✅ | branch-05.png（清理已合并（5）→ 批量删除 5 个；master（当前）与 wt-branch（worktree 占用）保留；修复 D-20 后计数排除 worktree 占用分支，按钮归零禁用） | |
+| F-067 | 与当前分支比较 | 行「比较」→ 日志页对比视图 | 双 range 双向提交差异；「当前」分支禁用 | ✅ | branch-06.png（非当前分支「比较」→ `?compare=diverge-test` 双向视图：分支独有 1 / 当前独有 8，与 CLI `rev-list --left-right --count` 8/1 一致；当前分支行「比较」禁用） | |
+| F-068 | 与工作树差异 | 行菜单「与工作树差异」→ 差异 Modal → 文件行 | 清单含未提交变更、R/C 带 renameFrom；文件行 → `/diff?from=<分支>` | ✅ | branch-07.png（行菜单「与工作树差异」→ 模态清单含 M/A/R 与 renameFrom；点文件行 → `/diff?file=src/app.ts&from=wt-branch`，17 处新增与 CLI 一致（左侧取分支而非 HEAD 为 R3 修复项 D-21）） | |
 | F-069 | 弹窗 Fetch | 页头「Fetch」 | fetch 全部远程 → refs.changed → 列表刷新（CLI 远端互证） | 待测 | branch-08.png |
 | F-070 | force-push 后修复 | 构造远端分叉 → 行内「force-push 修复」 | fetch → 本地重置到上游 → 本地独有提交 cherry-pick 重放（CLI 互证） | 待测 | branch-09.png |
 | F-071 | 检出并变基到当前 | 远程行下拉「检出并变基到当前」（本地名 Modal） | 检出（远程 → 新本地分支）→ rebase onto 原当前分支（CLI） | 待测 | branch-10.png |
@@ -521,6 +521,7 @@
 |------|------|-------------------|------------------------|----------------------------|
 | R1 | 2026-09-10 | F-001~F-028（RepoPage 8 + LogPage 20）、F-029~F-031（DiffPage 3）；暗黑/明亮双主题与 1440/768/480 三档宽度抽查 | ✅ 30 / 跳过 1（F-025） | D-01~D-12 全部修复并复验，见下表 |
 | R2 | 2026-09-10 | F-032~F-038（DiffPage 7）+ F-039~F-051（StatusPage 13）+ F-052~F-058（CommitDialog 7） | ✅ 27 / 跳过 0.5（F-056 的 gpg 分支） | D-14~D-17 修复并复验（见 §5.4）；夹具纠偏 P-06~P-10（见 §5.5） |
+| R3 | 2026-09-10 | F-059~F-061（ResetDialog 3）+ F-062~F-068（BranchPanel 7） | ✅ 10（ResetDialog 3/3、BranchPanel 7/11） | D-19~D-21 修复并复验（见 §5.4）；F-069~F-072 待续 |
 
 ### 5.1 R1 缺陷登记（全部已修复 + 复验）
 
@@ -559,6 +560,13 @@
 | D-16 | 三版本对比中「两侧相同」的那一段只是空 diff，无任何文字标注，易与「正在加载」混淆——F-037 | `ThreeWayView` 仅渲染标题 + 空 MonacoDiffView，未判定两侧是否相同 | `CompareSegment` 比较 `before === after` 时在标题行追加「无差异」标注（`data-testid=<段>-identical`） | src/app.ts 三段视图：HEAD→暂存段标注「无差异」、暂存→工作区段显示 5 处新增（diff-page-09.png）；新增 2 用例（单维相同 / 两侧全同） |
 
 | D-17 | blame 页整体报「git 命令失败 …`git log --no-walk` 退出码 128：fatal: bad object 0000…0000」——F-051「注解」入口 | `git blame` 对**工作区未提交行**输出零哈希伪提交（"Not Committed Yet"），`parentHashesOf` 未过滤即作为 `git log --no-walk <hash…>` 参数 → 任何含未提交改动的文件都 blame 失败（500） | `parentHashesOf` 先剔除零哈希（40/64 位全 0）并对这些行直接返回空父列表，仅把真实提交交给 git | `GET /blame?file=src/app.ts` → 200：未提交行 `hash=000…0`、author `Not Committed Yet`、`parents: []`，其余行父哈希正常；core 新增用例「未提交行（零哈希）不进入 git log 参数」 |
+### 5.6 R3 缺陷登记（全部已修复 + 复验）
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-19 | 「仅看已合并」把远程分支整组隐藏（显示 0/2、无匹配的远程分支），而 CLI `git branch -r --merged HEAD` 明确列出 origin/feature 与 origin/master——F-062 | core `mergedBranchNames` 只查本地（`git branch --merged`），api `toBranchRef` 又把远程分支硬编码 `mergedIntoHead:false` | core 增加 `git branch -r --merged` 查询并合并结果（远程项为全名）；api 去掉远程排除，按名单统一判定 | 表格：本地 6/7、远程 2/2；远程行亦出现已合并绿勾（branch-01/02.png）；core 新增用例「mergedBranchNames 含已合并的远程跟踪分支」 |
+| D-20 | 「清理已合并（1）」承诺可清理，点击后整条操作失败：`git branch -d wt-branch` 退出码 1「cannot delete branch 'wt-branch' used by worktree」——F-066 | 候选集只排除当前分支，未排除被 worktree 检出的分支（git 必然拒绝） | 契约 `BranchRef.checkedOutInWorktree`；api 经 `listWorktrees` 标记；ui 清理候选排除该标记 | 复跑：按钮变「清理已合并（0）」且禁用（branch-05.png）；api 新增用例「getBranches 标记 checkedOutInWorktree」、ui 新增用例「清理候选排除 worktree 占用的已合并分支」 |
+| D-21 | BranchPanel「与工作树差异」打开的文件 diff 显示 0 处差异，与 CLI `git diff wt-branch -- src/app.ts`（17 处新增）相悖——F-068 | api `getFileVersions` 的 from-only 分支被并入「工作区模式」并写死左侧 `HEAD`，忽略 `from`（仅 from+to 成对时才用 from） | from-only 左侧改取 `query.from`（`query.from ?? 'HEAD'`），保持 from/to 成对分支不变 | API：before 7 行 / after 24 行（此前两侧同内容）；页面 17 处新增与 CLI 一致（branch-07.png）；api 新增用例「from-only（分支 vs 工作树）：左侧取指定分支而非 HEAD」 |
 ### 5.5 R2 夹具纠偏
 
 | 编号 | 现象 | 处置 |

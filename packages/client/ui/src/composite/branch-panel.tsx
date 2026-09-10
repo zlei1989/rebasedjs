@@ -455,7 +455,12 @@ export function BranchPanel({
   const locals = useMemo(() => branches.branches.filter((b) => !b.remote), [branches]);
   const remotes = useMemo(() => branches.branches.filter((b) => b.remote), [branches]);
   /** 清理目标：本地已合并且非当前分支（当前分支不可删） */
-  const mergedLocals = useMemo(() => locals.filter((b) => b.mergedIntoHead && !b.current), [locals]);
+  // 清理候选：已合并入 HEAD 且非当前分支，且未被任何 worktree 检出（后者 git 必然拒绝删除，
+  // 计入会让「清理已合并（N）」承诺可清理却失败——冒烟 D-20）
+  const mergedLocals = useMemo(
+    () => locals.filter((b) => b.mergedIntoHead && !b.current && b.checkedOutInWorktree !== true),
+    [locals],
+  );
   const visibleLocals = useMemo(() => locals.filter(match), [locals, filterText, mergedOnly]);
   const visibleRemotes = useMemo(() => remotes.filter(match), [remotes, filterText, mergedOnly]);
 

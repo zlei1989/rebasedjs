@@ -168,6 +168,16 @@ describe('branch 原语', () => {
     await expect(mergedBranchNames(repo, 'HEAD')).resolves.toEqual(merged);
   });
 
+  // 冒烟 D-19：仅查本地分支会让「仅看已合并」把远程跟踪分支整体隐藏
+  it('mergedBranchNames 含已合并的远程跟踪分支（全名）', async () => {
+    // originBareTemplate 本地与 origin 同提交 → 远程跟踪分支是 HEAD 祖先（已合并）
+    const repo = instantiate(originBareTemplate);
+    const merged = await mergedBranchNames(repo);
+    const remoteNames = merged.filter((n) => n.includes('/'));
+    expect(remoteNames.length).toBeGreaterThan(0);
+    expect(remoteNames.some((n) => n.startsWith('origin/'))).toBe(true);
+  });
+
   it('远程分支 remote=true、跳过 origin/HEAD 符号引用、解析 upstream 轨道', async () => {
     const repo = instantiate(remoteSetupTemplate);
     const defaultBranch = remoteSetupBranch;

@@ -58,16 +58,26 @@ export async function listBranches(cwd: string): Promise<CoreBranch[]> {
   return branches;
 }
 
-/** 已合并入 ref 的本地分支名集合（git branch --merged）；ref 省略为 HEAD */
+/**
+ * 已合并入 ref 的分支名集合：`git branch --merged`（本地）∪ `git branch -r --merged`（远程跟踪）。
+ * --format 须置于 --merged 之前：--merged 会把紧随其后的参数当作 ref 吞掉。
+ * 仅查本地分支会让「仅看已合并」把全部远程分支判为未合并而整体隐藏（冒烟 D-19 实测：
+ * CLI `git branch -r --merged HEAD` 列出 origin/feature 与 origin/master，页面却显示 0/2），
+ * 故两次查询后合并返回；远程项为全名（origin/feature），与 CoreBranch.name 口径一致。
+ */
 export async function mergedBranchNames(cwd: string, ref?: string): Promise<string[]> {
-  // --format 须置于 --merged 之前：--merged 会把紧随其后的参数当作 ref 吞掉
-  const args = ['branch', '--format=%(refname:short)', '--merged'];
-  if (ref !== undefined) args.push(ref);
-  const { stdout } = await runGit(args, { cwd });
-  return stdout
-    .split('\n')
-    .map((s) => s.trim())
-    .filter((s) => s !== '');
+  const query = async (remoteOnly: boolean): Promise<string[]> => {
+    const args = ['branch', '--format=%(refname:short)', '--merged'];
+    if (remoteOnly) args.splice(1, 0, '-r');
+    if (ref !== undefined) args.push(ref);
+    const { stdout } = await runGit(args, { cwd });
+    return stdout
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s !== '');
+  };
+  const [local, remote] = await Promise.all([query(false), query(true)]);
+  return [...local, ...remote];
 }
 
 /**

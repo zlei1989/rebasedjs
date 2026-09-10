@@ -314,6 +314,24 @@ describe('BranchPanel 过滤/查找已合并', () => {
     expect(screen.queryByTestId('cleanup-merged')).not.toBeInTheDocument();
   });
 
+  // 冒烟 D-20：被 worktree 检出的分支 git 拒绝删除，不得计入清理候选（否则承诺可清理却必然失败）
+  it('清理候选排除 worktree 占用的已合并分支', () => {
+    const onCleanupMerged = vi.fn();
+    render(
+      <BranchPanel
+        branches={makeList([
+          makeBranch({ name: 'main', current: true, mergedIntoHead: true }),
+          makeBranch({ name: 'feature-merged', mergedIntoHead: true }),
+          makeBranch({ name: 'wt-branch', mergedIntoHead: true, checkedOutInWorktree: true }),
+        ])}
+        {...makeHandlers()}
+        onCleanupMerged={onCleanupMerged}
+      />,
+    );
+    // 仅 feature-merged 可清理：main 为当前分支、wt-branch 被工作树占用
+    expect(screen.getByTestId('cleanup-merged')).toHaveTextContent('清理已合并（1）');
+  });
+
   it('force-push 修复：当前分支与上游分叉（ahead>0 且 behind>0）时渲染按钮；点击回调；其余行/状态不渲染', () => {
     const onForcePushedUpdate = vi.fn();
     const { rerender } = render(

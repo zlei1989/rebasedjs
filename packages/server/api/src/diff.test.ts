@@ -107,8 +107,27 @@ describe('diff 功能', () => {
     expect(fromOnly).toEqual({ before: 'v1', after: 'v1' });
   });
 
-  it('getFileVersions from/to：路径在 from 侧不存在（新增 A）→ before 为空串（git diff A B -- path 语义）', async () => {
+  // 冒烟 D-21：BranchPanel「与工作树差异」走 from-only，此前左侧固定取 HEAD → 分叉文件显示 0 处差异
+  it('getFileVersions from-only（分支 vs 工作树）：左侧取指定分支而非 HEAD', async () => {
     const repo = createTmpRepo();
+    dirs.push(repo);
+    writeFileSync(join(repo, 'a.txt'), 'v1');
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+    // 分支 side 上把 a.txt 改成 v2 并提交；切回原分支后工作区再改成 v3
+    const original = execFileSync('git', ['-C', repo, 'symbolic-ref', 'HEAD', '--short'], { encoding: 'utf8' }).trim();
+    execFileSync('git', ['-C', repo, 'checkout', '-q', '-b', 'side']);
+    writeFileSync(join(repo, 'a.txt'), 'v2');
+    execFileSync('git', ['-C', repo, 'commit', '-q', '-am', 'side v2']);
+    execFileSync('git', ['-C', repo, 'checkout', '-q', original]);
+    writeFileSync(join(repo, 'a.txt'), 'v3');
+
+    const fromOnly = await getFileVersions(repo, { file: 'a.txt', from: 'side', staged: false });
+    // 左侧 = side 分支内容（v2），右侧 = 工作区（v3）；若误取 HEAD 则左侧为 v1
+    expect(fromOnly).toEqual({ before: 'v2', after: 'v3' });
+  });
+
+  it('getFileVersions from/to：路径在 from 侧不存在（新增 A）→ before 为空串（git diff A B -- path 语义）', async () => {    const repo = createTmpRepo();
     dirs.push(repo);
     writeFileSync(join(repo, 'a.txt'), 'v1');
     execFileSync('git', ['-C', repo, 'add', '.']);
