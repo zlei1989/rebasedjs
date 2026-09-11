@@ -48,21 +48,28 @@ function SubmoduleRow({
       <Tag color={meta.color} data-testid={`submodule-status-${entry.name}`} style={{ flexShrink: 0 }}>
         {meta.label}
       </Tag>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      {/* path 是不可断行的长串（与 URL 同风险，原 `flexShrink: 0` 会把行顶宽）→ EllipsisText 截断；
+          次要色由 `type="secondary"` 转发保留，`title` 给完整路径；
+          path 既非 hash 也非 ref，故不加 `mono`（Ruling P17 的 mono 口径只覆盖 hash/ref）；
+          `fontSize: 12` 交紧凑密度（Ruling P4），`flexShrink: 0` 去掉（可收缩正是目的）。 */}
+      <EllipsisText type="secondary" title={entry.path}>
         {entry.path}
-      </Typography.Text>
+      </EllipsisText>
       {/* 远端 URL 改 EllipsisText（brief Step 2 点名处）：自带 minWidth:0 + ellipsis + maxWidth，
           长 URL 不再撑宽行；由原 inline 样式承担的三项随之交接：
           ellipsis（内置）、maxWidth:220（改为 prop）、flexShrink:0（去掉——可收缩正是目的）；
-          fontSize:12 交紧凑密度（Ruling P4）。**随之丢弃 `type="secondary"`（EllipsisText 无 type prop，
-          见报告「自审/顾虑」），故此处文本由次要色变为默认色。** */}
-      <EllipsisText maxWidth={220} title={entry.url}>
+          fontSize:12 交紧凑密度（Ruling P4）。
+          `type="secondary"` 现在由 EllipsisText 转发（Ruling P17 为本原语补了 type prop），
+          原先「转换即丢次要色」的缺口在此闭合；URL 非 hash/ref，不加 `mono`。 */}
+      <EllipsisText type="secondary" maxWidth={220} title={entry.url}>
         {entry.url}
       </EllipsisText>
       {entry.branch !== undefined ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        // 分支名是不可断行的 ref → 同口径转 EllipsisText；次要色转发保留，
+        // `mono` 按 Ruling P17 的 ref 口径，`title` 给完整分支名，`flexShrink: 0` 去掉（可收缩正是目的）。
+        <EllipsisText type="secondary" mono title={entry.branch}>
           {entry.branch}
-        </Typography.Text>
+        </EllipsisText>
       ) : null}
       {entry.commitSha !== undefined ? (
         <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>

@@ -194,9 +194,12 @@ function TreeNodeRow({
       >
         {node.status !== undefined ? <CommittedStatusTag status={node.status} /> : null}
         {node.renameFrom ? (
-          <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-            {node.renameFrom} →
-          </Typography.Text>
+          // 原路径是不可断行的长串（原 `flexShrink: 0` 的次要色文本，长路径会把本行顶宽）→ EllipsisText 截断；
+          // 次要色由 `type="secondary"` 转发保留，`title` 给完整原路径（`→` 是固定后缀，不入 title）；
+          // 路径非 hash/ref，故不加 `mono`；`fontSize: 12` 交紧凑密度（Ruling P4），`flexShrink: 0` 去掉。
+          <EllipsisText type="secondary" title={node.renameFrom}>
+            {`${node.renameFrom} →`}
+          </EllipsisText>
         ) : null}
         <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
           {node.name}

@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Radio, Tag, Tooltip, Typography } from 'antd';
 import type { WorktreeCreateBody, WorktreeEntry, WorktreeList } from '@rebased/contracts';
+import { EllipsisText } from '../base/ellipsis-text';
 import { EmptyState } from '../base/empty-state';
 import { Toolbar } from '../base/toolbar';
 
@@ -49,9 +50,13 @@ function WorktreeRow({
         {wt.path}
       </Typography.Text>
       {wt.branch !== null ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        // 分支名是不可断行的 ref（原 `flexShrink: 0` 的次要色文本会把行顶宽）→ EllipsisText 截断；
+        // 次要色由 `type="secondary"` 转发保留，`mono` 按 Ruling P17 的「值是 hash/ref 用等宽」，
+        // `title` 给完整分支名；`fontSize: 12` 交紧凑密度（Ruling P4），`flexShrink: 0` 去掉（可收缩正是目的）。
+        // 位置不动：仍在 path 之后、「当前/分离」Tag 之前。
+        <EllipsisText type="secondary" mono title={wt.branch}>
           {wt.branch}
-        </Typography.Text>
+        </EllipsisText>
       ) : null}
       {current ? (
         <Tag color="green" style={{ flexShrink: 0 }}>

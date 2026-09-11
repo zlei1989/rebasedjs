@@ -27,6 +27,7 @@ import {
 } from 'antd';
 import { CheckOutlined, DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
 import type { BranchAction, BranchList, BranchRef, BranchWorkingDiff, CheckoutAction, TagEntry, TagList } from '@rebased/contracts';
+import { EllipsisText } from '../base/ellipsis-text';
 import { Toolbar } from '../base/toolbar';
 import { CommittedStatusTag } from '../domain/committed-status';
 
@@ -74,12 +75,18 @@ export interface BranchPanelProps {
 /** 行内上游信息：上游名 + ↑ahead ↓behind 徽标（0 不显示对应箭头）；无上游时整体不渲染 */
 function UpstreamInfo({ branch }: { branch: BranchRef }): React.ReactNode {
   if (branch.upstream === null) return null;
+  // 上游名是**不可断行的 ref**（origin/<长分支名>）：原 `flexShrink: 0` 的次要色文本会把整个分支行顶宽，
+  // 是不变量 ③ 点名的站点 → 换 EllipsisText（自带 minWidth:0 + ellipsis，可收缩并截断）。
+  // 呈现口径：`type="secondary"` 转发保留次要色（Ruling P17 为 EllipsisText 补的 type），
+  // `mono` 按 Ruling P17 的「值是 hash/ref 用等宽」加在 ref 上，`title` 给完整值；
+  // 原 `fontSize: 12` 交紧凑密度（Ruling P4，与本批次其余站点同口径）；`flexShrink: 0` 去掉（可收缩正是目的）。
+  const label = `${branch.upstream}${branch.ahead > 0 ? ` ↑${branch.ahead}` : ''}${
+    branch.behind > 0 ? ` ↓${branch.behind}` : ''
+  }`;
   return (
-    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-      {branch.upstream}
-      {branch.ahead > 0 ? ` ↑${branch.ahead}` : ''}
-      {branch.behind > 0 ? ` ↓${branch.behind}` : ''}
-    </Typography.Text>
+    <EllipsisText type="secondary" mono title={label}>
+      {label}
+    </EllipsisText>
   );
 }
 
