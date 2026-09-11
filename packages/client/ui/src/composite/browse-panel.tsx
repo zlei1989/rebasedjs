@@ -8,8 +8,10 @@
 import { Card, Flex, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { BrowseContent, BrowseEntry } from '@rebased/contracts';
 import { useMemo } from 'react';
+import { EllipsisText } from '../base/ellipsis-text';
 import { EmptyState } from '../base/empty-state';
 import { FileTree, FILE_TREE_TOOLTIP, type FileTreeNode } from '../base/file-tree';
+import { SplitPane } from '../base/split-pane';
 import { buildDirectoryTree } from '../domain/directory-tree';
 
 export interface BrowsePanelProps {
@@ -88,29 +90,38 @@ export function BrowsePanel({
       ) : !entries || entries.length === 0 ? (
         <EmptyState title="该版本没有文件" />
       ) : (
-        <Flex gap={12} style={{ flex: 1, minHeight: 0 }}>
-          <Card size="small" title={`文件（${entries.length}）`} style={{ width: 300, flexShrink: 0, overflow: 'auto' }}>
-            {/* FileTree 是复合组件（不转发 ref / 不落 DOM 事件），Tooltip 需要真实节点承载 hover，
-                故在中间包一层 block span 作为悬停宿主（布局等同原 div，尺寸不变）。 */}
-            <Tooltip title={FILE_TREE_TOOLTIP}>
-              <span style={{ display: 'block' }}>
-                <FileTree
-                  nodes={nodes}
-                  selectedKeys={selectedPath !== undefined ? [selectedPath] : []}
-                  onSelect={onSelectFile}
-                  defaultExpandedKeys={topDirs}
-                />
-              </span>
-            </Tooltip>
-          </Card>
+        /* 两栏改 SplitPane：侧栏在左（sidePosition 默认 'start'）、宽 300。
+           写死宽度 + flexShrink:0 的侧栏正是窄屏横向溢出的结构性成因，改由原语在过窄视口堆叠；
+           原主区 Card 的 flex:1/minWidth:0 与两卡各自的 overflow:'auto' 均由 SplitPane 宿主承担，故不再重复声明。 */
+        <SplitPane
+          sideWidth={300}
+          side={
+            <Card size="small" title={`文件（${entries.length}）`}>
+              {/* FileTree 是复合组件（不转发 ref / 不落 DOM 事件），Tooltip 需要真实节点承载 hover，
+                  故在中间包一层 block span 作为悬停宿主（布局等同原 div，尺寸不变）。 */}
+              <Tooltip title={FILE_TREE_TOOLTIP}>
+                <span style={{ display: 'block' }}>
+                  <FileTree
+                    nodes={nodes}
+                    selectedKeys={selectedPath !== undefined ? [selectedPath] : []}
+                    onSelect={onSelectFile}
+                    defaultExpandedKeys={topDirs}
+                  />
+                </span>
+              </Tooltip>
+            </Card>
+          }
+        >
           <Card
             size="small"
-            style={{ flex: 1, minWidth: 0, overflow: 'auto' }}
             title={
               selectedPath !== undefined ? (
-                <Typography.Text code style={{ fontSize: 12 }}>
+                /* 长路径改 EllipsisText：Card 标题横向被长路径撑宽曾是主区溢出来源之一；
+                   其自带 minWidth:0，antd 的 .ant-card-head-title 本身 overflow:hidden（自动最小尺寸为 0），
+                   故 flex 链上从 Card 起即可收缩，无需再给标题容器补样式。 */
+                <EllipsisText mono title={selectedPath}>
                   {selectedPath}
-                </Typography.Text>
+                </EllipsisText>
               ) : (
                 '内容'
               )
@@ -143,7 +154,7 @@ export function BrowsePanel({
               </pre>
             )}
           </Card>
-        </Flex>
+        </SplitPane>
       )}
     </Flex>
   );

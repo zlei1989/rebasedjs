@@ -9,6 +9,8 @@ import { useState } from 'react';
 import { Button, Card, Flex, Input, Segmented, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { BranchRef, SearchMode, SearchResult } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { PageShell } from '../base/page-shell';
+import { Toolbar } from '../base/toolbar';
 import { formatCommitDate } from '../domain/format';
 
 export interface SearchPanelProps {
@@ -138,12 +140,18 @@ export function SearchPanel({
   };
 
   return (
-    <Flex vertical gap={8} style={{ padding: 16 }}>
+    /* 根容器是纵向列（页内面板，非路由根）：按迁移配方换 PageShell 得到 width:100% + minWidth:0 + height:100%。
+       密度传 "default" 只豁免密度——本组件被 apps 侧页面容器（search.tsx:29 的 align 根）嵌入，
+       该容器才是本路由的密度归属方，面板自身不得再施加一层紧凑密度；
+       gap/padding 照抄既有值 8/16（PageShell 默认不落 style，不传会静默丢掉内距与行距）。 */
+    <PageShell density="default" gap={8} padding={16}>
       {/* 分支快速搜索（Search Everywhere Git tab 语义）：branches + onSelectBranch 同传时渲染 */}
       {branches !== undefined && onSelectBranch !== undefined && (
         <BranchQuickSearch branches={branches} onSelectBranch={onSelectBranch} />
       )}
-      <Flex gap={8}>
+      {/* 过滤行改 Toolbar：横向行容器（交叉轴为纵向，故此处不涉及横向沾满），
+         统一换行以免窄屏把输入框与按钮挤成溢出；输入框补 flex:1 + minWidth:0 学会收缩。 */}
+      <Toolbar gap={8}>
         {/* 关键词输入框：说明回车等价操作与检索范围（模式由下方 Segmented 决定） */}
         <Tooltip title="输入提交关键词：回车等同点「搜索」；命中范围取决于下方所选模式，空白关键词不发起检索">
           <Input
@@ -152,6 +160,7 @@ export function SearchPanel({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onPressEnter={submit}
+            style={{ flex: 1, minWidth: 0 }}
           />
         </Tooltip>
         {/* 关键词为空时禁用（空白查询无意义），禁用按钮不派发 hover → 按 antd 官方做法
@@ -171,7 +180,7 @@ export function SearchPanel({
             </Button>
           </span>
         </Tooltip>
-      </Flex>
+      </Toolbar>
       {/* 模式开关：说明两个选项各自的检索口径（文字标签本身不自解释差异） */}
       <Tooltip title="切换检索模式：信息 grep 匹配提交信息全文，内容 pickaxe 匹配新增/删除的内容行">
         <Segmented options={MODE_OPTIONS} value={mode} onChange={(v) => setMode(v as SearchMode)} />
@@ -194,6 +203,6 @@ export function SearchPanel({
         /* results 未注入 = 尚未搜索，与搜索无命中（空数组）区分文案 */
         <EmptyState title={results === undefined ? '输入关键词开始搜索' : '暂无搜索结果'} />
       )}
-    </Flex>
+    </PageShell>
   );
 }
