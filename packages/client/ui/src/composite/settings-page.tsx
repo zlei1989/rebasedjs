@@ -4,7 +4,7 @@
  * 纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
  */
 import { useState } from 'react';
-import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Flex, Form, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Tooltip, Typography } from 'antd';
 import type {
   AccountBody,
   AccountDeleteBody,
@@ -380,18 +380,22 @@ export function SettingsPage({
     <PageShell density="default" gap={16} padding={16}>
       <Card title="应用设置">
         {settings ? (
-          <Flex vertical gap={12}>
-            <Flex align="center" gap={8}>
+          /*
+           * 应用设置两项均走 Form.Item 纵向布局：label 在上、控件在下（无表单字段语义，仅取其排版）。
+           * component={false} 不落地 form 元素：内部只有受控控件，无原生提交语义。
+           */
+          <Form layout="vertical" component={false}>
+            {/* 标签文案即原说明文字：Switch（无内联文本）由 label 承担可读名称 */}
+            <Form.Item label="在编辑器中查看提交日志" style={{ marginBottom: 12 }}>
               <Tooltip title="切换提交日志的查看方式：开启后用本机编辑器打开，关闭则用内置页面查看（应用设置 logInEditor）">
                 <Switch
                   checked={settings.logInEditor}
                   onChange={(checked) => onPatchSettings({ logInEditor: checked })}
                 />
               </Tooltip>
-              <Typography.Text>在编辑器中查看提交日志</Typography.Text>
-            </Flex>
+            </Form.Item>
             {/* 界面主题：暗色/明亮二选一，写入应用设置后由 Providers 全站生效（含 Monaco 与 body 底色） */}
-            <Flex align="center" gap={8}>
+            <Form.Item label="界面主题" style={{ marginBottom: 0 }}>
               <Tooltip title="选择界面配色（暗色/明亮）：保存后全站立即生效，含编辑器与页面底色">
                 <Segmented
                   data-testid="theme-segmented"
@@ -403,9 +407,8 @@ export function SettingsPage({
                   onChange={(value) => onPatchSettings({ theme: value as 'light' | 'dark' })}
                 />
               </Tooltip>
-              <Typography.Text>界面主题</Typography.Text>
-            </Flex>
-          </Flex>
+            </Form.Item>
+          </Form>
         ) : (
           <Skeleton active />
         )}
