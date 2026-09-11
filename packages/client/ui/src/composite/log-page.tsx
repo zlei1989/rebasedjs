@@ -9,7 +9,7 @@
  * 回调全缺省时不渲染「更多」按钮。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
-import { Alert, Button, Dropdown, Flex, Input, Modal, Popconfirm, Skeleton, Switch, Tooltip, Typography, theme } from 'antd';
+import { Alert, Button, Col, Dropdown, Flex, Input, Modal, Popconfirm, Row, Skeleton, Space, Switch, Tooltip, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import type { CommitInfo, CommittedEntry, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
@@ -399,136 +399,147 @@ export function LogPage({
   // 原根节点既无 gap 也无 padding，故这里都不传（PageShell 默认不落 style，传了会凭空新增间距）。
   return (
     <PageShell>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}>
-        {/* 回首页（File→Close Project 语义）：顶栏最左「首页」链接；仅容器注入回调时渲染 */}
-        {onGoHome ? (
-          <Tooltip title="回到首页欢迎屏：关闭当前仓库视图，不改动仓库里的任何内容">
-            <Button type="link" size="small" data-testid="log-go-home" onClick={onGoHome}>
-              首页
-            </Button>
-          </Tooltip>
-        ) : null}
-        <span style={{ fontWeight: 600, padding: '4px 8px', whiteSpace: 'nowrap' }}>{repoName}</span>
-        <RepoStatusBar status={status} />
-        {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
-        {operation && onAbortOperation ? (
-          <OperationStatus operation={operation} onAbort={onAbortOperation} aborting={abortingOperation} />
-        ) : null}
-        {/* 「去解决冲突」链接：仅合并进行中（operation.kind==='merge'）且容器注入导航回调时渲染，
-            跟在操作条旁；base 组件 OperationStatus 不背导航职责，故由本层自行渲染 */}
-        {operation?.kind === 'merge' && onOpenConflicts ? (
-          <Tooltip title="打开冲突解决页：逐个文件处理合并冲突，解决完再提交以结束合并">
-            <Button type="link" size="small" onClick={onOpenConflicts}>
-              去解决冲突
-            </Button>
-          </Tooltip>
-        ) : null}
-        {/* 撤销最近提交：Popconfirm 确认后回调（保留改动到暂存区，等价 reset --soft HEAD~1） */}
-        {onUndoCommit ? (
-          <Popconfirm
-            title="将撤销最近提交并保留改动到暂存区"
-            okText="确定"
-            cancelText="取消"
-            onConfirm={onUndoCommit}
-          >
-            {/* Tooltip 必须放在 Popconfirm 内侧：放外侧会截断 Popconfirm 的点击触发链，确认气泡就不再出现 */}
-            <Tooltip title="回退最近一次提交并保留全部改动到暂存区（等价 reset --soft HEAD~1），提交记录会少一笔">
-              <Button
-                aria-label="撤销最近提交"
-                type="text"
-                icon={<RollbackOutlined />}
-                loading={undoCommitting}
-              />
-            </Tooltip>
-          </Popconfirm>
-        ) : null}
-        {/* 变更入口（状态页）：在设置按钮旁、靠右对齐；仅在容器注入导航回调时渲染 */}
-        {onOpenStatus ? (
-          <Tooltip title="打开变更页：查看工作区与暂存区的文件改动，逐个文件对照差异">
-            <Button
-              aria-label="变更"
-              type="text"
-              icon={<DiffOutlined />}
-              onClick={onOpenStatus}
-              style={{ marginLeft: 'auto' }}
-            />
-          </Tooltip>
-        ) : null}
-        {/* 分支入口：排在变更与设置之间；变更按钮已占位（marginLeft:auto）时不再重复右推 */}
-        {onOpenBranches ? (
-          <Tooltip title="打开分支页：查看本地/远程分支并执行新建、检出、合并等操作">
-            <Button
-              aria-label="分支"
-              type="text"
-              icon={<BranchesOutlined />}
-              onClick={onOpenBranches}
-              style={onOpenStatus ? undefined : { marginLeft: 'auto' }}
-            />
-          </Tooltip>
-        ) : null}
-        {/* 合并入口：排在分支与设置之间；前面按钮已占位（marginLeft:auto）时不再重复右推 */}
-        {onOpenMerge ? (
-          <Tooltip title="打开合并页：把选定的分支或提交并入当前分支">
-            <Button
-              aria-label="合并"
-              type="text"
-              icon={<MergeOutlined />}
-              onClick={onOpenMerge}
-              style={onOpenStatus || onOpenBranches ? undefined : { marginLeft: 'auto' }}
-            />
-          </Tooltip>
-        ) : null}
-        {/* 贮藏入口：排在合并与设置之间；前面按钮已占位（marginLeft:auto）时不再重复右推 */}
-        {onOpenStashes ? (
-          <Tooltip title="打开贮藏页：把未提交的改动暂存起来，或把已有贮藏重新应用回工作区">
-            <Button
-              aria-label="贮藏"
-              type="text"
-              icon={<InboxOutlined />}
-              onClick={onOpenStashes}
-              style={onOpenStatus || onOpenBranches || onOpenMerge ? undefined : { marginLeft: 'auto' }}
-            />
-          </Tooltip>
-        ) : null}
-        {/* 设置入口靠右对齐；变更/分支/合并/贮藏按钮已占位（marginLeft:auto）时不再重复右推 */}
-        {onOpenSettings ? (
-          <Tooltip title="打开设置页：调整当前仓库的 git 配置、账户与外观偏好">
-            <Button
-              aria-label="设置"
-              type="text"
-              icon={<SettingOutlined />}
-              onClick={onOpenSettings}
-              style={onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes ? undefined : { marginLeft: 'auto' }}
-            />
-          </Tooltip>
-        ) : null}
-        {/* 「更多」Dropdown：远程相关操作（拉取/推送/更新项目/远程管理）的收敛入口，跟在设置按钮之后；
-            前面按钮已占位（marginLeft:auto）时不再重复右推 */}
-        {moreItems.length > 0 ? (
-          <Dropdown
-            trigger={['click']}
-            onOpenChange={setMoreMenuOpen}
-            menu={{ items: moreItems, onClick: ({ key }) => onMoreClick(key) }}
-          >
-            {/* Tooltip 放在 Dropdown 内侧：Dropdown 需要直接包裹真实控件才能接住点击触发 */}
-            <Tooltip
-              title="更多功能：只读浏览（溯源/历史/已提交/搜索）、本地操作与远程操作统一收在这里"
-              open={moreMenuOpen ? false : undefined}
-            >
-              <Button
-                aria-label="更多"
-                type="text"
-                icon={<MoreOutlined />}
-                style={
-                  onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes || onOpenSettings
-                    ? undefined
-                    : { marginLeft: 'auto' }
-                }
-              />
-            </Tooltip>
-          </Dropdown>
-        ) : null}
-      </div>
+      {/* 顶栏两端布局：Grid（Row/Col）负责「左信息区 ←→ 右操作区」两端分布，Space 负责两侧组内间距。
+          为什么不再用 `marginLeft:auto` 逐个占位：那是「凑」出右端，可选按钮一多，每个按钮都要按
+          「前面还有哪个按钮会渲染」重算一遍条件（原代码里那串 `onOpenStatus || onOpenBranches || …` 就是）；
+          改成两端容器后左右各自成组，右端位置与按钮渲染条件彻底解耦。
+          注意两点：
+          1) Row/Col 从 'antd' 顶层具名导入；`Grid` 这个具名导出在 antd 6.6.1 运行时只有 useBreakpoint
+             （`es/grid/index.js` 只 default 出 { Col, Row, useBreakpoint }），在它上面解构 Row/Col 会拿到 undefined。
+          2) Row 默认 flexWrap='wrap'，且 Col 默认 `flex: 0 0 auto`（不收缩）——左侧必须显式给
+             flex:'1 1 auto' + minWidth:0 才能被压缩（否则撑开 Row 把操作区挤到第二行）。 */}
+      <Row
+        data-testid="log-topbar"
+        align="middle"
+        justify="space-between"
+        style={{ borderBottom: `1px solid ${token.colorSplit}` }}
+      >
+        {/* 左侧信息区：首页入口 + 仓库名 + 分支状态条 + 进行中操作条；整体可收缩（窄屏优先压缩这一侧） */}
+        <Col style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', minWidth: 0 }}>
+          {/* size={16} 承接原手写 gap 16（两项的列间距）；Space 默认 align="center" 与原 items 垂直居中一致 */}
+          <Space size={16} style={{ minWidth: 0 }}>
+            {/* 回首页（File→Close Project 语义）：顶栏最左「首页」链接；仅容器注入回调时渲染 */}
+            {onGoHome ? (
+              <Tooltip title="回到首页欢迎屏：关闭当前仓库视图，不改动仓库里的任何内容">
+                <Button type="link" size="small" data-testid="log-go-home" onClick={onGoHome}>
+                  首页
+                </Button>
+              </Tooltip>
+            ) : null}
+            {/* minWidth:0 + overflow:hidden 让长仓库名可被压缩并走 ellipsis，而不是把右端操作挤出屏幕 */}
+            <span style={{ fontWeight: 600, padding: '4px 8px', whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{repoName}</span>
+            <RepoStatusBar status={status} />
+            {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
+            {operation && onAbortOperation ? (
+              <OperationStatus operation={operation} onAbort={onAbortOperation} aborting={abortingOperation} />
+            ) : null}
+            {/* 「去解决冲突」链接：仅合并进行中（operation.kind==='merge'）且容器注入导航回调时渲染，
+                跟在操作条旁；base 组件 OperationStatus 不背导航职责，故由本层自行渲染 */}
+            {operation?.kind === 'merge' && onOpenConflicts ? (
+              <Tooltip title="打开冲突解决页：逐个文件处理合并冲突，解决完再提交以结束合并">
+                <Button type="link" size="small" onClick={onOpenConflicts}>
+                  去解决冲突
+                </Button>
+              </Tooltip>
+            ) : null}
+          </Space>
+        </Col>
+        {/* 右侧操作区：撤销/变更/分支/合并/贮藏/设置/更多 七个入口，靠 justify="space-between" 贴右端 */}
+        <Col style={{ flexShrink: 0 }}>
+          <Space size={4}>
+            {/* 撤销最近提交：Popconfirm 确认后回调（保留改动到暂存区，等价 reset --soft HEAD~1） */}
+            {onUndoCommit ? (
+              <Popconfirm
+                title="将撤销最近提交并保留改动到暂存区"
+                okText="确定"
+                cancelText="取消"
+                onConfirm={onUndoCommit}
+              >
+                {/* Tooltip 必须放在 Popconfirm 内侧：放外侧会截断 Popconfirm 的点击触发链，确认气泡就不再出现 */}
+                <Tooltip title="回退最近一次提交并保留全部改动到暂存区（等价 reset --soft HEAD~1），提交记录会少一笔">
+                  <Button
+                    aria-label="撤销最近提交"
+                    type="text"
+                    icon={<RollbackOutlined />}
+                    loading={undoCommitting}
+                  />
+                </Tooltip>
+              </Popconfirm>
+            ) : null}
+            {/* 变更入口（状态页）：在设置按钮旁、靠右对齐；仅在容器注入导航回调时渲染 */}
+            {onOpenStatus ? (
+              <Tooltip title="打开变更页：查看工作区与暂存区的文件改动，逐个文件对照差异">
+                <Button
+                  aria-label="变更"
+                  type="text"
+                  icon={<DiffOutlined />}
+                  onClick={onOpenStatus}
+                />
+              </Tooltip>
+            ) : null}
+            {/* 分支入口：排在变更与设置之间 */}
+            {onOpenBranches ? (
+              <Tooltip title="打开分支页：查看本地/远程分支并执行新建、检出、合并等操作">
+                <Button
+                  aria-label="分支"
+                  type="text"
+                  icon={<BranchesOutlined />}
+                  onClick={onOpenBranches}
+                />
+              </Tooltip>
+            ) : null}
+            {/* 合并入口：排在分支与设置之间 */}
+            {onOpenMerge ? (
+              <Tooltip title="打开合并页：把选定的分支或提交并入当前分支">
+                <Button
+                  aria-label="合并"
+                  type="text"
+                  icon={<MergeOutlined />}
+                  onClick={onOpenMerge}
+                />
+              </Tooltip>
+            ) : null}
+            {/* 贮藏入口：排在合并与设置之间 */}
+            {onOpenStashes ? (
+              <Tooltip title="打开贮藏页：把未提交的改动暂存起来，或把已有贮藏重新应用回工作区">
+                <Button
+                  aria-label="贮藏"
+                  type="text"
+                  icon={<InboxOutlined />}
+                  onClick={onOpenStashes}
+                />
+              </Tooltip>
+            ) : null}
+            {/* 设置入口 */}
+            {onOpenSettings ? (
+              <Tooltip title="打开设置页：调整当前仓库的 git 配置、账户与外观偏好">
+                <Button
+                  aria-label="设置"
+                  type="text"
+                  icon={<SettingOutlined />}
+                  onClick={onOpenSettings}
+                />
+              </Tooltip>
+            ) : null}
+            {/* 「更多」Dropdown：远程相关操作（拉取/推送/更新项目/远程管理）的收敛入口，跟在设置按钮之后 */}
+            {moreItems.length > 0 ? (
+              <Dropdown
+                trigger={['click']}
+                onOpenChange={setMoreMenuOpen}
+                menu={{ items: moreItems, onClick: ({ key }) => onMoreClick(key) }}
+              >
+                {/* Tooltip 放在 Dropdown 内侧：Dropdown 需要直接包裹真实控件才能接住点击触发 */}
+                <Tooltip
+                  title="更多功能：只读浏览（溯源/历史/已提交/搜索）、本地操作与远程操作统一收在这里"
+                  open={moreMenuOpen ? false : undefined}
+                >
+                  <Button aria-label="更多" type="text" icon={<MoreOutlined />} />
+                </Tooltip>
+              </Dropdown>
+            ) : null}
+          </Space>
+        </Col>
+      </Row>
       {/* 过滤/分页行：仅容器同时注入过滤回调时渲染（过滤受控，Enter/失焦提交防每击键重查）；
           窄屏（≤768）允许换行，避免输入框/开关被压成竖排文字 */}
       {onFiltersChange !== undefined ? (
