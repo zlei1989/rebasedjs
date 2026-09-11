@@ -129,11 +129,13 @@ export interface LogPageProps {
   filters?: LogFilters;
   /** 过滤变更回调（输入去首尾空白后上抛；清空 = 空对象） */
   onFiltersChange?: (filters: LogFilters) => void;
-  /** 「加载更多」可用（快照 hasMore 且未到上限）；缺省不渲染按钮 */
+  /** 还有更早的提交可加载（容器分页快照的 hasMore）；与 onLoadMore 同传时渲染「加载更多」按钮。
+   *  false = 已到仓库第一条（按钮转「已到最早的提交」并禁用），此时也不再按需加载 */
   hasMore?: boolean;
-  /** 「加载更多」进行中：按钮 loading 态 */
+  /** 「加载更多」进行中：按钮 loading 态；同时抑制按需加载（加载中不注入 onReachBottom，避免连发同页） */
   loadingMore?: boolean;
-  /** 「加载更多」回调（容器增大 limit 重查，推荐 ≤500 阶梯式） */
+  /** 加载更早提交的回调（容器追加下一页：页大小阶梯放大 + skip 游标，直到最早一条）。
+   *  滚到列表底部或已加载内容填不满视口时会自动触发它；按钮点击是同一入口的手动兜底 */
   onLoadMore?: () => void;
   /** 行右键「检出此提交（游离 HEAD）」回调；缺省不渲染该菜单项 */
   onCheckoutRevision?: (hash: string) => void;
