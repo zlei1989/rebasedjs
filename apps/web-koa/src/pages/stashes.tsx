@@ -6,8 +6,8 @@
  * （纯 drop/建删不改 RepoStatus 字段时 watcher 不产事件，见行内订阅注释）。
  */
 import { useBranches, useStashAction, useStashDiff, useStashes, useStashUnstashAs, useRepoEvents } from '@rebased/client';
-import { StashPanel } from '@rebased/ui';
-import { Button, Flex, Tooltip, message } from 'antd';
+import { PageShell, StashPanel } from '@rebased/ui';
+import { Button, Tooltip, message } from 'antd';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
@@ -35,7 +35,7 @@ export function RepoStashesPage(): React.ReactNode {
   // 贮藏列表未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!stashes) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -69,6 +69,6 @@ export function RepoStashesPage(): React.ReactNode {
         diffError={diffError?.message ?? null}
         acting={acting}
       />
-    </Flex>
+    </PageShell>
   );
 }

@@ -5,8 +5,8 @@
  * 与组件「确认提交本身不复位」契约对应）；onCancel 关窗；confirming = isMutating。
  */
 import { useIgnore, useIgnoreTemplates, usePutIgnore } from '@rebased/client';
-import { IgnoreDialog } from '@rebased/ui';
-import { Button, Flex, Tooltip, message } from 'antd';
+import { IgnoreDialog, PageShell } from '@rebased/ui';
+import { Button, Tooltip, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -28,7 +28,7 @@ export function RepoIgnorePage(): React.ReactNode {
   // 忽略配置未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!contents) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -56,6 +56,6 @@ export function RepoIgnorePage(): React.ReactNode {
         onCancel={() => setOpen(false)}
         confirming={saving}
       />
-    </Flex>
+    </PageShell>
   );
 }

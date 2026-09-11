@@ -7,7 +7,7 @@
  * 受影响（Show All Affected #34）→ useCommitFiles 条件拉取该提交全量变更文件 Modal（文件点击 → 该文件 diff）。
  */
 import { useBlame, useCommitFiles } from '@rebased/client';
-import { BlameView, EmptyState } from '@rebased/ui';
+import { BlameView, EmptyState, PageShell } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -41,7 +41,7 @@ export function RepoBlamePage(): React.ReactNode {
     }
   };
   return (
-    <Flex vertical align="flex-start" gap={8}>
+    <PageShell gap={8}>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -112,6 +112,6 @@ export function RepoBlamePage(): React.ReactNode {
           }}
         />
       )}
-    </Flex>
+    </PageShell>
   );
 }

@@ -5,8 +5,8 @@
  * restore 会回放变更到工作区——useShelfAction 只回写 shelves 键，容器在成功追加刷新 status 键（经全局 mutate 重取）。
  */
 import { useShelfAction, useShelves } from '@rebased/client';
-import { ShelfPanel } from '@rebased/ui';
-import { Button, Flex, Tooltip, message } from 'antd';
+import { PageShell, ShelfPanel } from '@rebased/ui';
+import { Button, Tooltip, message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
@@ -23,7 +23,7 @@ export function RepoShelvesPage(): React.ReactNode {
   // 搁置列表未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!shelves) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -45,6 +45,6 @@ export function RepoShelvesPage(): React.ReactNode {
         }}
         acting={acting}
       />
-    </Flex>
+    </PageShell>
   );
 }

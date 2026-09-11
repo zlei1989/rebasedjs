@@ -6,8 +6,8 @@
  */
 import { useBranches, useCheckout, useSearch } from '@rebased/client';
 import type { SearchMode } from '@rebased/contracts';
-import { SearchPanel } from '@rebased/ui';
-import { Button, Flex, Tooltip, message } from 'antd';
+import { PageShell, SearchPanel } from '@rebased/ui';
+import { Button, Tooltip, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -26,7 +26,7 @@ export function RepoSearchPage(): React.ReactNode {
     void message.error(err instanceof Error ? err.message : String(err));
   };
   return (
-    <Flex vertical align="flex-start" gap={8}>
+    <PageShell gap={8}>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -52,6 +52,6 @@ export function RepoSearchPage(): React.ReactNode {
             .catch(onError);
         }}
       />
-    </Flex>
+    </PageShell>
   );
 }

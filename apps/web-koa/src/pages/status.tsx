@@ -24,8 +24,8 @@ import {
   useStashAction,
 } from '@rebased/client';
 import type { CommitBody, HunkStagingBody, StagingBody } from '@rebased/contracts';
-import { StatusPage } from '@rebased/ui';
-import { Button, Flex, Modal, Tooltip, message } from 'antd';
+import { PageShell, StatusPage } from '@rebased/ui';
+import { Button, Modal, Tooltip, message } from 'antd';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -126,7 +126,7 @@ export function RepoStatusPage(): React.ReactNode {
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!status) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -290,6 +290,6 @@ export function RepoStatusPage(): React.ReactNode {
         即将提交的文件含 CRLF 行尾符（core.autocrlf 未按建议设置，Windows 建议 true）。
         「修复并提交」将设置 <code>git config --global core.autocrlf true</code> 后提交；「原样提交」直接提交（CRLF 将原样入库）。
       </Modal>
-    </Flex>
+    </PageShell>
   );
 }

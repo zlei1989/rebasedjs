@@ -5,8 +5,8 @@
  * 记录内容为服务端 exec 环形缓冲（token 剥离后），本页只读。
  */
 import { useConsole } from '@rebased/client';
-import { ConsolePanel } from '@rebased/ui';
-import { Button, Flex, Tooltip } from 'antd';
+import { ConsolePanel, PageShell } from '@rebased/ui';
+import { Button, Tooltip } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 
 export function RepoConsolePage(): React.ReactNode {
@@ -15,7 +15,7 @@ export function RepoConsolePage(): React.ReactNode {
   // 固定取最近 100 条（服务端默认同样 100，显式传参保持语义自明）
   const { data: entries, isLoading, mutate } = useConsole(repoId, 100);
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -24,6 +24,6 @@ export function RepoConsolePage(): React.ReactNode {
         </Button>
       </Tooltip>
       <ConsolePanel entries={entries} loading={isLoading} onRefresh={() => void mutate()} />
-    </Flex>
+    </PageShell>
   );
 }

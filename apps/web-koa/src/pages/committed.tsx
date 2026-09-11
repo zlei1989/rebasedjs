@@ -8,8 +8,8 @@
  */
 import { useCommittedPage } from '@rebased/client';
 import type { CommittedEntry } from '@rebased/contracts';
-import { CommittedChangesPanel } from '@rebased/ui';
-import { Button, Flex, Tooltip, Typography } from 'antd';
+import { CommittedChangesPanel, PageShell } from '@rebased/ui';
+import { Button, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -67,7 +67,7 @@ export function RepoCommittedPage(): React.ReactNode {
     void navigate(`/repos/${repoId}/diff?${params.toString()}`);
   };
   return (
-    <Flex vertical align="flex-start" gap={8}>
+    <PageShell gap={8}>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -92,6 +92,6 @@ export function RepoCommittedPage(): React.ReactNode {
           onOpenFile={onOpenFile}
         />
       )}
-    </Flex>
+    </PageShell>
   );
 }

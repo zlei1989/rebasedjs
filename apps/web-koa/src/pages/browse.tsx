@@ -4,7 +4,7 @@
  * 查询串只作输入初始值，提交后不回写 URL（v1 简化）；rev 为空串时 useBrowseTree 挂 null key 不发请求。
  */
 import { useBrowseContent, useBrowseTree } from '@rebased/client';
-import { BrowsePanel, EmptyState } from '@rebased/ui';
+import { BrowsePanel, EmptyState, PageShell } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -34,7 +34,7 @@ export function RepoBrowsePage(): React.ReactNode {
     }
   };
   return (
-    <Flex vertical align="flex-start" gap={8} style={{ height: '100%' }}>
+    <PageShell gap={8}>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -42,7 +42,7 @@ export function RepoBrowsePage(): React.ReactNode {
           返回日志
         </Button>
       </Tooltip>
-      <Flex gap={8} style={{ width: '100%' }}>
+      <Flex gap={8}>
         <Tooltip title="输入提交哈希、分支或标签，回车浏览该版本的文件树">
           <Input
             data-testid="browse-rev-input"
@@ -83,6 +83,6 @@ export function RepoBrowsePage(): React.ReactNode {
           onSelectFile={setSelectedPath}
         />
       )}
-    </Flex>
+    </PageShell>
   );
 }

@@ -6,8 +6,8 @@
  * （watcher 事件覆盖面：分支/标签/贮藏/远程引用的建删与移动均产 refs.changed）。
  */
 import { useRepoEvents, useTagAction, useTags } from '@rebased/client';
-import { TagPanel } from '@rebased/ui';
-import { Button, Flex, Tooltip, message } from 'antd';
+import { PageShell, TagPanel } from '@rebased/ui';
+import { Button, Tooltip, message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 
 export function RepoTagsPage(): React.ReactNode {
@@ -24,7 +24,7 @@ export function RepoTagsPage(): React.ReactNode {
   // 标签列表未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!tags) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -49,6 +49,6 @@ export function RepoTagsPage(): React.ReactNode {
         }}
         acting={acting}
       />
-    </Flex>
+    </PageShell>
   );
 }
