@@ -86,7 +86,16 @@ function HunkBlock({
         <Typography.Text code style={{ fontSize: 12 }}>
           @@ -{hunk.beforeStart},{hunk.beforeCount} +{hunk.afterStart},{hunk.afterCount} @@
         </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+        {/* hunk 头 `@@ -a,b +c,d @@ <定位串>` 的定位串常是整个函数签名，且 `ellipsis` 会带来
+            `white-space: nowrap`（整串不可断行），而本行是无 wrap 的横向 flex。
+            原元素既无 `flex: 1` 也无 `minWidth: 0`（`flex-basis: auto`）：收缩量按内容宽度在
+            本元素与左侧 `@@ … @@` 标记之间**按比例分摊** —— 360px 实测标记被压到 106→61px、
+            高度 17→31px（其文本换行），而定位串照样要截断，即收缩的代价落在错的元素上。
+            补 `flex: 1 + minWidth: 0`（basis 0%）后收缩全部由本元素吸收、标记保持原尺寸；
+            宽屏下标记宽度与文本左沿、字号不变（实测同为 106px / 左沿 130 / 12px），观感不变。
+            刻意**不**换 `EllipsisText` 原语：它没有 `style` 入口，会丢掉本元素的 `fontSize: 12`
+            （本文件是 domain 组件、嵌在 panel 内，非紧凑密度页，无 density 兜底）→ 改字号属未授权视觉变更。 */}
+        <Typography.Text type="secondary" style={{ fontSize: 12, flex: 1, minWidth: 0 }} ellipsis>
           {hunk.heading}
         </Typography.Text>
       </div>
