@@ -20,7 +20,7 @@ import { RepoStatusBar } from '../domain/repo-status-bar';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
 import { CommittedStatusTag } from '../domain/committed-status';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** 日志过滤条件（受控：容器持有，变更即重查快照；为空时才是默认全量视图） */
 export interface LogFilters {
@@ -223,10 +223,30 @@ export function LogPage({
   const [tagMessage, setTagMessage] = useState('');
   // tag chips 显示开关（默认关，对齐 Java VcsLogApplicationSettings.showTagNames 默认 false）
   const [showTags, setShowTags] = useState(false);
-  // 提交图整块的 Tooltip 受控状态：图内每一行自带 Tooltip，悬停到行上时必须抑制整块气泡，
-  // 否则行气泡与整图气泡会同时弹出（与 repo-page 的 hoverId/actionHoverId 同一思路）
-  const [graphHovered, setGraphHovered] = useState(false);
-  const [graphRowHovered, setGraphRowHovered] = useState(false);
+  // 提交图区域高度：随可用空间自适应。CommitGraph 的 height 缺省是写死的 480（虚拟滚动的滚动窗口
+  // 需要确定高度），窗口比 480 高时图下方留一片空白、更矮时列表溢出宿主盒子；故本页量出宿主盒子的
+  // 实测高度交给它。行高/滚动窗口仍归 CommitGraph，本页只负责「这块区域有多高」。
+  // undefined = 量不到（宿主未挂载 / jsdom 无布局），由 CommitGraph 的默认高度兜底。
+  const [graphHeight, setGraphHeight] = useState<number | undefined>(undefined);
+  // 观察器挂在 ref 里而不是 effect 里：宿主 div 只在「有提交」分支渲染，而首次查询回来前它是缺席的
+  // （挂载时 effect 已跑过一次，且不会因 commits 到达而重跑），故用回调 ref 随挂载/卸载重新接线。
+  const graphObserverRef = useRef<ResizeObserver | null>(null);
+  const graphHostRef = useCallback((host: HTMLDivElement | null): void => {
+    graphObserverRef.current?.disconnect();
+    graphObserverRef.current = null;
+    if (host === null) return;
+    const measure = (): void => {
+      const available = host.clientHeight;
+      setGraphHeight(available > 0 ? available : undefined);
+    };
+    measure();
+    // 无 ResizeObserver 的环境（jsdom 测试）只保留首帧这一次测量
+    if (typeof ResizeObserver === 'undefined') return;
+    // 跟随窗口缩放、详情面板开合、过滤行换行等一切会改变宿主盒子高度的事件
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    graphObserverRef.current = observer;
+  }, []);
   /**
    * 「更多」菜单是否展开：展开期间抑制触发按钮的气泡。
    * 原因（浏览器实测）：按钮在页面顶部，气泡会被 antd 翻到下方，正好压住菜单顶部若干项——
@@ -358,38 +378,19 @@ export function LogPage({
         /* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
            antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */
         <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
-          {/* 提交图整块也要有 tooltip（行点击/右键由图上每一行承载）。
-              Tooltip 的 child 必须能接 ref 与 hover 事件：刻意交给下面这层真实 div 承接，
-              而不是把函数组件 CommitGraph 直接当子节点（那样拿不到 ref，气泡不会出现）。
-              open 受控：指针落进某一行时抑制整图气泡，行自带的气泡才是这一刻该显示的那个 */}
-          <Tooltip
-            open={graphHovered && !graphRowHovered}
-            title="提交图区域：单击某行可查看该提交详情，右键某行可打开该提交的操作菜单"
-          >
-            <div
-              style={{ height: '100%' }}
-              onMouseEnter={() => setGraphHovered(true)}
-              onMouseLeave={() => {
-                setGraphHovered(false);
-                setGraphRowHovered(false);
-              }}
-              // onMouseOver 会冒泡：用事件目标判断指针是否落在提交行（commit-graph 渲染的 data-testid）上
-              onMouseOver={(event) => {
-                const target = event.target;
-                setGraphRowHovered(
-                  target instanceof Element && target.closest('[data-testid="commit-graph-row"]') !== null,
-                );
-              }}
-            >
-              <CommitGraph
-                commits={commits}
-                onSelect={onSelectCommit}
-                onContextMenu={setMenuHash}
-                showTags={showTags}
-                selectedHash={selectedCommit?.hash ?? null}
-              />
-            </div>
-          </Tooltip>
+          {/* 宿主 div：height:100% 承接两栏布局分给它的可用空间（SplitPane 主区，或未选中提交时
+              独占满宽），并把实测高度经 graphHostRef 交给 CommitGraph —— 图区高度因此随窗口与相邻
+              元素自适应。刻意保留这层真实 div：下拉（右键菜单）需要一个能接 ref 的宿主节点 */}
+          <div ref={graphHostRef} data-testid="log-graph-host" style={{ height: '100%' }}>
+            <CommitGraph
+              commits={commits}
+              height={graphHeight}
+              onSelect={onSelectCommit}
+              onContextMenu={setMenuHash}
+              showTags={showTags}
+              selectedHash={selectedCommit?.hash ?? null}
+            />
+          </div>
         </Dropdown>
       )}
     </>
