@@ -8,11 +8,9 @@
  *   内联 display/flexDirection/alignItems 全为空串，而 jsdom 计算值（cssinjs 已注入 <style>）为
  *   flex / column / stretch。故「antd 提供的那三项」断言计算值，「本组件自己写的样式」断言内联串。
  *
- * 已知偏差（Task 1 的 `density.ts`，本任务无修改权限）：设计 §6/V1 期望紧凑 `fontSize === 12`，
- *   但 antd v6 的 `compactAlgorithm` 以「基础算法派生出的 fontSizeSM」为新基准重新推导整档字号，
- *   显式 `token.fontSize: 12` 反而被覆盖——实测实效为 10（SM 11 / LG 14）。已实测的最小修正在
- *   `density.ts`：`token` 改为 `{ fontSizeSM: 11 }` 即得 12/11/14。故此处不断言字面量 10 或 12，
- *   改为断言 PageShell 的**自身职责**：确实施加了密度、且逐字转交 Task 1 的主题（不在此处自行调值）。
+ * 密度（Fix round 1 已修正 Task 1 的 `density.ts`）：antd v6 的 `compactAlgorithm` 会覆盖传入的 `fontSize`，
+ *   只给 `fontSizeSM: 11` 才得实效 12 / 11 / 14。故此处按设计 §6 / V1 断言**精确值**（不再用 < 14 的弱形式）：
+ *   `density="compact"`（默认）→ 12，`density="default"` → antd 默认 14。
  */
 import { render, screen, within } from '@testing-library/react';
 import { ConfigProvider, theme } from 'antd';
@@ -45,17 +43,6 @@ function renderShell(props: Partial<PageShellProps> = {}): HTMLElement {
     </DensityProvider>,
   );
   return container.firstElementChild as HTMLElement;
-}
-
-/** 基准：把 Task 1 的 compactTheme 直接挂到 ConfigProvider 上，读同一探针的字号 */
-function referenceFontSize(mode: DensityMode): string {
-  // 同一用例内可能有多次 render，故查询一律限定在本次 container 内（RTL 默认查 document.body）
-  const { container } = render(
-    <ConfigProvider theme={compactTheme(mode)}>
-      <TokenProbe />
-    </ConfigProvider>,
-  );
-  return within(container).getByTestId('probe').textContent ?? '';
 }
 
 /** 基准：指定 mode 下经 PageShell 得到的底色 */
@@ -95,12 +82,10 @@ describe('PageShell', () => {
     expect(root.style.alignItems).toBe('');
   });
 
-  it('默认施加紧凑密度：字号小于 antd 默认 14，且与 Task 1 的 compactTheme 逐字一致', () => {
+  it('默认施加紧凑密度：字号恰为 12', () => {
     renderShell();
-    const compactFontSize = screen.getByTestId('probe').textContent;
-    expect(Number(compactFontSize)).toBeLessThan(14);
-    // 密度数值只许在 density.ts 调整（设计 §6）：PageShell 必须原样转交，不得自行改 token
-    expect(compactFontSize).toBe(referenceFontSize('dark'));
+    // 精确值断言（12 而非「< 14」）：设计 §6 的 14→12 是验收项，弱形式会放过「10px」这类过小偏差
+    expect(screen.getByTestId('probe').textContent).toBe('12');
   });
 
   it('density="default" 豁免紧凑密度：字号回到 antd 默认 14', () => {
