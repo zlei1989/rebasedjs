@@ -6,7 +6,7 @@
  *  纯受控：open 由父级持有；策略为内部状态，关闭时复位为 merge。
  */
 import { useState } from 'react';
-import { Alert, Button, Flex, Modal, Radio, Typography } from 'antd';
+import { Alert, Button, Flex, Modal, Radio, Tooltip, Typography } from 'antd';
 import type { UpdateBody, UpdateOutcome } from '@rebased/contracts';
 
 export interface UpdateProjectDialogProps {
@@ -75,14 +75,16 @@ export function UpdateProjectDialog({
             ? '远端有更新，请先拉取最新提交（更新完成后将自动重新推送）：'
             : '更新方式（fetch 全部远程后合入当前分支）：'}
         </Typography.Text>
-        <Radio.Group
-          value={strategy}
-          onChange={(e) => setStrategy(e.target.value as 'merge' | 'rebase')}
-          options={[
-            { value: 'merge', label: 'merge：合并（生成合并提交）' },
-            { value: 'rebase', label: 'rebase：变基（线性历史）' },
-          ]}
-        />
+        <Tooltip title="更新策略：merge 生成合并提交保留双方历史；rebase 把本地提交重放到远端之上（线性历史，会改写本地提交）">
+          <Radio.Group
+            value={strategy}
+            onChange={(e) => setStrategy(e.target.value as 'merge' | 'rebase')}
+            options={[
+              { value: 'merge', label: 'merge：合并（生成合并提交）' },
+              { value: 'rebase', label: 'rebase：变基（线性历史）' },
+            ]}
+          />
+        </Tooltip>
         {/* 更新会话结果（GitUpdateSession 结果汇总）：fetched 引用数 + pull 状态 */}
         {outcome !== undefined && outcome !== null ? (
           <Flex vertical gap={6} data-testid="update-outcome-panel">
@@ -102,15 +104,17 @@ export function UpdateProjectDialog({
         ) : null}
         {onResetToTracked !== undefined && resetToTracked !== undefined && (
           <Flex gap={8} align="center" wrap="wrap" style={{ marginTop: 4 }}>
-            <Button
-              size="small"
-              data-testid="reset-to-tracked"
-              danger
-              loading={resetting}
-              onClick={onResetToTracked}
-            >
-              Reset to tracked：{resetToTracked.localBranch} → {resetToTracked.upstream}
-            </Button>
+            <Tooltip title="硬重置本地分支到上游（丢弃工作区与索引改动，回到上游提交状态；不可撤销）">
+              <Button
+                size="small"
+                data-testid="reset-to-tracked"
+                danger
+                loading={resetting}
+                onClick={onResetToTracked}
+              >
+                Reset to tracked：{resetToTracked.localBranch} → {resetToTracked.upstream}
+              </Button>
+            </Tooltip>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               丢弃工作区/索引变更，回到上游分支状态
             </Typography.Text>

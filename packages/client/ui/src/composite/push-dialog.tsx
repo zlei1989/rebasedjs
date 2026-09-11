@@ -7,7 +7,7 @@
  *  纯受控：open 由父级持有；远程/分支/选项为内部状态，关闭时复位。
  */
 import { useMemo, useState } from 'react';
-import { Checkbox, Flex, Input, Modal, Select, Tag, Typography } from 'antd';
+import { Checkbox, Flex, Input, Modal, Select, Tag, Tooltip, Typography } from 'antd';
 import type { PushBody, RemoteList } from '@rebased/contracts';
 
 export interface PushDialogProps {
@@ -87,35 +87,53 @@ export function PushDialog({ open, remotes, currentBranch, onOk, onCancel, confi
         ) : null}
         <Flex align="center" gap={8}>
           <Typography.Text type="secondary">推送到远程：</Typography.Text>
-          <Select
-            data-testid="push-remote-select"
-            style={{ flex: 1 }}
-            placeholder="选择远程"
-            value={effectiveRemote}
-            options={options}
-            onChange={setSelected}
-          />
+          <Tooltip title="推送到哪个远程：缺省按 origin 或唯一远程预选，手动改选会覆盖该默认值">
+            <Select
+              data-testid="push-remote-select"
+              style={{ flex: 1 }}
+              placeholder="选择远程"
+              value={effectiveRemote}
+              options={options}
+              onChange={setSelected}
+            />
+          </Tooltip>
         </Flex>
         <Flex align="center" gap={8}>
           <Typography.Text type="secondary">分支：</Typography.Text>
-          <Input
-            data-testid="push-branch-input"
-            placeholder="分支（默认当前分支）"
-            value={hashMode ? (currentBranch ?? '') : branch}
-            disabled={hashMode}
-            onChange={(e) => setBranch(e.target.value)}
-          />
+          {/* 哈希模式（Push up to Commit）下分支被锁定：禁用输入不派发 hover，在 Tooltip 与 Input 间包一层 span 承接提示；
+              span 用 display:flex + flex:1 顶替原来「输入框撑满剩余宽度」的弹性行为，宽度与禁用前后保持一致 */}
+          <Tooltip
+            title={
+              hashMode
+                ? '分支已锁定为当前分支：该模式推的是上面这个提交，不能换分支名'
+                : '要推送的本地分支名：默认当前分支，可改成其他本地分支（不填则推当前分支）'
+            }
+          >
+            <span style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+              <Input
+                data-testid="push-branch-input"
+                placeholder="分支（默认当前分支）"
+                value={hashMode ? (currentBranch ?? '') : branch}
+                disabled={hashMode}
+                onChange={(e) => setBranch(e.target.value)}
+              />
+            </span>
+          </Tooltip>
         </Flex>
         <Flex vertical gap={4}>
-          <Checkbox checked={forceWithLease} onChange={(e) => setForceWithLease(e.target.checked)}>
-            <Typography.Text type="danger">
-              force-with-lease：安全强推（可能覆盖远程提交，慎用）
-            </Typography.Text>
-          </Checkbox>
-          {!hashMode ? (
-            <Checkbox checked={setUpstream} onChange={(e) => setSetUpstream(e.target.checked)}>
-              set-upstream：设为上游（-u，首次推送时建议勾选）
+          <Tooltip title="勾选后改用 force-with-lease：远端若已被他人更新则拒绝推送（比 --force 安全，不会静默覆盖）">
+            <Checkbox checked={forceWithLease} onChange={(e) => setForceWithLease(e.target.checked)}>
+              <Typography.Text type="danger">
+                force-with-lease：安全强推（可能覆盖远程提交，慎用）
+              </Typography.Text>
             </Checkbox>
+          </Tooltip>
+          {!hashMode ? (
+            <Tooltip title="勾选后带 -u：把该远程分支设为当前分支的上游（首次推送新分支时建议勾选）">
+              <Checkbox checked={setUpstream} onChange={(e) => setSetUpstream(e.target.checked)}>
+                set-upstream：设为上游（-u，首次推送时建议勾选）
+              </Checkbox>
+            </Tooltip>
           ) : null}
         </Flex>
       </Flex>

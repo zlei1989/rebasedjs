@@ -6,7 +6,7 @@
  *  q 与 mode 为组件内简单状态（接口无对应受控 prop）；results/searching/error 与全部回调由容器注入。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Segmented, Spin, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Input, Segmented, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { BranchRef, SearchMode, SearchResult } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { formatCommitDate } from '../domain/format';
@@ -40,26 +40,30 @@ function ResultRow({
   onSelectCommit?: (hash: string) => void;
 }): React.ReactNode {
   return (
-    <Flex
-      data-testid={`search-result-${index}`}
-      align="center"
-      gap={8}
-      style={{ padding: '4px 0', cursor: onSelectCommit ? 'pointer' : undefined }}
-      onClick={() => onSelectCommit?.(result.hash)}
-    >
-      <Typography.Text code style={{ flexShrink: 0 }}>
-        {result.shortHash}
-      </Typography.Text>
-      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-        {result.subject}
-      </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-        {result.author}
-      </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-        {formatCommitDate(result.dateIso)}
-      </Typography.Text>
-    </Flex>
+    /* 整行可点（未注入 onSelectCommit 时不挂有效回调）→ 行 Tooltip 说明点击后果；
+       Flex 是 antd 容器组件，脚本按容器豁免，这里按「可点行」口径人工补上 */
+    <Tooltip title={onSelectCommit ? '打开该提交：跳到提交日志并选中这一条' : undefined}>
+      <Flex
+        data-testid={`search-result-${index}`}
+        align="center"
+        gap={8}
+        style={{ padding: '4px 0', cursor: onSelectCommit ? 'pointer' : undefined }}
+        onClick={() => onSelectCommit?.(result.hash)}
+      >
+        <Typography.Text code style={{ flexShrink: 0 }}>
+          {result.shortHash}
+        </Typography.Text>
+        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+          {result.subject}
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+          {result.author}
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+          {formatCommitDate(result.dateIso)}
+        </Typography.Text>
+      </Flex>
+    </Tooltip>
   );
 }
 
@@ -78,30 +82,35 @@ function BranchQuickSearch({
   return (
     <Card size="small" title="分支快速搜索">
       <Flex vertical gap={8}>
-        <Input
-          data-testid="branch-quick-input"
-          placeholder="输入分支名（文本即滤）"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+        {/* 输入即滤：说明作用对象（下方分支列表）与前提（纯前端过滤，不发请求） */}
+        <Tooltip title="按分支名过滤下方列表：输入子串即时筛选（纯前端过滤，不发请求），清空恢复全部">
+          <Input
+            data-testid="branch-quick-input"
+            placeholder="输入分支名（文本即滤）"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </Tooltip>
         {matched.length === 0 ? (
           <Typography.Text type="secondary">无匹配分支</Typography.Text>
         ) : (
           <Flex vertical>
             {matched.map((b) => (
-              <Flex
-                key={b.name}
-                data-testid={`branch-quick-${b.name}`}
-                align="center"
-                gap={8}
-                style={{ cursor: 'pointer', padding: '4px 0' }}
-                onClick={() => onSelectBranch(b.name)}
-              >
-                <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-                  {b.name}
-                </Typography.Text>
-                {b.current && <Tag color="green">当前</Tag>}
-              </Flex>
+              /* 整行可点 → 行 Tooltip 说明点击后果（分支名本身不自解释「点了会怎样」） */
+              <Tooltip key={b.name} title={b.current ? '当前分支：重新检出到它并跳到其提交日志' : `检出分支 ${b.name} 并跳到其提交日志`}>
+                <Flex
+                  data-testid={`branch-quick-${b.name}`}
+                  align="center"
+                  gap={8}
+                  style={{ cursor: 'pointer', padding: '4px 0' }}
+                  onClick={() => onSelectBranch(b.name)}
+                >
+                  <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+                    {b.name}
+                  </Typography.Text>
+                  {b.current && <Tag color="green">当前</Tag>}
+                </Flex>
+              </Tooltip>
             ))}
           </Flex>
         )}
@@ -135,26 +144,38 @@ export function SearchPanel({
         <BranchQuickSearch branches={branches} onSelectBranch={onSelectBranch} />
       )}
       <Flex gap={8}>
-        <Input
-          data-testid="search-input"
-          placeholder="搜索提交信息或内容"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onPressEnter={submit}
-        />
-        <Button
-          type="primary"
-          data-testid="search-submit"
-          // antd 对双汉字按钮默认自动插空格「搜 索」：关闭保证按钮可见文本与无障碍名精确为「搜索」
-          autoInsertSpace={false}
-          disabled={q.trim() === ''}
-          loading={searching}
-          onClick={submit}
-        >
-          搜索
-        </Button>
+        {/* 关键词输入框：说明回车等价操作与检索范围（模式由下方 Segmented 决定） */}
+        <Tooltip title="输入提交关键词：回车等同点「搜索」；命中范围取决于下方所选模式，空白关键词不发起检索">
+          <Input
+            data-testid="search-input"
+            placeholder="搜索提交信息或内容"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onPressEnter={submit}
+          />
+        </Tooltip>
+        {/* 关键词为空时禁用（空白查询无意义），禁用按钮不派发 hover → 按 antd 官方做法
+            在 Tooltip 与 Button 间包一层 span 承接提示；inline-flex 保持原行内布局尺寸 */}
+        <Tooltip title={q.trim() === '' ? '先在左侧输入关键词，空白关键词不发起检索' : '按当前关键词与所选模式检索提交，结果列在下方'}>
+          <span style={{ display: 'inline-flex' }}>
+            <Button
+              type="primary"
+              data-testid="search-submit"
+              // antd 对双汉字按钮默认自动插空格「搜 索」：关闭保证按钮可见文本与无障碍名精确为「搜索」
+              autoInsertSpace={false}
+              disabled={q.trim() === ''}
+              loading={searching}
+              onClick={submit}
+            >
+              搜索
+            </Button>
+          </span>
+        </Tooltip>
       </Flex>
-      <Segmented options={MODE_OPTIONS} value={mode} onChange={(v) => setMode(v as SearchMode)} />
+      {/* 模式开关：说明两个选项各自的检索口径（文字标签本身不自解释差异） */}
+      <Tooltip title="切换检索模式：信息 grep 匹配提交信息全文，内容 pickaxe 匹配新增/删除的内容行">
+        <Segmented options={MODE_OPTIONS} value={mode} onChange={(v) => setMode(v as SearchMode)} />
+      </Tooltip>
       {searching ? (
         <Spin data-testid="search-loading" />
       ) : error ? (

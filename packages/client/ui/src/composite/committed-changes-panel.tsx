@@ -6,7 +6,7 @@
  *  纯受控（page/selectedHash + 各回调）；ui 不调接口，数据与回调由调用方容器注入。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Typography, theme } from 'antd';
+import { Button, Card, Flex, Tooltip, Typography, theme } from 'antd';
 import { CaretDownOutlined, CaretRightOutlined, FolderOutlined } from '@ant-design/icons';
 import type { CommittedEntry, CommittedFileStatus, CommittedPage } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -89,30 +89,34 @@ function CommitRow({
   // 选中底色走主题 token（controlItemBgActive：明亮 #e6f4ff / 暗色 #111a2c），不再硬编码明亮专用色
   const { token } = theme.useToken();
   return (
-    <Flex
-      data-testid={`committed-entry-${index}`}
-      align="center"
-      gap={8}
-      style={{
-        padding: '4px 8px',
-        cursor: onSelectCommit ? 'pointer' : undefined,
-        backgroundColor: selected ? token.controlItemBgActive : undefined,
-      }}
-      onClick={() => onSelectCommit?.(entry.hash)}
-    >
-      <Typography.Text code style={{ flexShrink: 0 }}>
-        {entry.shortHash}
-      </Typography.Text>
-      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-        {entry.subject}
-      </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-        {entry.author}
-      </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-        {formatCommitDate(entry.dateIso)}
-      </Typography.Text>
-    </Flex>
+    // 整行可点（未接 onSelectCommit 时是纯列表行）→ 整行包一个 Tooltip；
+    // 行内没有别的可交互控件（无第二个气泡可冲突），故用默认的悬停触发即可，无需受控 open
+    <Tooltip title={onSelectCommit ? '单击选中该提交，右侧列出它在这次提交里的变更文件' : undefined}>
+      <Flex
+        data-testid={`committed-entry-${index}`}
+        align="center"
+        gap={8}
+        style={{
+          padding: '4px 8px',
+          cursor: onSelectCommit ? 'pointer' : undefined,
+          backgroundColor: selected ? token.controlItemBgActive : undefined,
+        }}
+        onClick={() => onSelectCommit?.(entry.hash)}
+      >
+        <Typography.Text code style={{ flexShrink: 0 }}>
+          {entry.shortHash}
+        </Typography.Text>
+        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+          {entry.subject}
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+          {entry.author}
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+          {formatCommitDate(entry.dateIso)}
+        </Typography.Text>
+      </Flex>
+    </Tooltip>
   );
 }
 
@@ -130,6 +134,10 @@ function TreeNodeRow({
   depth: number;
   hash: string;
   collapsed: Set<string>;
+  /**
+   * 目录行折叠开关。Tooltip 只包「行本身」而不是递归调用点：包在调用点上会罩住整棵子树，
+   * 悬停子文件时目录气泡与文件气泡同弹（行气泡必须一对一）。
+   */
   onToggle: (path: string) => void;
   onOpenFile?: (path: string, hash: string) => void;
 }): React.ReactNode {
@@ -137,17 +145,20 @@ function TreeNodeRow({
     const open = !collapsed.has(node.path);
     return (
       <>
-        <Flex
-          data-testid={`committed-dir-${node.path}`}
-          align="center"
-          gap={4}
-          style={{ padding: '4px 0', paddingLeft: depth * 16, cursor: 'pointer' }}
-          onClick={() => onToggle(node.path)}
-        >
-          {open ? <CaretDownOutlined style={{ fontSize: 10 }} /> : <CaretRightOutlined style={{ fontSize: 10 }} />}
-          <FolderOutlined />
-          <Typography.Text>{node.name}</Typography.Text>
-        </Flex>
+        {/* 目录行整行可点（折叠/展开）→ 行 Tooltip 包在行本身，不包递归调用（否则会连带罩住子行） */}
+        <Tooltip title={open ? '收起该目录（只影响显示，不改动任何文件）' : '展开该目录（只影响显示，不改动任何文件）'}>
+          <Flex
+            data-testid={`committed-dir-${node.path}`}
+            align="center"
+            gap={4}
+            style={{ padding: '4px 0', paddingLeft: depth * 16, cursor: 'pointer' }}
+            onClick={() => onToggle(node.path)}
+          >
+            {open ? <CaretDownOutlined style={{ fontSize: 10 }} /> : <CaretRightOutlined style={{ fontSize: 10 }} />}
+            <FolderOutlined />
+            <Typography.Text>{node.name}</Typography.Text>
+          </Flex>
+        </Tooltip>
         {open
           ? (node.children ?? []).map((child) => (
             <TreeNodeRow
@@ -165,23 +176,26 @@ function TreeNodeRow({
     );
   }
   return (
-    <Flex
-      data-testid={`committed-file-${node.fileIndex ?? node.path}`}
-      align="center"
-      gap={8}
-      style={{ padding: '4px 0', paddingLeft: depth * 16, cursor: onOpenFile ? 'pointer' : undefined }}
-      onClick={() => onOpenFile?.(node.path, hash)}
-    >
-      {node.status !== undefined ? <CommittedStatusTag status={node.status} /> : null}
-      {node.renameFrom ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {node.renameFrom} →
+    // 文件叶子整行可点（打开该文件的差异）→ 行 Tooltip（叶子无子行，不会与别的行气泡叠加）
+    <Tooltip title={onOpenFile ? '打开该文件在本次提交里的差异对比' : undefined}>
+      <Flex
+        data-testid={`committed-file-${node.fileIndex ?? node.path}`}
+        align="center"
+        gap={8}
+        style={{ padding: '4px 0', paddingLeft: depth * 16, cursor: onOpenFile ? 'pointer' : undefined }}
+        onClick={() => onOpenFile?.(node.path, hash)}
+      >
+        {node.status !== undefined ? <CommittedStatusTag status={node.status} /> : null}
+        {node.renameFrom ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+            {node.renameFrom} →
+          </Typography.Text>
+        ) : null}
+        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+          {node.name}
         </Typography.Text>
-      ) : null}
-      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-        {node.name}
-      </Typography.Text>
-    </Flex>
+      </Flex>
+    </Tooltip>
   );
 }
 
@@ -226,14 +240,16 @@ export function CommittedChangesPanel({
               ))}
               {/* 「加载更多」：仅在 hasMore 时出现；loading 态由 loadingMore 驱动（数据注入与回调由容器持有） */}
               {page?.hasMore ? (
-                <Button
-                  data-testid="committed-load-more"
-                  loading={loadingMore}
-                  onClick={onLoadMore}
-                  style={{ marginTop: 8 }}
-                >
-                  加载更多
-                </Button>
+                <Tooltip title="继续向后加载下一页提交记录（追加到现有列表）">
+                  <Button
+                    data-testid="committed-load-more"
+                    loading={loadingMore}
+                    onClick={onLoadMore}
+                    style={{ marginTop: 8 }}
+                  >
+                    加载更多
+                  </Button>
+                </Tooltip>
               ) : null}
             </Flex>
           </Card>

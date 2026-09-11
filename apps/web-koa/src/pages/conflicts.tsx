@@ -17,7 +17,7 @@ import {
   useSkipOperation,
 } from '@rebased/client';
 import { ConflictsPanel, MergeView, continueKindLabel } from '@rebased/ui';
-import { Button, Flex, message, Modal, Typography } from 'antd';
+import { Button, Flex, Tooltip, message, Modal, Typography } from 'antd';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -76,9 +76,12 @@ export function RepoConflictsPage(): React.ReactNode {
   return (
     <Flex vertical align="flex-start" style={{ height: '100%' }}>
       {/* 返回日志页 */}
-      <Button type="link" onClick={back}>
-        返回日志
-      </Button>
+      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+      <Tooltip title="返回该仓库的提交日志页">
+        <Button type="link" onClick={back}>
+          返回日志
+        </Button>
+      </Tooltip>
       {/* 进行中操作提示：中止入口在日志页操作条（P2-A），本页只做展示；文案按 kind 泛化（merge→完成合并/其他→继续xx） */}
       {operation && operation.kind !== 'none' ? (
         <Typography.Text type="secondary" style={{ padding: '0 16px' }}>

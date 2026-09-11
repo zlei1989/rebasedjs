@@ -4,7 +4,7 @@
  *  纯受控：open 由父级持有；远程/选项为内部状态，关闭时复位。
  */
 import { useMemo, useState } from 'react';
-import { Checkbox, Flex, Modal, Select, Typography } from 'antd';
+import { Checkbox, Flex, Modal, Select, Tooltip, Typography } from 'antd';
 import type { PullBody, RemoteList } from '@rebased/contracts';
 
 export interface PullDialogProps {
@@ -68,18 +68,22 @@ export function PullDialog({ open, remotes, onOk, onCancel, confirming }: PullDi
       <Flex vertical gap={12}>
         <Flex align="center" gap={8}>
           <Typography.Text type="secondary">从远程拉取：</Typography.Text>
-          <Select
-            data-testid="pull-remote-select"
-            style={{ flex: 1 }}
-            placeholder="选择远程"
-            value={effectiveRemote}
-            options={options}
-            onChange={setSelected}
-          />
+          <Tooltip title="从哪个远程拉取：缺省按 origin 或唯一远程预选，未选时由服务端取当前分支的上游">
+            <Select
+              data-testid="pull-remote-select"
+              style={{ flex: 1 }}
+              placeholder="选择远程"
+              value={effectiveRemote}
+              options={options}
+              onChange={setSelected}
+            />
+          </Tooltip>
         </Flex>
-        <Checkbox checked={rebase} onChange={(e) => setRebase(e.target.checked)}>
-          使用 rebase 而非 merge
-        </Checkbox>
+        <Tooltip title="勾选后以 rebase 方式合入远端提交（本地提交重放到远端之上，历史保持线性；不勾则生成合并提交）">
+          <Checkbox checked={rebase} onChange={(e) => setRebase(e.target.checked)}>
+            使用 rebase 而非 merge
+          </Checkbox>
+        </Tooltip>
       </Flex>
     </Modal>
   );

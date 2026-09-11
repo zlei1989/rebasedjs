@@ -101,22 +101,51 @@ function ConflictRow({
         {entry.path}
       </Typography.Text>
       <Tag color="red">{conflictKindLabel(entry.stages)}</Tag>
-      <Button
-        size="small"
-        data-testid={`resolve-ours-${entry.path}`}
-        disabled={resolving || !hasOurs}
-        onClick={() => onResolve({ strategy: 'ours', path: entry.path })}
+      {/* 「用我们的」：按我方版本整文件采纳（git checkout --ours，对侧改动随之丢弃）。
+          禁用有两种原因（解决请求进行中 / 该侧无版本必失败），文案分别说明；
+          禁用按钮不派发 hover（React 会抑制禁用控件的 onMouseEnter），故在 Tooltip 与 Button 之间
+          包一层 span 承接提示；inline-flex 让 span 紧贴按钮，不改变原 Flex 行的布局尺寸 */}
+      <Tooltip
+        title={
+          !hasOurs
+            ? '我方没有该文件版本（对方删除或本次未改动），采纳必失败：需要用「删除该文件」解决'
+            : resolving
+              ? '冲突解决请求进行中，完成后再操作'
+              : '采纳我方版本覆盖该文件（git checkout --ours）：对侧改动会被丢弃'
+        }
       >
-        用我们的
-      </Button>
-      <Button
-        size="small"
-        data-testid={`resolve-theirs-${entry.path}`}
-        disabled={resolving || !hasTheirs}
-        onClick={() => onResolve({ strategy: 'theirs', path: entry.path })}
+        <span style={{ display: 'inline-flex' }}>
+          <Button
+            size="small"
+            data-testid={`resolve-ours-${entry.path}`}
+            disabled={resolving || !hasOurs}
+            onClick={() => onResolve({ strategy: 'ours', path: entry.path })}
+          >
+            用我们的
+          </Button>
+        </span>
+      </Tooltip>
+      {/* 「用他们的」：同上，改为采纳对方版本（git checkout --theirs） */}
+      <Tooltip
+        title={
+          !hasTheirs
+            ? '对方没有该文件版本（我方删除或对方未改动），采纳必失败：需要用「删除该文件」解决'
+            : resolving
+              ? '冲突解决请求进行中，完成后再操作'
+              : '采纳对方版本覆盖该文件（git checkout --theirs）：我方改动会被丢弃'
+        }
       >
-        用他们的
-      </Button>
+        <span style={{ display: 'inline-flex' }}>
+          <Button
+            size="small"
+            data-testid={`resolve-theirs-${entry.path}`}
+            disabled={resolving || !hasTheirs}
+            onClick={() => onResolve({ strategy: 'theirs', path: entry.path })}
+          >
+            用他们的
+          </Button>
+        </span>
+      </Tooltip>
       {/* 删除/修改冲突（一侧无版本）：提供「保持删除」路径（git rm 语义） */}
       {!hasOurs || !hasTheirs ? (
         <Popconfirm
@@ -125,19 +154,29 @@ function ConflictRow({
           cancelText="取消"
           onConfirm={() => onResolve({ strategy: 'delete', path: entry.path })}
         >
-          <Button size="small" danger data-testid={`resolve-delete-${entry.path}`} disabled={resolving}>
-            删除该文件
-          </Button>
+          {/* Tooltip 放在 Popconfirm 内侧，保持 Popconfirm 的触发链完整（Popconfirm > Tooltip > Button）。
+              此处刻意不插 span：禁用按钮自身的 onClick 被 React 抑制，而套上 span 会把 Popconfirm 的
+              点击监听挪到 span 上，resolving 时点确认气泡仍会弹出并真的发出解决请求（行为变化） */}
+          <Tooltip title="删除该文件以解决冲突（git rm 语义）：确认后文件从索引与工作区移除">
+            <Button size="small" danger data-testid={`resolve-delete-${entry.path}`} disabled={resolving}>
+              删除该文件
+            </Button>
+          </Tooltip>
         </Popconfirm>
       ) : null}
-      <Button
-        size="small"
-        data-testid={`merge-manual-${entry.path}`}
-        disabled={resolving}
-        onClick={() => onOpenMergeView(entry.path)}
-      >
-        手动合并
-      </Button>
+      {/* 「手动合并」：打开三方合并视图逐块取舍，不改动仓库状态 */}
+      <Tooltip title={resolving ? '冲突解决请求进行中，完成后再操作' : '打开手动合并视图：逐块选择保留双方内容，存盘后再回本页继续'}>
+        <span style={{ display: 'inline-flex' }}>
+          <Button
+            size="small"
+            data-testid={`merge-manual-${entry.path}`}
+            disabled={resolving}
+            onClick={() => onOpenMergeView(entry.path)}
+          >
+            手动合并
+          </Button>
+        </span>
+      </Tooltip>
     </Flex>
   );
 }
@@ -196,9 +235,13 @@ export function ConflictsPanel({
             cancelText="取消"
             onConfirm={onSkip}
           >
-            <Button data-testid="skip-operation" disabled={remaining === 0}>
-              跳过
-            </Button>
+            {/* Tooltip 在内、Popconfirm 在外；不插 span 的原因同「删除该文件」——避免禁用态下
+                Popconfirm 的点击链被挪到 span 上而仍能弹出确认 */}
+            <Tooltip title="放弃当前这一提交的变更并继续后续流程（skip 语义，被丢弃的改动不可恢复）">
+              <Button data-testid="skip-operation" disabled={remaining === 0}>
+                跳过
+              </Button>
+            </Tooltip>
           </Popconfirm>
         )}
         <Tooltip title={remaining > 0 ? '还有未解决的冲突' : undefined}>

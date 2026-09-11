@@ -3,9 +3,10 @@
  *  列表（name + annotated 徽标 + subject + 操作：推送/删除 Popconfirm）
  *  + 创建 Modal（name 必填 + ref 可空默认 HEAD + message 可空——非空即附注标签）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
+ *  所有可交互元素（按钮/输入）均一对一包 Tooltip；Popconfirm 触发按钮的 Tooltip 放最内层。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Input, Modal, Popconfirm, Tag, Tooltip, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { TagAction, TagEntry, TagList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -41,9 +42,12 @@ function TagRow({ tag, onAction }: { tag: TagEntry; onAction: (action: TagAction
         cancelText="取消"
         onConfirm={() => onAction({ action: 'push', name: tag.name })}
       >
-        <Button size="small" data-testid={`tag-push-${tag.name}`}>
-          推送
-        </Button>
+        {/* Popconfirm 的触发按钮：Tooltip 放最内层，避免截断其点击触发链 */}
+        <Tooltip title="把该标签推到远程同名标签（远程已存在同名标签时会被拒绝）">
+          <Button size="small" data-testid={`tag-push-${tag.name}`}>
+            推送
+          </Button>
+        </Tooltip>
       </Popconfirm>
       <Popconfirm
         title={`确定从远程删除标签 ${tag.name}？`}
@@ -51,9 +55,11 @@ function TagRow({ tag, onAction }: { tag: TagEntry; onAction: (action: TagAction
         cancelText="取消"
         onConfirm={() => onAction({ action: 'deleteRemote', name: tag.name })}
       >
-        <Button size="small" danger data-testid={`tag-delete-remote-${tag.name}`}>
-          删除远程
-        </Button>
+        <Tooltip title="删除远程仓库上的该标签（本地标签不受影响，仍留在列表里）">
+          <Button size="small" danger data-testid={`tag-delete-remote-${tag.name}`}>
+            删除远程
+          </Button>
+        </Tooltip>
       </Popconfirm>
       <Popconfirm
         title={`确定删除标签 ${tag.name}？`}
@@ -61,9 +67,11 @@ function TagRow({ tag, onAction }: { tag: TagEntry; onAction: (action: TagAction
         cancelText="取消"
         onConfirm={() => onAction({ action: 'delete', name: tag.name })}
       >
-        <Button size="small" danger data-testid={`tag-delete-${tag.name}`}>
-          删除
-        </Button>
+        <Tooltip title="删除本地该标签（远程同名标签需用「删除远程」另行清理）">
+          <Button size="small" danger data-testid={`tag-delete-${tag.name}`}>
+            删除
+          </Button>
+        </Tooltip>
       </Popconfirm>
     </Flex>
   );
@@ -119,24 +127,30 @@ function CreateTagModal({
       onCancel={close}
     >
       <Flex vertical gap={8}>
-        <Input
-          data-testid="tag-create-name"
-          placeholder="标签名（必填）"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <Input
-          data-testid="tag-create-ref"
-          placeholder="引用（可空，默认 HEAD）"
-          value={ref}
-          onChange={(e) => setRef(e.target.value)}
-        />
-        <Input
-          data-testid="tag-create-message"
-          placeholder="附注信息（可空；非空即附注标签）"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-        />
+        <Tooltip title="标签名（必填）：与已有标签重名会被拒绝，留空时「确定」保持禁用">
+          <Input
+            data-testid="tag-create-name"
+            placeholder="标签名（必填）"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Tooltip>
+        <Tooltip title="指向的引用（可空）：留空即以当前 HEAD 打标，也可填分支名或提交号">
+          <Input
+            data-testid="tag-create-ref"
+            placeholder="引用（可空，默认 HEAD）"
+            value={ref}
+            onChange={(e) => setRef(e.target.value)}
+          />
+        </Tooltip>
+        <Tooltip title="附注信息（可空）：填了创建附注标签，留空则创建轻量标签">
+          <Input
+            data-testid="tag-create-message"
+            placeholder="附注信息（可空；非空即附注标签）"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+        </Tooltip>
       </Flex>
     </Modal>
   );
@@ -148,15 +162,17 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
       <Flex gap={8} align="center">
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          data-testid="tag-create-button"
-          loading={acting}
-          onClick={() => setCreateOpen(true)}
-        >
-          新建标签
-        </Button>
+        <Tooltip title="创建一个新标签（打开名称 / 引用 / 附注信息弹窗）">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            data-testid="tag-create-button"
+            loading={acting}
+            onClick={() => setCreateOpen(true)}
+          >
+            新建标签
+          </Button>
+        </Tooltip>
         {/* 推送全部标签（GitPushTagsActionGroup 语义）：Popconfirm 确认后一键推全部本地标签 */}
         <Popconfirm
           title="推送全部标签到远程仓库？"
@@ -164,9 +180,11 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
           cancelText="取消"
           onConfirm={() => onAction({ action: 'pushAll' })}
         >
-          <Button data-testid="tag-push-all" loading={acting}>
-            推送全部
-          </Button>
+          <Tooltip title="一次性把本地全部标签推到远程（标签多时耗时较长，远程同名会被拒绝）">
+            <Button data-testid="tag-push-all" loading={acting}>
+              推送全部
+            </Button>
+          </Tooltip>
         </Popconfirm>
       </Flex>
       <Card size="small" title={`标签列表（${tags.tags.length}）`}>

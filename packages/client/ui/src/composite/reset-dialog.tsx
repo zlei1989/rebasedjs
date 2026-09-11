@@ -5,7 +5,7 @@
  *  纯受控组件：open/ref 由父级持有，onOk 回调 {ref, mode}；mode/勾选为内部状态，关闭时复位。
  */
 import { useState } from 'react';
-import { Checkbox, Flex, Modal, Radio, Typography } from 'antd';
+import { Checkbox, Flex, Modal, Radio, Tooltip, Typography } from 'antd';
 import type { ResetBody } from '@rebased/contracts';
 
 export interface ResetDialogProps {
@@ -26,6 +26,9 @@ type ResetMode = ResetBody['mode'];
 export function ResetDialog({ open, ref, refLabel, onOk, onCancel, confirming }: ResetDialogProps): React.ReactNode {
   const [mode, setMode] = useState<ResetMode>('mixed');
   const [hardAcked, setHardAcked] = useState(false);
+  /** 是否正悬停模式 Radio：Radio.Group 的 div 也监听 mouseenter（进组内任一 Radio 同样算进组），
+   *  组 Tooltip 与 Radio 自身 Tooltip 会同时弹出——用它抑制组气泡，只留离鼠标最近的那一个 */
+  const [radioHovering, setRadioHovering] = useState(false);
 
   /** 关闭时复位 mode 与勾选：Modal 默认不卸载子树，取消后重开不能残留上次选择 */
   const close = (): void => {
@@ -60,18 +63,38 @@ export function ResetDialog({ open, ref, refLabel, onOk, onCancel, confirming }:
           <Typography.Text type="secondary">目标：</Typography.Text>
           <Typography.Text code>{refLabel ?? ref}</Typography.Text>
         </Flex>
-        <Radio.Group value={mode} onChange={(e) => setMode(e.target.value as ResetMode)}>
-          <Flex vertical gap={4}>
-            <Radio value="soft">soft：保留暂存区与工作区</Radio>
-            <Radio value="mixed">mixed：保留工作区、重置暂存区（默认）</Radio>
-            <Radio value="hard">hard：丢弃暂存区与工作区全部改动</Radio>
-          </Flex>
-        </Radio.Group>
+        {/* open 受控：悬停组内 Radio 时抑制组气泡（Radio 自己会弹），否则两个气泡叠在一起 */}
+        <Tooltip
+          open={radioHovering ? false : undefined}
+          title="重置模式：soft 只移动 HEAD；mixed 另重置暂存区；hard 连工作区改动一起丢弃——确定后不可撤销"
+        >
+          <Radio.Group value={mode} onChange={(e) => setMode(e.target.value as ResetMode)}>
+            <Flex vertical gap={4}>
+              <Tooltip title="soft：HEAD 移到目标提交，暂存区与工作区的改动原样保留（可重新提交）">
+                <Radio value="soft" onMouseEnter={() => setRadioHovering(true)} onMouseLeave={() => setRadioHovering(false)}>
+                  soft：保留暂存区与工作区
+                </Radio>
+              </Tooltip>
+              <Tooltip title="mixed：HEAD 移到目标提交并重置暂存区，工作区文件改动保留（git reset 默认行为）">
+                <Radio value="mixed" onMouseEnter={() => setRadioHovering(true)} onMouseLeave={() => setRadioHovering(false)}>
+                  mixed：保留工作区、重置暂存区（默认）
+                </Radio>
+              </Tooltip>
+              <Tooltip title="hard：HEAD 移到目标提交并丢弃暂存区与工作区全部改动（未提交内容会永久丢失）">
+                <Radio value="hard" onMouseEnter={() => setRadioHovering(true)} onMouseLeave={() => setRadioHovering(false)}>
+                  hard：丢弃暂存区与工作区全部改动
+                </Radio>
+              </Tooltip>
+            </Flex>
+          </Radio.Group>
+        </Tooltip>
         {/* hard 二次确认：仅 hard 模式渲染，勾选后才放行确定 */}
         {mode === 'hard' ? (
-          <Checkbox checked={hardAcked} onChange={(e) => setHardAcked(e.target.checked)}>
-            我了解 hard 将丢弃未提交改动
-          </Checkbox>
+          <Tooltip title="确认已知 hard 的后果：勾选后确定按钮才放行（未提交改动将被丢弃）">
+            <Checkbox checked={hardAcked} onChange={(e) => setHardAcked(e.target.checked)}>
+              我了解 hard 将丢弃未提交改动
+            </Checkbox>
+          </Tooltip>
         ) : null}
       </Flex>
     </Modal>

@@ -4,7 +4,7 @@
  *  行点击 → 日志页 ?select=<hash>（回跳选中）；顶部「退出对比」返回日志页。
  *  纯 props 驱动：数据由容器经双 range 查询注入；行渲染复用 CommitInfo 字段序列。
  */
-import { Button, Card, Flex, Typography } from 'antd';
+import { Button, Card, Flex, Tooltip, Typography } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
 import { formatCommitDate } from '../domain/format';
 
@@ -44,27 +44,29 @@ function CompareCard({
           </Typography.Text>
         ) : (
           commits.map((c) => (
-            <Flex
-              key={c.hash}
-              data-testid={`compare-row-${title}-${c.shortHash}`}
-              align="center"
-              gap={8}
-              style={{ cursor: 'pointer', padding: '4px 0' }}
-              onClick={() => onSelectCommit?.(c.hash)}
-            >
-              <Typography.Text code style={{ fontSize: 12, flexShrink: 0 }}>
-                {c.shortHash}
-              </Typography.Text>
-              <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-                {c.message}
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-                {c.author}
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-                {formatCommitDate(c.dateIso)}
-              </Typography.Text>
-            </Flex>
+            // 整行可点：点击即选中该提交（跳日志页定位）；行内无其它可交互元素，故不需要与内层气泡互斥
+            <Tooltip key={c.hash} title="选中该提交：跳转到提交日志页并定位到这条记录">
+              <Flex
+                data-testid={`compare-row-${title}-${c.shortHash}`}
+                align="center"
+                gap={8}
+                style={{ cursor: 'pointer', padding: '4px 0' }}
+                onClick={() => onSelectCommit?.(c.hash)}
+              >
+                <Typography.Text code style={{ fontSize: 12, flexShrink: 0 }}>
+                  {c.shortHash}
+                </Typography.Text>
+                <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+                  {c.message}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+                  {c.author}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+                  {formatCommitDate(c.dateIso)}
+                </Typography.Text>
+              </Flex>
+            </Tooltip>
           ))
         )}
       </Flex>
@@ -87,9 +89,11 @@ export function BranchCompareView({
           与分支 <Typography.Text code>{branch}</Typography.Text> 比较
         </Typography.Text>
         {onExit !== undefined && (
-          <Button size="small" data-testid="compare-exit" onClick={onExit}>
-            退出对比
-          </Button>
+          <Tooltip title="返回提交日志页：退出对比视图（不改动分支与工作树）">
+            <Button size="small" data-testid="compare-exit" onClick={onExit}>
+              退出对比
+            </Button>
+          </Tooltip>
         )}
       </Flex>
       <Flex gap={16} align="flex-start" wrap="wrap">

@@ -8,9 +8,10 @@
  *  工作区 → {name}（省略 staged，服务端缺省视为 false → git diff HEAD）；
  *  暂存 → {name, staged:true}；提交区间 → {name, from?, to?}。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
+ *  所有可交互元素（按钮/输入/单选组及其选项）均一对一包 Tooltip，说明作用对象与后果。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Radio, Typography } from 'antd';
+import { Button, Card, Flex, Input, Modal, Popconfirm, Radio, Tooltip, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { PatchCreateBody, PatchEntry, PatchList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -60,21 +61,35 @@ function PatchRow({
       <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
         {formatCommitDate(patch.createdAtIso)}
       </Typography.Text>
-      <Button size="small" data-testid={`apply-patch-${patch.name}`} disabled={acting} onClick={() => onApply(patch.name)}>
-        应用
-      </Button>
-      <Button size="small" data-testid={`import-patch-${patch.name}`} disabled={acting} onClick={() => onImportShelf(patch.name)}>
-        导入搁置
-      </Button>
+      {/* 行内按钮在 acting 期间禁用；禁用按钮不派发 hover，故在 Tooltip 与 Button 之间包一层 span 承接悬停 */}
+      <Tooltip title={acting ? '操作进行中：等结束后再应用该补丁' : '把该补丁的变更应用到当前工作区（不生成提交）'}>
+        <span>
+          <Button size="small" data-testid={`apply-patch-${patch.name}`} disabled={acting} onClick={() => onApply(patch.name)}>
+            应用
+          </Button>
+        </span>
+      </Tooltip>
+      <Tooltip title={acting ? '操作进行中：等结束后再导入该补丁' : '把该补丁转为搁置条目（不落到工作区）'}>
+        <span>
+          <Button size="small" data-testid={`import-patch-${patch.name}`} disabled={acting} onClick={() => onImportShelf(patch.name)}>
+            导入搁置
+          </Button>
+        </span>
+      </Tooltip>
+      {/* Popconfirm 触发按钮同样要能承接禁用态的悬停：Popconfirm > Tooltip > span > Button */}
       <Popconfirm
         title={`确定删除补丁 ${patch.name}？`}
         okText="确定"
         cancelText="取消"
         onConfirm={() => onDelete(patch.name)}
       >
-        <Button size="small" danger data-testid={`delete-patch-${patch.name}`} disabled={acting}>
-          删除
-        </Button>
+        <Tooltip title={acting ? '操作进行中：等结束后再删除该补丁' : '删除补丁文件（磁盘上不可恢复）'}>
+          <span>
+            <Button size="small" danger data-testid={`delete-patch-${patch.name}`} disabled={acting}>
+              删除
+            </Button>
+          </span>
+        </Tooltip>
       </Popconfirm>
     </Flex>
   );
@@ -138,33 +153,48 @@ function CreatePatchModal({
       onCancel={close}
     >
       <Flex vertical gap={12}>
-        <Input
-          data-testid="patch-create-name"
-          placeholder="补丁名（必填）"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <Radio.Group value={scope} onChange={(e) => setScope(e.target.value as CreateScope)}>
-          <Flex gap={16}>
-            <Radio value="workspace">工作区</Radio>
-            <Radio value="staged">暂存</Radio>
-            <Radio value="range">提交区间</Radio>
-          </Flex>
-        </Radio.Group>
+        <Tooltip title="补丁名（必填）：作为落盘文件名，留空时「确定」保持禁用">
+          <Input
+            data-testid="patch-create-name"
+            placeholder="补丁名（必填）"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Tooltip>
+        {/* Radio.Group 自身算一个控件；组内每个 Radio 也是控件（会被外层组遮挡），故内外各包一个 Tooltip */}
+        <Tooltip title="补丁范围：决定从哪些变更生成补丁，切换后下方输入框随之变化">
+          <Radio.Group value={scope} onChange={(e) => setScope(e.target.value as CreateScope)}>
+            <Flex gap={16}>
+              <Tooltip title="工作区：导出全部未提交变更，含已暂存内容（等价 git diff HEAD）">
+                <Radio value="workspace">工作区</Radio>
+              </Tooltip>
+              <Tooltip title="暂存区：只导出已 add 进索引的内容（等价 git diff --cached）">
+                <Radio value="staged">暂存</Radio>
+              </Tooltip>
+              <Tooltip title="提交区间：按起点到终点的两个版本取差异，选中后额外出现两个输入框">
+                <Radio value="range">提交区间</Radio>
+              </Tooltip>
+            </Flex>
+          </Radio.Group>
+        </Tooltip>
         {scope === 'range' ? (
           <Flex vertical gap={8}>
-            <Input
-              data-testid="patch-create-from"
-              placeholder="起点（分支/提交，可空默认 HEAD）"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            />
-            <Input
-              data-testid="patch-create-to"
-              placeholder="终点（分支/提交，可空默认 HEAD）"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-            />
+            <Tooltip title="起点（可空）：留空则该侧按 HEAD 取；支持分支名或提交号">
+              <Input
+                data-testid="patch-create-from"
+                placeholder="起点（分支/提交，可空默认 HEAD）"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+            </Tooltip>
+            <Tooltip title="终点（可空）：留空则该侧按 HEAD 取；与起点构成 diff 的两个端点">
+              <Input
+                data-testid="patch-create-to"
+                placeholder="终点（分支/提交，可空默认 HEAD）"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </Tooltip>
           </Flex>
         ) : null}
       </Flex>
@@ -178,15 +208,17 @@ export function PatchPanel({ patches, onCreate, onApply, onImportShelf, onDelete
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
       <Flex>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          data-testid="patch-create-button"
-          loading={acting}
-          onClick={() => setCreateOpen(true)}
-        >
-          创建补丁
-        </Button>
+        <Tooltip title="生成补丁文件存到仓库的补丁目录（打开命名与范围弹窗）">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            data-testid="patch-create-button"
+            loading={acting}
+            onClick={() => setCreateOpen(true)}
+          >
+            创建补丁
+          </Button>
+        </Tooltip>
       </Flex>
       <Card size="small" title={`补丁列表（${patches.patches.length}）`}>
         {patches.patches.length === 0 ? (

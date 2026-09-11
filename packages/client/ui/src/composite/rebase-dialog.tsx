@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
-import { Button, Flex, Input, Modal, Radio, Select, Spin, Typography } from 'antd';
+import { Button, Flex, Input, Modal, Radio, Select, Spin, Tooltip, Typography } from 'antd';
 import type { RebaseBody, RebaseTodoAction, TodoEntry } from '@rebased/contracts';
 
 export interface RebaseDialogProps {
@@ -77,32 +77,44 @@ function TodoRow({
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {row.subject}
       </Typography.Text>
-      <Select
-        data-testid={`todo-action-${row.hash}`}
-        size="small"
-        style={{ width: 96, flexShrink: 0 }}
-        value={row.action}
-        options={ACTION_OPTIONS}
-        onChange={(action) => onActionChange(row.hash, action)}
-      />
-      <Button
-        size="small"
-        type="text"
-        icon={<ArrowUpOutlined />}
-        aria-label="上移"
-        data-testid={`todo-up-${row.hash}`}
-        disabled={index === 0}
-        onClick={() => onMove(row.hash, -1)}
-      />
-      <Button
-        size="small"
-        type="text"
-        icon={<ArrowDownOutlined />}
-        aria-label="下移"
-        data-testid={`todo-down-${row.hash}`}
-        disabled={index === total - 1}
-        onClick={() => onMove(row.hash, 1)}
-      />
+      <Tooltip title="设置该提交的重放动作：pick 原样重放；reword 重放后改提交信息；squash 并入上一非 drop 行并保留信息；fixup 并入上一非 drop 行并丢弃信息；drop 丢弃该提交">
+        <Select
+          data-testid={`todo-action-${row.hash}`}
+          size="small"
+          style={{ width: 96, flexShrink: 0 }}
+          value={row.action}
+          options={ACTION_OPTIONS}
+          onChange={(action) => onActionChange(row.hash, action)}
+        />
+      </Tooltip>
+      {/* 首行禁上移、末行禁下移：禁用按钮不派发 hover，按 antd 做法在 Tooltip 与 Button 间包一层 span 承接提示。
+          span 用 display:flex 与按钮同尺寸（bare inline 包法会因基线留白把行撑高几像素） */}
+      <Tooltip title={index === 0 ? '该提交已是待办首行，无法再上移（可下移它后面的提交）' : '把该提交上移一行（调整 rebase 的重放顺序）'}>
+        <span style={{ display: 'flex' }}>
+          <Button
+            size="small"
+            type="text"
+            icon={<ArrowUpOutlined />}
+            aria-label="上移"
+            data-testid={`todo-up-${row.hash}`}
+            disabled={index === 0}
+            onClick={() => onMove(row.hash, -1)}
+          />
+        </span>
+      </Tooltip>
+      <Tooltip title={index === total - 1 ? '该提交已是待办末行，无法再下移（可上移它前面的提交）' : '把该提交下移一行（调整 rebase 的重放顺序）'}>
+        <span style={{ display: 'flex' }}>
+          <Button
+            size="small"
+            type="text"
+            icon={<ArrowDownOutlined />}
+            aria-label="下移"
+            data-testid={`todo-down-${row.hash}`}
+            disabled={index === total - 1}
+            onClick={() => onMove(row.hash, 1)}
+          />
+        </span>
+      </Tooltip>
     </Flex>
   );
 }
@@ -124,6 +136,9 @@ export function RebaseDialog(props: RebaseDialogProps): React.ReactNode {
   const [mode, setMode] = useState<RebaseMode>('simple');
   const [onto, setOnto] = useState('');
   const [rows, setRows] = useState<RebaseRow[]>(() => buildRows(todo));
+  /** 是否正悬停模式 Radio：Radio.Group 的 div 也监听 mouseenter（进组内任一 Radio 同样算进组），
+   *  组 Tooltip 与 Radio 自身 Tooltip 会同时弹出——用它抑制组气泡，只留离鼠标最近的那一个 */
+  const [radioHovering, setRadioHovering] = useState(false);
 
   /** 数据源内容键（hash 集合）：base 切换必然换内容；同内容重取（SWR 引用变化）不打断用户编辑 */
   const todoKey = useMemo(() => (todo ?? []).map((entry) => entry.hash).join('\n'), [todo]);
@@ -202,32 +217,54 @@ export function RebaseDialog(props: RebaseDialogProps): React.ReactNode {
       onCancel={close}
     >
       <Flex vertical gap={12}>
-        <Radio.Group value={mode} onChange={(e) => setMode(e.target.value as RebaseMode)}>
-          <Flex gap={16}>
-            <Radio value="simple">简单</Radio>
-            <Radio value="interactive">交互</Radio>
-          </Flex>
-        </Radio.Group>
+        {/* open 受控：悬停组内 Radio 时抑制组气泡（Radio 自己会弹），否则两个气泡叠在一起 */}
+        <Tooltip
+          open={radioHovering ? false : undefined}
+          title="变基模式：简单＝直接把提交搬到目标之上；交互＝先逐条编辑待重放的提交（动作与顺序）"
+        >
+          <Radio.Group value={mode} onChange={(e) => setMode(e.target.value as RebaseMode)}>
+            <Flex gap={16}>
+              <Tooltip title="简单模式：指定一个目标引用，把 onto..HEAD 的提交整体搬过去，不逐条编辑">
+                <Radio value="simple" onMouseEnter={() => setRadioHovering(true)} onMouseLeave={() => setRadioHovering(false)}>
+                  简单
+                </Radio>
+              </Tooltip>
+              <Tooltip title="交互模式：先编辑待重放提交清单（改动作、调顺序）再执行，对应 git rebase -i">
+                <Radio
+                  value="interactive"
+                  onMouseEnter={() => setRadioHovering(true)}
+                  onMouseLeave={() => setRadioHovering(false)}
+                >
+                  交互
+                </Radio>
+              </Tooltip>
+            </Flex>
+          </Radio.Group>
+        </Tooltip>
         {mode === 'simple' ? (
           <Flex vertical gap={4}>
             <Typography.Text type="secondary">目标（onto）：</Typography.Text>
-            <Input
-              data-testid="rebase-onto"
-              placeholder="如 main、HEAD~2 或提交哈希"
-              value={onto}
-              onChange={(e) => setOnto(e.target.value)}
-            />
+            <Tooltip title="变基目标：把当前分支的提交重放到该引用之上，可填分支名、HEAD~n 或提交哈希">
+              <Input
+                data-testid="rebase-onto"
+                placeholder="如 main、HEAD~2 或提交哈希"
+                value={onto}
+                onChange={(e) => setOnto(e.target.value)}
+              />
+            </Tooltip>
           </Flex>
         ) : (
           <Flex vertical gap={8}>
             <Flex align="center" gap={8}>
               <Typography.Text type="secondary">基准（base）：</Typography.Text>
-              <Input
-                data-testid="rebase-base"
-                placeholder="如 main（base..HEAD 的提交将重放）"
-                value={base ?? ''}
-                onChange={(e) => onBaseChange?.(e.target.value)}
-              />
+              <Tooltip title="基准引用：取 base..HEAD 的提交作为待重放清单，改动会立即重新拉取清单">
+                <Input
+                  data-testid="rebase-base"
+                  placeholder="如 main（base..HEAD 的提交将重放）"
+                  value={base ?? ''}
+                  onChange={(e) => onBaseChange?.(e.target.value)}
+                />
+              </Tooltip>
             </Flex>
             {todoLoading ? (
               <Spin data-testid="rebase-todo-loading" />

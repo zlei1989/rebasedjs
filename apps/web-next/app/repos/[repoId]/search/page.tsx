@@ -8,7 +8,7 @@
 import { useBranches, useCheckout, useSearch } from '@rebased/client';
 import type { SearchMode } from '@rebased/contracts';
 import { SearchPanel } from '@rebased/ui';
-import { Button, Flex, message } from 'antd';
+import { Button, Flex, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 
@@ -29,9 +29,12 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   return (
     <Flex vertical align="flex-start" gap={8}>
       {/* 返回日志页 */}
-      <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-        返回日志
-      </Button>
+      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+      <Tooltip title="返回该仓库的提交日志页">
+        <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
+          返回日志
+        </Button>
+      </Tooltip>
       <SearchPanel
         key={repoId}
         onSearch={(q, mode) => setSearch({ q, mode })}

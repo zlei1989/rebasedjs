@@ -651,7 +651,7 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 ### 5.2 全局骨架
 
 ```text
-RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
+RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
     │                              │ 顶栏：状态/分支/合并/贮藏/设置 + OperationStatus
     └──(克隆/初始化：RepoPage Modal)     │ 更多菜单：拉取/推送/更新项目/远程管理/变基/标签/溯源/
                                    │   历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块
@@ -666,7 +666,7 @@ RepoPage ──Open/双击最近项目──▶ LogPage（仓库枢纽页）
 
 | # | 源 → 目标 | 手势/入口 | Java 证据 | rebasedjs |
 |---|-----------|-----------|-----------|-----------|
-| 1 | RepoPage → 主窗口 | 双击最近项目 / Open | `OpenSelectedProjectsAction`（PlatformActions.xml:1251） | ✅ 打开成功 `navigate(/repos/:id)` |
+| 1 | RepoPage → 主窗口 | 点击最近项目 / Open | `OpenSelectedProjectsAction`（PlatformActions.xml:1251） | ✅ 点击最近列表项（或输入路径 Open）→ `openRepoFlow`（校验 + 注册 + 刷新「最近」排序）→ `navigate(/repos/:id)`；打开中行内「打开中…」加载态，失效条目走中文错误提示而非空白日志页 |
 | 2 | RepoPage → 克隆对话框 → 主窗口 | Get from VCS | `GetFromVersionControlAction` → `VcsCloneDialog`；`ProjectCheckoutListener.java:21` | ✅ 克隆 Modal（URL + Directory）→ `POST /repos/clone` → 日志页 |
 | 3 | RepoPage → SettingsPage | 欢迎屏 Configure | PlatformActions.xml:1208-1209 | ✅ 欢迎屏「设置」按钮（以最近仓库 id → `/repos/:id/settings`；无最近仓库禁用） |
 | 4 | 主窗口 → RepoPage | File → Close Project | `CloseProjectsActionBase.kt:42-46` | ✅ LogPage 顶栏「首页」链接 → `/`（File→Close Project 语义） |

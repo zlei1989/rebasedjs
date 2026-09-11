@@ -11,7 +11,7 @@
  * 这里用 key 随全部开关变化强制重挂载，保证 renderSideBySide/ignoreTrimWhitespace/folding 等生效。
  */
 import { useState } from 'react';
-import { Checkbox, Flex, Segmented, Select, Switch, Typography } from 'antd';
+import { Checkbox, Flex, Segmented, Select, Switch, Tooltip, Typography } from 'antd';
 import type { FileVersions } from '@rebased/contracts';
 import { MonacoDiffView, type MonacoDiffLoader } from '../base/monaco-diff-view';
 
@@ -62,57 +62,69 @@ export function DiffViewer({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
       <Flex align="center" gap={12} wrap="wrap">
-        <Segmented
-          options={[
-            { label: '并排', value: 'side' },
-            { label: '行内', value: 'inline' },
-          ]}
-          value={sideBySide ? 'side' : 'inline'}
-          onChange={(v) => setSideBySide(v === 'side')}
-        />
-        {/* from/to 模式：对比对象是两定提交，staged/工作区切换无意义且服务端互斥（400），隐藏 */}
-        {fromTo ? null : (
+        <Tooltip title="差异呈现方式：左右两栏逐行对照，或单栏里成对显示增删行">
           <Segmented
             options={[
-              { label: '工作区', value: 'worktree' },
-              { label: '已暂存', value: 'staged' },
+              { label: '并排', value: 'side' },
+              { label: '行内', value: 'inline' },
             ]}
-            value={staged ? 'staged' : 'worktree'}
-            onChange={(v) => onToggleStaged?.(v === 'staged')}
+            value={sideBySide ? 'side' : 'inline'}
+            onChange={(v) => setSideBySide(v === 'side')}
           />
+        </Tooltip>
+        {/* from/to 模式：对比对象是两定提交，staged/工作区切换无意义且服务端互斥（400），隐藏 */}
+        {fromTo ? null : (
+          <Tooltip title="对比哪一侧的改动：未暂存的工作区改动，或已加入暂存区的内容">
+            <Segmented
+              options={[
+                { label: '工作区', value: 'worktree' },
+                { label: '已暂存', value: 'staged' },
+              ]}
+              value={staged ? 'staged' : 'worktree'}
+              onChange={(v) => onToggleStaged?.(v === 'staged')}
+            />
+          </Tooltip>
         )}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Switch checked={ignoreWhitespace} onChange={(checked) => onToggleWhitespace?.(checked)} />
+          <Tooltip title="忽略空白差异：开启后缩进与行尾空白的改动不计入差异，只看实质内容变化">
+            <Switch checked={ignoreWhitespace} onChange={(checked) => onToggleWhitespace?.(checked)} />
+          </Tooltip>
           忽略空白
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Checkbox
-            data-testid="diff-folding"
-            checked={folding}
-            onChange={(e) => setFolding(e.target.checked)}
-          >
-            折叠
-          </Checkbox>
+          <Tooltip title="折叠未变更代码块：开启后长文件只展开改动附近的内容，便于快速定位">
+            <Checkbox
+              data-testid="diff-folding"
+              checked={folding}
+              onChange={(e) => setFolding(e.target.checked)}
+            >
+              折叠
+            </Checkbox>
+          </Tooltip>
         </span>
-        <Select
-          data-testid="diff-whitespace"
-          size="small"
-          style={{ width: 130 }}
-          value={renderWhitespace === 'all' ? 'all' : 'none'}
-          options={[
-            { value: 'none', label: '空白不显示' },
-            { value: 'all', label: '空白显示' },
-          ]}
-          onChange={(v) => setRenderWhitespace(v === 'all' ? 'all' : 'none')}
-        />
-        <Select
-          data-testid="diff-context"
-          size="small"
-          style={{ width: 140 }}
-          value={contextLines}
-          options={CONTEXT_LINES}
-          onChange={setContextLines}
-        />
+        <Tooltip title="空白字符渲染：选择是否把空格与制表符以可见符号标出（只影响显示，不改内容）">
+          <Select
+            data-testid="diff-whitespace"
+            size="small"
+            style={{ width: 130 }}
+            value={renderWhitespace === 'all' ? 'all' : 'none'}
+            options={[
+              { value: 'none', label: '空白不显示' },
+              { value: 'all', label: '空白显示' },
+            ]}
+            onChange={(v) => setRenderWhitespace(v === 'all' ? 'all' : 'none')}
+          />
+        </Tooltip>
+        <Tooltip title="未变更区域的上下文行数：选「全部显示」看整文件，选数值只保留改动区附近若干行">
+          <Select
+            data-testid="diff-context"
+            size="small"
+            style={{ width: 140 }}
+            value={contextLines}
+            options={CONTEXT_LINES}
+            onChange={setContextLines}
+          />
+        </Tooltip>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           word diff / 同步滚动为 Monaco 内建
         </Typography.Text>

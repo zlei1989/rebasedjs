@@ -2,6 +2,9 @@
  * 首页容器：useRecentRepos + useOpenRepo + useInitRepo + useCloneRepo + useRemoveRepo + useAppHomeDir
  * 注入 ui RepoPage（与 web-next 容器同构；导航用 react-router）。
  * 打开/初始化/克隆成功刷新列表并跳转日志页（失败 message.error），移除成功仅刷新列表。
+ * 点击最近列表项 = 与输入框「打开」同一条 openRepoFlow（校验 + 注册 + 刷新「最近」排序 + 跳转）——
+ * 列表条目可能已失效（目录被删/移动），直接 push 会进到拉不到 status 的日志页白屏，故仍走打开流程取中文错误提示；
+ * 打开中经 openingRepoId 传到 ui 做行内反馈与防连点。
  * 路径副文本 `~/` 相对化：homeDir 来自 GET /api/app/home-dir（浏览器端无法读 os.homedir，见 ui RepoPage）。
  */
 import {
@@ -14,6 +17,7 @@ import {
 } from '@rebased/client';
 import { RepoPage } from '@rebased/ui';
 import { message } from 'antd';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { openRepoFlow, repoMutationFlow } from './open-repo-flow';
 
@@ -25,12 +29,26 @@ export function ReposPage(): React.ReactNode {
   const { trigger: cloneRepo, isMutating: cloning } = useCloneRepo();
   const { trigger: removeRepo } = useRemoveRepo();
   const { data: appInfo } = useAppHomeDir();
+  /** 打开中的仓库 id（null=空闲）：打开含 POST 往返 + 配置落盘 + 最近列表刷新有耗时，行内加载态即时反馈并忽略再次点击 */
+  const [openingRepoId, setOpeningRepoId] = useState<string | null>(null);
   return (
     <RepoPage
       repos={repos}
       homeDir={appInfo?.homeDir}
       cloning={cloning}
       initializing={initializing}
+      openingRepoId={openingRepoId ?? undefined}
+      onOpenRepo={(repo) => {
+        setOpeningRepoId(repo.id);
+        // 成功即跳转（组件随之卸载），失败已由 openRepoFlow 弹中文 message；finally 保证加载态复位
+        void openRepoFlow({
+          path: repo.path,
+          openRepo,
+          refresh: () => mutate(),
+          navigate: (repoId) => navigate(`/repos/${repoId}`),
+          // 复位只认自己这一单：A 打开途中点了 B 时，A 的 finally 不得提前清掉 B 的「打开中」
+        }).finally(() => setOpeningRepoId((current) => (current === repo.id ? null : current)));
+      }}
       onOpen={(path) => {
         void openRepoFlow({
           path,

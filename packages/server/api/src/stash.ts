@@ -1,9 +1,10 @@
 /** 贮藏功能：core 贮藏原语 → contracts 形状；写操作前预检（save 取 status、其余校验 index），操作后返回刷新列表。 */
-import { GitExitError, listConflictedPaths } from '@rebased/core';
 import {
+  GitExitError,
   applyStash,
   checkoutBranch,
   dropStash,
+  listConflictedPaths,
   listStashes,
   popStash,
   saveStash,

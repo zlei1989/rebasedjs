@@ -5,7 +5,7 @@
  *  纯受控：open 由父级持有；account/token 为内部状态，关闭时清空（token 不残留）。
  */
 import { useState } from 'react';
-import { Flex, Input, Modal, Typography } from 'antd';
+import { Flex, Input, Modal, Tooltip, Typography } from 'antd';
 
 export interface AuthDialogProps {
   open: boolean;
@@ -53,18 +53,24 @@ export function AuthDialog({ open, host, onOk, onCancel, confirming }: AuthDialo
             {host}
           </Typography.Text>
         </Flex>
-        <Input
-          data-testid="auth-account"
-          placeholder="账户名"
-          value={account}
-          onChange={(e) => setAccount(e.target.value)}
-        />
-        <Input.Password
-          data-testid="auth-token"
-          placeholder="访问令牌（token）"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-        />
+        {/* 两个输入各包一层 Tooltip：说明填什么（作用对象 + 用途），不与 placeholder 文案复述同一句话 */}
+        <Tooltip title="填写该主机上的账户名：与下方令牌成对保存，作为访问远程仓库的用户名">
+          <Input
+            data-testid="auth-account"
+            placeholder="账户名"
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+          />
+        </Tooltip>
+        {/* 密码框只描述用途：token 本体不下行、不回显，故不写任何示例内容 */}
+        <Tooltip title="填写该账户的访问令牌（PAT）：仅用于本次主机认证，任一字段为空时「保存并重试」不可点">
+          <Input.Password
+            data-testid="auth-token"
+            placeholder="访问令牌（token）"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+        </Tooltip>
       </Flex>
     </Modal>
   );

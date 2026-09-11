@@ -6,9 +6,10 @@
  *  Unstash As：目标分支 Select（本地分支，GitUnstashAsDialog 语义——检出目标分支 + apply 不 drop）；
  *  查看差异：Modal 展示 git stash show -p 的 unified 补丁（数据由容器条件拉取）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
+ *  所有可交互元素（输入/勾选/按钮/选择器）均一对一包 Tooltip，说明作用对象与后果。
  */
 import { useState } from 'react';
-import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Select, Spin, Tag, Typography } from 'antd';
+import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Select, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { BranchRef, StashAction, StashDiff, StashEntry, StashList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 
@@ -65,35 +66,43 @@ function SaveForm({ acting, onAction }: { acting?: boolean; onAction: (action: S
   return (
     <Card size="small" title="保存贮藏">
       <Flex gap={8} align="center" wrap>
-        <Input
-          data-testid="stash-message-input"
-          placeholder="贮藏说明（可空）"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          style={{ flex: 1, minWidth: 200 }}
-        />
-        <Checkbox
-          checked={includeUntracked}
-          onChange={(e) => setIncludeUntracked(e.target.checked)}
-        >
-          包含未跟踪文件
-        </Checkbox>
+        <Tooltip title="贮藏说明：写入 stash message，留空则该贮藏以 WIP 命名">
+          <Input
+            data-testid="stash-message-input"
+            placeholder="贮藏说明（可空）"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            style={{ flex: 1, minWidth: 200 }}
+          />
+        </Tooltip>
+        <Tooltip title="勾选后把未跟踪的新文件一并存入贮藏（--include-untracked）">
+          <Checkbox
+            checked={includeUntracked}
+            onChange={(e) => setIncludeUntracked(e.target.checked)}
+          >
+            包含未跟踪文件
+          </Checkbox>
+        </Tooltip>
         {/* keep-index（--keep-index）：贮藏后暂存区保持不动（工作区变更回退，索引内容留在暂存区） */}
-        <Checkbox
-          data-testid="stash-keep-index"
-          checked={keepIndex}
-          onChange={(e) => setKeepIndex(e.target.checked)}
-        >
-          保持暂存区（keep-index）
-        </Checkbox>
-        <Button
-          type="primary"
-          data-testid="stash-save-button"
-          loading={acting}
-          onClick={submit}
-        >
-          保存
-        </Button>
+        <Tooltip title="勾选后保留暂存区内容（--keep-index）：只回退工作区，已 add 的内容仍留在索引">
+          <Checkbox
+            data-testid="stash-keep-index"
+            checked={keepIndex}
+            onChange={(e) => setKeepIndex(e.target.checked)}
+          >
+            保持暂存区（keep-index）
+          </Checkbox>
+        </Tooltip>
+        <Tooltip title="把当前工作区改动存为一个贮藏条目，随后工作区回到干净状态">
+          <Button
+            type="primary"
+            data-testid="stash-save-button"
+            loading={acting}
+            onClick={submit}
+          >
+            保存
+          </Button>
+        </Tooltip>
       </Flex>
     </Card>
   );
@@ -122,31 +131,42 @@ function StashRow({
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {formatStashDate(stash.dateIso)}
       </Typography.Text>
-      <Button size="small" data-testid={`apply-stash-${stash.index}`} onClick={() => onAction({ action: 'apply', index: stash.index })}>
-        应用
-      </Button>
+      <Tooltip title="把该贮藏的变更应用到当前工作区，贮藏条目保留在列表里">
+        <Button size="small" data-testid={`apply-stash-${stash.index}`} onClick={() => onAction({ action: 'apply', index: stash.index })}>
+          应用
+        </Button>
+      </Tooltip>
+      {/* Popconfirm 的触发按钮：Tooltip 必须放最内层，否则会截断 Popconfirm 的点击触发链 */}
       <Popconfirm
         title={`确定弹出 stash@{${stash.index}}？弹出后将移除该贮藏`}
         okText="确定"
         cancelText="取消"
         onConfirm={() => onAction({ action: 'pop', index: stash.index })}
       >
-        <Button size="small" data-testid={`pop-stash-${stash.index}`}>
-          弹出
-        </Button>
+        <Tooltip title="应用该贮藏的变更并从列表移除（等价 git stash pop）">
+          <Button size="small" data-testid={`pop-stash-${stash.index}`}>
+            弹出
+          </Button>
+        </Tooltip>
       </Popconfirm>
-      <Button size="small" data-testid={`branch-stash-${stash.index}`} onClick={() => onBranch(stash)}>
-        转分支
-      </Button>
-      {onUnstashAs !== undefined ? (
-        <Button size="small" data-testid={`unstash-as-${stash.index}`} onClick={() => onUnstashAs(stash)}>
-          Unstash As…
+      <Tooltip title="以该贮藏为起点创建并检出新的分支（打开分支命名窗口）">
+        <Button size="small" data-testid={`branch-stash-${stash.index}`} onClick={() => onBranch(stash)}>
+          转分支
         </Button>
+      </Tooltip>
+      {onUnstashAs !== undefined ? (
+        <Tooltip title="先检出所选的目标分支，再把该贮藏应用上去（贮藏不弹出、保留在列表）">
+          <Button size="small" data-testid={`unstash-as-${stash.index}`} onClick={() => onUnstashAs(stash)}>
+            Unstash As…
+          </Button>
+        </Tooltip>
       ) : null}
       {onOpenDiff !== undefined ? (
-        <Button size="small" data-testid={`stash-diff-${stash.index}`} onClick={() => onOpenDiff(stash)}>
-          查看差异
-        </Button>
+        <Tooltip title="查看该贮藏的补丁内容（git stash show -p），只看不改工作区">
+          <Button size="small" data-testid={`stash-diff-${stash.index}`} onClick={() => onOpenDiff(stash)}>
+            查看差异
+          </Button>
+        </Tooltip>
       ) : null}
       <Popconfirm
         title={`确定删除 stash@{${stash.index}}？`}
@@ -154,9 +174,11 @@ function StashRow({
         cancelText="取消"
         onConfirm={() => onAction({ action: 'drop', index: stash.index })}
       >
-        <Button size="small" danger data-testid={`drop-stash-${stash.index}`}>
-          删除
-        </Button>
+        <Tooltip title="从贮藏列表丢弃该条目（不动工作区改动，但丢弃后无法恢复）">
+          <Button size="small" danger data-testid={`drop-stash-${stash.index}`}>
+            删除
+          </Button>
+        </Tooltip>
       </Popconfirm>
     </Flex>
   );
@@ -197,12 +219,14 @@ function BranchModal({
       onOk={submit}
       onCancel={close}
     >
-      <Input
-        data-testid="stash-branch-name-input"
-        placeholder="新分支名"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+      <Tooltip title="新分支名：不得与已有分支重名，留空时「确定」保持禁用">
+        <Input
+          data-testid="stash-branch-name-input"
+          placeholder="新分支名"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </Tooltip>
     </Modal>
   );
 }
@@ -274,14 +298,16 @@ export function StashPanel({
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             将检出目标分支并应用该贮藏（贮藏保留，不弹出）
           </Typography.Text>
-          <Select
-            data-testid="unstash-as-branch"
-            placeholder="选择本地分支"
-            style={{ width: '100%' }}
-            value={unstashBranch}
-            options={localBranches.map((b) => ({ value: b.name, label: b.name }))}
-            onChange={setUnstashBranch}
-          />
+          <Tooltip title="目标本地分支：仅列本地分支，远程分支不会出现在选项里">
+            <Select
+              data-testid="unstash-as-branch"
+              placeholder="选择本地分支"
+              style={{ width: '100%' }}
+              value={unstashBranch}
+              options={localBranches.map((b) => ({ value: b.name, label: b.name }))}
+              onChange={setUnstashBranch}
+            />
+          </Tooltip>
         </Flex>
       </Modal>
       {/* 查看差异 Modal：git stash show -p 的 unified 补丁（数据由容器按 diffIndex 条件拉取；开关状态也由容器持有） */}

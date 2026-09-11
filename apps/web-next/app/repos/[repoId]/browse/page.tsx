@@ -9,7 +9,7 @@
  */
 import { useBrowseContent, useBrowseTree } from '@rebased/client';
 import { BrowsePanel, EmptyState } from '@rebased/ui';
-import { Button, Flex, Input } from 'antd';
+import { Button, Flex, Input, Tooltip } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 
@@ -46,25 +46,35 @@ export default function Page({
   return (
     <Flex vertical align="flex-start" gap={8} style={{ height: '100%' }}>
       {/* 返回日志页 */}
-      <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-        返回日志
-      </Button>
-      <Flex gap={8} style={{ width: '100%' }}>
-        <Input
-          data-testid="browse-rev-input"
-          placeholder="输入提交哈希/分支/标签（如 HEAD 或 6f4a2c1）"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onPressEnter={submit}
-        />
-        <Button
-          type="primary"
-          autoInsertSpace={false}
-          disabled={draft.trim() === ''}
-          onClick={submit}
-        >
-          确定
+      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+      <Tooltip title="返回该仓库的提交日志页">
+        <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
+          返回日志
         </Button>
+      </Tooltip>
+      <Flex gap={8} style={{ width: '100%' }}>
+        <Tooltip title="输入提交哈希、分支或标签，回车浏览该版本的文件树">
+          <Input
+            data-testid="browse-rev-input"
+            placeholder="输入提交哈希/分支/标签（如 HEAD 或 6f4a2c1）"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onPressEnter={submit}
+          />
+        </Tooltip>
+        {/* 禁用态 antd 按钮不派发 hover：按 antd 做法包一层 span 承接提示，文案点明不可点的前提 */}
+        <Tooltip title="按输入的 ref 只读浏览该版本快照（输入为空时此按钮不可点击）">
+          <span>
+            <Button
+              type="primary"
+              autoInsertSpace={false}
+              disabled={draft.trim() === ''}
+              onClick={submit}
+            >
+              确定
+            </Button>
+          </span>
+        </Tooltip>
       </Flex>
       {rev === '' ? (
         <EmptyState title="输入 ref 开始浏览快照" description="以该提交为根只读浏览文件树，不触碰工作区" />

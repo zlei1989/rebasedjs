@@ -4,9 +4,10 @@
  *  （恢复 / 删除——均经 Popconfirm 确认：恢复会向工作区回放变更，误触成本高，同 pop/drop 确认约定）。
  *  恢复提交 {action:"restore",name}、删除 {action:"drop",name}。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
+ *  所有可交互元素（按钮/输入）均一对一包 Tooltip；禁用按钮另包 span 承接悬停，Popconfirm 内 Tooltip 放最内层。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Typography } from 'antd';
+import { Button, Card, Flex, Input, Modal, Popconfirm, Tooltip, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { ShelfAction, ShelfEntry, ShelfList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -39,15 +40,26 @@ function ShelfRow({
       <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
         {shelf.untrackedCount} 个未跟踪
       </Typography.Text>
+      {/* Tooltip 留在 Popconfirm 内侧；按钮在 acting 期间禁用，禁用态不派发 hover，故再包一层 span 承接悬停 */}
       <Popconfirm
         title={`确定恢复搁置 ${shelf.name}？`}
         okText="确定"
         cancelText="取消"
         onConfirm={() => onAction({ action: 'restore', name: shelf.name })}
       >
-        <Button size="small" data-testid={`restore-shelf-${shelf.name}`} disabled={acting}>
-          恢复
-        </Button>
+        <Tooltip
+          title={
+            acting
+              ? '操作进行中：等当前操作结束后再恢复该搁置'
+              : '把该搁置里的变更回放到当前工作区（搁置条目保留，清理需另用「删除」）'
+          }
+        >
+          <span>
+            <Button size="small" data-testid={`restore-shelf-${shelf.name}`} disabled={acting}>
+              恢复
+            </Button>
+          </span>
+        </Tooltip>
       </Popconfirm>
       <Popconfirm
         title={`确定删除搁置 ${shelf.name}？`}
@@ -55,9 +67,19 @@ function ShelfRow({
         cancelText="取消"
         onConfirm={() => onAction({ action: 'drop', name: shelf.name })}
       >
-        <Button size="small" danger data-testid={`delete-shelf-${shelf.name}`} disabled={acting}>
-          删除
-        </Button>
+        <Tooltip
+          title={
+            acting
+              ? '操作进行中：等当前操作结束后再删除该搁置'
+              : '删掉该搁置的存档（工作区不变，但删除后无法再恢复）'
+          }
+        >
+          <span>
+            <Button size="small" danger data-testid={`delete-shelf-${shelf.name}`} disabled={acting}>
+              删除
+            </Button>
+          </span>
+        </Tooltip>
       </Popconfirm>
     </Flex>
   );
@@ -99,12 +121,14 @@ function SaveShelfModal({
       onOk={submit}
       onCancel={close}
     >
-      <Input
-        data-testid="shelf-save-name"
-        placeholder="搁置名（必填）"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+      <Tooltip title="搁置名（必填）：作为存档目录名，与已有搁置重名会被拒绝">
+        <Input
+          data-testid="shelf-save-name"
+          placeholder="搁置名（必填）"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </Tooltip>
     </Modal>
   );
 }
@@ -115,15 +139,17 @@ export function ShelfPanel({ shelves, onAction, acting }: ShelfPanelProps): Reac
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
       <Flex>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          data-testid="shelf-save-button"
-          loading={acting}
-          onClick={() => setSaveOpen(true)}
-        >
-          保存
-        </Button>
+        <Tooltip title="把当前工作区改动存成一个搁置存档（打开搁置名弹窗）">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            data-testid="shelf-save-button"
+            loading={acting}
+            onClick={() => setSaveOpen(true)}
+          >
+            保存
+          </Button>
+        </Tooltip>
       </Flex>
       <Card size="small" title={`搁置列表（${shelves.shelves.length}）`}>
         {shelves.shelves.length === 0 ? (

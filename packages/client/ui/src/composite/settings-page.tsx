@@ -4,7 +4,7 @@
  * 纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
  */
 import { useState } from 'react';
-import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Tooltip, Typography } from 'antd';
 import type {
   AccountBody,
   AccountDeleteBody,
@@ -63,20 +63,33 @@ function ConfigRow({
           {entry.value ?? '未设置'}
         </Typography.Text>
       </Flex>
-      <Input
-        data-testid={`config-input-${entry.key}`}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        style={{ flex: 1 }}
-      />
-      <Button
-        data-testid={`config-save-${entry.key}`}
-        size="small"
-        disabled={!dirty}
-        onClick={() => onSetConfig(entry.key, value)}
+      <Tooltip title={`填写 ${entry.key} 的仓库级（local）覆盖值：保存后写入本仓库 .git/config，仅对本仓库生效`}>
+        <Input
+          data-testid={`config-input-${entry.key}`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          style={{ flex: 1 }}
+        />
+      </Tooltip>
+      {/* 禁用按钮不派发 hover，故在 Tooltip 与 Button 之间包一层 span 承接提示；文案随禁用原因切换 */}
+      <Tooltip
+        title={
+          dirty
+            ? '把输入值写入本仓库的 .git/config（仅覆盖当前仓库，不改全局配置）'
+            : '输入值与生效值相同或为空：改动内容后才能保存'
+        }
       >
-        保存
-      </Button>
+        <span>
+          <Button
+            data-testid={`config-save-${entry.key}`}
+            size="small"
+            disabled={!dirty}
+            onClick={() => onSetConfig(entry.key, value)}
+          >
+            保存
+          </Button>
+        </span>
+      </Tooltip>
     </Flex>
   );
 }
@@ -106,9 +119,12 @@ function AccountRow({
         cancelText="取消"
         onConfirm={() => onDeleteAccount({ host: entry.host, account: entry.account })}
       >
-        <Button size="small" danger data-testid={`delete-account-${entry.host}-${entry.account}`}>
-          删除
-        </Button>
+        {/* Tooltip 放最内层（Popconfirm > Tooltip > Button）：保持 Popconfirm 的触发链完整 */}
+        <Tooltip title="删除该账户保存的本地凭据：只清本机记录，不影响远端服务器上的账号">
+          <Button size="small" danger data-testid={`delete-account-${entry.host}-${entry.account}`}>
+            删除
+          </Button>
+        </Tooltip>
       </Popconfirm>
     </Flex>
   );
@@ -154,24 +170,31 @@ function AddAccountModal({
       onCancel={close}
     >
       <Flex vertical gap={8}>
-        <Input
-          data-testid="account-host-input"
-          placeholder="主机（如 github.com）"
-          value={host}
-          onChange={(e) => setHost(e.target.value)}
-        />
-        <Input
-          data-testid="account-name-input"
-          placeholder="账户名"
-          value={account}
-          onChange={(e) => setAccount(e.target.value)}
-        />
-        <Input.Password
-          data-testid="account-token-input"
-          placeholder="访问令牌（token）"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-        />
+        <Tooltip title="填写远程主机的域名（如 github.com）：与账户名一起定位一份凭据，三项任一为空都不能提交">
+          <Input
+            data-testid="account-host-input"
+            placeholder="主机（如 github.com）"
+            value={host}
+            onChange={(e) => setHost(e.target.value)}
+          />
+        </Tooltip>
+        <Tooltip title="填写该主机上的账户名：认证时作为用户名，列表按 host + 账户名去重">
+          <Input
+            data-testid="account-name-input"
+            placeholder="账户名"
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+          />
+        </Tooltip>
+        {/* 令牌只描述用途（下行仅给掩码预览），不编造任何示例内容 */}
+        <Tooltip title="填写该账户的访问令牌（token）：保存到本地凭据库供该主机认证，列表里只显示掩码预览">
+          <Input.Password
+            data-testid="account-token-input"
+            placeholder="访问令牌（token）"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+        </Tooltip>
       </Flex>
     </Modal>
   );
@@ -211,21 +234,44 @@ function GpgConfigModal({
       onCancel={onClose}
     >
       <Flex vertical gap={12}>
-        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={noKeys}>
-          为仓库提交签名（commit.gpgsign）
-        </Checkbox>
-        <Select
-          data-testid="gpg-key-select"
-          style={{ width: '100%' }}
-          placeholder="选择签名密钥"
-          disabled={!enabled || noKeys}
-          value={key ?? undefined}
-          onChange={(v: string) => setKey(v)}
-          options={config.keys.map((k) => ({
-            value: k.id,
-            label: k.description === null ? k.id : `${k.id}（${k.description}）`,
-          }))}
-        />
+        {/* 禁用控件（无可用密钥 / 未启用）不派发 hover：包 span 承接提示，文案说明为什么不能操作 */}
+        <Tooltip
+          title={
+            noKeys
+              ? '暂不能启用：系统里没有可用密钥（gpg --list-secret-keys 无结果），先创建密钥再回来'
+              : '勾选后本仓库提交即用下方选定的密钥签名（写入 commit.gpgsign=true）'
+          }
+        >
+          <span>
+            <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={noKeys}>
+              为仓库提交签名（commit.gpgsign）
+            </Checkbox>
+          </span>
+        </Tooltip>
+        <Tooltip
+          title={
+            noKeys
+              ? '暂无可选项：先在本机创建 gpg 密钥（或配置 gpg.program 指向 gpg 程序）'
+              : enabled
+                ? '选择用于签名的私钥：提交时用它的 key id 签名（写入 user.signingkey）'
+                : '先勾选上一项启用签名，再从密钥列表中选择'
+          }
+        >
+          <span>
+            <Select
+              data-testid="gpg-key-select"
+              style={{ width: '100%' }}
+              placeholder="选择签名密钥"
+              disabled={!enabled || noKeys}
+              value={key ?? undefined}
+              onChange={(v: string) => setKey(v)}
+              options={config.keys.map((k) => ({
+                value: k.id,
+                label: k.description === null ? k.id : `${k.id}（${k.description}）`,
+              }))}
+            />
+          </span>
+        </Tooltip>
         {noKeys && (
           <Alert
             type="warning"
@@ -270,27 +316,42 @@ function ProtectedBranchCard({
           每行一个正则模式，匹配剥远程名前缀的分支名（origin/main → main）；匹配得到的远程分支上的已推送提交不可重写
           （Reword/Drop/Squash/Fixup 将被拒绝——GitProtectedBranches.isCommitPublishedBlocking 语义）
         </Typography.Text>
-        <Input.TextArea
-          data-testid="protected-patterns-input"
-          rows={3}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={'每行一个模式，如：\n^main$\n^release/'}
-        />
+        <Tooltip title="填写保护分支的正则模式：每行一个，匹配到的远程分支上的已推送提交不允许被重写">
+          <Input.TextArea
+            data-testid="protected-patterns-input"
+            rows={3}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={'每行一个模式，如：\n^main$\n^release/'}
+          />
+        </Tooltip>
         {invalid !== undefined && (
           <Typography.Text type="danger" data-testid="protected-patterns-error">
             非法正则：{invalid}
           </Typography.Text>
         )}
         <div>
-          <Button
-            size="small"
-            data-testid="protected-patterns-save"
-            disabled={!dirty || invalid !== undefined}
-            onClick={() => onSave(lines)}
+          {/* 禁用按钮不派发 hover：包 span 承接提示；文案随禁用原因（非法正则 / 未改动）切换 */}
+          <Tooltip
+            title={
+              invalid !== undefined
+                ? `正则语法非法（${invalid}）：修正该行后才能保存`
+                : dirty
+                  ? '保存这份模式列表：写入应用设置，立即约束可改写的提交范围'
+                  : '内容与已保存的模式相同：改动后才能保存'
+            }
           >
-            保存
-          </Button>
+            <span>
+              <Button
+                size="small"
+                data-testid="protected-patterns-save"
+                disabled={!dirty || invalid !== undefined}
+                onClick={() => onSave(lines)}
+              >
+                保存
+              </Button>
+            </span>
+          </Tooltip>
         </div>
       </Flex>
     </Card>
@@ -318,23 +379,27 @@ export function SettingsPage({
         {settings ? (
           <Flex vertical gap={12}>
             <Flex align="center" gap={8}>
-              <Switch
-                checked={settings.logInEditor}
-                onChange={(checked) => onPatchSettings({ logInEditor: checked })}
-              />
+              <Tooltip title="切换提交日志的查看方式：开启后用本机编辑器打开，关闭则用内置页面查看（应用设置 logInEditor）">
+                <Switch
+                  checked={settings.logInEditor}
+                  onChange={(checked) => onPatchSettings({ logInEditor: checked })}
+                />
+              </Tooltip>
               <Typography.Text>在编辑器中查看提交日志</Typography.Text>
             </Flex>
             {/* 界面主题：暗色/明亮二选一，写入应用设置后由 Providers 全站生效（含 Monaco 与 body 底色） */}
             <Flex align="center" gap={8}>
-              <Segmented
-                data-testid="theme-segmented"
-                value={settings.theme}
-                options={[
-                  { label: '暗色', value: 'dark' },
-                  { label: '明亮', value: 'light' },
-                ]}
-                onChange={(value) => onPatchSettings({ theme: value as 'light' | 'dark' })}
-              />
+              <Tooltip title="选择界面配色（暗色/明亮）：保存后全站立即生效，含编辑器与页面底色">
+                <Segmented
+                  data-testid="theme-segmented"
+                  value={settings.theme}
+                  options={[
+                    { label: '暗色', value: 'dark' },
+                    { label: '明亮', value: 'light' },
+                  ]}
+                  onChange={(value) => onPatchSettings({ theme: value as 'light' | 'dark' })}
+                />
+              </Tooltip>
               <Typography.Text>界面主题</Typography.Text>
             </Flex>
           </Flex>
@@ -388,9 +453,11 @@ export function SettingsPage({
           title="GPG 提交签名"
           data-testid="gpg-card"
           extra={
-            <Button size="small" data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
-              配置…
-            </Button>
+            <Tooltip title="打开 GPG 签名配置弹窗：开关提交签名并选择签名密钥">
+              <Button size="small" data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
+                配置…
+              </Button>
+            </Tooltip>
           }
         >
           <Flex align="center" gap={8}>
@@ -420,9 +487,11 @@ export function SettingsPage({
         <Card
           title="账户"
           extra={
-            <Button size="small" type="primary" data-testid="add-account-button" onClick={() => setAddOpen(true)}>
-              添加账户
-            </Button>
+            <Tooltip title="打开添加账户弹窗：填写主机、账户名与访问令牌后保存到本地凭据">
+              <Button size="small" type="primary" data-testid="add-account-button" onClick={() => setAddOpen(true)}>
+                添加账户
+              </Button>
+            </Tooltip>
           }
         >
           {accounts.accounts.length === 0 ? (

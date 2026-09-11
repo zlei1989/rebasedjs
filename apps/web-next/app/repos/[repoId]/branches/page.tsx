@@ -8,7 +8,7 @@
  */
 import { useBranchAction, useBranches, useBranchWorkingDiff, useCheckout, useCheckoutRebase, useCheckoutUpdate, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
 import { BranchPanel } from '@rebased/ui';
-import { Button, Flex, Modal, message } from 'antd';
+import { Button, Flex, Modal, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
 
@@ -96,9 +96,12 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   return (
     <Flex vertical align="flex-start">
       {/* 返回日志页 */}
-      <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-        返回日志
-      </Button>
+      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+      <Tooltip title="返回该仓库的提交日志页">
+        <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
+          返回日志
+        </Button>
+      </Tooltip>
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <BranchPanel
         key={repoId}

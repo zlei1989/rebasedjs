@@ -9,7 +9,7 @@
  * 回调全缺省时不渲染「更多」按钮。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
-import { Alert, Button, Dropdown, Flex, Input, Modal, Popconfirm, Skeleton, Switch, Typography, theme } from 'antd';
+import { Alert, Button, Dropdown, Flex, Input, Modal, Popconfirm, Skeleton, Switch, Tooltip, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import type { CommitInfo, CommittedEntry, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
@@ -221,6 +221,16 @@ export function LogPage({
   const [tagMessage, setTagMessage] = useState('');
   // tag chips 显示开关（默认关，对齐 Java VcsLogApplicationSettings.showTagNames 默认 false）
   const [showTags, setShowTags] = useState(false);
+  // 提交图整块的 Tooltip 受控状态：图内每一行自带 Tooltip，悬停到行上时必须抑制整块气泡，
+  // 否则行气泡与整图气泡会同时弹出（与 repo-page 的 hoverId/actionHoverId 同一思路）
+  const [graphHovered, setGraphHovered] = useState(false);
+  const [graphRowHovered, setGraphRowHovered] = useState(false);
+  /**
+   * 「更多」菜单是否展开：展开期间抑制触发按钮的气泡。
+   * 原因（浏览器实测）：按钮在页面顶部，气泡会被 antd 翻到下方，正好压住菜单顶部若干项——
+   * elementFromPoint 命中的是气泡容器，菜单项既出不了高亮也出不了自己的气泡。
+   */
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   // Reword 提交信息输入（GitSingleCommitEditingAction 语义：message 必填——Modal 预填当前主题）
   const [rewordHash, setRewordHash] = useState<string | null>(null);
   const [rewordMessage, setRewordMessage] = useState('');
@@ -228,27 +238,29 @@ export function LogPage({
     const hash = menuHash;
     if (hash === null) return [];
     const items: NonNullable<MenuProps['items']> = [];
-    if (onCheckoutRevision !== undefined) items.push({ key: 'checkout-revision', label: '检出此提交（游离 HEAD）' });
-    if (onCheckoutNewBranch !== undefined) items.push({ key: 'new-branch', label: '从此处新建分支…' });
-    if (onCreateTag !== undefined) items.push({ key: 'new-tag', label: '从此处新建标签…' });
-    if (onOpenInBrowser !== undefined) items.push({ key: 'open-in-browser', label: '在浏览器中打开' });
+    // 菜单项 label 用 Tooltip > span 包裹：菜单项是数据对象而非 JSX，antd 的 MenuItemType.title 在 Dropdown 下不弹；
+    // span 让 antd 的菜单项样式（行高/省略/禁用色）照旧生效，Tooltip 只负责悬停说明
+    if (onCheckoutRevision !== undefined) items.push({ key: 'checkout-revision', label: <Tooltip title="检出该提交：工作区换成它的快照，HEAD 进入游离状态（不移动任何分支）"><span>检出此提交（游离 HEAD）</span></Tooltip> });
+    if (onCheckoutNewBranch !== undefined) items.push({ key: 'new-branch', label: <Tooltip title="以该提交为起点新建分支：随后弹出对话框填写分支名，创建后不自动检出"><span>从此处新建分支…</span></Tooltip> });
+    if (onCreateTag !== undefined) items.push({ key: 'new-tag', label: <Tooltip title="以该提交为起点新建标签：随后弹出对话框填写标签名与说明"><span>从此处新建标签…</span></Tooltip> });
+    if (onOpenInBrowser !== undefined) items.push({ key: 'open-in-browser', label: <Tooltip title="在系统浏览器中打开该提交对应的远程网页（需已配置远程仓库）"><span>在浏览器中打开</span></Tooltip> });
     if (items.length > 0) items.push({ type: 'divider' });
-    if (onCherryPick !== undefined) items.push({ key: 'cherry-pick', label: '摘樱桃' });
-    if (onRevert !== undefined) items.push({ key: 'revert', label: '还原' });
-    if (onResetHere !== undefined) items.push({ key: 'reset-here', label: 'Reset 当前分支到此处' });
-    if (onBrowse !== undefined) items.push({ key: 'browse', label: '浏览快照' });
+    if (onCherryPick !== undefined) items.push({ key: 'cherry-pick', label: <Tooltip title="把该提交的改动复制到当前分支（cherry-pick）"><span>摘樱桃</span></Tooltip> });
+    if (onRevert !== undefined) items.push({ key: 'revert', label: <Tooltip title="生成一个反向提交来撤销该提交的改动（原提交仍留在历史里）"><span>还原</span></Tooltip> });
+    if (onResetHere !== undefined) items.push({ key: 'reset-here', label: <Tooltip title="把当前分支指针移到该提交：其后的提交将从分支历史上移除（可用 reflog 找回）"><span>Reset 当前分支到此处</span></Tooltip> });
+    if (onBrowse !== undefined) items.push({ key: 'browse', label: <Tooltip title="只读查看该提交时刻的完整文件树快照（不检出、不改动工作区）"><span>浏览快照</span></Tooltip> });
     if (onAutosquash !== undefined) {
       items.push({ type: 'divider' });
-      items.push({ key: 'fixup-commit', label: 'Fixup Commit' });
-      items.push({ key: 'squash-commit', label: 'Squash Commit' });
+      items.push({ key: 'fixup-commit', label: <Tooltip title="生成 fixup! 提交并指向该提交：留待交互式变基（autosquash）时自动并入"><span>Fixup Commit</span></Tooltip> });
+      items.push({ key: 'squash-commit', label: <Tooltip title="生成 squash! 提交并指向该提交：改动保留、提交信息待变基时合并编辑"><span>Squash Commit</span></Tooltip> });
     }
-    if (onPushUpToCommit !== undefined) items.push({ key: 'push-up-to-commit', label: 'Push up to Commit' });
+    if (onPushUpToCommit !== undefined) items.push({ key: 'push-up-to-commit', label: <Tooltip title="把远程分支推进到该提交为止：其后的远端提交将从远端历史丢弃（需 force-push，不可恢复）"><span>Push up to Commit</span></Tooltip> });
     if (onEditCommit !== undefined) {
       items.push({ type: 'divider' });
-      items.push({ key: 'reword-commit', label: 'Reword Commit' });
-      items.push({ key: 'drop-commit', label: 'Drop Commit' });
-      items.push({ key: 'squash-parent', label: 'Squash Commit（并入父提交）' });
-      items.push({ key: 'fixup-parent', label: 'Fixup Commit（并入父提交）' });
+      items.push({ key: 'reword-commit', label: <Tooltip title="改写该提交的提交信息：该提交及其之后的所有提交哈希都会被重写"><span>Reword Commit</span></Tooltip> });
+      items.push({ key: 'drop-commit', label: <Tooltip title="从历史中删除该提交：其改动一并丢弃，不可恢复"><span>Drop Commit</span></Tooltip> });
+      items.push({ key: 'squash-parent', label: <Tooltip title="把该提交的改动与提交信息并入父提交：该提交消失，历史被重写"><span>Squash Commit（并入父提交）</span></Tooltip> });
+      items.push({ key: 'fixup-parent', label: <Tooltip title="把该提交的改动并入父提交并丢弃其提交信息：历史被重写"><span>Fixup Commit（并入父提交）</span></Tooltip> });
     }
     return items;
   }, [menuHash, onCheckoutRevision, onCheckoutNewBranch, onCreateTag, onOpenInBrowser, onCherryPick, onRevert, onResetHere, onBrowse, onAutosquash, onPushUpToCommit, onEditCommit]);
@@ -289,27 +301,27 @@ export function LogPage({
   // 「更多」菜单项：仅装配容器注入回调的入口（P3-C 只读浏览 溯源/历史/已提交/搜索 + 本地操作 变基/标签
   // + 远程操作 拉取/推送/更新项目/远程管理 + P3-D 补丁/搁置/控制台/忽略）；全缺省时连「更多」按钮都不渲染
   const moreItems = [
-    ...(onOpenBlame ? [{ key: 'blame', label: '溯源' }] : []),
-    ...(onOpenHistory ? [{ key: 'history', label: '历史' }] : []),
-    ...(onOpenCommitted ? [{ key: 'committed', label: '已提交' }] : []),
-    ...(onOpenSearch ? [{ key: 'search', label: '搜索' }] : []),
-    ...(onOpenRebase ? [{ key: 'rebase', label: '变基' }] : []),
-    ...(onOpenTags ? [{ key: 'tags', label: '标签' }] : []),
-    ...(onOpenPull ? [{ key: 'pull', label: '拉取' }] : []),
-    ...(onOpenPush ? [{ key: 'push', label: '推送' }] : []),
-    ...(onOpenUpdate ? [{ key: 'update', label: '更新项目' }] : []),
-    ...(onOpenRemotes ? [{ key: 'remotes', label: '远程管理' }] : []),
-    ...(onOpenPatches ? [{ key: 'patches', label: '补丁' }] : []),
-    ...(onOpenShelves ? [{ key: 'shelves', label: '搁置' }] : []),
-    ...(onOpenConsole ? [{ key: 'console', label: '控制台' }] : []),
-    ...(onOpenIgnore ? [{ key: 'ignore', label: '忽略' }] : []),
+    ...(onOpenBlame ? [{ key: 'blame', label: <Tooltip title="打开逐行溯源视图：查看每一行的最后修改者与提交"><span>溯源</span></Tooltip> }] : []),
+    ...(onOpenHistory ? [{ key: 'history', label: <Tooltip title="打开该文件的提交历史：只看改动过它的记录"><span>历史</span></Tooltip> }] : []),
+    ...(onOpenCommitted ? [{ key: 'committed', label: <Tooltip title="查看当前分支上已提交但尚未推送的提交清单"><span>已提交</span></Tooltip> }] : []),
+    ...(onOpenSearch ? [{ key: 'search', label: <Tooltip title="在整个仓库历史中按提交信息、作者或文件内容检索"><span>搜索</span></Tooltip> }] : []),
+    ...(onOpenRebase ? [{ key: 'rebase', label: <Tooltip title="打开变基对话框：把当前分支的提交重新应用到指定基底（会重写提交哈希）"><span>变基</span></Tooltip> }] : []),
+    ...(onOpenTags ? [{ key: 'tags', label: <Tooltip title="打开标签管理页：查看、创建或删除仓库标签"><span>标签</span></Tooltip> }] : []),
+    ...(onOpenPull ? [{ key: 'pull', label: <Tooltip title="从远程拉取最新提交并合入当前分支"><span>拉取</span></Tooltip> }] : []),
+    ...(onOpenPush ? [{ key: 'push', label: <Tooltip title="把当前分支的本地提交推送到远程跟踪分支"><span>推送</span></Tooltip> }] : []),
+    ...(onOpenUpdate ? [{ key: 'update', label: <Tooltip title="按配置的同步策略从远程更新当前分支（合并或变基）"><span>更新项目</span></Tooltip> }] : []),
+    ...(onOpenRemotes ? [{ key: 'remotes', label: <Tooltip title="管理远程仓库：查看、新增、编辑或删除远程地址"><span>远程管理</span></Tooltip> }] : []),
+    ...(onOpenPatches ? [{ key: 'patches', label: <Tooltip title="补丁工具：把改动导出为补丁文件，或把补丁应用到工作区"><span>补丁</span></Tooltip> }] : []),
+    ...(onOpenShelves ? [{ key: 'shelves', label: <Tooltip title="搁置区：临时存放未完成的改动，之后可取出恢复"><span>搁置</span></Tooltip> }] : []),
+    ...(onOpenConsole ? [{ key: 'console', label: <Tooltip title="打开 Git 控制台：在当前仓库直接执行 git 命令并查看输出"><span>控制台</span></Tooltip> }] : []),
+    ...(onOpenIgnore ? [{ key: 'ignore', label: <Tooltip title="编辑忽略规则：把选中的文件或目录加入 .gitignore，之后不再视为未跟踪变更"><span>忽略</span></Tooltip> }] : []),
     // GitHub 面板：仅在容器检测到 GitHub 远程（githubAvailable）且注入导航回调时渲染（对齐 Java 检测到远程才显示工具窗口）
-    ...(onOpenGithub !== undefined && githubAvailable ? [{ key: 'github', label: 'GitHub 面板' }] : []),
+    ...(onOpenGithub !== undefined && githubAvailable ? [{ key: 'github', label: <Tooltip title="打开 GitHub 面板：查看该仓库关联的 PR、议题与动态"><span>GitHub 面板</span></Tooltip> }] : []),
     // GitLab 面板：与 GitHub 面板项并排、各自检测（容器经 useGitlabStatus 判定 gitlabAvailable）
-    ...(onOpenGitlab !== undefined && gitlabAvailable ? [{ key: 'gitlab', label: 'GitLab 面板' }] : []),
+    ...(onOpenGitlab !== undefined && gitlabAvailable ? [{ key: 'gitlab', label: <Tooltip title="打开 GitLab 面板：查看该仓库关联的 MR、议题与动态"><span>GitLab 面板</span></Tooltip> }] : []),
     // 工作树/子模块：恒渲染（无可用性门——本域无外部依赖，任何仓库可达；子模块空态在页面内承载）
-    ...(onOpenWorktrees ? [{ key: 'worktrees', label: '工作树' }] : []),
-    ...(onOpenSubmodules ? [{ key: 'submodules', label: '子模块' }] : []),
+    ...(onOpenWorktrees ? [{ key: 'worktrees', label: <Tooltip title="管理工作树：查看并新增或删除同一仓库的多个检出目录"><span>工作树</span></Tooltip> }] : []),
+    ...(onOpenSubmodules ? [{ key: 'submodules', label: <Tooltip title="管理子模块：查看状态、初始化或更新嵌套仓库"><span>子模块</span></Tooltip> }] : []),
   ];
   /** 「更多」菜单点击分发：按 key 调对应入口回调 */
   const onMoreClick = (key: string): void => {
@@ -337,9 +349,11 @@ export function LogPage({
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}>
         {/* 回首页（File→Close Project 语义）：顶栏最左「首页」链接；仅容器注入回调时渲染 */}
         {onGoHome ? (
-          <Button type="link" size="small" data-testid="log-go-home" onClick={onGoHome}>
-            首页
-          </Button>
+          <Tooltip title="回到首页欢迎屏：关闭当前仓库视图，不改动仓库里的任何内容">
+            <Button type="link" size="small" data-testid="log-go-home" onClick={onGoHome}>
+              首页
+            </Button>
+          </Tooltip>
         ) : null}
         <span style={{ fontWeight: 600, padding: '4px 8px', whiteSpace: 'nowrap' }}>{repoName}</span>
         <RepoStatusBar status={status} />
@@ -350,9 +364,11 @@ export function LogPage({
         {/* 「去解决冲突」链接：仅合并进行中（operation.kind==='merge'）且容器注入导航回调时渲染，
             跟在操作条旁；base 组件 OperationStatus 不背导航职责，故由本层自行渲染 */}
         {operation?.kind === 'merge' && onOpenConflicts ? (
-          <Button type="link" size="small" onClick={onOpenConflicts}>
-            去解决冲突
-          </Button>
+          <Tooltip title="打开冲突解决页：逐个文件处理合并冲突，解决完再提交以结束合并">
+            <Button type="link" size="small" onClick={onOpenConflicts}>
+              去解决冲突
+            </Button>
+          </Tooltip>
         ) : null}
         {/* 撤销最近提交：Popconfirm 确认后回调（保留改动到暂存区，等价 reset --soft HEAD~1） */}
         {onUndoCommit ? (
@@ -362,78 +378,101 @@ export function LogPage({
             cancelText="取消"
             onConfirm={onUndoCommit}
           >
-            <Button
-              aria-label="撤销最近提交"
-              type="text"
-              icon={<RollbackOutlined />}
-              loading={undoCommitting}
-            />
+            {/* Tooltip 必须放在 Popconfirm 内侧：放外侧会截断 Popconfirm 的点击触发链，确认气泡就不再出现 */}
+            <Tooltip title="回退最近一次提交并保留全部改动到暂存区（等价 reset --soft HEAD~1），提交记录会少一笔">
+              <Button
+                aria-label="撤销最近提交"
+                type="text"
+                icon={<RollbackOutlined />}
+                loading={undoCommitting}
+              />
+            </Tooltip>
           </Popconfirm>
         ) : null}
         {/* 变更入口（状态页）：在设置按钮旁、靠右对齐；仅在容器注入导航回调时渲染 */}
         {onOpenStatus ? (
-          <Button
-            aria-label="变更"
-            type="text"
-            icon={<DiffOutlined />}
-            onClick={onOpenStatus}
-            style={{ marginLeft: 'auto' }}
-          />
+          <Tooltip title="打开变更页：查看工作区与暂存区的文件改动，逐个文件对照差异">
+            <Button
+              aria-label="变更"
+              type="text"
+              icon={<DiffOutlined />}
+              onClick={onOpenStatus}
+              style={{ marginLeft: 'auto' }}
+            />
+          </Tooltip>
         ) : null}
         {/* 分支入口：排在变更与设置之间；变更按钮已占位（marginLeft:auto）时不再重复右推 */}
         {onOpenBranches ? (
-          <Button
-            aria-label="分支"
-            type="text"
-            icon={<BranchesOutlined />}
-            onClick={onOpenBranches}
-            style={onOpenStatus ? undefined : { marginLeft: 'auto' }}
-          />
+          <Tooltip title="打开分支页：查看本地/远程分支并执行新建、检出、合并等操作">
+            <Button
+              aria-label="分支"
+              type="text"
+              icon={<BranchesOutlined />}
+              onClick={onOpenBranches}
+              style={onOpenStatus ? undefined : { marginLeft: 'auto' }}
+            />
+          </Tooltip>
         ) : null}
         {/* 合并入口：排在分支与设置之间；前面按钮已占位（marginLeft:auto）时不再重复右推 */}
         {onOpenMerge ? (
-          <Button
-            aria-label="合并"
-            type="text"
-            icon={<MergeOutlined />}
-            onClick={onOpenMerge}
-            style={onOpenStatus || onOpenBranches ? undefined : { marginLeft: 'auto' }}
-          />
+          <Tooltip title="打开合并页：把选定的分支或提交并入当前分支">
+            <Button
+              aria-label="合并"
+              type="text"
+              icon={<MergeOutlined />}
+              onClick={onOpenMerge}
+              style={onOpenStatus || onOpenBranches ? undefined : { marginLeft: 'auto' }}
+            />
+          </Tooltip>
         ) : null}
         {/* 贮藏入口：排在合并与设置之间；前面按钮已占位（marginLeft:auto）时不再重复右推 */}
         {onOpenStashes ? (
-          <Button
-            aria-label="贮藏"
-            type="text"
-            icon={<InboxOutlined />}
-            onClick={onOpenStashes}
-            style={onOpenStatus || onOpenBranches || onOpenMerge ? undefined : { marginLeft: 'auto' }}
-          />
+          <Tooltip title="打开贮藏页：把未提交的改动暂存起来，或把已有贮藏重新应用回工作区">
+            <Button
+              aria-label="贮藏"
+              type="text"
+              icon={<InboxOutlined />}
+              onClick={onOpenStashes}
+              style={onOpenStatus || onOpenBranches || onOpenMerge ? undefined : { marginLeft: 'auto' }}
+            />
+          </Tooltip>
         ) : null}
         {/* 设置入口靠右对齐；变更/分支/合并/贮藏按钮已占位（marginLeft:auto）时不再重复右推 */}
         {onOpenSettings ? (
-          <Button
-            aria-label="设置"
-            type="text"
-            icon={<SettingOutlined />}
-            onClick={onOpenSettings}
-            style={onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes ? undefined : { marginLeft: 'auto' }}
-          />
+          <Tooltip title="打开设置页：调整当前仓库的 git 配置、账户与外观偏好">
+            <Button
+              aria-label="设置"
+              type="text"
+              icon={<SettingOutlined />}
+              onClick={onOpenSettings}
+              style={onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes ? undefined : { marginLeft: 'auto' }}
+            />
+          </Tooltip>
         ) : null}
         {/* 「更多」Dropdown：远程相关操作（拉取/推送/更新项目/远程管理）的收敛入口，跟在设置按钮之后；
             前面按钮已占位（marginLeft:auto）时不再重复右推 */}
         {moreItems.length > 0 ? (
-          <Dropdown trigger={['click']} menu={{ items: moreItems, onClick: ({ key }) => onMoreClick(key) }}>
-            <Button
-              aria-label="更多"
-              type="text"
-              icon={<MoreOutlined />}
-              style={
-                onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes || onOpenSettings
-                  ? undefined
-                  : { marginLeft: 'auto' }
-              }
-            />
+          <Dropdown
+            trigger={['click']}
+            onOpenChange={setMoreMenuOpen}
+            menu={{ items: moreItems, onClick: ({ key }) => onMoreClick(key) }}
+          >
+            {/* Tooltip 放在 Dropdown 内侧：Dropdown 需要直接包裹真实控件才能接住点击触发 */}
+            <Tooltip
+              title="更多功能：只读浏览（溯源/历史/已提交/搜索）、本地操作与远程操作统一收在这里"
+              open={moreMenuOpen ? false : undefined}
+            >
+              <Button
+                aria-label="更多"
+                type="text"
+                icon={<MoreOutlined />}
+                style={
+                  onOpenStatus || onOpenBranches || onOpenMerge || onOpenStashes || onOpenSettings
+                    ? undefined
+                    : { marginLeft: 'auto' }
+                }
+              />
+            </Tooltip>
           </Dropdown>
         ) : null}
       </div>
@@ -444,51 +483,63 @@ export function LogPage({
           data-testid="log-filter-row"
           style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}
         >
-          <Input
-            data-testid="log-filter-author"
-            placeholder="作者过滤"
-            allowClear
-            size="small"
-            style={{ width: 180 }}
-            value={authorDraft}
-            onChange={(e) => setAuthorDraft(e.target.value)}
-            onPressEnter={applyFilters}
-            onBlur={applyFilters}
-          />
-          <Input
-            data-testid="log-filter-path"
-            placeholder="路径过滤（如 src/）"
-            allowClear
-            size="small"
-            style={{ width: 220 }}
-            value={pathDraft}
-            onChange={(e) => setPathDraft(e.target.value)}
-            onPressEnter={applyFilters}
-            onBlur={applyFilters}
-          />
+          <Tooltip title="按作者过滤提交：支持姓名或邮箱片段，回车或失焦才生效">
+            <Input
+              data-testid="log-filter-author"
+              placeholder="作者过滤"
+              allowClear
+              size="small"
+              style={{ width: 180 }}
+              value={authorDraft}
+              onChange={(e) => setAuthorDraft(e.target.value)}
+              onPressEnter={applyFilters}
+              onBlur={applyFilters}
+            />
+          </Tooltip>
+          <Tooltip title="按路径过滤提交：填目录或文件前缀（如 src/），回车或失焦才生效">
+            <Input
+              data-testid="log-filter-path"
+              placeholder="路径过滤（如 src/）"
+              allowClear
+              size="small"
+              style={{ width: 220 }}
+              value={pathDraft}
+              onChange={(e) => setPathDraft(e.target.value)}
+              onPressEnter={applyFilters}
+              onBlur={applyFilters}
+            />
+          </Tooltip>
           {/* tag chips 显示开关（对齐 Java VcsLogApplicationSettings.showTagNames：分支 chips 恒显、tag 默认关可开） */}
           <Flex align="center" gap={4} style={{ whiteSpace: 'nowrap' }}>
-            <Switch
-              size="small"
-              data-testid="log-show-tags"
-              checked={showTags}
-              onChange={setShowTags}
-            />
+            <Tooltip title="在提交行上显示 tag 标签 chip：开启后能看到每个提交被打了哪些标签">
+              <Switch
+                size="small"
+                data-testid="log-show-tags"
+                checked={showTags}
+                onChange={setShowTags}
+              />
+            </Tooltip>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               标签
             </Typography.Text>
           </Flex>
           {hasMore !== undefined && onLoadMore !== undefined ? (
-            <Button
-              size="small"
-              data-testid="log-load-more"
-              disabled={!hasMore}
-              loading={loadingMore}
-              onClick={onLoadMore}
-              style={{ marginLeft: 'auto' }}
-            >
-              加载更多
-            </Button>
+            // 到达快照上限时按钮禁用；禁用按钮不派发 hover，故在 Tooltip 与 Button 之间包 span 承接悬停。
+            // 外层 span 承接原先挂在按钮上的 marginLeft:auto（按钮自身 style 保持不变），右对齐位置不变
+            <Tooltip title={hasMore ? '继续加载更早的提交：按阶梯放大查询数量，结果追加在列表下方' : '已到本次快照的加载上限：请收窄过滤条件或重新查询后再加载'}>
+              <span style={{ marginLeft: 'auto' }}>
+                <Button
+                  size="small"
+                  data-testid="log-load-more"
+                  disabled={!hasMore}
+                  loading={loadingMore}
+                  onClick={onLoadMore}
+                  style={{ marginLeft: 'auto' }}
+                >
+                  加载更多
+                </Button>
+              </span>
+            </Tooltip>
           ) : null}
         </div>
       ) : null}
@@ -501,15 +552,38 @@ export function LogPage({
             /* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
                antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */
             <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
-              <div style={{ height: '100%' }}>
-                <CommitGraph
-                  commits={commits}
-                  onSelect={onSelectCommit}
-                  onContextMenu={setMenuHash}
-                  showTags={showTags}
-                  selectedHash={selectedCommit?.hash ?? null}
-                />
-              </div>
+              {/* 提交图整块也要有 tooltip（行点击/右键由图上每一行承载）。
+                  Tooltip 的 child 必须能接 ref 与 hover 事件：刻意交给下面这层真实 div 承接，
+                  而不是把函数组件 CommitGraph 直接当子节点（那样拿不到 ref，气泡不会出现）。
+                  open 受控：指针落进某一行时抑制整图气泡，行自带的气泡才是这一刻该显示的那个 */}
+              <Tooltip
+                open={graphHovered && !graphRowHovered}
+                title="提交图区域：单击某行可查看该提交详情，右键某行可打开该提交的操作菜单"
+              >
+                <div
+                  style={{ height: '100%' }}
+                  onMouseEnter={() => setGraphHovered(true)}
+                  onMouseLeave={() => {
+                    setGraphHovered(false);
+                    setGraphRowHovered(false);
+                  }}
+                  // onMouseOver 会冒泡：用事件目标判断指针是否落在提交行（commit-graph 渲染的 data-testid）上
+                  onMouseOver={(event) => {
+                    const target = event.target;
+                    setGraphRowHovered(
+                      target instanceof Element && target.closest('[data-testid="commit-graph-row"]') !== null,
+                    );
+                  }}
+                >
+                  <CommitGraph
+                    commits={commits}
+                    onSelect={onSelectCommit}
+                    onContextMenu={setMenuHash}
+                    showTags={showTags}
+                    selectedHash={selectedCommit?.hash ?? null}
+                  />
+                </div>
+              </Tooltip>
             </Dropdown>
           )}
         </div>
@@ -546,12 +620,14 @@ export function LogPage({
           setBranchModalOpen(false);
         }}
       >
-        <Input
-          data-testid="log-branch-name"
-          placeholder="分支名（如 feature/xxx）"
-          value={branchName}
-          onChange={(e) => setBranchName(e.target.value)}
-        />
+        <Tooltip title="新分支名（必填）：以该提交为起点创建并立即检出，留空时「确定」保持禁用">
+          <Input
+            data-testid="log-branch-name"
+            placeholder="分支名（如 feature/xxx）"
+            value={branchName}
+            onChange={(e) => setBranchName(e.target.value)}
+          />
+        </Tooltip>
       </Modal>
       <Modal
         title="从此处新建标签"
@@ -575,18 +651,22 @@ export function LogPage({
         }}
       >
         <Flex vertical gap={8}>
-          <Input
-            data-testid="log-tag-name"
-            placeholder="标签名（如 v1.0.0）"
-            value={tagName}
-            onChange={(e) => setTagName(e.target.value)}
-          />
-          <Input
-            data-testid="log-tag-message"
-            placeholder="附注信息（可选；留空为轻量标签）"
-            value={tagMessage}
-            onChange={(e) => setTagMessage(e.target.value)}
-          />
+          <Tooltip title="新标签名（必填）：以该提交为起点创建标签，留空时「确定」保持禁用">
+            <Input
+              data-testid="log-tag-name"
+              placeholder="标签名（如 v1.0.0）"
+              value={tagName}
+              onChange={(e) => setTagName(e.target.value)}
+            />
+          </Tooltip>
+          <Tooltip title="标签附注（可选）：填写会创建带说明的附注标签，留空则创建轻量标签">
+            <Input
+              data-testid="log-tag-message"
+              placeholder="附注信息（可选；留空为轻量标签）"
+              value={tagMessage}
+              onChange={(e) => setTagMessage(e.target.value)}
+            />
+          </Tooltip>
         </Flex>
       </Modal>
       {/* Reword 提交信息（单提交编辑直通：message 必填——经交互式变基 reword + GIT_EDITOR 消息 shim 覆写） */}
@@ -604,13 +684,15 @@ export function LogPage({
         }}
         onCancel={() => setRewordHash(null)}
       >
-        <Input.TextArea
-          data-testid="reword-message-input"
-          placeholder="新的提交信息"
-          autoSize={{ minRows: 2, maxRows: 6 }}
-          value={rewordMessage}
-          onChange={(e) => setRewordMessage(e.target.value)}
-        />
+        <Tooltip title="改写后的提交信息（必填）：经交互式变基 reword 覆盖原信息，留空时「确定」保持禁用">
+          <Input.TextArea
+            data-testid="reword-message-input"
+            placeholder="新的提交信息"
+            autoSize={{ minRows: 2, maxRows: 6 }}
+            value={rewordMessage}
+            onChange={(e) => setRewordMessage(e.target.value)}
+          />
+        </Tooltip>
       </Modal>
       {/* 查看变更集（#13 LogPage → DiffPage 直达）：选中提交的全量变更文件 Modal——行点击 → 该文件
           diff（from=父哈希、to=该提交；根提交降级由容器定）；数据由容器经 useCommitFiles 条件拉取 */}
@@ -636,14 +718,16 @@ export function LogPage({
             {changesEntry.files.map((file) => (
               <Flex key={`${file.status}-${file.path}`} align="center" gap={8}>
                 <CommittedStatusTag status={file.status} />
-                <Typography.Text
-                  data-testid={`changes-file-${file.path}`}
-                  style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
-                  ellipsis
-                  onClick={() => onOpenChangedFile?.(file.path)}
-                >
-                  {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
-                </Typography.Text>
+                <Tooltip title="查看该文件的差异：以本提交与其父提交为两端，直接跳到该文件的对比视图">
+                  <Typography.Text
+                    data-testid={`changes-file-${file.path}`}
+                    style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
+                    ellipsis
+                    onClick={() => onOpenChangedFile?.(file.path)}
+                  >
+                    {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
+                  </Typography.Text>
+                </Tooltip>
               </Flex>
             ))}
           </Flex>

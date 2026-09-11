@@ -5,7 +5,7 @@
  *  纯受控：open 由父级持有；分支/选项/信息为内部状态，关闭时复位。
  */
 import { useMemo, useState } from 'react';
-import { Checkbox, Flex, Input, Modal, Select, Typography } from 'antd';
+import { Checkbox, Flex, Input, Modal, Select, Tooltip, Typography } from 'antd';
 import type { BranchList, MergeBody } from '@rebased/contracts';
 
 export interface MergeDialogProps {
@@ -85,32 +85,42 @@ export function MergeDialog({ open, branches, onOk, onCancel, confirming }: Merg
       <Flex vertical gap={12}>
         <Flex align="center" gap={8}>
           <Typography.Text type="secondary">合并到当前分支：</Typography.Text>
-          <Select
-            data-testid="merge-branch-select"
-            style={{ flex: 1 }}
-            placeholder="选择分支"
-            value={branch}
-            options={options}
-            onChange={setBranch}
-          />
+          <Tooltip title="合并来源分支：可选其他本地分支或远程跟踪分支（origin/* 直接作合并参数）">
+            <Select
+              data-testid="merge-branch-select"
+              style={{ flex: 1 }}
+              placeholder="选择分支"
+              value={branch}
+              options={options}
+              onChange={setBranch}
+            />
+          </Tooltip>
         </Flex>
         <Flex vertical gap={4}>
-          <Checkbox checked={noFf} onChange={(e) => setNoFf(e.target.checked)}>
-            no-ff：禁用快进
-          </Checkbox>
-          <Checkbox checked={squash} onChange={(e) => setSquash(e.target.checked)}>
-            squash：压缩为单提交
-          </Checkbox>
-          <Checkbox checked={noCommit} onChange={(e) => setNoCommit(e.target.checked)}>
-            no-commit：不自动提交
-          </Checkbox>
+          <Tooltip title="勾选后即使可快进也生成一个合并提交（保留「曾经合并过」的分支历史）">
+            <Checkbox checked={noFf} onChange={(e) => setNoFf(e.target.checked)}>
+              no-ff：禁用快进
+            </Checkbox>
+          </Tooltip>
+          <Tooltip title="勾选后把合并进来的提交压成当前分支上的一个提交（改动停在暂存区，需再提交）">
+            <Checkbox checked={squash} onChange={(e) => setSquash(e.target.checked)}>
+              squash：压缩为单提交
+            </Checkbox>
+          </Tooltip>
+          <Tooltip title="勾选后只把合并结果写进工作区与暂存区，不自动生成合并提交（需手动提交）">
+            <Checkbox checked={noCommit} onChange={(e) => setNoCommit(e.target.checked)}>
+              no-commit：不自动提交
+            </Checkbox>
+          </Tooltip>
         </Flex>
-        <Input
-          data-testid="merge-message"
-          placeholder="合并信息（可选）"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-        />
+        <Tooltip title="合并提交信息：留空则用 git 默认的 merge 信息（仅在有合并提交时生效）">
+          <Input
+            data-testid="merge-message"
+            placeholder="合并信息（可选）"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+        </Tooltip>
       </Flex>
     </Modal>
   );

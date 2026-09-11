@@ -6,7 +6,7 @@
  *  （core 日志已剥离 token 的 extraHeader 对，这里是普通 -c 配置项的可读性折叠）。
  *  纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
  */
-import { Button, Card, Flex, Spin, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { ConsoleEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { formatCommitDate } from '../domain/format';
@@ -77,9 +77,12 @@ export function ConsolePanel({ entries, loading, onRefresh }: ConsolePanelProps)
       title="Git 控制台"
       extra={
         onRefresh !== undefined ? (
-          <Button size="small" data-testid="console-refresh" onClick={onRefresh}>
-            刷新
-          </Button>
+          /* 只重新拉取记录列表，不会重跑任何命令（避免误以为「刷新 = 重执行」） */
+          <Tooltip title="重新拉取最近的命令执行记录：只读日志，不会重跑命令">
+            <Button size="small" data-testid="console-refresh" onClick={onRefresh}>
+              刷新
+            </Button>
+          </Tooltip>
         ) : undefined
       }
     >

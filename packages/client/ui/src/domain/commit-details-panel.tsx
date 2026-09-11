@@ -6,7 +6,7 @@
  * 操作按钮：摘樱桃/还原/Reset 当前分支到此处——均为可选回调注入，缺省不渲染对应按钮
  * （确认弹窗与 hook 调用由容器持有）。
  */
-import { Button, Tag } from 'antd';
+import { Button, Tag, Tooltip } from 'antd';
 import { CopyOutlined } from '@ant-design/icons';
 import type { CommitInfo } from '@rebased/contracts';
 import { classifyRefs } from './refs';
@@ -44,7 +44,9 @@ export function CommitDetailsPanel({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <code>{commit.shortHash}</code>
-        <Button data-testid="copy-hash" size="small" icon={<CopyOutlined />} onClick={copyHash} />
+        <Tooltip title="把该提交的完整 hash 复制到剪贴板（浏览器无剪贴板权限时静默跳过）">
+          <Button data-testid="copy-hash" size="small" icon={<CopyOutlined />} onClick={copyHash} />
+        </Tooltip>
       </div>
       <div>{formatAuthorLine(commit.author, commit.dateIso)}</div>
       <div>
@@ -72,9 +74,12 @@ export function CommitDetailsPanel({
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span>父提交：</span>
           {commit.parents.map((p) => (
-            <a key={p} data-testid="parent-link" href={`#${p}`}>
-              {p.slice(0, 7)}
-            </a>
+            // 父提交链接：地址栏 hash 变化即由容器解析 ?select=<hash> 深链并切换选中提交
+            <Tooltip key={p} title="跳转到该父提交：按提交号重新定位提交图并选中它">
+              <a data-testid="parent-link" href={`#${p}`}>
+                {p.slice(0, 7)}
+              </a>
+            </Tooltip>
           ))}
         </div>
       ) : null}
@@ -82,29 +87,39 @@ export function CommitDetailsPanel({
       {onResetHere || onCherryPick || onRevert || onBrowse || onOpenChanges ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {onBrowse ? (
-            <Button data-testid="browse-snapshot" size="small" onClick={() => onBrowse(commit.hash)}>
-              浏览快照
-            </Button>
+            <Tooltip title="浏览该提交的文件快照：以只读方式打开这一版的目录内容（不改动工作区）">
+              <Button data-testid="browse-snapshot" size="small" onClick={() => onBrowse(commit.hash)}>
+                浏览快照
+              </Button>
+            </Tooltip>
           ) : null}
           {onOpenChanges ? (
-            <Button data-testid="open-changes" size="small" onClick={() => onOpenChanges(commit.hash)}>
-              查看变更集
-            </Button>
+            <Tooltip title="查看该提交的变更集：列出本次提交涉及的全部文件，可再点单个文件看差异">
+              <Button data-testid="open-changes" size="small" onClick={() => onOpenChanges(commit.hash)}>
+                查看变更集
+              </Button>
+            </Tooltip>
           ) : null}
           {onCherryPick ? (
-            <Button data-testid="cherry-pick" size="small" onClick={() => onCherryPick(commit.hash)}>
-              摘樱桃
-            </Button>
+            <Tooltip title="把该提交的改动移植到当前分支并生成一笔新提交（原提交保持不动）">
+              <Button data-testid="cherry-pick" size="small" onClick={() => onCherryPick(commit.hash)}>
+                摘樱桃
+              </Button>
+            </Tooltip>
           ) : null}
           {onRevert ? (
-            <Button data-testid="revert" size="small" onClick={() => onRevert(commit.hash)}>
-              还原
-            </Button>
+            <Tooltip title="生成一笔反向提交来抵消该提交的改动（历史保留，不做改写）">
+              <Button data-testid="revert" size="small" onClick={() => onRevert(commit.hash)}>
+                还原
+              </Button>
+            </Tooltip>
           ) : null}
           {onResetHere ? (
-            <Button data-testid="reset-here" size="small" onClick={() => onResetHere(commit.hash)}>
-              Reset 当前分支到此处
-            </Button>
+            <Tooltip title="把当前分支重置到该提交：此后的提交将不再属于本分支（需先确认重置方式）">
+              <Button data-testid="reset-here" size="small" onClick={() => onResetHere(commit.hash)}>
+                Reset 当前分支到此处
+              </Button>
+            </Tooltip>
           ) : null}
         </div>
       ) : null}

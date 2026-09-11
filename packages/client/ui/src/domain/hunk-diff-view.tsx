@@ -7,7 +7,7 @@
  * 大 diff 截断（GitHub 无标记）按部分渲染——解析出多少 hunk 显示多少。
  * 纯函数驱动（ui 不调接口）；loader 为测试注入点。
  */
-import { Button, Flex, Input, Select, Typography } from 'antd';
+import { Button, Flex, Input, Select, Tooltip, Typography } from 'antd';
 import { parseUnifiedDiff, hunkSides, type UnifiedHunk } from '@rebased/contracts';
 import { useState } from 'react';
 import { formatCommitDate } from './format';
@@ -106,31 +106,40 @@ function HunkBlock({
         ))}
         {onAddComment !== undefined && rightLines.length > 0 ? (
           <Flex align="center" gap={8}>
-            <Select
-              data-testid={`hunk-comment-line-${index}`}
-              size="small"
-              style={{ width: 120 }}
-              value={selectedLine}
-              options={rightLines.map((line) => ({ value: line, label: `第 ${line} 行` }))}
-              onChange={setSelectedLine}
-            />
-            <Input
-              data-testid={`hunk-comment-input-${index}`}
-              size="small"
-              placeholder="行级评论"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onPressEnter={submit}
-            />
-            <Button
-              size="small"
-              data-testid={`hunk-comment-send-${index}`}
-              disabled={draft.trim() === ''}
-              loading={adding}
-              onClick={submit}
-            >
-              发送
-            </Button>
+            <Tooltip title="评论锚定的新文件行号：只列本 hunk 新侧的行，选中即决定评论挂在哪一行">
+              <Select
+                data-testid={`hunk-comment-line-${index}`}
+                size="small"
+                style={{ width: 120 }}
+                value={selectedLine}
+                options={rightLines.map((line) => ({ value: line, label: `第 ${line} 行` }))}
+                onChange={setSelectedLine}
+              />
+            </Tooltip>
+            <Tooltip title="行级评论内容：回车或点「发送」提交，提交后输入框清空、行号保持上次选择">
+              <Input
+                data-testid={`hunk-comment-input-${index}`}
+                size="small"
+                placeholder="行级评论"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onPressEnter={submit}
+              />
+            </Tooltip>
+            {/* 评论为空时按钮禁用；antd 禁用按钮不派发 hover，故在 Tooltip 与 Button 之间包一层 span 承接悬停提示 */}
+            <Tooltip title={draft.trim() === '' ? '先填写评论内容：内容为空时无法发送' : '把这条评论发到所选行，随代码评审一起保存'}>
+              <span>
+                <Button
+                  size="small"
+                  data-testid={`hunk-comment-send-${index}`}
+                  disabled={draft.trim() === ''}
+                  loading={adding}
+                  onClick={submit}
+                >
+                  发送
+                </Button>
+              </span>
+            </Tooltip>
           </Flex>
         ) : null}
       </Flex>

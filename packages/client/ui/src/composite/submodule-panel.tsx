@@ -6,7 +6,7 @@
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
  */
 import { useState } from 'react';
-import { Button, Card, Checkbox, Flex, Tag, Typography } from 'antd';
+import { Button, Card, Checkbox, Flex, Tag, Tooltip, Typography } from 'antd';
 import type { SubmoduleEntry, SubmoduleList, SubmoduleUpdateBody } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 
@@ -62,14 +62,27 @@ function SubmoduleRow({
           {entry.commitSha.slice(0, 7)}
         </Typography.Text>
       ) : null}
-      <Button
-        size="small"
-        data-testid={`submodule-update-${entry.name}`}
-        disabled={acting}
-        onClick={() => onUpdate({ name: entry.name })}
+      {/* 行内「更新」：只更新这一行子模块（不带 recursive）。
+          acting 期间禁用，禁用按钮不派发 hover → 在 Tooltip 与 Button 之间包 span 承接提示；
+          inline-flex 让 span 紧贴按钮，不改变原 Flex 行布局尺寸 */}
+      <Tooltip
+        title={
+          acting
+            ? '子模块操作进行中，完成后再更新这一行'
+            : '按 .gitmodules 记录的提交更新该子模块：会改动它自己的工作区内容'
+        }
       >
-        更新
-      </Button>
+        <span style={{ display: 'inline-flex' }}>
+          <Button
+            size="small"
+            data-testid={`submodule-update-${entry.name}`}
+            disabled={acting}
+            onClick={() => onUpdate({ name: entry.name })}
+          >
+            更新
+          </Button>
+        </span>
+      </Tooltip>
     </Flex>
   );
 }
@@ -86,21 +99,52 @@ export function SubmodulePanel(props: SubmodulePanelProps): React.ReactNode {
         extra={
           <Flex gap={8} align="center">
             {onRefresh !== undefined ? (
-              <Button size="small" data-testid="submodule-refresh" disabled={acting} onClick={onRefresh}>
-                刷新
-              </Button>
+              /* 刷新：只重新读取状态，不改工作区；acting 禁用期间同样靠外层 span 承接提示 */
+              <Tooltip
+                title={
+                  acting ? '子模块操作进行中，完成后再刷新列表' : '重新读取 .gitmodules 与各子模块的检出状态（只读，不改工作区）'
+                }
+              >
+                <span style={{ display: 'inline-flex' }}>
+                  <Button size="small" data-testid="submodule-refresh" disabled={acting} onClick={onRefresh}>
+                    刷新
+                  </Button>
+                </span>
+              </Tooltip>
             ) : null}
-            <Checkbox checked={recursive} disabled={acting} onChange={(e) => setRecursive(e.target.checked)}>
-              递归更新
-            </Checkbox>
-            <Button
-              size="small"
-              data-testid="submodule-update-all"
-              disabled={acting}
-              onClick={() => onUpdate(recursive ? { recursive: true } : {})}
+            {/* 递归开关：决定「更新全部」的作用深度，禁用期间也靠 span 承接提示（Checkbox 禁用同样不派发 hover） */}
+            <Tooltip
+              title={
+                acting
+                  ? '子模块操作进行中，完成后再修改该选项'
+                  : '勾选后「更新全部」连带更新子模块内部的嵌套子模块；不勾只更新第一层'
+              }
             >
-              更新全部
-            </Button>
+              <span style={{ display: 'inline-flex' }}>
+                <Checkbox checked={recursive} disabled={acting} onChange={(e) => setRecursive(e.target.checked)}>
+                  递归更新
+                </Checkbox>
+              </span>
+            </Tooltip>
+            {/* 更新全部：作用对象是整张列表（区别于每行的「更新」），深度取决于左侧递归开关 */}
+            <Tooltip
+              title={
+                acting
+                  ? '子模块操作进行中，完成后再批量更新'
+                  : '更新列表中全部子模块：勾选左侧「递归更新」时连带其内部的嵌套子模块'
+              }
+            >
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  size="small"
+                  data-testid="submodule-update-all"
+                  disabled={acting}
+                  onClick={() => onUpdate(recursive ? { recursive: true } : {})}
+                >
+                  更新全部
+                </Button>
+              </span>
+            </Tooltip>
           </Flex>
         }
       >

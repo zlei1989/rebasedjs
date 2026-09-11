@@ -2,7 +2,7 @@
  * 进行中操作条：merge/rebase/cherry-pick/revert 的中文状态 + 中止按钮（Popconfirm 确认）；none 时不渲染。
  * 纯 props 驱动：ui 不调接口，operation/onAbort/aborting 由调用方容器注入 hooks 数据。
  */
-import { Button, Popconfirm, Space, Tag } from 'antd';
+import { Button, Popconfirm, Space, Tag, Tooltip } from 'antd';
 import type { OperationState } from '@rebased/contracts';
 
 export interface OperationStatusProps {
@@ -43,9 +43,13 @@ export function OperationStatus({ operation, onAbort, aborting = false }: Operat
         cancelText="取消"
         onConfirm={onAbort}
       >
-        <Button danger size="small" loading={aborting}>
-          中止
-        </Button>
+        {/* Tooltip 置于 Popconfirm 内侧（Popconfirm > Tooltip > Button），保持取消确认的触发链完整；
+            文案说明中止的后果（工作区回到操作前、已做的解决会被丢弃），且外层确认气泡还要再点一次 */}
+        <Tooltip title="放弃本次进行中的操作：工作区恢复到操作前状态，已完成的冲突解决不会保留">
+          <Button danger size="small" loading={aborting}>
+            中止
+          </Button>
+        </Tooltip>
       </Popconfirm>
     </Space>
   );

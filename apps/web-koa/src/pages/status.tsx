@@ -25,7 +25,7 @@ import {
 } from '@rebased/client';
 import type { CommitBody, HunkStagingBody, StagingBody } from '@rebased/contracts';
 import { StatusPage } from '@rebased/ui';
-import { Button, Flex, Modal, message } from 'antd';
+import { Button, Flex, Modal, Tooltip, message } from 'antd';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -128,9 +128,12 @@ export function RepoStatusPage(): React.ReactNode {
   return (
     <Flex vertical align="flex-start">
       {/* 返回日志页 */}
-      <Button type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-        返回日志
-      </Button>
+      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+      <Tooltip title="返回该仓库的提交日志页">
+        <Button type="link" onClick={() => navigate(`/repos/${repoId}`)}>
+          返回日志
+        </Button>
+      </Tooltip>
       {/* key 含 repoId（切仓库强制重挂载）与 commitSeq（commit 成功清空提交框） */}
       <StatusPage
         key={`${repoId}-${commitSeq}`}
@@ -250,32 +253,37 @@ export function RepoStatusPage(): React.ReactNode {
         title="检测到 CRLF 行尾符"
         open={crlfPending !== null}
         footer={[
-          <Button key="cancel" data-testid="crlf-cancel" onClick={() => setCrlfPending(null)}>
-            取消
-          </Button>,
-          <Button
-            key="keep"
-            data-testid="crlf-keep"
-            onClick={() => {
-              const pending = crlfPending;
-              setCrlfPending(null);
-              if (pending !== null) (pending.kind === 'commit' ? doCommit : doCommitAndPush)(pending.body);
-            }}
-          >
-            原样提交
-          </Button>,
-          <Button
-            key="fix"
-            type="primary"
-            data-testid="crlf-fix"
-            onClick={() => {
-              const pending = crlfPending;
-              setCrlfPending(null);
-              if (pending !== null) (pending.kind === 'commit' ? doCommit : doCommitAndPush)({ ...pending.body, crlfFix: true });
-            }}
-          >
-            修复并提交
-          </Button>,
+          /* key 移到最外层 Tooltip：数组元素的 key 必须由最外层节点持有（否则 React 报列表 key 告警） */
+          <Tooltip key="cancel" title="关闭此提示，本次提交不会发生">
+            <Button data-testid="crlf-cancel" onClick={() => setCrlfPending(null)}>
+              取消
+            </Button>
+          </Tooltip>,
+          <Tooltip key="keep" title="不做行尾转换，按当前 CRLF 内容直接提交">
+            <Button
+              data-testid="crlf-keep"
+              onClick={() => {
+                const pending = crlfPending;
+                setCrlfPending(null);
+                if (pending !== null) (pending.kind === 'commit' ? doCommit : doCommitAndPush)(pending.body);
+              }}
+            >
+              原样提交
+            </Button>
+          </Tooltip>,
+          <Tooltip key="fix" title="改设 core.autocrlf 后提交，避免 CRLF 混入库">
+            <Button
+              type="primary"
+              data-testid="crlf-fix"
+              onClick={() => {
+                const pending = crlfPending;
+                setCrlfPending(null);
+                if (pending !== null) (pending.kind === 'commit' ? doCommit : doCommitAndPush)({ ...pending.body, crlfFix: true });
+              }}
+            >
+              修复并提交
+            </Button>
+          </Tooltip>,
         ]}
         onCancel={() => setCrlfPending(null)}
       >

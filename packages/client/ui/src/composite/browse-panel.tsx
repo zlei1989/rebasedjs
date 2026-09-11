@@ -5,11 +5,11 @@
  * 降级边界：子模块（type=commit）不可选中；二进制（binary=true）仅提示不渲染；
  * 空版本、加载/错误态均有占位。
  */
-import { Card, Flex, Spin, Tag, Typography } from 'antd';
+import { Card, Flex, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { BrowseContent, BrowseEntry } from '@rebased/contracts';
 import { useMemo } from 'react';
 import { EmptyState } from '../base/empty-state';
-import { FileTree, type FileTreeNode } from '../base/file-tree';
+import { FileTree, FILE_TREE_TOOLTIP, type FileTreeNode } from '../base/file-tree';
 import { buildDirectoryTree } from '../domain/directory-tree';
 
 export interface BrowsePanelProps {
@@ -90,12 +90,18 @@ export function BrowsePanel({
       ) : (
         <Flex gap={12} style={{ flex: 1, minHeight: 0 }}>
           <Card size="small" title={`文件（${entries.length}）`} style={{ width: 300, flexShrink: 0, overflow: 'auto' }}>
-            <FileTree
-              nodes={nodes}
-              selectedKeys={selectedPath !== undefined ? [selectedPath] : []}
-              onSelect={onSelectFile}
-              defaultExpandedKeys={topDirs}
-            />
+            {/* FileTree 是复合组件（不转发 ref / 不落 DOM 事件），Tooltip 需要真实节点承载 hover，
+                故在中间包一层 block span 作为悬停宿主（布局等同原 div，尺寸不变）。 */}
+            <Tooltip title={FILE_TREE_TOOLTIP}>
+              <span style={{ display: 'block' }}>
+                <FileTree
+                  nodes={nodes}
+                  selectedKeys={selectedPath !== undefined ? [selectedPath] : []}
+                  onSelect={onSelectFile}
+                  defaultExpandedKeys={topDirs}
+                />
+              </span>
+            </Tooltip>
           </Card>
           <Card
             size="small"

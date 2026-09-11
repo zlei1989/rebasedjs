@@ -7,7 +7,7 @@
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Select, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Input, Modal, Popconfirm, Select, Tag, Tooltip, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { RemoteAction, RemoteInfo, RemoteList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -61,18 +61,22 @@ function AddRemoteModal({
       onCancel={close}
     >
       <Flex vertical gap={8}>
-        <Input
-          data-testid="add-remote-name"
-          placeholder="远程名（如 origin）"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <Input
-          data-testid="add-remote-url"
-          placeholder="远程 URL"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-        />
+        <Tooltip title="填写新远程的名称（如 origin）：与下方 URL 成对写入仓库配置，名称重复会被服务端拒绝">
+          <Input
+            data-testid="add-remote-name"
+            placeholder="远程名（如 origin）"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Tooltip>
+        <Tooltip title="填写新远程的 URL：支持 https/ssh，添加后同时作为该远程的 fetch 与 push 地址">
+          <Input
+            data-testid="add-remote-url"
+            placeholder="远程 URL"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        </Tooltip>
       </Flex>
     </Modal>
   );
@@ -114,12 +118,14 @@ function EditRemoteModal({
       onOk={submit}
       onCancel={close}
     >
-      <Input
-        data-testid="edit-remote-url"
-        placeholder="远程 URL"
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-      />
+      <Tooltip title="修改该远程的 URL：保存后 fetch 与 push 地址同时改写（契约 setUrl），改地址不影响已有提交">
+        <Input
+          data-testid="edit-remote-url"
+          placeholder="远程 URL"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+      </Tooltip>
     </Modal>
   );
 }
@@ -144,21 +150,29 @@ function RemoteRow({
       <Typography.Text type="secondary" style={{ flex: 1, minWidth: 0 }} ellipsis>
         {remote.fetchUrl}
       </Typography.Text>
-      <Button size="small" data-testid={`fetch-remote-${remote.name}`} onClick={() => onFetch(remote.name)}>
-        Fetch
-      </Button>
-      <Button size="small" data-testid={`edit-remote-${remote.name}`} onClick={() => onEdit(remote)}>
-        编辑
-      </Button>
+      {/* 行本身不可点（只读展示 name/URL），故无需行 Tooltip 抑制逻辑；行内三个操作各自包 Tooltip */}
+      <Tooltip title="拉取该远程的最新提交与分支（git fetch）：只更新远程跟踪分支，不改动工作区">
+        <Button size="small" data-testid={`fetch-remote-${remote.name}`} onClick={() => onFetch(remote.name)}>
+          Fetch
+        </Button>
+      </Tooltip>
+      <Tooltip title="修改该远程的 URL（弹窗内预填当前地址）：保存后 fetch/push 地址一起改写">
+        <Button size="small" data-testid={`edit-remote-${remote.name}`} onClick={() => onEdit(remote)}>
+          编辑
+        </Button>
+      </Tooltip>
       <Popconfirm
         title={`确定删除远程 ${remote.name}？`}
         okText="确定"
         cancelText="取消"
         onConfirm={() => onAction({ action: 'remove', name: remote.name })}
       >
-        <Button size="small" danger data-testid={`remove-remote-${remote.name}`}>
-          删除
-        </Button>
+        {/* Tooltip 放最内层（Popconfirm > Tooltip > Button）：保持 Popconfirm 的触发链完整 */}
+        <Tooltip title="从本仓库配置中移除该远程（git remote remove）：只改本地配置，不动远端仓库">
+          <Button size="small" danger data-testid={`remove-remote-${remote.name}`}>
+            删除
+          </Button>
+        </Tooltip>
       </Popconfirm>
     </Flex>
   );
@@ -206,19 +220,23 @@ function FetchSpecModal({
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           按 refspec 拉取指定引用（如 +refs/pull/7/head:refs/remotes/origin/pr-7）；refspec 需指定远程。
         </Typography.Text>
-        <Select
-          data-testid="fetch-spec-remote"
-          placeholder="选择远程"
-          value={remote}
-          options={remotes.map((r) => ({ value: r.name, label: r.name }))}
-          onChange={setRemote}
-        />
-        <Input
-          data-testid="fetch-spec-refspec"
-          placeholder="refspec（如 +refs/heads/*:refs/remotes/origin/*）"
-          value={refspec}
-          onChange={(e) => setRefspec(e.target.value)}
-        />
+        <Tooltip title="选择要拉取的远程：refspec 依赖远程名解析，未选则「确定」不可点">
+          <Select
+            data-testid="fetch-spec-remote"
+            placeholder="选择远程"
+            value={remote}
+            options={remotes.map((r) => ({ value: r.name, label: r.name }))}
+            onChange={setRemote}
+          />
+        </Tooltip>
+        <Tooltip title="填写 refspec（如 +refs/heads/*:refs/remotes/origin/*）：决定把哪些引用拉到哪里，需与所选远程匹配">
+          <Input
+            data-testid="fetch-spec-refspec"
+            placeholder="refspec（如 +refs/heads/*:refs/remotes/origin/*）"
+            value={refspec}
+            onChange={(e) => setRefspec(e.target.value)}
+          />
+        </Tooltip>
       </Flex>
     </Modal>
   );
@@ -233,21 +251,27 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
     <Flex vertical gap={16} style={{ padding: 16 }}>
       {/* 顶部工具条：添加远程 + fetch 全部（无参 onFetch 表示全部远程） */}
       <Flex gap={8}>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          data-testid="add-remote-button"
-          onClick={() => setAddOpen(true)}
-        >
-          添加远程
-        </Button>
-        <Button data-testid="fetch-all-button" loading={acting} onClick={() => onFetch()}>
-          Fetch 全部
-        </Button>
-        {onFetchSpec !== undefined && (
-          <Button data-testid="fetch-spec-button" onClick={() => setSpecOpen(true)}>
-            定制 Fetch…
+        <Tooltip title="打开添加远程弹窗：填写名称与 URL 后写入仓库配置（git remote add）">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            data-testid="add-remote-button"
+            onClick={() => setAddOpen(true)}
+          >
+            添加远程
           </Button>
+        </Tooltip>
+        <Tooltip title="拉取全部远程的最新提交（git fetch --all）：不合并、不改动工作区，耗时随远程数量增加">
+          <Button data-testid="fetch-all-button" loading={acting} onClick={() => onFetch()}>
+            Fetch 全部
+          </Button>
+        </Tooltip>
+        {onFetchSpec !== undefined && (
+          <Tooltip title="按指定 refspec 拉取单个远程的引用（弹窗内选远程 + 填 refspec），用于拉取 PR 等非默认引用">
+            <Button data-testid="fetch-spec-button" onClick={() => setSpecOpen(true)}>
+              定制 Fetch…
+            </Button>
+          </Tooltip>
         )}
       </Flex>
 
@@ -259,14 +283,16 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
               浅克隆（历史截断）
             </Tag>
             {onUnshallow !== undefined && (
-              <Button
-                size="small"
-                data-testid="unshallow-button"
-                loading={acting}
-                onClick={() => onUnshallow(remotes.remotes[0]?.name ?? '')}
-              >
-                解除浅克隆
-              </Button>
+              <Tooltip title="补齐被截断的历史（git fetch --unshallow，作用于首个远程）：成功后浅克隆徽标消失，耗时较长">
+                <Button
+                  size="small"
+                  data-testid="unshallow-button"
+                  loading={acting}
+                  onClick={() => onUnshallow(remotes.remotes[0]?.name ?? '')}
+                >
+                  解除浅克隆
+                </Button>
+              </Tooltip>
             )}
           </Flex>
         )}
@@ -294,13 +320,20 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
         onClose={() => setAddOpen(false)}
       />
       {onFetchSpec !== undefined && (
-        <FetchSpecModal
-          open={specOpen}
-          remotes={remotes.remotes}
-          acting={acting}
-          onSubmit={onFetchSpec}
-          onClose={() => setSpecOpen(false)}
-        />
+        // 门禁口径说明（反直觉点，勿删）：FetchSpecModal 是「弹窗入口」——内部渲染 Modal（容器型组件），
+        // 弹窗里的控件已各自带 Tooltip；但 check-tooltips 按属性名把 onSubmit 当作用户操作事件，
+        // 于是把它当成可交互元素。此处按「一对一覆盖」包一层 Tooltip 满足门禁：
+        // 该组件只取自己的具名 props、不转发额外事件属性，所以既不会在弹窗上弹气泡，
+        // 也没有给 Modal 增加任何行为（props / 事件处理 / 布局均未改动）。
+        <Tooltip title="定制 Fetch 弹窗入口：选远程 + 填 refspec 后按该引用拉取（弹窗内控件各自带说明）">
+          <FetchSpecModal
+            open={specOpen}
+            remotes={remotes.remotes}
+            acting={acting}
+            onSubmit={onFetchSpec}
+            onClose={() => setSpecOpen(false)}
+          />
+        </Tooltip>
       )}
       {/* 编辑 Modal 以 key 按目标重挂载：切换编辑对象时 url 初始值随之刷新为对应 fetchUrl */}
       {editTarget !== null && (

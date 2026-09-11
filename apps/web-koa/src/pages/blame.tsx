@@ -8,7 +8,7 @@
  */
 import { useBlame, useCommitFiles } from '@rebased/client';
 import { BlameView, EmptyState } from '@rebased/ui';
-import { Button, Flex, Input } from 'antd';
+import { Button, Flex, Input, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -43,25 +43,35 @@ export function RepoBlamePage(): React.ReactNode {
   return (
     <Flex vertical align="flex-start" gap={8}>
       {/* 返回日志页 */}
-      <Button type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-        返回日志
-      </Button>
-      <Flex gap={8}>
-        <Input
-          data-testid="blame-file-input"
-          placeholder="输入文件路径（相对仓库根目录，如 src/main.ts）"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onPressEnter={submit}
-        />
-        <Button
-          type="primary"
-          autoInsertSpace={false}
-          disabled={draft.trim() === ''}
-          onClick={submit}
-        >
-          确定
+      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+      <Tooltip title="返回该仓库的提交日志页">
+        <Button type="link" onClick={() => navigate(`/repos/${repoId}`)}>
+          返回日志
         </Button>
+      </Tooltip>
+      <Flex gap={8}>
+        <Tooltip title="输入文件路径（相对仓库根），回车查看内容">
+          <Input
+            data-testid="blame-file-input"
+            placeholder="输入文件路径（相对仓库根目录，如 src/main.ts）"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onPressEnter={submit}
+          />
+        </Tooltip>
+        {/* 禁用态 antd 按钮不派发 hover：按 antd 做法包一层 span 承接提示，文案点明不可点的前提 */}
+        <Tooltip title="按输入的文件路径溯源该文件（输入为空时此按钮不可点击）">
+          <span>
+            <Button
+              type="primary"
+              autoInsertSpace={false}
+              disabled={draft.trim() === ''}
+              onClick={submit}
+            >
+              确定
+            </Button>
+          </span>
+        </Tooltip>
       </Flex>
       {file === '' ? (
         <EmptyState title="输入文件路径开始溯源" description="溯源展示文件当前内容的逐行责任归属" />

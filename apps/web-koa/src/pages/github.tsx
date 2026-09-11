@@ -25,7 +25,7 @@ import {
 } from '@rebased/client';
 import { ServiceError } from '@rebased/contracts';
 import { GitHubPanel } from '@rebased/ui';
-import { Alert, Button, Flex, Tabs, message } from 'antd';
+import { Alert, Button, Flex, Tabs, Tooltip, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -90,12 +90,17 @@ export function RepoGithubPage(): React.ReactNode {
     <Flex vertical align="flex-start">
       {/* 返回日志页 + 设置入口（#8：面板内 Settings 菜单入口语义） */}
       <Flex gap={8}>
-        <Button type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-        <Button type="link" data-testid="github-open-settings" onClick={() => navigate(`/repos/${repoId}/settings`)}>
-          设置
-        </Button>
+        {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+        <Tooltip title="返回该仓库的提交日志页">
+          <Button type="link" onClick={() => navigate(`/repos/${repoId}`)}>
+            返回日志
+          </Button>
+        </Tooltip>
+        <Tooltip title="打开该仓库的设置页：配置 GitHub 令牌等认证信息">
+          <Button type="link" data-testid="github-open-settings" onClick={() => navigate(`/repos/${repoId}/settings`)}>
+            设置
+          </Button>
+        </Tooltip>
       </Flex>
       {isAuthFailed(prsError) ? (
         /* prs 加载失败 AUTH_FAILED：提示卡 + 去设置链接（替代面板，避免无数据渲染）。
@@ -107,9 +112,11 @@ export function RepoGithubPage(): React.ReactNode {
           message="GitHub 认证失败"
           description={(prsError instanceof Error && prsError.message !== '' ? prsError.message : '令牌无效或已过期，请到设置中重新配置。')}
           action={
-            <Button size="small" onClick={() => navigate(`/repos/${repoId}/settings`)}>
-              去设置
-            </Button>
+            <Tooltip title="打开设置页重新配置 GitHub 令牌">
+              <Button size="small" onClick={() => navigate(`/repos/${repoId}/settings`)}>
+                去设置
+              </Button>
+            </Tooltip>
           }
         />
       ) : (
@@ -119,8 +126,24 @@ export function RepoGithubPage(): React.ReactNode {
             activeKey={state}
             onChange={(key) => setState(key as 'open' | 'closed')}
             items={[
-              { key: 'open', label: '打开' },
-              { key: 'closed', label: '已关闭' },
+              // Tabs 的 items 是数据对象而非 JSX，JSX 树看不见它，故门禁按「字符串 key + label」单独审计：
+              // label 必须是 Tooltip 包裹的 JSX；内层 span 是 Tooltip 的 DOM 宿主（可见文字原样保留，不改行为）
+              {
+                key: 'open',
+                label: (
+                  <Tooltip title="切到打开状态列表：只看仍在等待评审与合并的 PR，点行可查看详情">
+                    <span>打开</span>
+                  </Tooltip>
+                ),
+              },
+              {
+                key: 'closed',
+                label: (
+                  <Tooltip title="切到已关闭状态列表：只看已合并或已拒绝的 PR，点行可查看详情">
+                    <span>已关闭</span>
+                  </Tooltip>
+                ),
+              },
             ]}
           />
           <GitHubPanel

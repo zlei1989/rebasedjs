@@ -22,6 +22,7 @@ import {
   Select,
   Skeleton,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import type { MenuProps } from 'antd';
@@ -193,8 +194,23 @@ function ChangeGroup({
   onOpenHistory?: (path: string) => void;
 }): React.ReactNode {
   const [selected, setSelected] = useState<string[]>([]);
+  /** 悬停中的行路径：整行可点（选中预览/双击看差异）需行级气泡，但只在指针落在行本身时弹 */
+  const [rowHover, setRowHover] = useState<string | null>(null);
+  /** 悬停中的行内操作区所在行路径：行气泡与行内控件气泡互斥，否则两个气泡会同时弹出（参考 repo-page 的 hoverId/actionHoverId） */
+  const [actionHover, setActionHover] = useState<string | null>(null);
+  /**
+   * 「移动到列表」菜单展开中的行路径：展开期间抑制该行按钮的气泡。
+   * 原因同「管理列表」：气泡与菜单同侧时会压住菜单顶部若干项，菜单项既点不到也出不了自己的气泡。
+   */
+  const [moveMenuPath, setMoveMenuPath] = useState<string | null>(null);
   const paths = useMemo(() => entries.map((e) => e.path), [entries]);
   const allChecked = entries.length > 0 && selected.length === entries.length;
+
+  /** 行内操作区（勾选/行按钮）的悬停追踪属性：只做悬停反馈（不拦点击），用于抑制行气泡 */
+  const actionHoverProps = (path: string): { onMouseEnter: () => void; onMouseLeave: () => void } => ({
+    onMouseEnter: () => setActionHover(path),
+    onMouseLeave: () => setActionHover(null),
+  });
 
   /** 组内变更列表子分组：仅在提供 changelists 时计算 */
   const byChangelist = useMemo(
@@ -221,93 +237,126 @@ function ChangeGroup({
       onChangelistAction?.({ action: 'move', paths: movePaths, targetId });
     };
 
+    /** 行是否真有可点行为：两个回调都没接时不给行气泡（提示一个点了没反应的区域没有意义） */
+    const clickable = onSelectPatch !== undefined || onOpenDiff !== undefined;
+
     return (
-      <Flex
+      // 整行可点（单击选中预览 / 双击看差异）且行内还有勾选与多个操作按钮：
+      // 行 Tooltip 用受控 open——只在指针落在行本身、且不在行内操作区上时弹，
+      // 否则行气泡会与勾选/按钮气泡同时弹出互相遮挡（参考 repo-page.tsx 的 hoverId / actionHoverId 写法）。
+      // key 必须挂在这一层：Tooltip 成为 map 生成的最外层元素
+      <Tooltip
         key={entry.path}
-        data-testid={`row-${group}-${entry.path}`}
-        align="center"
-        gap={8}
-        style={{ cursor: 'pointer', padding: '4px 0' }}
-        onClick={() => onSelectPatch?.(entry.path, group === 'staged')}
-        onDoubleClick={() => onOpenDiff?.(entry.path, group === 'staged')}
+        open={clickable && rowHover === entry.path && actionHover !== entry.path}
+        title={clickable ? '单击在右侧预览该文件的补丁，双击打开版本差异对比' : undefined}
       >
-        {/* 勾选不应触发行选中预览：阻止点击冒泡到行 */}
-        <Flex onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            data-testid={`check-${group}-${entry.path}`}
-            checked={selected.includes(entry.path)}
-            onChange={(e) => toggle(entry.path, e.target.checked)}
-          />
+        <Flex
+          data-testid={`row-${group}-${entry.path}`}
+          align="center"
+          gap={8}
+          style={{ cursor: 'pointer', padding: '4px 0' }}
+          // 纯悬停反馈（不改变点击/双击行为）：驱动上面受控的行气泡
+          onMouseEnter={() => setRowHover(entry.path)}
+          onMouseLeave={() => setRowHover(null)}
+          onClick={() => onSelectPatch?.(entry.path, group === 'staged')}
+          onDoubleClick={() => onOpenDiff?.(entry.path, group === 'staged')}
+        >
+          {/* 勾选不应触发行选中预览：阻止点击冒泡到行；同时悬停时抑制行气泡（勾选自带气泡） */}
+          <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
+            <Tooltip title="勾选该文件加入本组批量操作集合（与右侧预览选中互不影响）">
+              <Checkbox
+                data-testid={`check-${group}-${entry.path}`}
+                checked={selected.includes(entry.path)}
+                onChange={(e) => toggle(entry.path, e.target.checked)}
+              />
+            </Tooltip>
+          </Flex>
+          <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+            {entry.path}
+          </Typography.Text>
+          <Tag>{codeBadge(entry, group)}</Tag>
+          {/* 「移动到列表」行操作：仅 changelists 模式渲染；无可用目标（仅默认列表且在默认列表）时禁用 */}
+          {changelists !== undefined && onChangelistAction !== undefined && (
+            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
+              <Dropdown
+                trigger={['click']}
+                disabled={moveTargets.length === 0}
+                onOpenChange={(open) => setMoveMenuPath(open ? entry.path : null)}
+                menu={{
+                  items: moveTargets.map((l) => ({ key: l.id, label: l.name })),
+                  onClick: ({ key }) => move(key),
+                }}
+              >
+                {/* Tooltip 放 Dropdown 内层（Dropdown > Tooltip > Button）：不打断 Dropdown 的触发链；
+                    菜单展开时抑制气泡，避免翻到下方压住菜单项 */}
+                <Tooltip
+                  title="把该文件指派到其它变更列表（该行已勾选时，连同其它勾选项一起移动）"
+                  open={moveMenuPath === entry.path ? false : undefined}
+                >
+                  <Button size="small" type="text" data-testid={`move-${group}-${entry.path}`}>
+                    移动到列表
+                  </Button>
+                </Tooltip>
+              </Dropdown>
+            </Flex>
+          )}
+          {/* 「忽略」行操作：仅未跟踪组渲染（缺省不渲染，向后兼容）；点击不触发行选中 */}
+          {group === 'untracked' && onIgnore !== undefined && (
+            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
+              <Tooltip title="把该文件写入 .gitignore，之后不再作为未跟踪变更出现">
+                <Button size="small" type="text" data-testid={`ignore-${group}-${entry.path}`} onClick={() => onIgnore(entry.path)}>
+                  忽略
+                </Button>
+              </Tooltip>
+            </Flex>
+          )}
+          {/* 「三版本」行操作：已暂存/工作区组渲染（未跟踪无版本三侧可对比）；点击不触发行选中 */}
+          {group !== 'untracked' && onOpenThreeWay !== undefined && (
+            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
+              <Tooltip title="并排对比该文件的 HEAD / 暂存区 / 工作区三个版本">
+                <Button
+                  size="small"
+                  type="text"
+                  data-testid={`three-way-${group}-${entry.path}`}
+                  onClick={() => onOpenThreeWay(entry.path)}
+                >
+                  三版本
+                </Button>
+              </Tooltip>
+            </Flex>
+          )}
+          {/* 「注解」行操作（Annotate 语义）；点击不触发行选中 */}
+          {onOpenAnnotate !== undefined && (
+            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
+              <Tooltip title="打开该文件的逐行溯源页（blame），查看每行的最后修改提交">
+                <Button
+                  size="small"
+                  type="text"
+                  data-testid={`annotate-${group}-${entry.path}`}
+                  onClick={() => onOpenAnnotate(entry.path)}
+                >
+                  注解
+                </Button>
+              </Tooltip>
+            </Flex>
+          )}
+          {/* 「历史」行操作（Show History 语义）；点击不触发行选中 */}
+          {onOpenHistory !== undefined && (
+            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
+              <Tooltip title="打开该文件的提交历史页，查看它的历次变更记录">
+                <Button
+                  size="small"
+                  type="text"
+                  data-testid={`history-${group}-${entry.path}`}
+                  onClick={() => onOpenHistory(entry.path)}
+                >
+                  历史
+                </Button>
+              </Tooltip>
+            </Flex>
+          )}
         </Flex>
-        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-          {entry.path}
-        </Typography.Text>
-        <Tag>{codeBadge(entry, group)}</Tag>
-        {/* 「移动到列表」行操作：仅 changelists 模式渲染；无可用目标（仅默认列表且在默认列表）时禁用 */}
-        {changelists !== undefined && onChangelistAction !== undefined && (
-          <Flex onClick={(e) => e.stopPropagation()}>
-            <Dropdown
-              trigger={['click']}
-              disabled={moveTargets.length === 0}
-              menu={{
-                items: moveTargets.map((l) => ({ key: l.id, label: l.name })),
-                onClick: ({ key }) => move(key),
-              }}
-            >
-              <Button size="small" type="text" data-testid={`move-${group}-${entry.path}`}>
-                移动到列表
-              </Button>
-            </Dropdown>
-          </Flex>
-        )}
-        {/* 「忽略」行操作：仅未跟踪组渲染（缺省不渲染，向后兼容）；点击不触发行选中 */}
-        {group === 'untracked' && onIgnore !== undefined && (
-          <Flex onClick={(e) => e.stopPropagation()}>
-            <Button size="small" type="text" data-testid={`ignore-${group}-${entry.path}`} onClick={() => onIgnore(entry.path)}>
-              忽略
-            </Button>
-          </Flex>
-        )}
-        {/* 「三版本」行操作：已暂存/工作区组渲染（未跟踪无版本三侧可对比）；点击不触发行选中 */}
-        {group !== 'untracked' && onOpenThreeWay !== undefined && (
-          <Flex onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="small"
-              type="text"
-              data-testid={`three-way-${group}-${entry.path}`}
-              onClick={() => onOpenThreeWay(entry.path)}
-            >
-              三版本
-            </Button>
-          </Flex>
-        )}
-        {/* 「注解」行操作（Annotate 语义）；点击不触发行选中 */}
-        {onOpenAnnotate !== undefined && (
-          <Flex onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="small"
-              type="text"
-              data-testid={`annotate-${group}-${entry.path}`}
-              onClick={() => onOpenAnnotate(entry.path)}
-            >
-              注解
-            </Button>
-          </Flex>
-        )}
-        {/* 「历史」行操作（Show History 语义）；点击不触发行选中 */}
-        {onOpenHistory !== undefined && (
-          <Flex onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="small"
-              type="text"
-              data-testid={`history-${group}-${entry.path}`}
-              onClick={() => onOpenHistory(entry.path)}
-            >
-              历史
-            </Button>
-          </Flex>
-        )}
-      </Flex>
+      </Tooltip>
     );
   };
 
@@ -317,14 +366,16 @@ function ChangeGroup({
       title={`${title}（${entries.length}）`}
       extra={
         <Flex align="center" gap={8}>
-          <Checkbox
-            data-testid={`select-all-${group}`}
-            checked={allChecked}
-            indeterminate={selected.length > 0 && !allChecked}
-            onChange={(e) => setSelected(e.target.checked ? paths : [])}
-          >
-            全选
-          </Checkbox>
+          <Tooltip title="勾选本组全部文件（取消勾选即清空本组选择）">
+            <Checkbox
+              data-testid={`select-all-${group}`}
+              checked={allChecked}
+              indeterminate={selected.length > 0 && !allChecked}
+              onChange={(e) => setSelected(e.target.checked ? paths : [])}
+            >
+              全选
+            </Checkbox>
+          </Tooltip>
           {actions(selected)}
         </Flex>
       }
@@ -401,12 +452,14 @@ function ChangelistNameModal({
       onOk={submit}
       onCancel={close}
     >
-      <Input
-        data-testid={inputTestId}
-        placeholder="列表名称"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+      <Tooltip title="变更列表名称：非空才能提交，确定后由容器新建或重命名列表">
+        <Input
+          data-testid={inputTestId}
+          placeholder="列表名称"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </Tooltip>
     </Modal>
   );
 }
@@ -472,12 +525,23 @@ function PageActionModal({
       onCancel={close}
     >
       <Flex vertical gap={8}>
-        <Input
-          data-testid={`page-action-${patch ? 'patch' : shelf ? 'shelf' : 'stash'}-input`}
-          placeholder={patch ? '补丁名（必填）' : shelf ? '搁置名（必填）' : '贮藏信息（可空）'}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
+        {/* 三种动作共用同一输入框：气泡文案按 kind 分流，说明「填什么、必填与否」 */}
+        <Tooltip
+          title={
+            patch
+              ? '补丁名（必填）：确定后以此名对勾选的文件生成补丁'
+              : shelf
+                ? '搁置名（必填）：用于在搁置列表中标识这次保存的变更'
+                : '贮藏说明（可空）：留空则由 git 依当前分支生成说明'
+          }
+        >
+          <Input
+            data-testid={`page-action-${patch ? 'patch' : shelf ? 'shelf' : 'stash'}-input`}
+            placeholder={patch ? '补丁名（必填）' : shelf ? '搁置名（必填）' : '贮藏信息（可空）'}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </Tooltip>
         {patch ? (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             对勾选的 {patchPaths.length} 个文件创建补丁（{patchStaged ? '暂存区 diff' : '工作区 diff'}）
@@ -552,62 +616,108 @@ function CommitCard({
             title={`即将提交的文件含 CRLF 行尾符（${crlfFiles.slice(0, 3).join('、')}${crlfFiles.length > 3 ? ` 等 ${crlfFiles.length} 个` : ''}）；core.autocrlf 未按建议设置，建议修复后提交`}
           />
         ) : null}
-        <Input.TextArea
-          data-testid="commit-message"
-          autoSize={{ minRows: 2, maxRows: 6 }}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          // amend 必须给新 message（服务端 git commit --amend -m），留空不沿用原 message
-          placeholder={amendTargetHash !== '' ? '修改目标提交的提交信息' : amend ? '修改上一次提交的提交信息' : '提交信息'}
-        />
+        <Tooltip title="提交信息：首行作为标题；amend 模式不会沿用原提交信息，必须重新填写">
+          <Input.TextArea
+            data-testid="commit-message"
+            autoSize={{ minRows: 2, maxRows: 6 }}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            // amend 必须给新 message（服务端 git commit --amend -m），留空不沿用原 message
+            placeholder={amendTargetHash !== '' ? '修改目标提交的提交信息' : amend ? '修改上一次提交的提交信息' : '提交信息'}
+          />
+        </Tooltip>
         <Flex align="center" gap={16} wrap="wrap">
-          <Checkbox
-            checked={amend}
-            disabled={amendTargetHash !== ''}
-            onChange={(e) => setAmend(e.target.checked)}
+          {/* 已选定 amend 目标（amend 到…）时本开关禁用：两种 amend 模式互斥。
+              antd 禁用控件不派发 hover 事件，故 Tooltip 与控件之间包一层 span 承接提示 */}
+          <Tooltip
+            title={
+              amendTargetHash !== ''
+                ? '已选定要改写的历史提交：本次提交固定走「amend 到指定提交」，不能再改为修改上一次提交'
+                : '改写上一次提交而不是新建提交（提交信息需重新填写，不会沿用原信息）'
+            }
           >
-            amend
-          </Checkbox>
-          {onAmendSpecific !== undefined ? (
-            <Select
-              data-testid="amend-target-select"
-              style={{ minWidth: 220 }}
-              placeholder="amend 到…（指定历史提交）"
-              allowClear
-              loading={amendTargets === undefined || amendTargets === null}
-              options={(amendTargets ?? []).map((t) => ({ value: t.hash, label: `Amend ${t.subject}` }))}
-              value={amendTargetHash === '' ? undefined : amendTargetHash}
-              onChange={(v) => {
-                setAmendTargetHash(v ?? '');
-                if (v !== undefined) setAmend(false);
-              }}
-            />
-          ) : null}
-          <Checkbox checked={signOff} onChange={(e) => setSignOff(e.target.checked)}>
-            signOff
-          </Checkbox>
-          <Checkbox checked={noVerify} onChange={(e) => setNoVerify(e.target.checked)}>
-            noVerify
-          </Checkbox>
-          <Flex gap={8}>
-            <Button
-              type="primary"
-              data-testid="commit-button"
-              loading={committing}
-              disabled={message.trim() === ''}
-              onClick={submit}
-            >
-              提交
-            </Button>
-            {onCommitAndPush !== undefined && (
-              <Button
-                data-testid="commit-and-push-button"
-                loading={committing}
-                disabled={message.trim() === '' || amendTargetHash !== ''}
-                onClick={submitAndPush}
+            <span>
+              <Checkbox
+                checked={amend}
+                disabled={amendTargetHash !== ''}
+                onChange={(e) => setAmend(e.target.checked)}
               >
-                提交并推送
-              </Button>
+                amend
+              </Checkbox>
+            </span>
+          </Tooltip>
+          {onAmendSpecific !== undefined ? (
+            <Tooltip title="按提交标题选择要改写的历史提交：选中后本次提交 amend 到该提交，并自动取消上面的 amend 开关">
+              <Select
+                data-testid="amend-target-select"
+                style={{ minWidth: 220 }}
+                placeholder="amend 到…（指定历史提交）"
+                allowClear
+                loading={amendTargets === undefined || amendTargets === null}
+                options={(amendTargets ?? []).map((t) => ({ value: t.hash, label: `Amend ${t.subject}` }))}
+                value={amendTargetHash === '' ? undefined : amendTargetHash}
+                onChange={(v) => {
+                  setAmendTargetHash(v ?? '');
+                  if (v !== undefined) setAmend(false);
+                }}
+              />
+            </Tooltip>
+          ) : null}
+          <Tooltip title="在提交信息末尾追加 Signed-off-by 行（DCO 开发者原创声明）">
+            <Checkbox checked={signOff} onChange={(e) => setSignOff(e.target.checked)}>
+              signOff
+            </Checkbox>
+          </Tooltip>
+          <Tooltip title="跳过 pre-commit / commit-msg 等提交钩子校验（本地检查不再拦截本次提交）">
+            <Checkbox checked={noVerify} onChange={(e) => setNoVerify(e.target.checked)}>
+              noVerify
+            </Checkbox>
+          </Tooltip>
+          <Flex gap={8}>
+            {/* 提交信息为空时禁用：包 span 让禁用态也能弹提示，说明为什么点不动 */}
+            <Tooltip
+              title={
+                message.trim() === ''
+                  ? '提交信息为空：填写提交信息后即可提交'
+                  : amendTargetHash !== ''
+                    ? '把暂存的改动 amend 到选中的历史提交'
+                    : '把暂存区内容提交到当前分支'
+              }
+            >
+              <span>
+                <Button
+                  type="primary"
+                  data-testid="commit-button"
+                  loading={committing}
+                  disabled={message.trim() === ''}
+                  onClick={submit}
+                >
+                  提交
+                </Button>
+              </span>
+            </Tooltip>
+            {onCommitAndPush !== undefined && (
+              // 信息为空或已指定 amend 目标时禁用（组合执行器不支持 amend-specific），禁用态同样需要 span 承接提示
+              <Tooltip
+                title={
+                  message.trim() === ''
+                    ? '提交信息为空：填写提交信息后即可提交并推送'
+                    : amendTargetHash !== ''
+                      ? '已选定 amend 目标提交：组合推送不可用，请改用「提交」'
+                      : '提交后把当前分支推送到它的上游分支'
+                }
+              >
+                <span>
+                  <Button
+                    data-testid="commit-and-push-button"
+                    loading={committing}
+                    disabled={message.trim() === '' || amendTargetHash !== ''}
+                    onClick={submitAndPush}
+                  >
+                    提交并推送
+                  </Button>
+                </span>
+              </Tooltip>
             )}
           </Flex>
         </Flex>
@@ -662,36 +772,51 @@ function PatchCard({
           <Flex vertical gap={8}>
             <Flex align="center" gap={8} wrap="wrap">
               {previewStaged ? (
-                <Button
-                  size="small"
-                  data-testid="hunk-unstage"
-                  disabled={selected.length === 0}
-                  loading={hunkActing}
-                  onClick={() => fire('unstage')}
-                >
-                  取消暂存选中
-                </Button>
+                // 未勾选任何 hunk 时禁用；禁用按钮不派发 hover，包 span 承接「为什么禁用」的提示
+                <Tooltip title={selected.length === 0 ? '先勾选要取消暂存的 hunk' : '把选中的 hunk 从暂存区移回工作区'}>
+                  <span>
+                    <Button
+                      size="small"
+                      data-testid="hunk-unstage"
+                      disabled={selected.length === 0}
+                      loading={hunkActing}
+                      onClick={() => fire('unstage')}
+                    >
+                      取消暂存选中
+                    </Button>
+                  </span>
+                </Tooltip>
               ) : (
                 <>
-                  <Button
-                    size="small"
-                    type="primary"
-                    data-testid="hunk-stage"
-                    disabled={selected.length === 0}
-                    loading={hunkActing}
-                    onClick={() => fire('stage')}
-                  >
-                    暂存选中
-                  </Button>
+                  <Tooltip title={selected.length === 0 ? '先勾选要暂存的 hunk' : '把选中的 hunk 从工作区加入暂存区'}>
+                    <span>
+                      <Button
+                        size="small"
+                        type="primary"
+                        data-testid="hunk-stage"
+                        disabled={selected.length === 0}
+                        loading={hunkActing}
+                        onClick={() => fire('stage')}
+                      >
+                        暂存选中
+                      </Button>
+                    </span>
+                  </Tooltip>
                   <Popconfirm
                     title="放弃选中 hunk 的修改？不可恢复"
                     okText="确定"
                     cancelText="取消"
                     onConfirm={() => fire('discard')}
                   >
-                    <Button size="small" danger data-testid="hunk-discard" disabled={selected.length === 0}>
-                      放弃选中
-                    </Button>
+                    {/* Tooltip 放 Popconfirm 内层（Popconfirm > Tooltip > span > Button）：不打断确认气泡的触发链；
+                        span 用于让禁用态也能弹提示 */}
+                    <Tooltip title={selected.length === 0 ? '先勾选要放弃的 hunk' : '丢弃选中 hunk 的工作区改动（确认后不可恢复）'}>
+                      <span>
+                        <Button size="small" danger data-testid="hunk-discard" disabled={selected.length === 0}>
+                          放弃选中
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </Popconfirm>
                 </>
               )}
@@ -711,11 +836,13 @@ function PatchCard({
                         e.stopPropagation();
                       }}
                     >
-                      <Checkbox
-                        data-testid={`hunk-check-${hunk.index}`}
-                        checked={selected.includes(hunk.index)}
-                        onChange={(e) => toggle(hunk.index, e.target.checked)}
-                      />
+                      <Tooltip title="勾选该 hunk 加入上面按钮的批量操作集合（部分暂存）">
+                        <Checkbox
+                          data-testid={`hunk-check-${hunk.index}`}
+                          checked={selected.includes(hunk.index)}
+                          onChange={(e) => toggle(hunk.index, e.target.checked)}
+                        />
+                      </Tooltip>
                     </span>
                     <Typography.Text code style={{ fontSize: 12 }}>
                       hunk {hunk.index + 1}
@@ -804,11 +931,18 @@ export function StatusPage({
 
   /** 变更列表模式仅在视图与回调同时具备时开启（向后兼容：缺省维持现状三分组） */
   const changelistMode = changelists !== undefined && onChangelistAction !== undefined;
+  /**
+   * 「管理列表」菜单是否展开：展开期间抑制触发按钮的气泡。
+   * 原因（浏览器实测）：按钮在页头工具条，气泡会被 antd 翻到下方压住菜单顶部若干项，
+   * 命中气泡容器的指针既点不到菜单项也出不了菜单项自己的气泡。
+   */
+  const [manageMenuOpen, setManageMenuOpen] = useState(false);
 
   /** 「管理列表」菜单：新建 + 各列表一组（重命名/设默认/删除；默认列表设默认与删除禁用） */
   const manageItems: MenuProps['items'] = changelistMode
     ? [
-      { key: 'create', label: '新建列表' },
+      // 菜单项 label 用 Tooltip > span 包裹：菜单项是数据对象而非 JSX，span 让 antd 菜单项样式照旧生效
+      { key: 'create', label: <Tooltip title="新建变更列表：随后弹出对话框填写名称，列表用于给改动分组"><span>新建列表</span></Tooltip> },
       { type: 'divider' },
       ...changelists.lists.map((list) => ({
         type: 'group' as const,
@@ -846,19 +980,33 @@ export function StatusPage({
       {/* 页头工具条：变更列表管理入口（仅 changelists 模式渲染）+ 页级动作（搁置/存入贮藏——全量工作区+暂存，不依赖勾选） */}
       <Flex gap={8} align="center">
         {changelistMode && (
-          <Dropdown trigger={['click']} menu={{ items: manageItems, onClick: handleManageClick }}>
-            <Button data-testid="manage-changelists">管理列表</Button>
+          <Dropdown
+            trigger={['click']}
+            onOpenChange={setManageMenuOpen}
+            menu={{ items: manageItems, onClick: handleManageClick }}
+          >
+            {/* Tooltip 放 Dropdown 内层：不打断管理菜单的触发链；菜单展开时抑制气泡，避免压住菜单项 */}
+            <Tooltip
+              title="新建、重命名、设为默认或删除变更列表（默认列表不可删除/设默认）"
+              open={manageMenuOpen ? false : undefined}
+            >
+              <Button data-testid="manage-changelists">管理列表</Button>
+            </Tooltip>
           </Dropdown>
         )}
         {onShelve !== undefined && (
-          <Button data-testid="action-shelve" onClick={() => setPageAction({ kind: 'shelf' })}>
-            搁置
-          </Button>
+          <Tooltip title="把工作区与暂存区的全部改动保存为具名搁置，之后可从搁置列表恢复">
+            <Button data-testid="action-shelve" onClick={() => setPageAction({ kind: 'shelf' })}>
+              搁置
+            </Button>
+          </Tooltip>
         )}
         {onStash !== undefined && (
-          <Button data-testid="action-stash" onClick={() => setPageAction({ kind: 'stash' })}>
-            存入贮藏
-          </Button>
+          <Tooltip title="把当前全部改动存入 git 贮藏（stash），工作区随之回到干净状态">
+            <Button data-testid="action-stash" onClick={() => setPageAction({ kind: 'stash' })}>
+              存入贮藏
+            </Button>
+          </Tooltip>
         )}
       </Flex>
       {/* 左列三组变更列表 + 右列补丁预览（窄屏自然折行为上下布局） */}
@@ -877,23 +1025,32 @@ export function StatusPage({
             onChangelistAction={onChangelistAction}
             actions={(selected) => (
               <>
-                <Button
-                  size="small"
-                  data-testid="unstage-staged"
-                  disabled={selected.length === 0}
-                  onClick={() => onUnstage(selected)}
-                >
-                  取消暂存
-                </Button>
+                {/* 组级按钮都在未勾选时禁用：包 span 让禁用态也能弹「先勾选文件」的原因说明 */}
+                <Tooltip title={selected.length === 0 ? '先勾选要取消暂存的文件' : '把勾选的文件从暂存区移回工作区'}>
+                  <span>
+                    <Button
+                      size="small"
+                      data-testid="unstage-staged"
+                      disabled={selected.length === 0}
+                      onClick={() => onUnstage(selected)}
+                    >
+                      取消暂存
+                    </Button>
+                  </span>
+                </Tooltip>
                 {onCreatePatch !== undefined && (
-                  <Button
-                    size="small"
-                    data-testid="create-patch-staged"
-                    disabled={selected.length === 0}
-                    onClick={() => setPageAction({ kind: 'patch', paths: selected, staged: true })}
-                  >
-                    创建补丁
-                  </Button>
+                  <Tooltip title={selected.length === 0 ? '先勾选要打包的文件' : '按暂存区 diff 为勾选文件生成补丁（弹窗填补丁名）'}>
+                    <span>
+                      <Button
+                        size="small"
+                        data-testid="create-patch-staged"
+                        disabled={selected.length === 0}
+                        onClick={() => setPageAction({ kind: 'patch', paths: selected, staged: true })}
+                      >
+                        创建补丁
+                      </Button>
+                    </span>
+                  </Tooltip>
                 )}
               </>
             )}
@@ -911,33 +1068,46 @@ export function StatusPage({
             onChangelistAction={onChangelistAction}
             actions={(selected) => (
               <>
-                <Button
-                  size="small"
-                  data-testid="stage-unstaged"
-                  disabled={selected.length === 0}
-                  onClick={() => onStage(selected)}
-                >
-                  暂存
-                </Button>
+                <Tooltip title={selected.length === 0 ? '先勾选要暂存的文件' : '把勾选文件的工作区改动加入暂存区'}>
+                  <span>
+                    <Button
+                      size="small"
+                      data-testid="stage-unstaged"
+                      disabled={selected.length === 0}
+                      onClick={() => onStage(selected)}
+                    >
+                      暂存
+                    </Button>
+                  </span>
+                </Tooltip>
                 <Popconfirm
                   title="放弃选中修改？不可恢复"
                   okText="确定"
                   cancelText="取消"
                   onConfirm={() => onDiscard(selected)}
                 >
-                  <Button size="small" danger data-testid="discard-unstaged" disabled={selected.length === 0}>
-                    放弃
-                  </Button>
+                  {/* Tooltip 在 Popconfirm 内层，span 承接禁用态提示（两处都不打断确认气泡的触发链） */}
+                  <Tooltip title={selected.length === 0 ? '先勾选要放弃修改的文件' : '丢弃勾选文件的工作区改动（确认后不可恢复）'}>
+                    <span>
+                      <Button size="small" danger data-testid="discard-unstaged" disabled={selected.length === 0}>
+                        放弃
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Popconfirm>
                 {onCreatePatch !== undefined && (
-                  <Button
-                    size="small"
-                    data-testid="create-patch-unstaged"
-                    disabled={selected.length === 0}
-                    onClick={() => setPageAction({ kind: 'patch', paths: selected, staged: false })}
-                  >
-                    创建补丁
-                  </Button>
+                  <Tooltip title={selected.length === 0 ? '先勾选要打包的文件' : '按工作区 diff 为勾选文件生成补丁（弹窗填补丁名）'}>
+                    <span>
+                      <Button
+                        size="small"
+                        data-testid="create-patch-unstaged"
+                        disabled={selected.length === 0}
+                        onClick={() => setPageAction({ kind: 'patch', paths: selected, staged: false })}
+                      >
+                        创建补丁
+                      </Button>
+                    </span>
+                  </Tooltip>
                 )}
               </>
             )}
@@ -955,14 +1125,18 @@ export function StatusPage({
             onIgnore={onIgnore}
             actions={(selected) => (
               <>
-                <Button
-                  size="small"
-                  data-testid="stage-untracked"
-                  disabled={selected.length === 0}
-                  onClick={() => onStage(selected)}
-                >
-                  暂存
-                </Button>
+                <Tooltip title={selected.length === 0 ? '先勾选要暂存的文件' : '把勾选的未跟踪文件加入暂存区（此后 git 开始跟踪它们）'}>
+                  <span>
+                    <Button
+                      size="small"
+                      data-testid="stage-untracked"
+                      disabled={selected.length === 0}
+                      onClick={() => onStage(selected)}
+                    >
+                      暂存
+                    </Button>
+                  </span>
+                </Tooltip>
                 {/* 未跟踪文件的"删除"即 discard 语义（服务端按条目状态分派 clean） */}
                 <Popconfirm
                   title="删除选中未跟踪文件？不可恢复"
@@ -970,9 +1144,14 @@ export function StatusPage({
                   cancelText="取消"
                   onConfirm={() => onDiscard(selected)}
                 >
-                  <Button size="small" danger data-testid="discard-untracked" disabled={selected.length === 0}>
-                    删除
-                  </Button>
+                  {/* Tooltip 在 Popconfirm 内层，span 承接禁用态提示 */}
+                  <Tooltip title={selected.length === 0 ? '先勾选要删除的文件' : '删除勾选的未跟踪文件（按未跟踪状态走 clean，确认后不可恢复）'}>
+                    <span>
+                      <Button size="small" danger data-testid="discard-untracked" disabled={selected.length === 0}>
+                        删除
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Popconfirm>
               </>
             )}

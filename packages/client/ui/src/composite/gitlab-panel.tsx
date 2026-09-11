@@ -20,6 +20,7 @@ import {
   Spin,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   theme,
 } from 'antd';
@@ -109,32 +110,36 @@ function MrRow({
 }): React.ReactNode {
   // 选中底色走主题 token（明亮 #e6f4ff / 暗色 #111a2c），不再硬编码明亮专用色
   const { token } = theme.useToken();
+  // 整行可点 → 气泡挂在行本身（Flex 是真实 DOM 节点）：
+  // 调用处再包一层会与行内气泡叠加成两个气泡，故行 Tooltip 归组件自己持有
   return (
-    <Flex
-      data-testid={`gitlab-mr-row-${mr.iid}`}
-      align="center"
-      gap={8}
-      style={{
-        padding: '4px 8px',
-        cursor: 'pointer',
-        backgroundColor: selected ? token.controlItemBgActive : undefined,
-      }}
-      onClick={() => onSelect(mr.iid)}
-    >
-      <Tag style={{ flexShrink: 0 }}>{`#${mr.iid}`}</Tag>
-      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-        {mr.title}
-      </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-        {mr.author}
-      </Typography.Text>
-      <Tag color={MR_STATE_COLORS[mr.state]} style={{ flexShrink: 0 }}>
-        {mr.state}
-      </Tag>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-        {formatCommitDate(mr.updatedAtIso)}
-      </Typography.Text>
-    </Flex>
+    <Tooltip title="选中该 MR：在右侧详情列加载描述、时间线与文件变更">
+      <Flex
+        data-testid={`gitlab-mr-row-${mr.iid}`}
+        align="center"
+        gap={8}
+        style={{
+          padding: '4px 8px',
+          cursor: 'pointer',
+          backgroundColor: selected ? token.controlItemBgActive : undefined,
+        }}
+        onClick={() => onSelect(mr.iid)}
+      >
+        <Tag style={{ flexShrink: 0 }}>{`#${mr.iid}`}</Tag>
+        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+          {mr.title}
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+          {mr.author}
+        </Typography.Text>
+        <Tag color={MR_STATE_COLORS[mr.state]} style={{ flexShrink: 0 }}>
+          {mr.state}
+        </Tag>
+        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+          {formatCommitDate(mr.updatedAtIso)}
+        </Typography.Text>
+      </Flex>
+    </Tooltip>
   );
 }
 
@@ -201,15 +206,23 @@ function FileRow({
       </Flex>
       {file.diff !== '' || file.status === 'renamed' ? (
         <Flex vertical gap={4}>
-          <Button
-            type="link"
-            size="small"
-            data-testid={`gitlab-diff-toggle-${index}`}
-            style={{ alignSelf: 'flex-start', padding: 0 }}
-            onClick={() => setExpanded((v) => !v)}
+          <Tooltip
+            title={
+              expanded
+                ? '收起该文件的逐 hunk 差异视图'
+                : '展开该文件的逐 hunk 差异视图：逐 hunk 两侧对照，可挂行级讨论'
+            }
           >
-            {expanded ? '收起差异' : '查看差异'}
-          </Button>
+            <Button
+              type="link"
+              size="small"
+              data-testid={`gitlab-diff-toggle-${index}`}
+              style={{ alignSelf: 'flex-start', padding: 0 }}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? '收起差异' : '查看差异'}
+            </Button>
+          </Tooltip>
           {expanded ? (
             <HunkDiffView
               patch={file.diff}
@@ -267,9 +280,11 @@ function MergeMrModal({
     >
       <Flex vertical gap={12}>
         <Typography.Text type="secondary">合并后 MR 将在 GitLab 上标记为已合并。</Typography.Text>
-        <Checkbox checked={squash} onChange={(e) => setSquash(e.target.checked)}>
-          squash：压缩为单个提交
-        </Checkbox>
+        <Tooltip title="压缩为单个提交：勾选后合并只落一个提交，不保留分支上的逐个提交历史">
+          <Checkbox checked={squash} onChange={(e) => setSquash(e.target.checked)}>
+            squash：压缩为单个提交
+          </Checkbox>
+        </Tooltip>
       </Flex>
     </Modal>
   );
@@ -332,39 +347,47 @@ function CreateMrModal({
       onCancel={close}
     >
       <Flex vertical gap={8}>
-        <Select
-          data-testid="gitlab-create-source"
-          placeholder="源分支"
-          value={source === '' ? undefined : source}
-          options={options}
-          onChange={setSource}
-        />
-        <Select
-          data-testid="gitlab-create-target"
-          placeholder="目标分支"
-          value={target === '' ? undefined : target}
-          options={options}
-          onChange={setTarget}
-        />
+        <Tooltip title="选择源分支：其上的改动将被合入目标分支（不能与目标分支相同）">
+          <Select
+            data-testid="gitlab-create-source"
+            placeholder="源分支"
+            value={source === '' ? undefined : source}
+            options={options}
+            onChange={setSource}
+          />
+        </Tooltip>
+        <Tooltip title="选择目标分支：改动最终合入的分支（不能与源分支相同）">
+          <Select
+            data-testid="gitlab-create-target"
+            placeholder="目标分支"
+            value={target === '' ? undefined : target}
+            options={options}
+            onChange={setTarget}
+          />
+        </Tooltip>
         {sameBranch ? (
           <Typography.Text type="warning">源分支与目标分支不能相同</Typography.Text>
         ) : null}
-        <Input
-          data-testid="gitlab-create-title"
-          placeholder="标题"
-          value={title}
-          maxLength={255}
-          showCount
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <Input.TextArea
-          data-testid="gitlab-create-description"
-          rows={3}
-          placeholder="描述（可选）"
-          value={description}
-          maxLength={20_000}
-          onChange={(e) => setDescription(e.target.value)}
-        />
+        <Tooltip title="填写 MR 标题：必填，最长 255 字，作为 GitLab 上的合并请求名称">
+          <Input
+            data-testid="gitlab-create-title"
+            placeholder="标题"
+            value={title}
+            maxLength={255}
+            showCount
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </Tooltip>
+        <Tooltip title="填写 MR 描述：可选，最长 20000 字，随创建请求一并提交">
+          <Input.TextArea
+            data-testid="gitlab-create-description"
+            rows={3}
+            placeholder="描述（可选）"
+            value={description}
+            maxLength={20_000}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </Tooltip>
       </Flex>
     </Modal>
   );
@@ -443,31 +466,59 @@ function MrDetailBlock({
         {detail.body}
       </Typography.Paragraph>
       <Flex vertical gap={8}>
-        <Input.TextArea
-          data-testid="gitlab-comment-input"
-          rows={3}
-          placeholder="评论或 review 说明"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-        />
+        <Tooltip title="输入评论或 review 说明：发送评论与 Request changes 共用这段文字">
+          <Input.TextArea
+            data-testid="gitlab-comment-input"
+            rows={3}
+            placeholder="评论或 review 说明"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
+        </Tooltip>
         <Flex gap={8} wrap>
-          <Button
-            type="primary"
-            data-testid="gitlab-send-comment"
-            disabled={acting || comment.trim() === ''}
-            onClick={sendComment}
+          {/* 空内容 / 上一个操作进行中时该按钮禁用；antd 禁用按钮不派发 hover，
+              故在 Tooltip 与 Button 之间包一层 inline-flex span 承接悬停，文案说明不可用的原因 */}
+          <Tooltip
+            title={
+              acting
+                ? '上一个操作进行中：完成后才能发送'
+                : comment.trim() === ''
+                  ? '先输入评论内容：空内容不发送'
+                  : '把上方输入框的内容作为评论发到该 MR'
+            }
           >
-            发送评论
-          </Button>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                type="primary"
+                data-testid="gitlab-send-comment"
+                disabled={acting || comment.trim() === ''}
+                onClick={sendComment}
+              >
+                发送评论
+              </Button>
+            </span>
+          </Tooltip>
           <Popconfirm
             title="批准该 MR？"
             okText="确定"
             cancelText="取消"
             onConfirm={() => onReview('APPROVE')}
           >
-            <Button data-testid="gitlab-approve" disabled={acting}>
-              Approve
-            </Button>
+            {/* Tooltip 放最内层（Popconfirm > Tooltip > span > Button）保持 Popconfirm 触发链完整；
+                acting 时按钮禁用 → 由 span 承接 hover，文案说明为什么不可点 */}
+            <Tooltip
+              title={
+                acting
+                  ? '上一个操作进行中：完成后才能批准'
+                  : '批准该 MR：确认后在 GitLab 上记录一次 APPROVED 审查（不附评论内容）'
+              }
+            >
+              <span style={{ display: 'inline-flex' }}>
+                <Button data-testid="gitlab-approve" disabled={acting}>
+                  Approve
+                </Button>
+              </span>
+            </Tooltip>
           </Popconfirm>
           <Popconfirm
             title="要求修改该 MR？将附带上方的评论/说明内容"
@@ -475,16 +526,48 @@ function MrDetailBlock({
             cancelText="取消"
             onConfirm={requestChanges}
           >
-            <Button data-testid="gitlab-request-changes" disabled={acting}>
-              Request changes
-            </Button>
+            {/* 同上：Tooltip 最内层 + 禁用由 span 承接 hover */}
+            <Tooltip
+              title={
+                acting
+                  ? '上一个操作进行中：完成后才能要求修改'
+                  : '要求修改该 MR：确认后把上方输入的内容作为 review 说明一并提交'
+              }
+            >
+              <span style={{ display: 'inline-flex' }}>
+                <Button data-testid="gitlab-request-changes" disabled={acting}>
+                  Request changes
+                </Button>
+              </span>
+            </Tooltip>
           </Popconfirm>
-          <Button data-testid="gitlab-merge" disabled={acting} onClick={() => setMergeOpen(true)}>
-            合并
-          </Button>
-          <Button data-testid="gitlab-checkout" disabled={acting} onClick={onCheckout}>
-            检出 MR 分支
-          </Button>
+          {/* 打开合并确认弹窗（可勾选 squash），不是直接合并 → 文案点明后续还有一步确认 */}
+          <Tooltip
+            title={
+              acting
+                ? '上一个操作进行中：完成后才能合并'
+                : '合并该 MR：打开合并确认弹窗，可选择是否 squash 压缩提交'
+            }
+          >
+            <span style={{ display: 'inline-flex' }}>
+              <Button data-testid="gitlab-merge" disabled={acting} onClick={() => setMergeOpen(true)}>
+                合并
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip
+            title={
+              acting
+                ? '上一个操作进行中：完成后才能检出'
+                : '检出该 MR 的源分支：切换到本地工作区当前分支'
+            }
+          >
+            <span style={{ display: 'inline-flex' }}>
+              <Button data-testid="gitlab-checkout" disabled={acting} onClick={onCheckout}>
+                检出 MR 分支
+              </Button>
+            </span>
+          </Tooltip>
         </Flex>
       </Flex>
       <Tabs
@@ -492,7 +575,8 @@ function MrDetailBlock({
         items={[
           {
             key: 'timeline',
-            label: '时间线',
+            // Tabs 标签也是数据对象（items[].label）：包 Tooltip > span 逐页说明，标签样式不受影响
+            label: <Tooltip title="按时间查看该 MR 的动态：讨论、提交与状态变更依次排列"><span>时间线</span></Tooltip>,
             children:
               timeline === null || timeline.entries.length === 0 ? (
                 <EmptyState title="暂无动态" />
@@ -506,7 +590,7 @@ function MrDetailBlock({
           },
           {
             key: 'files',
-            label: '文件',
+            label: <Tooltip title="查看该 MR 改动的文件清单与逐文件差异"><span>文件</span></Tooltip>,
             children:
               files === null || files.files.length === 0 ? (
                 <EmptyState title="暂无文件变更" />
@@ -588,18 +672,39 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
         extra={
           <Flex gap={8}>
             {onRefresh !== undefined ? (
-              <Button size="small" data-testid="gitlab-refresh" disabled={acting} onClick={onRefresh}>
-                刷新
-              </Button>
+              // acting 时禁用：禁用按钮不派发 hover，包一层 span 承接提示
+              <Tooltip
+                title={
+                  acting
+                    ? '上一个操作进行中：完成后才能刷新'
+                    : '重新拉取 MR 列表与当前详情（不改变当前选中项）'
+                }
+              >
+                <span style={{ display: 'inline-flex' }}>
+                  <Button size="small" data-testid="gitlab-refresh" disabled={acting} onClick={onRefresh}>
+                    刷新
+                  </Button>
+                </span>
+              </Tooltip>
             ) : null}
-            <Button
-              size="small"
-              data-testid="gitlab-create-mr"
-              disabled={acting}
-              onClick={() => setCreateOpen(true)}
+            <Tooltip
+              title={
+                acting
+                  ? '上一个操作进行中：完成后才能新建'
+                  : '新建合并请求：选择源/目标分支并填写标题，确认后提交到 GitLab'
+              }
             >
-              新建 MR
-            </Button>
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  size="small"
+                  data-testid="gitlab-create-mr"
+                  disabled={acting}
+                  onClick={() => setCreateOpen(true)}
+                >
+                  新建 MR
+                </Button>
+              </span>
+            </Tooltip>
           </Flex>
         }
       >
@@ -610,6 +715,7 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
         ) : (
           <Flex vertical>
             {mrs.mrs.map((mr) => (
+              // 整行气泡由 MrRow 内部持有（挂在可点 Flex 上），此处不再包一层，避免双气泡
               <MrRow key={mr.iid} mr={mr} selected={mr.iid === iid} onSelect={onSelectMr} />
             ))}
           </Flex>

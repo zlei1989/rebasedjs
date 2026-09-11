@@ -143,6 +143,113 @@ describe('RepoPage 克隆/初始化入口', () => {
   });
 });
 
+describe('RepoPage 点击列表项打开仓库（点击最近项目 → 日志页）', () => {
+  it('点击列表行以该仓库调 onOpenRepo', () => {
+    const onOpenRepo = vi.fn();
+    render(
+      <RepoPage
+        repos={[makeRepo({ id: 'a', name: 'alpha', path: '/home/user/alpha' })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={onOpenRepo}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('repo-item'));
+    expect(onOpenRepo).toHaveBeenCalledWith(expect.objectContaining({ id: 'a', path: '/home/user/alpha' }));
+  });
+
+  it('点「移除」按钮不冒泡为打开（行内操作独立）', async () => {
+    const onOpenRepo = vi.fn();
+    const onRemove = vi.fn();
+    render(
+      <RepoPage
+        repos={[makeRepo({ id: 'a', name: 'alpha' })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={onOpenRepo}
+        onRemove={onRemove}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('repo-remove'));
+    // 确认气泡在 body portal：点它同样不得触发打开
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
+    expect(onRemove).toHaveBeenCalledWith('a');
+    expect(onOpenRepo).not.toHaveBeenCalled();
+  });
+
+  it('openingRepoId 命中的行显示「打开中」加载态，其余行不显示', () => {
+    render(
+      <RepoPage
+        repos={[makeRepo({ id: 'a', name: 'alpha' }), makeRepo({ id: 'b', name: 'beta' })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={vi.fn()}
+        openingRepoId="a"
+      />,
+    );
+    const rows = screen.getAllByTestId('repo-item');
+    const alphaRow = rows.find((row) => within(row).queryByText('alpha') !== null);
+    const betaRow = rows.find((row) => within(row).queryByText('beta') !== null);
+    expect(within(alphaRow!).getByTestId('repo-opening')).toBeInTheDocument();
+    expect(within(betaRow!).queryByTestId('repo-opening')).not.toBeInTheDocument();
+  });
+
+  it('打开中的行忽略再次点击（防连点重复触发打开流程）', () => {
+    const onOpenRepo = vi.fn();
+    render(
+      <RepoPage
+        repos={[makeRepo({ id: 'a', name: 'alpha' })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={onOpenRepo}
+        openingRepoId="a"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('repo-item'));
+    expect(onOpenRepo).not.toHaveBeenCalled();
+  });
+
+  it('打开中的行禁用「移除」（打开往返内删掉该仓库会跳进拉不到 status 的白屏页）', () => {
+    const onRemove = vi.fn();
+    render(
+      <RepoPage
+        repos={[makeRepo({ id: 'a', name: 'alpha' })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={vi.fn()}
+        onRemove={onRemove}
+        openingRepoId="a"
+      />,
+    );
+    expect(screen.getByTestId('repo-remove')).toBeDisabled();
+  });
+
+  it('打开中点其它行仍可打开（openingRepoId 只锁命中行，允许改选）', () => {
+    const onOpenRepo = vi.fn();
+    render(
+      <RepoPage
+        repos={[makeRepo({ id: 'a', name: 'alpha' }), makeRepo({ id: 'b', name: 'beta' })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={onOpenRepo}
+        openingRepoId="a"
+      />,
+    );
+    const betaRow = screen.getAllByTestId('repo-item').find((row) => within(row).queryByText('beta') !== null);
+    fireEvent.click(betaRow!);
+    expect(onOpenRepo).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
+  });
+
+  it('未注入 onOpenRepo 时行不可点：光标保持默认、点击不误触发打开表单', () => {
+    const onOpen = vi.fn();
+    render(<RepoPage repos={[makeRepo({ id: 'a', name: 'alpha' })]} onOpen={onOpen} homeDir={HOME} />);
+    const row = screen.getByTestId('repo-item');
+    expect(row).not.toHaveStyle({ cursor: 'pointer' });
+    fireEvent.click(row);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+});
+
 describe('RepoPage 设置入口（欢迎屏 Configure → SettingsPage 语义 #3）', () => {
   it('有最近仓库：点击以最近仓库 id 调 onOpenSettings（打开时间降序优先）', () => {
     const onOpenSettings = vi.fn();

@@ -144,21 +144,27 @@ function CreateBranchModal({
       onCancel={close}
     >
       <Flex vertical gap={8}>
-        <Input
-          data-testid="create-name"
-          placeholder="分支名称"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <Input
-          data-testid="create-start-point"
-          placeholder="起始点（可空，默认 HEAD）"
-          value={startPoint}
-          onChange={(e) => setStartPoint(e.target.value)}
-        />
-        <Checkbox checked={checkout} onChange={(e) => setCheckout(e.target.checked)}>
-          创建后检出
-        </Checkbox>
+        <Tooltip title="填写分支名称：必填，重名或非法名由服务端拒绝">
+          <Input
+            data-testid="create-name"
+            placeholder="分支名称"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Tooltip>
+        <Tooltip title="填写起始点：可空，留空取当前 HEAD，也可填分支名或提交哈希">
+          <Input
+            data-testid="create-start-point"
+            placeholder="起始点（可空，默认 HEAD）"
+            value={startPoint}
+            onChange={(e) => setStartPoint(e.target.value)}
+          />
+        </Tooltip>
+        <Tooltip title="勾选后创建并立即检出该分支（走检出流程，未提交改动可能使其失败）">
+          <Checkbox checked={checkout} onChange={(e) => setCheckout(e.target.checked)}>
+            创建后检出
+          </Checkbox>
+        </Tooltip>
       </Flex>
     </Modal>
   );
@@ -209,12 +215,14 @@ function SingleInputModal({
       onOk={submit}
       onCancel={close}
     >
-      <Input
-        data-testid={inputTestId}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-      />
+      <Tooltip title={`填写${placeholder}：点「确定」即提交（首尾空白自动去除），取消不生效`}>
+        <Input
+          data-testid={inputTestId}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </Tooltip>
     </Modal>
   );
 }
@@ -258,29 +266,42 @@ function LocalBranchRow({
       {branch.current && <Tag color="green">当前</Tag>}
       <UpstreamInfo branch={branch} />
       <MergedIcon branch={branch} />
-      {/* 「比较」：对比视图入口（两分支独有提交双向视图）；点击不触发行其他行为 */}
+      {/* 「比较」：对比视图入口（两分支独有提交双向视图）；点击不触发行其他行为。
+          当前分支禁用，antd 禁用按钮不派发 hover 事件，故在 Tooltip 与 Button 之间包一层 span 承接提示 */}
       {onCompare !== undefined && (
-        <Button
-          size="small"
-          type="text"
-          data-testid={`compare-local-${branch.name}`}
-          disabled={branch.current}
-          onClick={() => onCompare(branch.name)}
+        <Tooltip
+          title={
+            branch.current
+              ? '当前分支与自己比较恒为空（A..A），切到其它分支后再用'
+              : '与该分支双向比较独有提交：进入对比视图，不检出、不改工作树'
+          }
         >
-          比较
-        </Button>
+          <span>
+            <Button
+              size="small"
+              type="text"
+              data-testid={`compare-local-${branch.name}`}
+              disabled={branch.current}
+              onClick={() => onCompare(branch.name)}
+            >
+              比较
+            </Button>
+          </span>
+        </Tooltip>
       )}
       {/* force-push 修复：远端被强推（本地与上游分叉且无法普通更新）时的恢复通道——重置到上游 + 重放本地提交 */}
       {onForcePushedUpdate !== undefined && diverged ? (
-        <Button
-          size="small"
-          type="text"
-          danger
-          data-testid={`force-push-fix-${branch.name}`}
-          onClick={onForcePushedUpdate}
-        >
-          force-push 修复
-        </Button>
+        <Tooltip title="重置到上游并重放本地提交：远端已被强推时的恢复通道，会改写本地分支历史">
+          <Button
+            size="small"
+            type="text"
+            danger
+            data-testid={`force-push-fix-${branch.name}`}
+            onClick={onForcePushedUpdate}
+          >
+            force-push 修复
+          </Button>
+        </Tooltip>
       ) : null}
       {/* 删除走受控 Popconfirm：Dropdown 菜单项点击即关菜单，故确认框锚定在菜单按钮上按状态开关 */}
       <Popconfirm
@@ -295,23 +316,25 @@ function LocalBranchRow({
           trigger={['click']}
           menu={{
             items: [
-              { key: 'checkout', label: '检出' },
+              // 菜单项 label 用 Tooltip > span 包裹：菜单项是数据对象而非 JSX（Dropdown 下 MenuItemType.title 不弹），
+              // span 让 antd 的菜单项样式与禁用态照旧生效
+              { key: 'checkout', label: <Tooltip title="检出该分支：把工作区切到它的最新提交（未提交的改动可能被拒绝或覆盖）"><span>检出</span></Tooltip> },
               // 检出并变基到当前（GitCheckoutWithRebaseAction 语义）：检出本行分支后 rebase onto 当前分支；当前分支无意义，禁用
               ...(hasCheckoutRebase
-                ? [{ key: 'checkoutRebase', label: '检出并变基到当前', disabled: branch.current }]
+                ? [{ key: 'checkoutRebase', label: <Tooltip title="检出该分支后把它变基到当前分支：重新应用其提交（提交哈希会被重写）"><span>检出并变基到当前</span></Tooltip>, disabled: branch.current }]
                 : []),
               // 检出并更新（GitCheckoutWithUpdateAction 语义）：检出后 fetch 跟踪分支 + 策略化更新；当前分支/无上游无意义，禁用
               ...(hasCheckoutUpdate
-                ? [{ key: 'checkoutUpdate', label: '检出并更新', disabled: branch.current || branch.upstream === null }]
+                ? [{ key: 'checkoutUpdate', label: <Tooltip title="检出该分支后拉取并更新上游：按配置策略合并或变基到跟踪分支"><span>检出并更新</span></Tooltip>, disabled: branch.current || branch.upstream === null }]
                 : []),
               // 与工作树差异（GitShowDiffWithRefAction 语义）：分支 vs 当前工作树（含未提交变更）；当前分支无意义，禁用
               ...(hasWorkingDiff
-                ? [{ key: 'workingDiff', label: '与工作树差异', disabled: branch.current }]
+                ? [{ key: 'workingDiff', label: <Tooltip title="对比该分支与当前工作树（含未提交改动）的文件差异"><span>与工作树差异</span></Tooltip>, disabled: branch.current }]
                 : []),
-              { key: 'rename', label: '重命名' },
-              { key: 'setUpstream', label: '设上游' },
+              { key: 'rename', label: <Tooltip title="重命名该分支：随后弹出对话框填写新名称"><span>重命名</span></Tooltip> },
+              { key: 'setUpstream', label: <Tooltip title="为该分支指定跟踪的远程分支：影响拉取与推送的默认目标"><span>设上游</span></Tooltip> },
               // 当前分支禁止删除（git branch -d 当前头分支无意义，服务端也会拒绝）
-              { key: 'delete', label: '删除', danger: true, disabled: branch.current },
+              { key: 'delete', label: <Tooltip title="删除该分支：未合并的分支将强制删除，其独有提交不可恢复"><span>删除</span></Tooltip>, danger: true, disabled: branch.current },
             ],
             onClick: ({ key }) =>
               onMenuAction(
@@ -320,7 +343,11 @@ function LocalBranchRow({
               ),
           }}
         >
-          <Button size="small" type="text" icon={<MoreOutlined />} data-testid={`menu-local-${branch.name}`} />
+          {/* Tooltip 放在 Dropdown 之内、Button 之外：保持 Popconfirm → Dropdown → Button 的触发链完整，
+              同时让「菜单按钮」自己带一对一提示（点击展开菜单，悬停即可说明菜单用途） */}
+          <Tooltip title="展开该分支的操作菜单：检出、重命名、设上游、删除等（部分项按当前状态禁用）">
+            <Button size="small" type="text" icon={<MoreOutlined />} data-testid={`menu-local-${branch.name}`} />
+          </Tooltip>
         </Dropdown>
       </Popconfirm>
     </Flex>
@@ -349,13 +376,15 @@ function RemoteBranchRow({
         <Dropdown
           trigger={['click']}
           menu={{
-            items: [{ key: 'checkoutRebase', label: '检出并变基到当前' }],
+            items: [{ key: 'checkoutRebase', label: <Tooltip title="检出该远程分支并变基到当前：先按去掉远程前缀的名称新建本地分支"><span>检出并变基到当前</span></Tooltip> }],
             onClick: ({ key }) => {
               if (key === 'checkoutRebase') onMenuAction('checkoutRebase', branch);
             },
           }}
         >
-          <Button size="small" type="text" icon={<MoreOutlined />} data-testid={`menu-remote-${branch.name}`} />
+          <Tooltip title="展开该远程分支的操作菜单：检出并变基到当前（新建同名本地分支后检出）">
+            <Button size="small" type="text" icon={<MoreOutlined />} data-testid={`menu-remote-${branch.name}`} />
+          </Tooltip>
         </Dropdown>
       )}
     </Flex>
@@ -377,14 +406,16 @@ function RecentBranchRow({
       </Typography.Text>
       {branch.current && <Tag color="green">当前</Tag>}
       <UpstreamInfo branch={branch} />
-      <Button
-        size="small"
-        type="text"
-        data-testid={`recent-checkout-${branch.name}`}
-        onClick={() => onCheckout({ action: 'branch', name: branch.name })}
-      >
-        检出
-      </Button>
+      <Tooltip title="检出该分支：切换当前分支并更新工作树（存在未提交改动时可能被拒绝）">
+        <Button
+          size="small"
+          type="text"
+          data-testid={`recent-checkout-${branch.name}`}
+          onClick={() => onCheckout({ action: 'branch', name: branch.name })}
+        >
+          检出
+        </Button>
+      </Tooltip>
     </Flex>
   );
 }
@@ -397,14 +428,16 @@ function TagRow({ tag, onCheckout }: { tag: TagEntry; onCheckout: (action: Check
         {tag.name}
       </Typography.Text>
       {tag.annotated && <Tag>附注</Tag>}
-      <Button
-        size="small"
-        type="text"
-        data-testid={`tag-checkout-${tag.name}`}
-        onClick={() => onCheckout({ action: 'detach', ref: tag.name })}
-      >
-        检出
-      </Button>
+      <Tooltip title="以 detached HEAD 检出该标签：只读查看该版本，不落在任何分支上">
+        <Button
+          size="small"
+          type="text"
+          data-testid={`tag-checkout-${tag.name}`}
+          onClick={() => onCheckout({ action: 'detach', ref: tag.name })}
+        >
+          检出
+        </Button>
+      </Tooltip>
     </Flex>
   );
 }
@@ -522,34 +555,44 @@ export function BranchPanel({
     <Flex vertical gap={16} style={{ padding: 16 }}>
       {/* 顶部工具条：新建分支 + 过滤/查找已合并 + 清理已合并 */}
       <Flex align="center" gap={8} wrap="wrap">
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          data-testid="create-branch-button"
-          loading={acting}
-          onClick={() => setCreateOpen(true)}
-        >
-          新建分支
-        </Button>
-        <Input
-          data-testid="branch-filter"
-          placeholder="过滤分支名"
-          allowClear
-          style={{ width: 200 }}
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-        />
-        <Checkbox checked={mergedOnly} onChange={(e) => setMergedOnly(e.target.checked)}>
-          仅看已合并
-        </Checkbox>
-        {/* 分组维度开关（Java showRecentBranches/showTags 默认 true）：最近检出组仅有数据时渲染；标签组仅在注入 tags 时可用 */}
-        <Checkbox checked={showRecent} onChange={(e) => setShowRecent(e.target.checked)}>
-          显示最近检出
-        </Checkbox>
-        {tags !== undefined && (
-          <Checkbox checked={showTags} onChange={(e) => setShowTags(e.target.checked)}>
-            显示标签
+        <Tooltip title="打开新建分支弹窗：可指定起始点，并选择创建后是否立即检出">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            data-testid="create-branch-button"
+            loading={acting}
+            onClick={() => setCreateOpen(true)}
+          >
+            新建分支
+          </Button>
+        </Tooltip>
+        <Tooltip title="过滤下方分支列表：按名称子串匹配（大小写不敏感），四组共用同一关键字">
+          <Input
+            data-testid="branch-filter"
+            placeholder="过滤分支名"
+            allowClear
+            style={{ width: 200 }}
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+          />
+        </Tooltip>
+        <Tooltip title="只保留已合并到 HEAD 的分支（本地与远程同筛），便于确认清理范围">
+          <Checkbox checked={mergedOnly} onChange={(e) => setMergedOnly(e.target.checked)}>
+            仅看已合并
           </Checkbox>
+        </Tooltip>
+        {/* 分组维度开关（Java showRecentBranches/showTags 默认 true）：最近检出组仅有数据时渲染；标签组仅在注入 tags 时可用 */}
+        <Tooltip title="开关注最近检出分组的显隐：数据取自 reflog 历史，只受文本过滤影响">
+          <Checkbox checked={showRecent} onChange={(e) => setShowRecent(e.target.checked)}>
+            显示最近检出
+          </Checkbox>
+        </Tooltip>
+        {tags !== undefined && (
+          <Tooltip title="开关注标签分组的显隐：仅在容器注入标签列表时可用">
+            <Checkbox checked={showTags} onChange={(e) => setShowTags(e.target.checked)}>
+              显示标签
+            </Checkbox>
+          </Tooltip>
         )}
         {onCleanupMerged !== undefined ? (
           <Popconfirm
@@ -559,22 +602,36 @@ export function BranchPanel({
             disabled={mergedLocals.length === 0}
             onConfirm={onCleanupMerged}
           >
-            <Button
-              data-testid="cleanup-merged"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={mergedLocals.length === 0}
-              loading={acting}
+            {/* Tooltip 放在 Popconfirm 之内（最内层）：保持确认气泡的触发链完整；
+                计数为 0 时按钮禁用，antd 禁用按钮不派发 hover，故再包一层 span 承接提示 */}
+            <Tooltip
+              title={
+                mergedLocals.length === 0
+                  ? '当前没有可清理的已合并分支：当前分支与被工作树占用的分支不参与清理'
+                  : `删除 ${mergedLocals.length} 个已合并到 HEAD 的本地分支：删除后不可恢复`
+              }
             >
-              清理已合并（{mergedLocals.length}）
-            </Button>
+              <span>
+                <Button
+                  data-testid="cleanup-merged"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={mergedLocals.length === 0}
+                  loading={acting}
+                >
+                  清理已合并（{mergedLocals.length}）
+                </Button>
+              </span>
+            </Tooltip>
           </Popconfirm>
         ) : null}
         {/* 弹窗 Fetch（GitBranchPopupFetchAction 语义）：fetch 全部远程 → 容器重验证分支列表 */}
         {onFetch !== undefined ? (
-          <Button data-testid="branch-fetch" loading={fetching ?? acting} onClick={onFetch}>
-            Fetch
-          </Button>
+          <Tooltip title="拉取全部远程更新：完成后容器重新校验分支列表，耗时取决于远端">
+            <Button data-testid="branch-fetch" loading={fetching ?? acting} onClick={onFetch}>
+              Fetch
+            </Button>
+          </Tooltip>
         ) : null}
       </Flex>
 
@@ -712,14 +769,16 @@ export function BranchPanel({
             {workingDiffData.files.map((file) => (
               <Flex key={`${file.status}-${file.path}`} align="center" gap={8}>
                 <CommittedStatusTag status={file.status} />
-                <Typography.Text
-                  data-testid={`working-diff-file-${file.path}`}
-                  style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
-                  ellipsis
-                  onClick={() => onOpenWorkingDiffFile?.(workingDiffData.branch, file.path)}
-                >
-                  {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
-                </Typography.Text>
+                <Tooltip title={`打开该文件的差异视图：当前工作树与 ${workingDiffData.branch} 的逐行对比`}>
+                  <Typography.Text
+                    data-testid={`working-diff-file-${file.path}`}
+                    style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
+                    ellipsis
+                    onClick={() => onOpenWorkingDiffFile?.(workingDiffData.branch, file.path)}
+                  >
+                    {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
+                  </Typography.Text>
+                </Tooltip>
               </Flex>
             ))}
           </Flex>

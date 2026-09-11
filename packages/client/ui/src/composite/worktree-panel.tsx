@@ -6,9 +6,10 @@
  *  组件只校验非空，路径是否在仓库内由服务层拦截）
  *  + 「清理」按钮（Popconfirm → onPrune）；刷新可选（缺省不渲染）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
+ *  所有可交互元素（按钮/输入/单选组及其选项/勾选）均一对一包 Tooltip；禁用按钮另包 span 承接悬停。
  */
 import { useState } from 'react';
-import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Radio, Tag, Typography } from 'antd';
+import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Radio, Tag, Tooltip, Typography } from 'antd';
 import type { WorktreeCreateBody, WorktreeEntry, WorktreeList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 
@@ -73,13 +74,15 @@ function WorktreeRow({
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               工作树内有未提交改动时需勾选强制移除（其中的改动将被丢弃）
             </Typography.Text>
-            <Checkbox
-              data-testid={`worktree-force-${wt.path}`}
-              checked={force}
-              onChange={(e) => setForce(e.target.checked)}
-            >
-              强制移除（--force）
-            </Checkbox>
+            <Tooltip title="勾选后移除会携带 --force：新工作树里未提交的改动将一并被丢弃">
+              <Checkbox
+                data-testid={`worktree-force-${wt.path}`}
+                checked={force}
+                onChange={(e) => setForce(e.target.checked)}
+              >
+                强制移除（--force）
+              </Checkbox>
+            </Tooltip>
           </Flex>
         }
         onConfirm={() => {
@@ -88,9 +91,20 @@ function WorktreeRow({
           onRemove(wt.path, useForce);
         }}
       >
-        <Button size="small" data-testid={`worktree-remove-${wt.path}`} disabled={acting}>
-          移除
-        </Button>
+        {/* Tooltip 留在 Popconfirm 内侧；禁用按钮不派发 hover，故再包一层 span 承接悬停 */}
+        <Tooltip
+          title={
+            acting
+              ? '操作进行中：等当前操作结束后再移除该工作树'
+              : '注销该工作树的登记并清空其目录（有未提交改动时 git 会拒绝，需勾选强制移除）'
+          }
+        >
+          <span>
+            <Button size="small" data-testid={`worktree-remove-${wt.path}`} disabled={acting}>
+              移除
+            </Button>
+          </span>
+        </Tooltip>
       </Popconfirm>
     </Flex>
   );
@@ -147,32 +161,45 @@ function CreateWorktreeModal({
       onCancel={close}
     >
       <Flex vertical gap={12}>
-        <Input
-          data-testid="worktree-create-path"
-          placeholder="工作树路径（必填）"
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-        />
-        <Radio.Group value={mode} onChange={(e) => setMode(e.target.value as CreateMode)}>
-          <Flex gap={16}>
-            <Radio value="branch">关联已有分支</Radio>
-            <Radio value="new">创建新分支</Radio>
-          </Flex>
-        </Radio.Group>
+        <Tooltip title="工作树路径（必填）：新建的检出目录，须落在一个尚不存在的路径上">
+          <Input
+            data-testid="worktree-create-path"
+            placeholder="工作树路径（必填）"
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+          />
+        </Tooltip>
+        {/* Radio.Group 自身算一个控件，组内每个 Radio 也是控件（会被外层组遮挡），故内外各包一个 Tooltip */}
+        <Tooltip title="创建方式：决定新工作树检出的是已有分支还是新建分支，下方输入框随选择切换">
+          <Radio.Group value={mode} onChange={(e) => setMode(e.target.value as CreateMode)}>
+            <Flex gap={16}>
+              <Tooltip title="关联已有分支：把该分支检出到新工作树（已被其它工作树检出的分支不能再选）">
+                <Radio value="branch">关联已有分支</Radio>
+              </Tooltip>
+              <Tooltip title="创建新分支：以当前 HEAD 为起点新建分支并在新工作树里检出">
+                <Radio value="new">创建新分支</Radio>
+              </Tooltip>
+            </Flex>
+          </Radio.Group>
+        </Tooltip>
         {mode === 'branch' ? (
-          <Input
-            data-testid="worktree-create-branch"
-            placeholder="分支名（必填）"
-            value={branch}
-            onChange={(e) => setBranch(e.target.value)}
-          />
+          <Tooltip title="已有分支名（必填）：分支不存在时创建会被服务层拒绝">
+            <Input
+              data-testid="worktree-create-branch"
+              placeholder="分支名（必填）"
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+            />
+          </Tooltip>
         ) : (
-          <Input
-            data-testid="worktree-create-new-branch"
-            placeholder="新分支名（必填）"
-            value={newBranch}
-            onChange={(e) => setNewBranch(e.target.value)}
-          />
+          <Tooltip title="新分支名（必填）：不得与已有分支重名，创建后立即在新工作树检出">
+            <Input
+              data-testid="worktree-create-new-branch"
+              placeholder="新分支名（必填）"
+              value={newBranch}
+              onChange={(e) => setNewBranch(e.target.value)}
+            />
+          </Tooltip>
         )}
       </Flex>
     </Modal>
@@ -191,17 +218,36 @@ export function WorktreePanel(props: WorktreePanelProps): React.ReactNode {
         extra={
           <Flex gap={8}>
             {onRefresh !== undefined ? (
-              <Button size="small" data-testid="worktree-refresh" disabled={acting} onClick={onRefresh}>
-                刷新
-              </Button>
+              // 卡头三个按钮都在 acting 期间禁用：禁用按钮不派发 hover，统一在 Tooltip 内包 span 承接悬停
+              <Tooltip title={acting ? '操作进行中：等当前操作结束后再刷新列表' : '重新拉取工作树列表（外部命令改动过工作树时用）'}>
+                <span>
+                  <Button size="small" data-testid="worktree-refresh" disabled={acting} onClick={onRefresh}>
+                    刷新
+                  </Button>
+                </span>
+              </Tooltip>
             ) : null}
-            <Button size="small" data-testid="worktree-create" disabled={acting} onClick={() => setCreateOpen(true)}>
-              创建
-            </Button>
+            <Tooltip title={acting ? '操作进行中：等当前操作结束后再创建工作树' : '在指定目录新建一个工作树（打开路径与分支弹窗）'}>
+              <span>
+                <Button size="small" data-testid="worktree-create" disabled={acting} onClick={() => setCreateOpen(true)}>
+                  创建
+                </Button>
+              </span>
+            </Tooltip>
             <Popconfirm title="确定清理失效工作树？" okText="确定" cancelText="取消" onConfirm={onPrune}>
-              <Button size="small" data-testid="worktree-prune" disabled={acting}>
-                清理
-              </Button>
+              <Tooltip
+                title={
+                  acting
+                    ? '操作进行中：等当前操作结束后再清理'
+                    : '清理已失效的工作树登记（目录被手工删掉后遗留的条目）'
+                }
+              >
+                <span>
+                  <Button size="small" data-testid="worktree-prune" disabled={acting}>
+                    清理
+                  </Button>
+                </span>
+              </Tooltip>
             </Popconfirm>
           </Flex>
         }

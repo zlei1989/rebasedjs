@@ -8,7 +8,7 @@
  *  数据由容器经 useCommitFiles 条件拉取，本组件只受控渲染）。纯受控（file/lines/loading/error）；
  *  ui 不调接口，数据与回调由调用方容器注入。
  */
-import { Button, Flex, Modal, Spin, Typography } from 'antd';
+import { Button, Flex, Modal, Spin, Tooltip, Typography } from 'antd';
 import type { BlameLine, CommittedEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { CommittedStatusTag } from '../domain/committed-status';
@@ -59,47 +59,60 @@ function BlameRow({
       <Typography.Text type="secondary" style={{ width: 48, textAlign: 'right', flexShrink: 0 }}>
         {line.lineno}
       </Typography.Text>
-      <Button
-        type="link"
-        size="small"
-        style={{ padding: 0, flexShrink: 0 }}
-        data-testid={`blame-hash-${line.lineno}`}
-        onClick={() => onOpenCommit?.(line.hash)}
-      >
-        {line.shortHash}
-      </Button>
-      {onShowDiff !== undefined ? (
+      {/* hash 短名即操作入口：点了会跳到日志页并选中该提交（不是纯展示文本）。
+          未接线 onOpenCommit 时该按钮无行为 → 去掉提示，避免承诺做不到的事 */}
+      <Tooltip title={onOpenCommit ? '在提交日志中定位该提交并选中它（只做导航，不改动工作区）' : undefined}>
         <Button
+          type="link"
           size="small"
-          type="text"
-          style={{ flexShrink: 0 }}
-          data-testid={`blame-diff-${line.lineno}`}
-          onClick={() => onShowDiff(line.hash, line.parents)}
+          style={{ padding: 0, flexShrink: 0 }}
+          data-testid={`blame-hash-${line.lineno}`}
+          onClick={() => onOpenCommit?.(line.hash)}
         >
-          差异
+          {line.shortHash}
         </Button>
+      </Tooltip>
+      {onShowDiff !== undefined ? (
+        /* 「差异」：说明对比的两侧（该提交 vs 其父提交），不点开猜不到对比基准 */
+        <Tooltip title="对比该提交与其父提交的差异文件（根提交无父版本时容器会降级处理）">
+          <Button
+            size="small"
+            type="text"
+            style={{ flexShrink: 0 }}
+            data-testid={`blame-diff-${line.lineno}`}
+            onClick={() => onShowDiff(line.hash, line.parents)}
+          >
+            差异
+          </Button>
+        </Tooltip>
       ) : null}
       {onShowInHistory !== undefined ? (
-        <Button
-          size="small"
-          type="text"
-          style={{ flexShrink: 0 }}
-          data-testid={`blame-history-${line.lineno}`}
-          onClick={() => onShowInHistory(file)}
-        >
-          历史
-        </Button>
+        /* 「历史」：作用对象是当前文件（而非某一次提交），与「差异」区分 */
+        <Tooltip title="查看当前文件的提交历史列表（逐次改动记录）">
+          <Button
+            size="small"
+            type="text"
+            style={{ flexShrink: 0 }}
+            data-testid={`blame-history-${line.lineno}`}
+            onClick={() => onShowInHistory(file)}
+          >
+            历史
+          </Button>
+        </Tooltip>
       ) : null}
       {onShowAffected !== undefined ? (
-        <Button
-          size="small"
-          type="text"
-          style={{ flexShrink: 0 }}
-          data-testid={`blame-affected-${line.lineno}`}
-          onClick={() => onShowAffected(line.hash)}
-        >
-          受影响
-        </Button>
+        /* 「受影响」：弹出该提交的全量文件清单（Show All Affected） */
+        <Tooltip title="打开该提交改动的全部文件清单；合并提交默认不列出文件变更">
+          <Button
+            size="small"
+            type="text"
+            style={{ flexShrink: 0 }}
+            data-testid={`blame-affected-${line.lineno}`}
+            onClick={() => onShowAffected(line.hash)}
+          >
+            受影响
+          </Button>
+        </Tooltip>
       ) : null}
       <Typography.Text style={{ width: 120, flexShrink: 0 }} ellipsis>
         {line.author}
@@ -125,23 +138,27 @@ function AffectedFileRow({
   onOpenFile?: (path: string) => void;
 }): React.ReactNode {
   return (
-    <Flex
-      data-testid={`affected-file-${index}`}
-      align="center"
-      gap={8}
-      style={{ padding: '4px 0', cursor: onOpenFile ? 'pointer' : undefined }}
-      onClick={() => onOpenFile?.(file.path)}
-    >
-      <CommittedStatusTag status={file.status} />
-      {file.renameFrom ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {file.renameFrom} →
+    /* 整行可点（未注入 onOpenFile 时为只读行）→ 行 Tooltip 说明点击后果；
+       Flex 属 antd 容器组件、脚本按容器豁免，这里按「可点行」口径人工补上 */
+    <Tooltip title={onOpenFile ? '打开该文件与该提交父版本的差异对比' : undefined}>
+      <Flex
+        data-testid={`affected-file-${index}`}
+        align="center"
+        gap={8}
+        style={{ padding: '4px 0', cursor: onOpenFile ? 'pointer' : undefined }}
+        onClick={() => onOpenFile?.(file.path)}
+      >
+        <CommittedStatusTag status={file.status} />
+        {file.renameFrom ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+            {file.renameFrom} →
+          </Typography.Text>
+        ) : null}
+        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+          {file.path}
         </Typography.Text>
-      ) : null}
-      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-        {file.path}
-      </Typography.Text>
-    </Flex>
+      </Flex>
+    </Tooltip>
   );
 }
 

@@ -7,7 +7,7 @@
  */
 import { useIgnore, useIgnoreTemplates, usePutIgnore } from '@rebased/client';
 import { IgnoreDialog } from '@rebased/ui';
-import { Button, Flex, message } from 'antd';
+import { Button, Flex, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 
@@ -31,12 +31,17 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   return (
     <Flex vertical align="flex-start">
       {/* 返回日志页 */}
-      <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-        返回日志
-      </Button>
-      <Button type="primary" data-testid="edit-ignore-button" onClick={() => setOpen(true)}>
-        编辑忽略规则
-      </Button>
+      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+      <Tooltip title="返回该仓库的提交日志页">
+        <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
+          返回日志
+        </Button>
+      </Tooltip>
+      <Tooltip title="打开忽略规则编辑器：选 .gitignore 或 .git/info/exclude 编辑规则，确认后写盘">
+        <Button type="primary" data-testid="edit-ignore-button" onClick={() => setOpen(true)}>
+          编辑忽略规则
+        </Button>
+      </Tooltip>
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载（contents/templates 随之更新） */}
       <IgnoreDialog
         key={repoId}

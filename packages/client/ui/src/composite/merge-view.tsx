@@ -7,7 +7,7 @@
  *  Monaco 重：经 loader 懒加载（默认动态 import monaco-lazy），测试注入 stub loader 绕过。
  */
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Button, Flex, Typography } from 'antd';
+import { Button, Flex, Tooltip, Typography } from 'antd';
 import type { ConflictContents } from '@rebased/contracts';
 import { MonacoDiffView } from '../base/monaco-diff-view';
 import type { MonacoEditorInnerProps, MonacoLazyLoader } from '../base/monaco-lazy';
@@ -82,12 +82,20 @@ export function MergeView({ contents, onSave, saving = false, loader = defaultLo
       <Pane
         title="合并结果"
         action={
-          <Button type="primary" size="small" loading={saving} onClick={() => onSave(path, edited)}>
-            保存
-          </Button>
+          <Tooltip title="把合并结果写回该文件（保存成功后冲突即标记为已解决）">
+            <Button type="primary" size="small" loading={saving} onClick={() => onSave(path, edited)}>
+              保存
+            </Button>
+          </Tooltip>
         }
       >
-        <MonacoEditorLazy value={edited} onChange={setEdited} loader={loader} />
+        {/* Monaco 是懒加载函数组件、不向 DOM 转发 ref，Tooltip 只能挂在真实 DOM 上（否则气泡没有锚点）；
+            故在 Tooltip 与编辑器之间包一层 span：display:block + height:100% 保持原有「撑满面板」的布局 */}
+        <Tooltip title="合并结果编辑器：直接改文本解决冲突，改完点右上「保存」写回文件（Ctrl+Z 可撤销输入）">
+          <span style={{ display: 'block', height: '100%' }}>
+            <MonacoEditorLazy value={edited} onChange={setEdited} loader={loader} />
+          </span>
+        </Tooltip>
       </Pane>
     </Flex>
   );

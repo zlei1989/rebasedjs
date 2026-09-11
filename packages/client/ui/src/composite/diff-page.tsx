@@ -11,7 +11,7 @@
  */
 import { useState } from 'react';
 import type { FileThreeVersions, FileVersions } from '@rebased/contracts';
-import { Button, Flex, Typography } from 'antd';
+import { Button, Flex, Tooltip, Typography } from 'antd';
 import { DiffViewer } from '../domain/diff-viewer';
 import { ThreeWayView } from './three-way-view';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
@@ -57,15 +57,35 @@ function FileNavButtons({
   const next = index < files.length - 1 ? files[index + 1] : undefined;
   return (
     <Flex gap={8} align="center" data-testid="diff-file-nav">
-      <Button size="small" disabled={prev === undefined} data-testid="diff-prev-file" onClick={() => prev !== undefined && onNavigateFile(prev)}>
-        ‹ Prev
-      </Button>
+      {/* 到头/到尾时按钮禁用，禁用按钮不派发 hover → 在 Tooltip 与 Button 之间包一层 span 承接提示；
+          inline-flex 让 span 紧贴按钮，不改变这一行的布局尺寸 */}
+      <Tooltip title={prev === undefined ? '当前文件已是该组第一个，没有上一个可切' : '切到同组的上一个文件（保留当前对比模式）'}>
+        <span style={{ display: 'inline-flex' }}>
+          <Button
+            size="small"
+            disabled={prev === undefined}
+            data-testid="diff-prev-file"
+            onClick={() => prev !== undefined && onNavigateFile(prev)}
+          >
+            ‹ Prev
+          </Button>
+        </span>
+      </Tooltip>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {index + 1}/{files.length}
       </Typography.Text>
-      <Button size="small" disabled={next === undefined} data-testid="diff-next-file" onClick={() => next !== undefined && onNavigateFile(next)}>
-        Next ›
-      </Button>
+      <Tooltip title={next === undefined ? '当前文件已是该组最后一个，没有下一个可切' : '切到同组的下一个文件（保留当前对比模式）'}>
+        <span style={{ display: 'inline-flex' }}>
+          <Button
+            size="small"
+            disabled={next === undefined}
+            data-testid="diff-next-file"
+            onClick={() => next !== undefined && onNavigateFile(next)}
+          >
+            Next ›
+          </Button>
+        </span>
+      </Tooltip>
     </Flex>
   );
 }

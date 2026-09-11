@@ -30,7 +30,7 @@ import {
 } from '@rebased/client';
 import { ServiceError } from '@rebased/contracts';
 import { GitLabPanel } from '@rebased/ui';
-import { Alert, Button, Flex, Tabs, message } from 'antd';
+import { Alert, Button, Flex, Tabs, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, use } from 'react';
 
@@ -96,12 +96,17 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     <Flex vertical align="flex-start">
       {/* 返回日志页 + 设置入口（#8：面板内 Settings 菜单入口语义） */}
       <Flex gap={8}>
-        <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-        <Button type="link" data-testid="gitlab-open-settings" onClick={() => router.push(`/repos/${repoId}/settings`)}>
-          设置
-        </Button>
+        {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+        <Tooltip title="返回该仓库的提交日志页">
+          <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
+            返回日志
+          </Button>
+        </Tooltip>
+        <Tooltip title="打开该仓库的设置页：配置 GitLab 令牌等认证信息">
+          <Button type="link" data-testid="gitlab-open-settings" onClick={() => router.push(`/repos/${repoId}/settings`)}>
+            设置
+          </Button>
+        </Tooltip>
       </Flex>
       {isAuthFailed(mrsError) ? (
         /* mrs 加载失败 AUTH_FAILED：提示卡 + 去设置链接（替代面板，避免无数据渲染）。
@@ -113,9 +118,11 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
           message="GitLab 认证失败"
           description={(mrsError instanceof Error && mrsError.message !== '' ? mrsError.message : '令牌无效或已过期，请到设置中重新配置。')}
           action={
-            <Button size="small" onClick={() => router.push(`/repos/${repoId}/settings`)}>
-              去设置
-            </Button>
+            <Tooltip title="打开设置页重新配置 GitLab 令牌">
+              <Button size="small" onClick={() => router.push(`/repos/${repoId}/settings`)}>
+                去设置
+              </Button>
+            </Tooltip>
           }
         />
       ) : (
@@ -125,8 +132,24 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             activeKey={state}
             onChange={(key) => setState(key as 'opened' | 'merged')}
             items={[
-              { key: 'opened', label: '打开' },
-              { key: 'merged', label: '已合并' },
+              // Tabs 的 items 是数据对象而非 JSX，JSX 树看不见它，故门禁按「字符串 key + label」单独审计：
+              // label 必须是 Tooltip 包裹的 JSX；内层 span 是 Tooltip 的 DOM 宿主（可见文字原样保留，不改行为）
+              {
+                key: 'opened',
+                label: (
+                  <Tooltip title="切到打开状态列表：只看仍在等待评审与合并的 MR，点行可查看详情">
+                    <span>打开</span>
+                  </Tooltip>
+                ),
+              },
+              {
+                key: 'merged',
+                label: (
+                  <Tooltip title="切到已合并状态列表：只看已合并的 MR，点行可查看详情">
+                    <span>已合并</span>
+                  </Tooltip>
+                ),
+              },
             ]}
           />
           <GitLabPanel
