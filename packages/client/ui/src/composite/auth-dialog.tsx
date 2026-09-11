@@ -48,8 +48,19 @@ export function AuthDialog({ open, host, onOk, onCancel, confirming }: AuthDialo
       <Flex vertical gap={12}>
         <Flex align="center" gap={8}>
           <Typography.Text type="secondary">主机：</Typography.Text>
-          {/* host 只读展示：认证目标由失败请求决定，不可在此修改 */}
-          <Typography.Text data-testid="auth-host" strong>
+          {/* host 只读展示：认证目标由失败请求决定，不可在此修改。
+              宽度：host 是注入的远端主机名（不可断行 ASCII，来源于失败请求的 err.context），
+              同行「主机：」标签不可收缩：窄屏（360px 视口下 Modal 内容盒约 280px）下这一行会被 host 顶宽。
+              此处是 EllipsisText 的**内联等价写法**而非换原语：本元素带 `data-testid`（被
+              `auth-dialog.test.tsx:24` 断言）且 EllipsisText 不透传 testid；
+              `ellipsis={{ tooltip }}` + `minWidth: 0` 与 EllipsisText 内部实现逐字同构
+              （`ellipsis-text.tsx:45-54`），tooltip 仅在文本真的溢出时才出现，短主机名观感不变 */}
+          <Typography.Text
+            data-testid="auth-host"
+            strong
+            style={{ minWidth: 0 }}
+            ellipsis={{ tooltip: host }}
+          >
             {host}
           </Typography.Text>
         </Flex>

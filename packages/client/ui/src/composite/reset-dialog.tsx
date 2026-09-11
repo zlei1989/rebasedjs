@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { Checkbox, Flex, Modal, Radio, Tooltip, Typography } from 'antd';
 import type { ResetBody } from '@rebased/contracts';
+import { EllipsisText } from '../base/ellipsis-text';
 
 export interface ResetDialogProps {
   open: boolean;
@@ -61,7 +62,14 @@ export function ResetDialog({ open, ref, refLabel, onOk, onCancel, confirming }:
       <Flex vertical gap={12}>
         <Flex align="center" gap={8}>
           <Typography.Text type="secondary">目标：</Typography.Text>
-          <Typography.Text code>{refLabel ?? ref}</Typography.Text>
+          {/* 目标 ref 是注入的不可断行长串（完整哈希 / 分支引用 / 「短哈希 + 主题」）；
+              原标记已用 `code`，故 `mono` 只是把同一呈现交回 EllipsisText（Ruling P17(b)：
+              仅原文即 code 的站点可用 `mono`，不引入额外观感）；转出后由本原语自带的
+              `minWidth: 0` + `ellipsis` 承担窄屏截断（原写法在无 wrap 行内会顶宽弹窗），
+              `title` 给完整值供 hover 查看 */}
+          <EllipsisText mono title={refLabel ?? ref}>
+            {refLabel ?? ref}
+          </EllipsisText>
         </Flex>
         {/* open 受控：悬停组内 Radio 时抑制组气泡（Radio 自己会弹），否则两个气泡叠在一起 */}
         <Tooltip

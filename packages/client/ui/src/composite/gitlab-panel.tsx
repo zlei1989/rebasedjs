@@ -40,6 +40,7 @@ import type {
   GitLabTimelineEntry,
 } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { Toolbar } from '../base/toolbar';
 import { formatCommitDate } from '../domain/format';
 import { HunkDiffView } from '../domain/hunk-diff-view';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
@@ -451,7 +452,18 @@ function MrDetailBlock({
           {detail.author}
         </Typography.Text>
         <Typography.Text type="secondary" data-testid="gitlab-detail-iid">{`#${detail.iid}`}</Typography.Text>
-        <Typography.Text type="secondary" data-testid="gitlab-detail-refs">
+        {/* sourceBranch → targetBranch 是两个不可断行的分支引用：原写法既无 `minWidth: 0` 也无
+            `ellipsis`，窄屏（360px 视口下本列为 1:2 分栏的右栏）会被这两串顶宽。
+            此处是 EllipsisText 的**内联等价写法**而非换原语：本元素带 `data-testid`，
+            且该 testid 被 `gitlab-panel.test.tsx:215` 断言，而 `EllipsisText` 不透传 testid
+            （丢测试钩子属未授权改动）。`ellipsis={{ tooltip }}` + `minWidth: 0` 与 EllipsisText
+            内部实现逐字同构（`ellipsis-text.tsx:45-54`），tooltip 仅在文本真的溢出时才出现。 */}
+        <Typography.Text
+          type="secondary"
+          data-testid="gitlab-detail-refs"
+          style={{ minWidth: 0 }}
+          ellipsis={{ tooltip: `${detail.sourceBranch} → ${detail.targetBranch}` }}
+        >
           {detail.sourceBranch} → {detail.targetBranch}
         </Typography.Text>
         {detail.reviewState !== 'NONE' ? (
@@ -475,7 +487,12 @@ function MrDetailBlock({
             onChange={(e) => setComment(e.target.value)}
           />
         </Tooltip>
-        <Flex gap={8} wrap>
+        {/* 操作按钮行改 Toolbar：原行已带 `wrap`，本次只多出「宽度 100% + minWidth: 0」这两个
+            收缩前提（`Toolbar` 自带），子项顺序/包裹链均未动。不传 `align`——
+            `ToolbarProps.align` 映射的是主轴 `justify`（`toolbar.tsx:19-31`），传 `center` 会把整行居中，
+            与原左对齐不符。交叉轴 `Toolbar` 固定 `center`，本行子项全是 `Tooltip>span>Button`（等高），
+            与原先未写 `align`（交叉轴 normal=stretch）的观感一致（同 Task 12 既有口径） */}
+        <Toolbar gap={8}>
           {/* 空内容 / 上一个操作进行中时该按钮禁用；antd 禁用按钮不派发 hover，
               故在 Tooltip 与 Button 之间包一层 inline-flex span 承接悬停，文案说明不可用的原因 */}
           <Tooltip
@@ -568,7 +585,7 @@ function MrDetailBlock({
               </Button>
             </span>
           </Tooltip>
-        </Flex>
+        </Toolbar>
       </Flex>
       <Tabs
         defaultActiveKey="timeline"
@@ -663,14 +680,27 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
     );
   }
 
+  // 根容器是**横向**行（左列表 Card + 右详情 Card 两栏），不是页面根，故：
+  //   1. `align="flex-start"` **保留** —— 横向 Flex 的交叉轴是纵向，它表示「子项顶部对齐」，
+  //      与横向沾满无关；删掉会变成 antd 默认的等高拉伸（未获授权的视觉变更，Ruling P15）；
+  //   2. 不迁 `PageShell`（那是纵向列容器，会把「行」变成「列」，Ruling P15(b)）；
+  //      本面板的布局与紧凑密度归其 app 页面容器（T14/T15）所有；
+  //   3. `padding: 16` / `gap: 16` 逐字未动。
   return (
     <Flex gap={16} align="flex-start" style={{ padding: 16 }}>
+      {/* 左列表卡：`flex: 1` 保留原有等分口径，只把固定下限 260 → 0（不变量 ①）——
+          `min-width: 260` 使该子项的自动最小尺寸恒 ≥ 260，360px 视口下本面板（内容盒约 328px）
+          并排两栏必然溢出，而溢出会传播为文档级横向滚动；改 0 只交出收缩能力，宽屏表现不变 */}
       <Card
         size="small"
         title={`合并请求（${mrs.mrs.length}）`}
-        style={{ flex: 1, minWidth: 260 }}
+        style={{ flex: 1, minWidth: 0 }}
         extra={
-          <Flex gap={8}>
+          // 卡头按钮行改 Toolbar（gap 照抄原值 8）：原 `<Flex gap={8}>` 没有 wrap，
+          // 卡头在窄屏一旦放不下就会顶宽；`Toolbar` 自带 flexWrap 且写 `width: 100%`，
+          // 宿主 `.ant-card-extra` 是 `flex: 0 1 auto` 的收缩项，宽屏下与内容宽度等价（同 Task 12
+          // 对 worktree/submodule 卡头的既有论证）。不传 `align`（会变成主轴居中）
+          <Toolbar gap={8}>
             {onRefresh !== undefined ? (
               // acting 时禁用：禁用按钮不派发 hover，包一层 span 承接提示
               <Tooltip
@@ -705,7 +735,7 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
                 </Button>
               </span>
             </Tooltip>
-          </Flex>
+          </Toolbar>
         }
       >
         {loading ? (
@@ -722,7 +752,8 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
         )}
       </Card>
       {iid !== null ? (
-        <Card size="small" title={`MR #${iid}`} style={{ flex: 2, minWidth: 380 }}>
+        // 右详情卡：`flex: 2` 保留两栏 1:2 比例；固定下限 380 → 0（不变量 ①，同上）
+        <Card size="small" title={`MR #${iid}`} style={{ flex: 2, minWidth: 0 }}>
           {detail === null ? (
             <Spin data-testid="gitlab-detail-loading" />
           ) : (
