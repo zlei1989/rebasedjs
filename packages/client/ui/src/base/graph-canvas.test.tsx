@@ -1,9 +1,10 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { LayoutRow } from '../graph-layout/types';
-import { GraphCanvas } from './graph-canvas';
+import { GraphCanvas, laneCenterX, rowCenterY } from './graph-canvas';
+import { buildRowSegments } from '../domain/commit-graph-segments';
 
-/** 三行布局：lane 0/1 交错，含一条跨 lane 边（0→1）与一条同行直边（1→1） */
+/** 三行布局：lane 0/1 交错，含一条跨 lane 边（0→1）与一条同 lane 直边（1→1） */
 const rows: LayoutRow[] = [
   {
     commit: { hash: 'a', parents: ['b'], refs: [] },
@@ -25,12 +26,30 @@ const rows: LayoutRow[] = [
   },
 ];
 
+const ROW = 24;
+const LANE = 18;
+
 describe('GraphCanvas', () => {
-  it('按行数画节点圆点，按边段画折线（每条边两段 line）', () => {
-    const { container } = render(<GraphCanvas rows={rows} rowHeight={24} />);
-    // 每条边段折线简化为两段 line：2 条边 → 4 条线段，不少于行数
-    expect(container.querySelectorAll('line').length).toBeGreaterThanOrEqual(rows.length);
+  it('按行数画节点圆点，并把编译好的线段画成 line/polyline', () => {
+    const segmentsPerRow = buildRowSegments(rows, rows.map(() => []), ROW, LANE);
+    const { container } = render(
+      <GraphCanvas segmentsPerRow={segmentsPerRow} rows={rows} rowHeight={ROW} laneWidth={LANE} />,
+    );
     // 节点圆点数等于行数
     expect(container.querySelectorAll('circle')).toHaveLength(rows.length);
+    // 有边就应该有线（折线或直线）
+    expect(container.querySelectorAll('line').length + container.querySelectorAll('polyline').length).toBeGreaterThan(0);
+  });
+
+  it('节点画在全局坐标的 lane/行中心上（x=(lane+0.5)*laneWidth，y=row*rowHeight+rowHeight/2）', () => {
+    const segmentsPerRow = buildRowSegments(rows, rows.map(() => []), ROW, LANE);
+    const { container } = render(
+      <GraphCanvas segmentsPerRow={segmentsPerRow} rows={rows} rowHeight={ROW} laneWidth={LANE} />,
+    );
+    const circles = [...container.querySelectorAll('circle')];
+    rows.forEach((row, i) => {
+      expect(circles[i]!.getAttribute('cx')).toBe(String(laneCenterX(row.lane, LANE)));
+      expect(circles[i]!.getAttribute('cy')).toBe(String(rowCenterY(i, ROW)));
+    });
   });
 });

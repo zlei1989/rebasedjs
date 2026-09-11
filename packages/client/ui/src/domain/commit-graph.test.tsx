@@ -96,35 +96,49 @@ describe('CommitGraph', () => {
     makeCommit({ hash: 'c1', parents: [] }),
   ];
 
-  it('切片画布的边坐标换算到局部坐标系（y 落在画布高度内）', () => {
+  it('每行渲染一个「整图视口」：viewBox 覆盖本行那条带，线段按全局坐标画', () => {
     render(<CommitGraph commits={mergeCommits} />);
     const rows = screen.getAllByTestId('commit-graph-row');
-    // 第 5 行（index 4，侧支 c2b）：切片 rows[3..5]，画布高 3×24=72；
-    // 切片内边为 c2(3→5)、c2b(4→5)，局部坐标均应在 [0, 72] 内
-    const canvas = within(rows[4]).getByTestId('graph-canvas');
-    const height = Number(canvas.getAttribute('height'));
-    expect(height).toBe(72);
-    const lines = canvas.querySelectorAll('line');
-    expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) {
-      for (const attr of ['y1', 'y2']) {
-        const y = Number(line.getAttribute(attr));
-        expect(y).toBeGreaterThanOrEqual(0);
-        expect(y).toBeLessThanOrEqual(height);
-      }
+    // 第 5 行（index 4）：viewBox 的 y 必须正好是 [4*24, 5*24)，与行盒 1:1 对齐
+    const lane = within(rows[4]).getByTestId('commit-graph-lane');
+    const svg = lane.querySelector('svg')!;
+    const [, minY, , vbH] = (svg.getAttribute('viewBox') ?? '').split(' ').map(Number);
+    expect(minY).toBe(4 * 24);
+    expect(vbH).toBe(24);
+    // 线段按全局坐标画：所有 y 必须落在全局 [0, 行数*24] 内，且至少有一条线
+    const shapes = [...svg.querySelectorAll('line, polyline')];
+    expect(shapes.length).toBeGreaterThan(0);
+    const ys = shapes.flatMap((s) =>
+      s.tagName === 'line'
+        ? [Number(s.getAttribute('y1')), Number(s.getAttribute('y2'))]
+        : (s.getAttribute('points') ?? '').split(' ').map((p) => Number(p.split(',')[1])),
+    );
+    for (const y of ys) {
+      expect(Number.isFinite(y)).toBe(true);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(mergeCommits.length * 24);
     }
   });
 
-  it('边端点与本行节点圆点对齐（存在边从本行圆点出发）', () => {
+  it('本行圆点画在本行中线，且该行线段的端点落在 lane 中心（竖线/斜线都接在竖线上）', () => {
     render(<CommitGraph commits={mergeCommits} />);
     const rows = screen.getAllByTestId('commit-graph-row');
-    const canvas = within(rows[4]).getByTestId('graph-canvas');
-    // c2b 在切片 rows[3..5] 的局部下标 1（lane 1 → cx=27，cy=36）
-    const own = canvas.querySelectorAll('circle')[1];
-    const lines = [...canvas.querySelectorAll('line')];
-    const startsAtNode = lines.some(
-      (l) => l.getAttribute('x1') === own.getAttribute('cx') && l.getAttribute('y1') === own.getAttribute('cy'),
-    );
+    // 第 5 行（index 4，侧支 c2b）：本行圆点 = 该行 SVG 里 cy = 4*24 + 12 的那个
+    const svg = within(rows[4]).getByTestId('commit-graph-lane').querySelector('svg')!;
+    const own = [...svg.querySelectorAll('circle')].find((c) => Number(c.getAttribute('cy')) === 4 * 24 + 12);
+    expect(own).toBeTruthy();
+    // lane 中心 x = (lane + 0.5) * 18；本行 c2b 的 lane 由布局给出，这里用圆点自身反查
+    const ownX = Number(own!.getAttribute('cx'));
+    expect((ownX - 9) % 18).toBe(0);
+    // 存在一条线段从本行圆点出发（说明边接在圆点上、不是悬空的斜线）
+    const shapes = [...svg.querySelectorAll('line, polyline')];
+    const startsAtNode = shapes.some((s) => {
+      if (s.tagName === 'line') {
+        return Number(s.getAttribute('x1')) === ownX && Number(s.getAttribute('y1')) === 4 * 24 + 12;
+      }
+      const [x, y] = (s.getAttribute('points') ?? '').split(' ')[0].split(',').map(Number);
+      return x === ownX && y === 4 * 24 + 12;
+    });
     expect(startsAtNode).toBe(true);
   });
 });
