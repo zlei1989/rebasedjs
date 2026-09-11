@@ -48,4 +48,9 @@ describe('Toolbar', () => {
     const root = renderToolbar({ children: null, gap: 8 });
     expect(root.style.gap).toBe('8px');
   });
+
+  it('gap={0} 仍落 style（!== undefined 守卫，而非真值判断）', () => {
+    const root = renderToolbar({ children: null, gap: 0 });
+    expect(root.style.gap).toBe('0px');
+  });
 });
