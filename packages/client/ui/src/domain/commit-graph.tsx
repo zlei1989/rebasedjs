@@ -8,7 +8,7 @@
 import { useMemo } from 'react';
 import { Listy, Tag, theme } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
-import { buildLayout, type LayoutCommit } from '../graph-layout';
+import { buildLayout, type LayoutCommit, type LayoutRow } from '../graph-layout';
 import { rowCanvasWindow } from './commit-graph-window';
 import { colorForRef } from '../graph-layout/color';
 import { GraphCanvas } from '../base/graph-canvas';
@@ -29,6 +29,16 @@ export interface CommitGraphProps {
 
 const ROW_HEIGHT = 24;
 const LANE_WIDTH = 18;
+
+/** 画布切片的空位行（首行的前一行 / 末行的后一行）：无节点无边段，只为占满 3 行画布的高度。
+ *  hash 带上位置与行号：空位行在切片里可能出现两次（如只有 1 行数据时前、后都是空位），
+ *  复用同一个对象会让 GraphCanvas 内部的 React key 撞车。 */
+const emptyRow = (slot: 'prev' | 'next', index: number): LayoutRow => ({
+  commit: { hash: `__empty-${slot}-${index}__`, parents: [], refs: [] },
+  lane: 0,
+  color: 'transparent',
+  edges: [],
+});
 
 /**
  * 单行 refs chips：分支 chip 底色 = 该分支名的图列色（colorForRef，ref 名 hash → HSB 色板），
@@ -92,10 +102,15 @@ export function CommitGraph({
         if (!commit) return null;
         // 选中态：底走主题 token（controlItemBgActive），与提交详情面板当前提交一致
         const selected = selectedHash !== null && row.commit.hash === selectedHash;
-        // 画布窗口几何：切片（前一行 + 本行 + 后一行）与画布在裁剪窗口内的 top 偏移。
-        // 口径与不变量（本行圆点必须落在本行窗口中点）见 commit-graph-window.ts 与其单测。
+        // 画布窗口几何：视口高度/偏移/画布内容平移（口径与不变量见 commit-graph-window.ts 与其单测）
         const win = rowCanvasWindow(index, rows.length, ROW_HEIGHT);
-        const slicedRows = rows.slice(win.sliceStart, win.sliceStart + win.canvasRows);
+        // 画布恒画 3 行：缺失的邻居（首行的前一行 / 末行的后一行）按空位补，
+        // 否则首/末行画布变矮、圆点会跟着偏一行（实测：首行圆点会掉进第二行）
+        const slicedRows = [
+          index - 1 >= 0 ? rows[index - 1]! : emptyRow('prev', index),
+          rows[index]!,
+          index + 1 < rows.length ? rows[index + 1]! : emptyRow('next', index),
+        ];
         // 画布窗口宽度：取全量布局的最大 lane 数（GraphCanvas 自身的宽度就是这么算的）。
         // 必须显式给宽度：外框是 relative 的定高裁剪盒，若不定宽，其绝对定位的唯一子元素
         // 不参与父盒宽度计算 —— 宽度会塌成 0，整列图直接不可见（实测踩过）。
@@ -116,24 +131,35 @@ export function CommitGraph({
             onContextMenu={() => onContextMenu?.(commit.hash)}
           >
             {/*
-              画布窗口（错位修复）：GraphCanvas 每行画的是「前一行 + 本行 + 后一行」共 2~3 行高，
-              而本行只有 ROW_HEIGHT 高 —— 改造前每行是**绝对定位的定高盒子**（height: ROW_HEIGHT），
-              画布的溢出部分被隐式裁掉；换成 Listy 的普通流之后行不再裁剪，整块画布盖到上下相邻行上，
-              同一列于是出现 12px 步进的重复圆点，肉眼就是「图与右侧文字行错位」。
-              怎么做：外框定高 ROW_HEIGHT + overflow:hidden 还原裁剪面；内层画布按 win.canvasTop
-              绝对定位，使本行圆点恰落在本行窗口中点（几何见 domain/commit-graph-window.ts）。
-              不要用 top:'50%' + translateY(-50%)：那条路把画布居中在容器盒上，实测整体偏下 ~3px。
-              裁剪掉的相邻行内容由邻居行各自的窗口覆盖（窗口在行边界处首尾无缝相接），跨行连线仍连续。 */}
-            <div style={{ position: 'relative', width: graphWidth, height: ROW_HEIGHT, overflow: 'hidden', flexShrink: 0 }}>
-              <div style={{ position: 'absolute', left: 0, top: win.canvasTop }}>
-                <GraphCanvas
-                  rows={slicedRows}
-                  rowHeight={ROW_HEIGHT}
-                  laneWidth={LANE_WIDTH}
-                  // 切片起点即行偏移：边段全量行号须平移到切片局部坐标系
-                  rowOffset={win.sliceStart}
-                />
-              </div>
+              画布窗口（「图与文字行错位」+「分叉线段连接不对」两个问题的修复，几何见 domain/commit-graph-window.ts）：
+
+              ① 错位：GraphCanvas 每行画的是「前一行 + 本行 + 后一行」，而行盒只有 ROW_HEIGHT。
+                 改造前每行是绝对定位的定高盒子（隐式裁剪）；换成 Listy 的普通流后行不再裁剪，
+                 画布盖到相邻行上 —— 同一列出现 12px 步进的重复圆点，看着就是「图与文字行错位」。
+
+              ② 但不能把行盒裁成 ROW_HEIGHT：相邻行共享一段 12px 高的斜边（分叉/合流），
+                 硬裁会把斜边切成两截、各削掉一半，于是「分叉的线段连接不对」。
+
+              做法：行盒不裁剪；每行画布只画「本行 + 前一行」（win.canvasRows），整体上移一行后
+              放进一个 3×ROW_HEIGHT 高的 **SVG 视口**（overflow:hidden）——视口覆盖 [上一行顶, 下一行底]，
+              与邻居视口首尾相接、互不重叠，于是既不重复画圆点、也不切断斜边；画布内容再按
+              win.contentOffsetY 平移，使本行圆点落在视口内第二行中点（= 本行行盒中点）。 */}
+            <div style={{ position: 'relative', width: graphWidth, height: ROW_HEIGHT, flexShrink: 0 }}>
+              <svg
+                width={graphWidth}
+                height={win.viewportHeight}
+                style={{ position: 'absolute', left: 0, top: win.viewportTop, overflow: 'hidden', display: 'block' }}
+              >
+                <g transform={`translate(0 ${win.contentOffsetY})`}>
+                  <GraphCanvas
+                    rows={slicedRows}
+                    rowHeight={ROW_HEIGHT}
+                    laneWidth={LANE_WIDTH}
+                    // 切片起点即行偏移：边段全量行号须平移到切片局部坐标系
+                    rowOffset={win.sliceStart}
+                  />
+                </g>
+              </svg>
             </div>
             <span style={{ flex: 1, minWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               <RefChips refs={commit.refs} showTags={showTags} />
