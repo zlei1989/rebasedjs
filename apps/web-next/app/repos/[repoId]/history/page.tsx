@@ -8,7 +8,7 @@
  * Annotate Revision → /blame?file&rev=<hash>。
  */
 import { useHistory } from '@rebased/client';
-import { EmptyState, HistoryPanel } from '@rebased/ui';
+import { EmptyState, HistoryPanel, PageShell } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
@@ -37,7 +37,7 @@ export default function Page({
     if (trimmed !== '') setFile(trimmed);
   };
   return (
-    <Flex vertical align="flex-start" gap={8}>
+    <PageShell gap={8}>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -91,6 +91,6 @@ export default function Page({
           onAnnotate={(hash) => router.push(`/repos/${repoId}/blame?file=${encodeURIComponent(file)}&rev=${hash}`)}
         />
       )}
-    </Flex>
+    </PageShell>
   );
 }

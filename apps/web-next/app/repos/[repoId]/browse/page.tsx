@@ -8,7 +8,7 @@
  * 选中文件（onSelectFile）仅驱动内容视图（v1 不做 DiffPage from/to 联动，readFileAtRev 复用面见 browse 服务）。
  */
 import { useBrowseContent, useBrowseTree } from '@rebased/client';
-import { BrowsePanel, EmptyState } from '@rebased/ui';
+import { BrowsePanel, EmptyState, PageShell } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
@@ -44,7 +44,7 @@ export default function Page({
     }
   };
   return (
-    <Flex vertical align="flex-start" gap={8} style={{ height: '100%' }}>
+    <PageShell gap={8}>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -52,7 +52,7 @@ export default function Page({
           返回日志
         </Button>
       </Tooltip>
-      <Flex gap={8} style={{ width: '100%' }}>
+      <Flex gap={8}>
         <Tooltip title="输入提交哈希、分支或标签，回车浏览该版本的文件树">
           <Input
             data-testid="browse-rev-input"
@@ -93,6 +93,6 @@ export default function Page({
           onSelectFile={setSelectedPath}
         />
       )}
-    </Flex>
+    </PageShell>
   );
 }

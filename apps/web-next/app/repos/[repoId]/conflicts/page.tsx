@@ -17,8 +17,8 @@ import {
   useResolveConflict,
   useSkipOperation,
 } from '@rebased/client';
-import { ConflictsPanel, MergeView, continueKindLabel } from '@rebased/ui';
-import { Button, Flex, Tooltip, message, Modal, Typography } from 'antd';
+import { ConflictsPanel, MergeView, PageShell, continueKindLabel } from '@rebased/ui';
+import { Button, Tooltip, message, Modal, Typography } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
 
@@ -72,7 +72,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // 冲突列表未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!conflictList) return null;
   return (
-    <Flex vertical align="flex-start" style={{ height: '100%' }}>
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -125,6 +125,6 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
       >
         {contents ? <MergeView contents={contents} onSave={onSaveMerge} saving={resolving} /> : '加载中…'}
       </Modal>
-    </Flex>
+    </PageShell>
   );
 }

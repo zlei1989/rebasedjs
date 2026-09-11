@@ -26,7 +26,7 @@ import {
   useSubmitGithubReview,
 } from '@rebased/client';
 import { ServiceError } from '@rebased/contracts';
-import { GitHubPanel } from '@rebased/ui';
+import { GitHubPanel, PageShell } from '@rebased/ui';
 import { Alert, Button, Flex, Tabs, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, use } from 'react';
@@ -89,7 +89,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补；失败已 toast，面板不可用时静默）
   if (status === undefined) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 + 设置入口（#8：面板内 Settings 菜单入口语义） */}
       <Flex gap={8}>
         {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
@@ -194,6 +194,6 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
           />
         </>
       )}
-    </Flex>
+    </PageShell>
   );
 }

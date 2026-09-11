@@ -7,8 +7,8 @@
  * 远程列表自身不经 watcher 事件变化（远程配置不属于 refs/status 指纹）。
  */
 import { useFetch, useRemoteAction, useRemotes } from '@rebased/client';
-import { RemotePanel } from '@rebased/ui';
-import { Button, Flex, Tooltip, message } from 'antd';
+import { PageShell, RemotePanel } from '@rebased/ui';
+import { Button, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 
@@ -25,7 +25,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // 远程列表未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!remotes) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -77,6 +77,6 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         }}
         acting={acting || fetching}
       />
-    </Flex>
+    </PageShell>
   );
 }

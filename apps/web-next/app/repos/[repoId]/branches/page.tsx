@@ -7,8 +7,8 @@
  * （纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
 import { useBranchAction, useBranches, useBranchWorkingDiff, useCheckout, useCheckoutRebase, useCheckoutUpdate, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
-import { BranchPanel } from '@rebased/ui';
-import { Button, Flex, Modal, Tooltip, message } from 'antd';
+import { BranchPanel, PageShell } from '@rebased/ui';
+import { Button, Modal, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
 
@@ -94,7 +94,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // 分支列表未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!branches) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -157,6 +157,6 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         tags={tags}
         acting={actingBranch || checkingOut || fixingForcePushed || rebaseCheckingOut || updatingCheckout}
       />
-    </Flex>
+    </PageShell>
   );
 }

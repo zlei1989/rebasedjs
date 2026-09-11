@@ -5,8 +5,8 @@
  * 顶部返回按钮回日志页；保存失败经 message.error 呈现，账户增删/GPG 保存成功经 message.success 反馈（与 web-koa 容器同构）。
  */
 import { useAccounts, useDeleteAccount, useGitExecutableInfo, useGpgConfig, useRepoConfig, useSetConfig, useSetGpgConfig, useSettings, useUpsertAccount } from '@rebased/client';
-import { SettingsPage } from '@rebased/ui';
-import { Button, Flex, Tooltip, message } from 'antd';
+import { PageShell, SettingsPage } from '@rebased/ui';
+import { Button, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 
@@ -30,7 +30,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     void message.error(err instanceof Error ? err.message : String(err));
   };
   return (
-    <Flex vertical align="flex-start">
+    <PageShell density="default">
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -65,6 +65,6 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         }
         gpgSaving={gpgSaving}
       />
-    </Flex>
+    </PageShell>
   );
 }

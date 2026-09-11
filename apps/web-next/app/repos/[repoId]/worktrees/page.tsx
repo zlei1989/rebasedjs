@@ -9,8 +9,8 @@
  * 顶部返回按钮回日志页；「刷新」重取列表（mutate）；操作失败统一以服务端中文 message 提示。
  */
 import { useCreateWorktree, usePruneWorktrees, useRecentRepos, useRemoveWorktree, useWorktrees } from '@rebased/client';
-import { WorktreePanel } from '@rebased/ui';
-import { Button, Flex, Tooltip, message } from 'antd';
+import { PageShell, WorktreePanel } from '@rebased/ui';
+import { Button, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { useEffect, use } from 'react';
 
@@ -36,7 +36,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // 列表未就绪前不渲染主体（加载态壳层后续任务再补；失败已 toast，面板不可用时静默）
   if (!worktrees) return null;
   return (
-    <Flex vertical align="flex-start">
+    <PageShell>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
       <Tooltip title="返回该仓库的提交日志页">
@@ -68,6 +68,6 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         acting={acting}
         onRefresh={() => void mutateWorktrees()}
       />
-    </Flex>
+    </PageShell>
   );
 }
