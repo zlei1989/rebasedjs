@@ -1,6 +1,6 @@
 /**
  * EllipsisText 测试：断言文本渲染、等宽开关、自带 minWidth:0（flex 内截断的前提）、
- * maxWidth 守卫（含 maxWidth={0}）、**ellipsis 启用标记**与 **type 透传（承色类，成对正/反断言）**。
+ * maxWidth 守卫（含 maxWidth={0}）、**ellipsis 启用标记**与 **type / strong 透传（各成对正/反断言）**。
  *
  * 这里能断什么、不能断什么（antd 6.6.1 实测结论）：
  *
@@ -58,6 +58,31 @@ describe('EllipsisText', () => {
     unmount();
     const { container: plain } = render(<EllipsisText>origin/feature-x</EllipsisText>);
     expect(plain.querySelector('.ant-typography')).not.toHaveClass('ant-typography-secondary');
+  });
+
+  // strong 透传（Ruling P17(c)）：本来就用加粗字重呈现的长文本（如 tag-panel 的标签名）转进本原语后
+  // 必须仍然加粗——不能为了可截断而丢掉字重，也不能为保字重而放弃收缩。
+  // 与 type 同构的**成对断言**：只断「传了 strong 有痕迹」无法区分「真转发」与「实现里写死了 strong」；
+  // 反向再断「不传 strong 时该痕迹缺席」，才把两条实现路径分开。
+  // 承载方式与 type 不同，是**实测结论**（antd 6.6.1 实测，见下方 outerHTML）：
+  //   type   → 根 <span> 上的 CSS 类 `ant-typography-secondary`；
+  //   strong → **不是**类名，而是 antd 在根 <span> 内**再包一层 <strong>** 承载字重（根类名逐字不变）。
+  //   传 strong        → <span class="ant-typography ant-typography-ellipsis ant-typography-ellipsis-single-line …"
+  //                        style="min-width: 0px;"><strong>release-2026-09</strong></span>
+  //   不传 strong      → 同上一模一样的 <span …>release-2026-09</span>（**无**内层 <strong>）
+  // 故判别痕迹取「根元素内是否存在 <strong> 后代」，而非类名（类名两侧完全相同，断类名不可判别）。
+  it('strong 转发到 antd：传 strong 内层多一个 strong 元素，未传则没有', () => {
+    const { container, unmount } = render(<EllipsisText strong>release-2026-09</EllipsisText>);
+    const el = container.querySelector('.ant-typography') as HTMLElement;
+    // 正向：转发真的到达 DOM —— antd 用内层 <strong> 承载字重
+    expect(el.querySelector('strong')).not.toBeNull();
+    expect(el.querySelector('strong')!.textContent).toBe('release-2026-09');
+    // 顺带守住「转发 strong 不该弄丢截断」：两件事必须同时成立
+    expect(el).toHaveClass('ant-typography-ellipsis');
+
+    unmount();
+    const { container: plain } = render(<EllipsisText>release-2026-09</EllipsisText>);
+    expect(plain.querySelector('.ant-typography')!.querySelector('strong')).toBeNull();
   });
 
   it('maxWidth 落 style', () => {
