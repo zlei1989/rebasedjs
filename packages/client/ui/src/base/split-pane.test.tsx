@@ -5,8 +5,9 @@
  * 定位口径：`data-testid="split-side-host"` / `"split-main-host"` 落在 **宿主 div**（承载
  * width/flex/overflow 的那一层，由本组件渲染）；测试里作为 `side` / `children` 传入的
  * `data-testid="split-side"` / `"split-main"` 是**业务子节点**，不是宿主。
- * 本组件自己写进 style 的属性（width / flexShrink / flexGrow / minWidth / overflow）
- * 故一律断内联串，不走 getComputedStyle。
+ * 本组件自己写进 style 的属性（width / flex / flexShrink / flexGrow / minWidth / minHeight / overflow）
+ * 故一律断内联串；惟 `flexDirection` 由 antd `Flex vertical` 的类名控制，按 Tasks 3–5 的既定规则
+ * 断 getComputedStyle 计算值。
  */
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -87,6 +88,54 @@ describe('SplitPane', () => {
     const { side, main } = hosts();
     expect(side.style.overflow).toBe('auto');
     expect(main.style.overflow).toBe('auto');
+  });
+
+  // 窄屏分支的头号行为：容器必须是**列**。若 `vertical` 从 <Flex vertical …> 上被删掉，
+  // 容器退回 row，两个 width:100% 的孩子就会并排 —— 正是本任务要消灭的横向溢出，
+  // 而下面「都占满宽度」的断言对此毫无察觉（它只看 width）。故此处断言 flexDirection。
+  it('窄屏：塌缩后的根容器是纵向（column）容器', () => {
+    stubViewport(true);
+    const { container } = render(
+      <SplitPane side={<span data-testid="split-side">侧</span>}>
+        <span data-testid="split-main">主</span>
+      </SplitPane>,
+    );
+    const root = container.firstElementChild as HTMLElement;
+    expect(getComputedStyle(root).flexDirection).toBe('column');
+  });
+
+  // 窄屏两侧都必须能内部滚动、且都留出高度预算（minHeight:0），
+  // 否则高度由内容决定、overflow:auto 永不生效（宽屏那条 overflow 用例覆盖不到这一分支）。
+  it('窄屏：两侧都保留内部滚动并留出高度预算', () => {
+    stubViewport(true);
+    render(
+      <SplitPane side={<span data-testid="split-side">侧</span>}>
+        <span data-testid="split-main">主</span>
+      </SplitPane>,
+    );
+    const { side, main } = hosts();
+    expect(side.style.overflow).toBe('auto');
+    expect(main.style.overflow).toBe('auto');
+    expect(side.style.minHeight).toBe('0px');
+    expect(main.style.minHeight).toBe('0px');
+  });
+
+  // 窄屏两侧都不得被压成 0 高：等分高度靠 flex-basis:0（flex 简写 '1 1 0'）。
+  // 若某一侧退回旧几何（侧栏 flexShrink:0 无高度预算 / 主区 basis:0% 又不可伸），
+  // 该侧要么吃满内容高度要么解析为 0，此断言即失败。
+  it('窄屏：两侧等分高度且都可伸缩（flex:1 1 0）', () => {
+    stubViewport(true);
+    render(
+      <SplitPane side={<span data-testid="split-side">侧</span>}>
+        <span data-testid="split-main">主</span>
+      </SplitPane>,
+    );
+    const { side, main } = hosts();
+    for (const host of [side, main]) {
+      expect(host.style.flexGrow).toBe('1');
+      expect(host.style.flexShrink).toBe('1');
+      expect(host.style.flexBasis).toBe('0%');
+    }
   });
 
   // sideWidth 由调用点给出（browse 300 / log 320），断言它真的落到宿主宽度上，
