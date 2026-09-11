@@ -40,6 +40,7 @@ import type {
   PatchCreateBody,
   RepoStatus,
 } from '@rebased/contracts';
+import { PageShell } from '../base/page-shell';
 
 export interface StatusPageProps {
   status: RepoStatus;
@@ -975,8 +976,13 @@ export function StatusPage({
     if (action === 'delete') onChangelistAction({ action: 'delete', id });
   };
 
+  // 页面根：PageShell 自带纵向 Flex + width:100% + minWidth:0 + height:100%。
+  // StatusPage 是**被嵌入**的页面（两端宿主 apps/web-koa/src/pages/status.tsx:129 与
+  // apps/web-next/app/repos/[repoId]/status/page.tsx:131 都是自带布局根的 <Flex vertical align="flex-start">），
+  // 故按 Ruling P1 传 density="default"：只豁免密度，不在这里施加紧凑主题。
+  // gap/padding 照抄既有值 16（PageShell 默认不落 style，不传会静默丢掉内距）。
   return (
-    <Flex vertical gap={16} style={{ padding: 16 }}>
+    <PageShell density="default" gap={16} padding={16}>
       {/* 页头工具条：变更列表管理入口（仅 changelists 模式渲染）+ 页级动作（搁置/存入贮藏——全量工作区+暂存，不依赖勾选） */}
       <Flex gap={8} align="center">
         {changelistMode && (
@@ -1206,6 +1212,6 @@ export function StatusPage({
         }}
         onClose={() => setRenameTarget(null)}
       />
-    </Flex>
+    </PageShell>
   );
 }

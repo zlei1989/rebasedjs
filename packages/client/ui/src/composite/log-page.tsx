@@ -14,6 +14,8 @@ import type { MenuProps } from 'antd';
 import type { CommitInfo, CommittedEntry, OperationState, RepoStatus } from '@rebased/contracts';
 import { OperationStatus } from '../base/operation-status';
 import { EmptyState } from '../base/empty-state';
+import { PageShell } from '../base/page-shell';
+import { SplitPane } from '../base/split-pane';
 import { RepoStatusBar } from '../domain/repo-status-bar';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
@@ -344,8 +346,59 @@ export function LogPage({
     else if (key === 'worktrees') onOpenWorktrees?.();
     else if (key === 'submodules') onOpenSubmodules?.();
   };
+  // 主区（提交图）：与右侧详情面板共同构成两栏——宽屏并排、窄屏纵向堆叠由 SplitPane 承担。
+  // 提取成变量是因为详情面板按需出现（未选中提交时整块不渲染），而 SplitPane 的侧栏宿主恒存在：
+  // 把条件放进 side 会让默认视图（未选中）右侧永久留一条 320px 空列，故两栏块整体按需切换。
+  const graphArea = (
+    <>
+      {/* 空仓（unborn HEAD，如刚 init）与过滤无命中：显式空态——否则整片空白无法区分「在加载」与「没有提交」 */}
+      {commits.length === 0 ? (
+        <EmptyState title="暂无提交" description="该仓库还没有任何提交，或当前过滤条件没有匹配结果" />
+      ) : (
+        /* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
+           antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */
+        <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
+          {/* 提交图整块也要有 tooltip（行点击/右键由图上每一行承载）。
+              Tooltip 的 child 必须能接 ref 与 hover 事件：刻意交给下面这层真实 div 承接，
+              而不是把函数组件 CommitGraph 直接当子节点（那样拿不到 ref，气泡不会出现）。
+              open 受控：指针落进某一行时抑制整图气泡，行自带的气泡才是这一刻该显示的那个 */}
+          <Tooltip
+            open={graphHovered && !graphRowHovered}
+            title="提交图区域：单击某行可查看该提交详情，右键某行可打开该提交的操作菜单"
+          >
+            <div
+              style={{ height: '100%' }}
+              onMouseEnter={() => setGraphHovered(true)}
+              onMouseLeave={() => {
+                setGraphHovered(false);
+                setGraphRowHovered(false);
+              }}
+              // onMouseOver 会冒泡：用事件目标判断指针是否落在提交行（commit-graph 渲染的 data-testid）上
+              onMouseOver={(event) => {
+                const target = event.target;
+                setGraphRowHovered(
+                  target instanceof Element && target.closest('[data-testid="commit-graph-row"]') !== null,
+                );
+              }}
+            >
+              <CommitGraph
+                commits={commits}
+                onSelect={onSelectCommit}
+                onContextMenu={setMenuHash}
+                showTags={showTags}
+                selectedHash={selectedCommit?.hash ?? null}
+              />
+            </div>
+          </Tooltip>
+        </Dropdown>
+      )}
+    </>
+  );
+  // 页面根：PageShell 自带纵向 Flex + width:100% + minWidth:0 + height:100%（并施加紧凑密度）。
+  // LogPage 是路由根（两端容器均以裸 fragment 直接渲染它），故密度归本页所有——不传 density 即默认 compact。
+  // 原根节点既无 gap 也无 padding，故这里都不传（PageShell 默认不落 style，传了会凭空新增间距）。
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <PageShell>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}>
         {/* 回首页（File→Close Project 语义）：顶栏最左「首页」链接；仅容器注入回调时渲染 */}
         {onGoHome ? (
@@ -543,66 +596,32 @@ export function LogPage({
           ) : null}
         </div>
       ) : null}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
-          {/* 空仓（unborn HEAD，如刚 init）与过滤无命中：显式空态——否则整片空白无法区分「在加载」与「没有提交」 */}
-          {commits.length === 0 ? (
-            <EmptyState title="暂无提交" description="该仓库还没有任何提交，或当前过滤条件没有匹配结果" />
-          ) : (
-            /* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
-               antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */
-            <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
-              {/* 提交图整块也要有 tooltip（行点击/右键由图上每一行承载）。
-                  Tooltip 的 child 必须能接 ref 与 hover 事件：刻意交给下面这层真实 div 承接，
-                  而不是把函数组件 CommitGraph 直接当子节点（那样拿不到 ref，气泡不会出现）。
-                  open 受控：指针落进某一行时抑制整图气泡，行自带的气泡才是这一刻该显示的那个 */}
-              <Tooltip
-                open={graphHovered && !graphRowHovered}
-                title="提交图区域：单击某行可查看该提交详情，右键某行可打开该提交的操作菜单"
-              >
-                <div
-                  style={{ height: '100%' }}
-                  onMouseEnter={() => setGraphHovered(true)}
-                  onMouseLeave={() => {
-                    setGraphHovered(false);
-                    setGraphRowHovered(false);
-                  }}
-                  // onMouseOver 会冒泡：用事件目标判断指针是否落在提交行（commit-graph 渲染的 data-testid）上
-                  onMouseOver={(event) => {
-                    const target = event.target;
-                    setGraphRowHovered(
-                      target instanceof Element && target.closest('[data-testid="commit-graph-row"]') !== null,
-                    );
-                  }}
-                >
-                  <CommitGraph
-                    commits={commits}
-                    onSelect={onSelectCommit}
-                    onContextMenu={setMenuHash}
-                    showTags={showTags}
-                    selectedHash={selectedCommit?.hash ?? null}
-                  />
-                </div>
-              </Tooltip>
-            </Dropdown>
-          )}
-        </div>
-        {selectedCommit ? (
-          <div
-            data-testid="commit-details"
-            style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${token.colorSplit}`, overflow: 'auto' }}
-          >
-            <CommitDetailsPanel
-              commit={selectedCommit}
-              onResetHere={onResetHere}
-              onCherryPick={onCherryPick}
-              onRevert={onRevert}
-              onBrowse={onBrowse}
-              onOpenChanges={onOpenChanges}
-            />
-          </div>
-        ) : null}
-      </div>
+      {/* 两栏：主区（提交图）+ 右侧详情面板（320）；未选中提交时退化为主区独占满宽 */}
+      {selectedCommit ? (
+        <SplitPane
+          sidePosition="end"
+          sideWidth={320}
+          side={
+            /* 分隔线是侧栏自身的视觉分隔（SplitPane 只做布局、不画线），故保留在调用点；
+               宽度 320 / flexShrink:0 / 内部滚动均已由 SplitPane 的侧栏宿主承担，此处不再重复 */
+            <div data-testid="commit-details" style={{ borderLeft: `1px solid ${token.colorSplit}` }}>
+              <CommitDetailsPanel
+                commit={selectedCommit}
+                onResetHere={onResetHere}
+                onCherryPick={onCherryPick}
+                onRevert={onRevert}
+                onBrowse={onBrowse}
+                onOpenChanges={onOpenChanges}
+              />
+            </div>
+          }
+        >
+          {graphArea}
+        </SplitPane>
+      ) : (
+        /* 未选中提交：不渲染侧栏宿主，主区独占满宽（盒子几何与 SplitPane 的主区宿主一致） */
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' }}>{graphArea}</div>
+      )}
       {/* 行右键 Modal：从此处新建分支（创建+检出语义由容器经 checkout newBranch 承载）/ 新建标签（附注可选） */}
       <Modal
         title="从此处新建分支"
@@ -733,6 +752,6 @@ export function LogPage({
           </Flex>
         )}
       </Modal>
-    </div>
+    </PageShell>
   );
 }
