@@ -100,9 +100,10 @@ export function BranchCompareView({
         )}
       </Flex>
       {/* 两栏并排容器（非页面根——上面的 PageShell 才是页面根）：两栏各 flex:1 + minWidth:320，
-          窄屏交给 wrap 换行。刻意不写 align="flex-start"：本层是横向 Flex、交叉轴为纵向，
-          该属性只决定两栏是否等高拉伸，对「横向沾满」本就无影响（根因写法只存在于纵向 Flex 根）。 */}
-      <Flex gap={16} wrap="wrap">
+          窄屏交给 wrap 换行。保留 align="flex-start" 是有意的：本层是横向 Flex、交叉轴为纵向，
+          故该属性意为「两栏顶部对齐」（不拉伸高度），对「横向沾满」没有任何影响——
+          宽度根因只存在于纵向 Flex（交叉轴为水平），那是页面根，已由上面的 PageShell 修复。 */}
+      <Flex gap={16} align="flex-start" wrap="wrap">
         <Flex vertical gap={16} style={{ flex: 1, minWidth: 320 }}>
           <CompareCard
             title="分支独有"
