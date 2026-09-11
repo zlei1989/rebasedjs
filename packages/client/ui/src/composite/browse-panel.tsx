@@ -90,13 +90,25 @@ export function BrowsePanel({
       ) : !entries || entries.length === 0 ? (
         <EmptyState title="该版本没有文件" />
       ) : (
-        /* 两栏改 SplitPane：侧栏在左（sidePosition 默认 'start'）、宽 300。
+        /* 两栏改 SplitPane：侧栏在左（sidePosition 默认 'start'）、宽 300、栏间距 12（gap）。
            写死宽度 + flexShrink:0 的侧栏正是窄屏横向溢出的结构性成因，改由原语在过窄视口堆叠；
-           原主区 Card 的 flex:1/minWidth:0 与两卡各自的 overflow:'auto' 均由 SplitPane 宿主承担，故不再重复声明。 */
+           原主区 Card 的 flex:1/minWidth:0 与侧栏 Card 的 width:300/flexShrink:0 由 SplitPane 两个宿主承担，故不再重复声明。
+           两张 Card 仍各带 height:'100%' + overflow:'auto' —— 这是**复刻迁移前的视觉**，不是可删的冗余：
+           迁移前两卡是行容器的 flex 子项，被默认 align-items:stretch 拉伸到整栏高，Card 自身的 overflow:'auto'
+           在 Card 上滚动其内容（= 卡撑满整栏、内容在卡内滚）。改成宿主 div 的普通子元素后，它们退回内容高
+           （栏看着没撑满），且滚动落到宿主上，整张卡连同标题（如「文件（N）」）一起滚走 —— 对文件树是真实退化。
+           height:'100%' 等价还原「被 stretch 拉伸」（宿主是撑满的 flex 子项、高度确定，百分比高度可解析），
+           overflow:'auto' 把滚动还到 Card 自己身上；宿主的 overflow:'auto' 随之惰性（卡恰为 100% 高，永不溢出
+           宿主），无害，故不改 SplitPane 原语。 */
         <SplitPane
           sideWidth={300}
+          gap={12}
           side={
-            <Card size="small" title={`文件（${entries.length}）`}>
+            <Card
+              size="small"
+              title={`文件（${entries.length}）`}
+              style={{ height: '100%', overflow: 'auto' }}
+            >
               {/* FileTree 是复合组件（不转发 ref / 不落 DOM 事件），Tooltip 需要真实节点承载 hover，
                   故在中间包一层 block span 作为悬停宿主（布局等同原 div，尺寸不变）。 */}
               <Tooltip title={FILE_TREE_TOOLTIP}>
@@ -114,6 +126,7 @@ export function BrowsePanel({
         >
           <Card
             size="small"
+            style={{ height: '100%', overflow: 'auto' }}
             title={
               selectedPath !== undefined ? (
                 /* 长路径改 EllipsisText：Card 标题横向被长路径撑宽曾是主区溢出来源之一；
