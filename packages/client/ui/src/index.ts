@@ -10,6 +10,7 @@ export {
 } from './base/monaco-diff-view';
 export { MonacoTextView, type MonacoTextViewProps } from './base/monaco-text-view';
 export { EmptyState, type EmptyStateProps } from './base/empty-state';
+export { COMPACT_FONT_TOKENS, compactTheme, type DensityMode } from './base/density';
 export { OperationStatus, type OperationStatusProps } from './base/operation-status';
 export * from './graph-layout';
 export { CommitGraph, type CommitGraphProps } from './domain/commit-graph';
