@@ -74,3 +74,4 @@ export { relativeToHome } from './composite/repo-page-utils';
 export { DensityProvider, useDensityMode, type DensityProviderProps } from './base/density-context';
 export { PageShell, type PageShellProps } from './base/page-shell';
 export { Toolbar, type ToolbarProps } from './base/toolbar';
+export { EllipsisText, type EllipsisTextProps } from './base/ellipsis-text';
