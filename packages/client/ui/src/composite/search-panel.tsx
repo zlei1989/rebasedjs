@@ -4,9 +4,11 @@
  *  分支快速搜索（Search Everywhere Git tab 语义）：分支输入即滤（文本即滤约定同 LogPage），
  *  行点击 → onSelectBranch（容器做检出/导航）。
  *  q 与 mode 为组件内简单状态（接口无对应受控 prop）；results/searching/error 与全部回调由容器注入。
+ *  结果列表与分支快速搜索结果列表均走 antd Listy（6.6.0 起）：行容器/悬停底色由组件负责，
+ *  调用方只给数据与行内容；行级 Tooltip 按产品口径不挂（行内按钮的 Tooltip 保留）。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Segmented, Spin, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Input, Listy, Segmented, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { BranchRef, SearchMode, SearchResult } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { PageShell } from '../base/page-shell';
@@ -42,30 +44,30 @@ function ResultRow({
   onSelectCommit?: (hash: string) => void;
 }): React.ReactNode {
   return (
-    /* 整行可点（未注入 onSelectCommit 时不挂有效回调）→ 行 Tooltip 说明点击后果；
-       Flex 是 antd 容器组件，脚本按容器豁免，这里按「可点行」口径人工补上 */
-    <Tooltip title={onSelectCommit ? '打开该提交：跳到提交日志并选中这一条' : undefined}>
-      <Flex
-        data-testid={`search-result-${index}`}
-        align="center"
-        gap={8}
-        style={{ padding: '4px 0', cursor: onSelectCommit ? 'pointer' : undefined }}
-        onClick={() => onSelectCommit?.(result.hash)}
-      >
-        <Typography.Text code style={{ flexShrink: 0 }}>
-          {result.shortHash}
-        </Typography.Text>
-        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-          {result.subject}
-        </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {result.author}
-        </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {formatCommitDate(result.dateIso)}
-        </Typography.Text>
-      </Flex>
-    </Tooltip>
+    /* 行内边距（原 `padding: '4px 0'`）留在**可点元素自身**：下沉到 Listy 的 `styles.item` 会让那圈内边距
+       落在包装 div 上（不属本元素命中区，点在内边距上不触发行选中）；
+       `cursor` 逐行不同（未注入 onSelectCommit 时不可点）故留在行元素上。
+       整行可点（未注入 onSelectCommit 时不挂有效回调）；行级 Tooltip 按产品口径不挂。 */
+    <Flex
+      data-testid={`search-result-${index}`}
+      align="center"
+      gap={8}
+      style={{ padding: '4px 0', cursor: onSelectCommit ? 'pointer' : undefined }}
+      onClick={() => onSelectCommit?.(result.hash)}
+    >
+      <Typography.Text code style={{ flexShrink: 0 }}>
+        {result.shortHash}
+      </Typography.Text>
+      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+        {result.subject}
+      </Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        {result.author}
+      </Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        {formatCommitDate(result.dateIso)}
+      </Typography.Text>
+    </Flex>
   );
 }
 
@@ -96,25 +98,28 @@ function BranchQuickSearch({
         {matched.length === 0 ? (
           <Typography.Text type="secondary">无匹配分支</Typography.Text>
         ) : (
-          <Flex vertical>
-            {matched.map((b) => (
-              /* 整行可点 → 行 Tooltip 说明点击后果（分支名本身不自解释「点了会怎样」） */
-              <Tooltip key={b.name} title={b.current ? '当前分支：重新检出到它并跳到其提交日志' : `检出分支 ${b.name} 并跳到其提交日志`}>
-                <Flex
-                  data-testid={`branch-quick-${b.name}`}
-                  align="center"
-                  gap={8}
-                  style={{ cursor: 'pointer', padding: '4px 0' }}
-                  onClick={() => onSelectBranch(b.name)}
-                >
-                  <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-                    {b.name}
-                  </Typography.Text>
-                  {b.current && <Tag color="green">当前</Tag>}
-                </Flex>
-              </Tooltip>
-            ))}
-          </Flex>
+          // 分支行列表走 antd Listy：行容器（下边框/悬停底色/内边距）由组件负责，
+          // 行级 Tooltip 按产品口径不挂；`cursor: pointer` 留在行元素上（逐行语义）。
+          <Listy
+            items={matched}
+            rowKey={(branch) => branch.name}
+            itemRender={(branch) => (
+              <Flex
+                data-testid={`branch-quick-${branch.name}`}
+                align="center"
+                gap={8}
+                style={{ cursor: 'pointer' }}
+                onClick={() => onSelectBranch(branch.name)}
+              >
+                <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+                  {branch.name}
+                </Typography.Text>
+                {branch.current && <Tag color="green">当前</Tag>}
+              </Flex>
+            )}
+            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Flex>
     </Card>
@@ -193,11 +198,18 @@ export function SearchPanel({
         </Typography.Text>
       ) : results && results.length > 0 ? (
         <Card size="small" title={`搜索结果（${results.length}）`}>
-          <Flex vertical>
-            {results.map((result, index) => (
-              <ResultRow key={result.hash} result={result} index={index} onSelectCommit={onSelectCommit} />
-            ))}
-          </Flex>
+          {/* 结果列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：容器/行结构/悬停底色由组件负责，
+              调用方只给数据与行内容，不再手写 flex 行。原实现无虚拟滚动/加载更多分页语义，
+              故按原语义不启用 virtual/height（长列表仍全量渲染，行为不变）。 */}
+          <Listy
+            items={results}
+            rowKey={(result) => result.hash}
+            itemRender={(result, index) => (
+              <ResultRow result={result} index={index} onSelectCommit={onSelectCommit} />
+            )}
+            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+            styles={{ item: { padding: '4px 0' } }}
+          />
         </Card>
       ) : (
         /* results 未注入 = 尚未搜索，与搜索无命中（空数组）区分文案 */

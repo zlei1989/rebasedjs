@@ -5,6 +5,8 @@
  *  并开启行级「移动到列表」与页头「管理列表」（新建/重命名/设默认/删除）入口。
  *  补丁预览：选中文件显示 unified diff；onHunkStaging 提供时开启行内 hunk 选择（勾选 hunk →
  *  暂存/取消暂存/放弃选中，与文件级操作并行），切片经 contracts 共享函数（服务端索引同源）。
+ *  变更行列表统一走 antd Listy（6.6.0 起的列表组件，取代老 List）：容器/行结构/悬停底色由组件负责，
+ *  调用方只给数据与行内容；行不挂 Tooltip（行内按钮的 Tooltip 保留）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入 hooks。
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -17,6 +19,7 @@ import {
   Dropdown,
   Flex,
   Input,
+  Listy,
   Modal,
   Popconfirm,
   Select,
@@ -155,6 +158,14 @@ export function groupByChangelist(entries: ChangeEntry[], view: ChangelistView):
 /** 三组内部标识：决定徽标取码（staged 取 X 列、unstaged 取 Y 列、untracked 无码）与 onSelectPatch 的 staged 参数 */
 type ChangeGroupKind = 'staged' | 'unstaged' | 'untracked';
 
+/**
+ * 变更行容器的 Listy 样式（必须是静态对象：styles 不支持按行取值）。
+ * 行内边距**不在这里**：`styles.item` 作用在 Listy 的包装 div 上，那圈内边距既不属于行元素命中区、
+ * 也不会随行的选中底色一起亮，故内边距留在 `renderRow` 的行元素上（`padding: '4px 0'`，与改造前一致）；
+ * 下边框与悬停底色走组件默认样式。
+ */
+const ROW_STYLES = { item: { padding: 0 } };
+
 /** 行内 code 徽标：取该组语义对应的列字符（重命名 R、新增 A、修改 M、删除 D、类型变更 T、未跟踪 ?） */
 function codeBadge(entry: ChangeEntry, group: ChangeGroupKind): string {
   if (group === 'staged') return entry.code[0] ?? '?';
@@ -196,10 +207,6 @@ function ChangeGroup({
   onOpenHistory?: (path: string) => void;
 }): React.ReactNode {
   const [selected, setSelected] = useState<string[]>([]);
-  /** 悬停中的行路径：整行可点（选中预览/双击看差异）需行级气泡，但只在指针落在行本身时弹 */
-  const [rowHover, setRowHover] = useState<string | null>(null);
-  /** 悬停中的行内操作区所在行路径：行气泡与行内控件气泡互斥，否则两个气泡会同时弹出（参考 repo-page 的 hoverId/actionHoverId） */
-  const [actionHover, setActionHover] = useState<string | null>(null);
   /**
    * 「移动到列表」菜单展开中的行路径：展开期间抑制该行按钮的气泡。
    * 原因同「管理列表」：气泡与菜单同侧时会压住菜单顶部若干项，菜单项既点不到也出不了自己的气泡。
@@ -207,12 +214,6 @@ function ChangeGroup({
   const [moveMenuPath, setMoveMenuPath] = useState<string | null>(null);
   const paths = useMemo(() => entries.map((e) => e.path), [entries]);
   const allChecked = entries.length > 0 && selected.length === entries.length;
-
-  /** 行内操作区（勾选/行按钮）的悬停追踪属性：只做悬停反馈（不拦点击），用于抑制行气泡 */
-  const actionHoverProps = (path: string): { onMouseEnter: () => void; onMouseLeave: () => void } => ({
-    onMouseEnter: () => setActionHover(path),
-    onMouseLeave: () => setActionHover(null),
-  });
 
   /** 组内变更列表子分组：仅在提供 changelists 时计算 */
   const byChangelist = useMemo(
@@ -225,7 +226,12 @@ function ChangeGroup({
     setSelected((prev) => (checked ? [...prev, path] : prev.filter((p) => p !== path)));
   };
 
-  /** 单行渲染：勾选 + 路径 + code 徽标 +（可选）「移动到列表」行操作 */
+  /**
+   * 单行渲染（Listy itemRender）：勾选 + 路径 + code 徽标 +（可选）行操作。
+   * 行**不挂 Tooltip**（产品口径同 repo-page：行级气泡会与行内按钮气泡在同一块悬停区叠弹，
+   * 且行内已有勾选/移动/忽略/三版本/注解/历史等自述按钮），故原先驱动行气泡的 rowHover/actionHover
+   * 状态一并删除；行容器的悬停底色由 Listy 自带的 `:hover` 承担，内边距仍归行元素（见下方注释）。
+   */
   const renderRow = (entry: ChangeEntry): React.ReactNode => {
     /** 移动目标 = 非当前列表（当前在默认列表时可移往各普通列表，反之含默认列表） */
     const moveTargets: Changelist[] =
@@ -239,126 +245,112 @@ function ChangeGroup({
       onChangelistAction?.({ action: 'move', paths: movePaths, targetId });
     };
 
-    /** 行是否真有可点行为：两个回调都没接时不给行气泡（提示一个点了没反应的区域没有意义） */
-    const clickable = onSelectPatch !== undefined || onOpenDiff !== undefined;
-
     return (
-      // 整行可点（单击选中预览 / 双击看差异）且行内还有勾选与多个操作按钮：
-      // 行 Tooltip 用受控 open——只在指针落在行本身、且不在行内操作区上时弹，
-      // 否则行气泡会与勾选/按钮气泡同时弹出互相遮挡（参考 repo-page.tsx 的 hoverId / actionHoverId 写法）。
-      // key 必须挂在这一层：Tooltip 成为 map 生成的最外层元素
-      <Tooltip
-        key={entry.path}
-        open={clickable && rowHover === entry.path && actionHover !== entry.path}
-        title={clickable ? '单击在右侧预览该文件的补丁，双击打开版本差异对比' : undefined}
+      // 整行可点（单击选中预览 / 双击看差异）：行内边距留在**可点元素自身**（下沉到 Listy 的 styles.item
+      // 会让那圈内边距落在包装 div 上，不属本元素命中区），逐行差异（cursor）一并留在行元素上
+      <Flex
+        data-testid={`row-${group}-${entry.path}`}
+        align="center"
+        gap={8}
+        style={{ padding: '4px 0', cursor: 'pointer' }}
+        onClick={() => onSelectPatch?.(entry.path, group === 'staged')}
+        onDoubleClick={() => onOpenDiff?.(entry.path, group === 'staged')}
       >
-        <Flex
-          data-testid={`row-${group}-${entry.path}`}
-          align="center"
-          gap={8}
-          style={{ cursor: 'pointer', padding: '4px 0' }}
-          // 纯悬停反馈（不改变点击/双击行为）：驱动上面受控的行气泡
-          onMouseEnter={() => setRowHover(entry.path)}
-          onMouseLeave={() => setRowHover(null)}
-          onClick={() => onSelectPatch?.(entry.path, group === 'staged')}
-          onDoubleClick={() => onOpenDiff?.(entry.path, group === 'staged')}
-        >
-          {/* 勾选不应触发行选中预览：阻止点击冒泡到行；同时悬停时抑制行气泡（勾选自带气泡） */}
-          <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
-            <Tooltip title="勾选该文件加入本组批量操作集合（与右侧预览选中互不影响）">
-              <Checkbox
-                data-testid={`check-${group}-${entry.path}`}
-                checked={selected.includes(entry.path)}
-                onChange={(e) => toggle(entry.path, e.target.checked)}
-              />
+        {/* 勾选不应触发行选中预览：阻止点击冒泡到行 */}
+        <Flex onClick={(e) => e.stopPropagation()}>
+          <Tooltip title="勾选该文件加入本组批量操作集合（与右侧预览选中互不影响）">
+            <Checkbox
+              data-testid={`check-${group}-${entry.path}`}
+              checked={selected.includes(entry.path)}
+              onChange={(e) => toggle(entry.path, e.target.checked)}
+            />
+          </Tooltip>
+        </Flex>
+        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+          {entry.path}
+        </Typography.Text>
+        <Tag>{codeBadge(entry, group)}</Tag>
+        {/* 「移动到列表」行操作：仅 changelists 模式渲染；无可用目标（仅默认列表且在默认列表）时禁用 */}
+        {changelists !== undefined && onChangelistAction !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Dropdown
+              trigger={['click']}
+              disabled={moveTargets.length === 0}
+              onOpenChange={(open) => setMoveMenuPath(open ? entry.path : null)}
+              menu={{
+                items: moveTargets.map((l) => ({ key: l.id, label: l.name })),
+                onClick: ({ key }) => move(key),
+              }}
+            >
+              {/* Tooltip 放 Dropdown 内层（Dropdown > Tooltip > Button）：不打断 Dropdown 的触发链；
+                  菜单展开时抑制气泡，避免翻到下方压住菜单项 */}
+              <Tooltip
+                title="把该文件指派到其它变更列表（该行已勾选时，连同其它勾选项一起移动）"
+                open={moveMenuPath === entry.path ? false : undefined}
+              >
+                <Button size="small" type="text" data-testid={`move-${group}-${entry.path}`}>
+                  移动到列表
+                </Button>
+              </Tooltip>
+            </Dropdown>
+          </Flex>
+        )}
+        {/* 「忽略」行操作：仅未跟踪组渲染（缺省不渲染，向后兼容）；点击不触发行选中 */}
+        {group === 'untracked' && onIgnore !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Tooltip title="把该文件写入 .gitignore，之后不再作为未跟踪变更出现">
+              <Button size="small" type="text" data-testid={`ignore-${group}-${entry.path}`} onClick={() => onIgnore(entry.path)}>
+                忽略
+              </Button>
             </Tooltip>
           </Flex>
-          <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-            {entry.path}
-          </Typography.Text>
-          <Tag>{codeBadge(entry, group)}</Tag>
-          {/* 「移动到列表」行操作：仅 changelists 模式渲染；无可用目标（仅默认列表且在默认列表）时禁用 */}
-          {changelists !== undefined && onChangelistAction !== undefined && (
-            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
-              <Dropdown
-                trigger={['click']}
-                disabled={moveTargets.length === 0}
-                onOpenChange={(open) => setMoveMenuPath(open ? entry.path : null)}
-                menu={{
-                  items: moveTargets.map((l) => ({ key: l.id, label: l.name })),
-                  onClick: ({ key }) => move(key),
-                }}
+        )}
+        {/* 「三版本」行操作：已暂存/工作区组渲染（未跟踪无版本三侧可对比）；点击不触发行选中 */}
+        {group !== 'untracked' && onOpenThreeWay !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Tooltip title="并排对比该文件的 HEAD / 暂存区 / 工作区三个版本">
+              <Button
+                size="small"
+                type="text"
+                data-testid={`three-way-${group}-${entry.path}`}
+                onClick={() => onOpenThreeWay(entry.path)}
               >
-                {/* Tooltip 放 Dropdown 内层（Dropdown > Tooltip > Button）：不打断 Dropdown 的触发链；
-                    菜单展开时抑制气泡，避免翻到下方压住菜单项 */}
-                <Tooltip
-                  title="把该文件指派到其它变更列表（该行已勾选时，连同其它勾选项一起移动）"
-                  open={moveMenuPath === entry.path ? false : undefined}
-                >
-                  <Button size="small" type="text" data-testid={`move-${group}-${entry.path}`}>
-                    移动到列表
-                  </Button>
-                </Tooltip>
-              </Dropdown>
-            </Flex>
-          )}
-          {/* 「忽略」行操作：仅未跟踪组渲染（缺省不渲染，向后兼容）；点击不触发行选中 */}
-          {group === 'untracked' && onIgnore !== undefined && (
-            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
-              <Tooltip title="把该文件写入 .gitignore，之后不再作为未跟踪变更出现">
-                <Button size="small" type="text" data-testid={`ignore-${group}-${entry.path}`} onClick={() => onIgnore(entry.path)}>
-                  忽略
-                </Button>
-              </Tooltip>
-            </Flex>
-          )}
-          {/* 「三版本」行操作：已暂存/工作区组渲染（未跟踪无版本三侧可对比）；点击不触发行选中 */}
-          {group !== 'untracked' && onOpenThreeWay !== undefined && (
-            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
-              <Tooltip title="并排对比该文件的 HEAD / 暂存区 / 工作区三个版本">
-                <Button
-                  size="small"
-                  type="text"
-                  data-testid={`three-way-${group}-${entry.path}`}
-                  onClick={() => onOpenThreeWay(entry.path)}
-                >
-                  三版本
-                </Button>
-              </Tooltip>
-            </Flex>
-          )}
-          {/* 「注解」行操作（Annotate 语义）；点击不触发行选中 */}
-          {onOpenAnnotate !== undefined && (
-            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
-              <Tooltip title="打开该文件的逐行溯源页（blame），查看每行的最后修改提交">
-                <Button
-                  size="small"
-                  type="text"
-                  data-testid={`annotate-${group}-${entry.path}`}
-                  onClick={() => onOpenAnnotate(entry.path)}
-                >
-                  注解
-                </Button>
-              </Tooltip>
-            </Flex>
-          )}
-          {/* 「历史」行操作（Show History 语义）；点击不触发行选中 */}
-          {onOpenHistory !== undefined && (
-            <Flex onClick={(e) => e.stopPropagation()} {...actionHoverProps(entry.path)}>
-              <Tooltip title="打开该文件的提交历史页，查看它的历次变更记录">
-                <Button
-                  size="small"
-                  type="text"
-                  data-testid={`history-${group}-${entry.path}`}
-                  onClick={() => onOpenHistory(entry.path)}
-                >
-                  历史
-                </Button>
-              </Tooltip>
-            </Flex>
-          )}
-        </Flex>
-      </Tooltip>
+                三版本
+              </Button>
+            </Tooltip>
+          </Flex>
+        )}
+        {/* 「注解」行操作（Annotate 语义）；点击不触发行选中 */}
+        {onOpenAnnotate !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Tooltip title="打开该文件的逐行溯源页（blame），查看每行的最后修改提交">
+              <Button
+                size="small"
+                type="text"
+                data-testid={`annotate-${group}-${entry.path}`}
+                onClick={() => onOpenAnnotate(entry.path)}
+              >
+                注解
+              </Button>
+            </Tooltip>
+          </Flex>
+        )}
+        {/* 「历史」行操作（Show History 语义）；点击不触发行选中 */}
+        {onOpenHistory !== undefined && (
+          <Flex onClick={(e) => e.stopPropagation()}>
+            <Tooltip title="打开该文件的提交历史页，查看它的历次变更记录">
+              <Button
+                size="small"
+                type="text"
+                data-testid={`history-${group}-${entry.path}`}
+                onClick={() => onOpenHistory(entry.path)}
+              >
+                历史
+              </Button>
+            </Tooltip>
+          </Flex>
+        )}
+      </Flex>
     );
   };
 
@@ -382,37 +374,47 @@ function ChangeGroup({
         </Flex>
       }
     >
-      {/* 行列表用 Flex 渲染：antd v6 已弃用 List（控制台告警），行结构对齐 settings-page 的 Flex 行约定 */}
-      <Flex vertical>
-        {entries.length === 0 ? (
-          <Typography.Text type="secondary">无变更</Typography.Text>
-        ) : byChangelist === null || changelists === undefined ? (
-          entries.map(renderRow)
-        ) : (
-          <>
-            {/* 默认列表条目平铺在前（无子标题），非默认列表按列表名子标题分组在后 */}
-            {(byChangelist.get(DEFAULT_KEY) ?? []).map(renderRow)}
-            {changelists.lists
-              .filter((l) => !l.isDefault)
-              .map((list) => {
-                const listEntries = byChangelist.get(list.id) ?? [];
-                if (listEntries.length === 0) return null;
-                return (
-                  <Flex vertical key={list.id}>
-                    <Typography.Text
-                      type="secondary"
-                      data-testid={`subtitle-${group}-${list.id}`}
-                      style={{ padding: '4px 0' }}
-                    >
-                      {list.name}（{listEntries.length}）
-                    </Typography.Text>
-                    {listEntries.map(renderRow)}
-                  </Flex>
-                );
-              })}
-          </>
-        )}
-      </Flex>
+      {/* 行列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：行容器/下边框/悬停底色由组件负责，
+          调用方只给数据（items）与行内容（itemRender）。行内边距沿用改造前的 4px 0（Listy 默认 12px 16px），
+          逐行差异（cursor、选中态）留在行元素上——styles/classNames 只支持静态对象。 */}
+      {entries.length === 0 ? (
+        <Typography.Text type="secondary">无变更</Typography.Text>
+      ) : byChangelist === null || changelists === undefined ? (
+        <Listy items={entries} rowKey={(entry) => entry.path} itemRender={renderRow} styles={ROW_STYLES} />
+      ) : (
+        <>
+          {/* 默认列表条目平铺在前（无子标题），非默认列表按列表名子标题分组在后；每个分桶各是一个 Listy */}
+          <Listy
+            items={byChangelist.get(DEFAULT_KEY) ?? []}
+            rowKey={(entry) => entry.path}
+            itemRender={renderRow}
+            styles={ROW_STYLES}
+          />
+          {changelists.lists
+            .filter((l) => !l.isDefault)
+            .map((list) => {
+              const listEntries = byChangelist.get(list.id) ?? [];
+              if (listEntries.length === 0) return null;
+              return (
+                <Flex vertical key={list.id}>
+                  <Typography.Text
+                    type="secondary"
+                    data-testid={`subtitle-${group}-${list.id}`}
+                    style={{ padding: '4px 0' }}
+                  >
+                    {list.name}（{listEntries.length}）
+                  </Typography.Text>
+                  <Listy
+                    items={listEntries}
+                    rowKey={(entry) => entry.path}
+                    itemRender={renderRow}
+                    styles={ROW_STYLES}
+                  />
+                </Flex>
+              );
+            })}
+        </>
+      )}
     </Card>
   );
 }

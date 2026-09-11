@@ -9,7 +9,7 @@
  *  所有可交互元素（输入/勾选/按钮/选择器）均一对一包 Tooltip，说明作用对象与后果。
  */
 import { useState } from 'react';
-import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Select, Spin, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Checkbox, Flex, Input, Listy, Modal, Popconfirm, Select, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { BranchRef, StashAction, StashDiff, StashEntry, StashList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { Toolbar } from '../base/toolbar';
@@ -132,7 +132,7 @@ function StashRow({
   // 卡片把文档撑出横向滚动（T16 六档断言实测 scrollWidth 492 > clientWidth 360/480）。
   // 加 wrap 只交出换行能力：宽视口一行放得下时视觉完全不变（同 Toolbar 的既有口径）。
   return (
-    <Flex data-testid={`row-stash-${stash.index}`} align="center" gap={8} wrap style={{ padding: '4px 0' }}>
+    <Flex data-testid={`row-stash-${stash.index}`} align="center" gap={8} wrap>
       <Tag>stash@{`{${stash.index}}`}</Tag>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {stash.message}
@@ -267,18 +267,23 @@ export function StashPanel({
         {stashes.stashes.length === 0 ? (
           <EmptyState title="暂无贮藏" />
         ) : (
-          <Flex vertical>
-            {stashes.stashes.map((stash) => (
+          // 行列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：行容器/悬停底色由组件负责，
+          // 调用方只给数据与行内容；行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。
+          // rowKey 沿用改造前的 stash.hash（index 会随 pop/drop 整体前移，不能作稳定键）。
+          <Listy
+            items={stashes.stashes}
+            rowKey={(stash) => stash.hash}
+            itemRender={(stash) => (
               <StashRow
-                key={stash.hash}
                 stash={stash}
                 onAction={onAction}
                 onBranch={setBranchTarget}
                 onUnstashAs={onUnstashAs === undefined ? undefined : setUnstashTarget}
                 onOpenDiff={onOpenDiff === undefined ? undefined : (stash) => onOpenDiff(stash.index)}
               />
-            ))}
-          </Flex>
+            )}
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Card>
       <BranchModal

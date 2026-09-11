@@ -11,7 +11,7 @@
  *  所有可交互元素（按钮/输入/单选组及其选项）均一对一包 Tooltip，说明作用对象与后果。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Radio, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Input, Listy, Modal, Popconfirm, Radio, Tooltip, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { PatchCreateBody, PatchEntry, PatchList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -52,7 +52,9 @@ function PatchRow({
   onDelete: (name: string) => void;
 }): React.ReactNode {
   return (
-    <Flex data-testid={`row-patch-${patch.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 本组件只渲染行内容；`gap={8}` 等行内间距仍留在本行，视觉不变。
+    <Flex data-testid={`row-patch-${patch.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {patch.name}
       </Typography.Text>
@@ -227,18 +229,23 @@ export function PatchPanel({ patches, onCreate, onApply, onImportShelf, onDelete
         {patches.patches.length === 0 ? (
           <EmptyState title="暂无补丁" />
         ) : (
-          <Flex vertical>
-            {patches.patches.map((patch) => (
+          // 列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：容器/行结构/悬停底色由组件负责，
+          // 调用方只给数据与行内容，不再手写 flex 行。行级 Tooltip 按产品口径不挂（行内按钮的 Tooltip 保留）。
+          <Listy
+            items={patches.patches}
+            rowKey={(patch) => patch.name}
+            itemRender={(patch) => (
               <PatchRow
-                key={patch.name}
                 patch={patch}
                 acting={acting}
                 onApply={onApply}
                 onImportShelf={onImportShelf}
                 onDelete={onDelete}
               />
-            ))}
-          </Flex>
+            )}
+            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Card>
       <CreatePatchModal

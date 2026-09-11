@@ -17,6 +17,7 @@ import {
   Dropdown,
   Flex,
   Input,
+  Listy,
   Modal,
   Popconfirm,
   Skeleton,
@@ -268,7 +269,7 @@ function LocalBranchRow({
 }): React.ReactNode {
   const diverged = branch.current && branch.upstream !== null && branch.ahead > 0 && branch.behind > 0;
   return (
-    <Flex data-testid={`row-local-${branch.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    <Flex data-testid={`row-local-${branch.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {branch.name}
       </Typography.Text>
@@ -375,7 +376,7 @@ function RemoteBranchRow({
   onMenuAction: (key: 'checkoutRebase', branch: BranchRef) => void;
 }): React.ReactNode {
   return (
-    <Flex data-testid={`row-remote-${branch.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    <Flex data-testid={`row-remote-${branch.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {branch.name}
       </Typography.Text>
@@ -409,7 +410,7 @@ function RecentBranchRow({
   onCheckout: (action: CheckoutAction) => void;
 }): React.ReactNode {
   return (
-    <Flex data-testid={`row-recent-${branch.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    <Flex data-testid={`row-recent-${branch.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {branch.name}
       </Typography.Text>
@@ -432,7 +433,7 @@ function RecentBranchRow({
 /** 标签行（tags 组语义：行内「检出」→ detached 检出标签） */
 function TagRow({ tag, onCheckout }: { tag: TagEntry; onCheckout: (action: CheckoutAction) => void }): React.ReactNode {
   return (
-    <Flex data-testid={`row-tag-${tag.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    <Flex data-testid={`row-tag-${tag.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {tag.name}
       </Typography.Text>
@@ -451,16 +452,33 @@ function TagRow({ tag, onCheckout }: { tag: TagEntry; onCheckout: (action: Check
   );
 }
 
-/** 分支组卡片：标题带计数；行列表用 Flex vertical 渲染（antd v6 已弃用 List） */function BranchGroupCard({
+/** 分支组卡片：标题带计数；行列表走 antd Listy（6.6.0 起的列表组件，官方推荐替代老 List）。
+ *  行容器（内边距/下边框/悬停底色）由组件负责，调用方只给数据 + 行内容；Listy 空数据不渲染空态，故空态由 empty 传入。 */
+function BranchGroupCard<T extends { name: string }>({
   title,
-  rows,
+  items,
+  itemRender,
+  empty,
 }: {
   title: string;
-  rows: React.ReactNode;
+  items: T[];
+  itemRender: (item: T, index: number) => React.ReactNode;
+  /** 空数据占位节点（如「无本地分支」）；缺省时空卡片不渲染任何行 */
+  empty?: React.ReactNode;
 }): React.ReactNode {
   return (
     <Card size="small" title={title}>
-      <Flex vertical>{rows}</Flex>
+      {items.length === 0 ? (
+        empty ?? null
+      ) : (
+        // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+        <Listy
+          items={items}
+          rowKey={(item) => item.name}
+          itemRender={itemRender}
+          styles={{ item: { padding: '4px 0' } }}
+        />
+      )}
     </Card>
   );
 }
@@ -652,54 +670,47 @@ export function BranchPanel({
       {visibleRecent.length > 0 && (
         <BranchGroupCard
           title={`最近检出（${visibleRecent.length}${visibleRecent.length !== recentRefs.length ? `/${recentRefs.length}` : ''}）`}
-          rows={visibleRecent.map((branch) => (
-            <RecentBranchRow key={branch.name} branch={branch} onCheckout={onCheckout} />
-          ))}
+          items={visibleRecent}
+          itemRender={(branch) => <RecentBranchRow branch={branch} onCheckout={onCheckout} />}
         />
       )}
       <BranchGroupCard
         title={`本地分支（${visibleLocals.length}${visibleLocals.length !== locals.length ? `/${locals.length}` : ''}）`}
-        rows={
-          visibleLocals.length === 0 ? (
-            <Typography.Text type="secondary">
-              {filterText.trim() !== '' || mergedOnly ? '无匹配的本地分支' : '无本地分支'}
-            </Typography.Text>
-          ) : (
-            visibleLocals.map((branch) => (
-              <LocalBranchRow
-                key={branch.name}
-                branch={branch}
-                pendingDelete={pendingDelete}
-                onMenuAction={handleMenuAction}
-                onDelete={handleDelete}
-                onDeleteCancel={() => setPendingDelete(null)}
-                onCompare={onCompare}
-                onForcePushedUpdate={onForcePushedUpdate}
-                hasCheckoutRebase={onCheckoutRebase !== undefined}
-                hasCheckoutUpdate={onCheckoutUpdate !== undefined}
-                hasWorkingDiff={onShowDiffWithWorkingTree !== undefined}
-              />
-            ))
-          )
+        items={visibleLocals}
+        itemRender={(branch) => (
+          <LocalBranchRow
+            branch={branch}
+            pendingDelete={pendingDelete}
+            onMenuAction={handleMenuAction}
+            onDelete={handleDelete}
+            onDeleteCancel={() => setPendingDelete(null)}
+            onCompare={onCompare}
+            onForcePushedUpdate={onForcePushedUpdate}
+            hasCheckoutRebase={onCheckoutRebase !== undefined}
+            hasCheckoutUpdate={onCheckoutUpdate !== undefined}
+            hasWorkingDiff={onShowDiffWithWorkingTree !== undefined}
+          />
+        )}
+        empty={
+          <Typography.Text type="secondary">
+            {filterText.trim() !== '' || mergedOnly ? '无匹配的本地分支' : '无本地分支'}
+          </Typography.Text>
         }
       />
       <BranchGroupCard
         title={`远程分支（${visibleRemotes.length}${visibleRemotes.length !== remotes.length ? `/${remotes.length}` : ''}）`}
-        rows={
-          visibleRemotes.length === 0 ? (
-            <Typography.Text type="secondary">
-              {filterText.trim() !== '' || mergedOnly ? '无匹配的远程分支' : '无远程分支'}
-            </Typography.Text>
-          ) : (
-            visibleRemotes.map((branch) => (
-              <RemoteBranchRow
-                key={branch.name}
-                branch={branch}
-                hasCheckoutRebase={onCheckoutRebase !== undefined}
-                onMenuAction={handleMenuAction}
-              />
-            ))
-          )
+        items={visibleRemotes}
+        itemRender={(branch) => (
+          <RemoteBranchRow
+            branch={branch}
+            hasCheckoutRebase={onCheckoutRebase !== undefined}
+            onMenuAction={handleMenuAction}
+          />
+        )}
+        empty={
+          <Typography.Text type="secondary">
+            {filterText.trim() !== '' || mergedOnly ? '无匹配的远程分支' : '无远程分支'}
+          </Typography.Text>
         }
       />
 
@@ -707,9 +718,8 @@ export function BranchPanel({
       {tags !== undefined && visibleTags.length > 0 && (
         <BranchGroupCard
           title={`标签（${visibleTags.length}${visibleTags.length !== tags.tags.length ? `/${tags.tags.length}` : ''}）`}
-          rows={visibleTags.map((tag) => (
-            <TagRow key={tag.name} tag={tag} onCheckout={onCheckout} />
-          ))}
+          items={visibleTags}
+          itemRender={(tag) => <TagRow tag={tag} onCheckout={onCheckout} />}
         />
       )}
 
@@ -778,9 +788,13 @@ export function BranchPanel({
         ) : workingDiffData === undefined || workingDiffData === null ? (
           <Typography.Text type="secondary">暂无差异（工作树与分支一致）</Typography.Text>
         ) : (
-          <Flex vertical gap={8}>
-            {workingDiffData.files.map((file) => (
-              <Flex key={`${file.status}-${file.path}`} align="center" gap={8}>
+          // 差异文件列表同样走 Listy：行容器（下边框/悬停底色）由组件负责，
+          // 行内边距取 4px 0——相邻行间距 4+4 = 原 Flex vertical gap 8 的同一口径
+          <Listy
+            items={workingDiffData.files}
+            rowKey={(file) => `${file.status}-${file.path}`}
+            itemRender={(file) => (
+              <Flex align="center" gap={8}>
                 <CommittedStatusTag status={file.status} />
                 <Tooltip title={`打开该文件的差异视图：当前工作树与 ${workingDiffData.branch} 的逐行对比`}>
                   <Typography.Text
@@ -793,8 +807,9 @@ export function BranchPanel({
                   </Typography.Text>
                 </Tooltip>
               </Flex>
-            ))}
-          </Flex>
+            )}
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Modal>
     </Flex>

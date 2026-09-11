@@ -5,11 +5,12 @@
  * 路径副文本 user-home 相对化（`~/…`，homeDir 由容器注入）、移除带 Popconfirm 确认、
  * 最近优先/去重/上限 50（服务端与组件同口径）。
  * 克隆/初始化 Modal 对齐 VcsCloneDialog 最小字段集（URL + Directory / 路径表单）。
+ * 最近仓库列表走 antd Listy（6.6.0 起的列表组件）：行不挂 Tooltip，行内容由调用方渲染。
  * 纯 props 驱动：ui 不调接口，repos/onOpen/onOpenRepo/onRemove/onClone/onInit/homeDir 由调用方容器注入 hooks 数据。
  * 点击最近列表项打开该仓库（注入 onOpenRepo 才可点）+ 打开中行内加载态（openingRepoId 命中行）。
  */
 import { useMemo, useState } from 'react';
-import { Button, Flex, Input, Modal, Popconfirm, Spin, theme, Tooltip } from 'antd';
+import { Button, Flex, Input, Listy, Modal, Popconfirm, Spin, theme, Tooltip } from 'antd';
 import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SettingOutlined, SwitcherOutlined } from '@ant-design/icons';
 import type { RepoInfo } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -174,10 +175,6 @@ export function RepoPage({
   const [openPath, setOpenPath] = useState('');
   const [cloneOpen, setCloneOpen] = useState(false);
   const [initOpen, setInitOpen] = useState(false);
-  /** 悬停中的仓库 id：整行可点需给悬停反馈（inline style 无 :hover，只能由状态驱动） */
-  const [hoverId, setHoverId] = useState<string | null>(null);
-  /** 悬停中的行内操作区（移除按钮）所在仓库 id：行 Tooltip 与按钮 Tooltip 互斥，避免两个气泡叠弹 */
-  const [actionHoverId, setActionHoverId] = useState<string | null>(null);
   // 最近优先（openedAt 降序）→ 同路径去重（保留最近一条）→ 截断上限 50
   const visible = useMemo(() => {
     const sorted = [...repos].sort((a, b) => b.openedAt.localeCompare(a.openedAt));
@@ -259,77 +256,63 @@ export function RepoPage({
       {visible.length === 0 ? (
         <EmptyState title="暂无最近仓库" description="输入路径打开一个 Git 仓库" />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {visible.map((repo) => {
+        // 最近仓库列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：容器/行结构/悬停底色由组件负责，
+        // 调用方只给数据与行内容，不再手写 flex 行 + borderBottom + 悬停状态。
+        // 行**不挂 Tooltip**（产品口径：行级气泡与「移除」按钮气泡会在同一块悬停区叠弹，且行的可点后果已由文案与按钮自述）。
+        // Listy 的行底色悬停由组件 `:hover` 承担（controlItemBgHover），故原本驱动悬停的 hoverId 状态一并删掉。
+        <Listy
+          items={visible}
+          rowKey={(repo) => repo.id}
+          itemRender={(repo) => {
             // 可点条目：仅容器注入 onOpenRepo 时启用；命中 openingRepoId 的行打开中（加载态 + 忽略再次点击）
             const clickable = onOpenRepo !== undefined;
             const opening = repo.id === openingRepoId;
             return (
-              // 整行可点 → 整行包 Tooltip 说明点击后果；行内「移除」自带 Tooltip（见下）。
-              // 受控 open：只在指针落在行本身、且不在行内操作区上时弹，否则行气泡会与「移除」气泡同时弹出。
-              // key 必须挂在这一层：Tooltip 是 map 生成的最外层元素（与 status-page.tsx 行气泡同一写法）。
-              <Tooltip
-                key={repo.id}
-                open={clickable && !opening && hoverId === repo.id && actionHoverId !== repo.id}
-                title={clickable ? '点击打开该仓库：校验并注册为最近仓库，随后进入提交日志页' : undefined}
+              <Flex
+                data-testid="repo-item"
+                align="center"
+                gap={8}
+                // 整行可点即打开该仓库（未接线则不挂事件，无死控件）；打开中的行不再响应，防连点重复走打开流程
+                onClick={clickable && !opening ? () => onOpenRepo(repo) : undefined}
+                // 行内边距留在**可点元素自身**（不能下沉到 Listy 的 styles.item：那层是包装 div，
+                // 它的 padding 既不属于本元素的命中区，点击落在内边距上也不会触发打开）；光标在打开中给 progress
+                style={{
+                  padding: '8px 4px',
+                  ...(clickable ? { cursor: opening ? 'progress' : 'pointer' } : {}),
+                }}
               >
-                <div
-                  data-testid="repo-item"
-                  // 整行可点即打开该仓库（未接线则不挂事件，无死控件）；打开中的行不再响应，防连点重复走打开流程
-                  onClick={clickable && !opening ? () => onOpenRepo(repo) : undefined}
-                  onMouseEnter={clickable ? () => setHoverId(repo.id) : undefined}
-                  onMouseLeave={clickable ? () => setHoverId(null) : undefined}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 4px',
-                    borderBottom: `1px solid ${token.colorSplit}`,
-                    // 可点条目才有悬停反馈：底色走 token 自适应亮暗主题，光标在打开中给 progress
-                    ...(clickable
-                      ? {
-                        cursor: opening ? 'progress' : 'pointer',
-                        borderRadius: token.borderRadius,
-                        transition: 'background 0.15s',
-                        ...(opening || hoverId === repo.id ? { background: token.colorFillTertiary } : {}),
-                      }
-                      : {}),
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600 }}>{repo.name}</div>
-                    <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>{relativeToHome(repo.path, homeDir)}</div>
-                  </div>
-                  {/* 打开中：打开含 POST 往返 + 配置落盘 + 最近列表刷新，有耗时需即时反馈，否则点击似无响应 */}
-                  {opening ? (
-                    <Flex align="center" gap={6} data-testid="repo-opening">
-                      <Spin size="small" />
-                      <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>打开中…</span>
-                    </Flex>
-                  ) : null}
-                  {onRemove ? (
-                    // 行内操作容器：① 阻断冒泡——Popconfirm 的确认气泡挂在 body portal，
-                    // 但 React 合成事件仍按组件树冒泡到本行，不拦会把「移除」连带成「打开该仓库」；
-                    // ② 悬停期间抑制行 Tooltip（actionHoverId），只留「移除」自己的气泡；
-                    // ③ 打开中禁用移除——打开往返内删掉该仓库，打开成功会跳进拉不到 status 的白屏页
-                    <span
-                      style={{ display: 'inline-flex' }}
-                      onClick={(event) => event.stopPropagation()}
-                      onMouseEnter={() => setActionHoverId(repo.id)}
-                      onMouseLeave={() => setActionHoverId(null)}
-                    >
-                      <Popconfirm title="移除该仓库？" okText="确定" cancelText="取消" onConfirm={() => onRemove(repo.id)}>
-                        <Tooltip title="从最近列表移除（仅移出列表，不删除磁盘上的仓库）">
-                          <Button data-testid="repo-remove" size="small" type="text" disabled={opening} icon={<DeleteOutlined />} />
-                        </Tooltip>
-                      </Popconfirm>
-                    </span>
-                  ) : null}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{repo.name}</div>
+                  <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>{relativeToHome(repo.path, homeDir)}</div>
                 </div>
-              </Tooltip>
+                {/* 打开中：打开含 POST 往返 + 配置落盘 + 最近列表刷新，有耗时需即时反馈，否则点击似无响应 */}
+                {opening ? (
+                  <Flex align="center" gap={6} data-testid="repo-opening">
+                    <Spin size="small" />
+                    <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>打开中…</span>
+                  </Flex>
+                ) : null}
+                {onRemove ? (
+                  // 行内操作容器：① 阻断冒泡——Popconfirm 的确认气泡挂在 body portal，
+                  // 但 React 合成事件仍按组件树冒泡到本行，不拦会把「移除」连带成「打开该仓库」；
+                  // ② 打开中禁用移除——打开往返内删掉该仓库，打开成功会跳进拉不到 status 的白屏页
+                  <span
+                    style={{ display: 'inline-flex' }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Popconfirm title="移除该仓库？" okText="确定" cancelText="取消" onConfirm={() => onRemove(repo.id)}>
+                      <Tooltip title="从最近列表移除（仅移出列表，不删除磁盘上的仓库）">
+                        <Button data-testid="repo-remove" type="text" disabled={opening} icon={<DeleteOutlined />} />
+                      </Tooltip>
+                    </Popconfirm>
+                  </span>
+                ) : null}
+              </Flex>
             );
-          })}
-        </div>
+          }}
+          // 行包装层只留圆角（悬停底色圆角随它）；内边距在行元素上 —— 保证整行命中区与改造前一致
+          styles={{ item: { padding: 0, borderRadius: token.borderRadius } }}
+        />
       )}
       {onClone ? (
         <CloneModal open={cloneOpen} acting={cloning} onClone={onClone} onClose={() => setCloneOpen(false)} />

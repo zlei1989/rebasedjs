@@ -7,7 +7,7 @@
  *  所有可交互元素（按钮/输入）均一对一包 Tooltip；禁用按钮另包 span 承接悬停，Popconfirm 内 Tooltip 放最内层。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Input, Listy, Modal, Popconfirm, Tooltip, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { ShelfAction, ShelfEntry, ShelfList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -31,7 +31,9 @@ function ShelfRow({
   onAction: (action: ShelfAction) => void;
 }): React.ReactNode {
   return (
-    <Flex data-testid={`row-shelf-${shelf.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 本组件只渲染行内容；`gap={8}` 等行内间距仍留在本行，视觉不变。
+    <Flex data-testid={`row-shelf-${shelf.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {shelf.name}
       </Typography.Text>
@@ -158,11 +160,15 @@ export function ShelfPanel({ shelves, onAction, acting }: ShelfPanelProps): Reac
         {shelves.shelves.length === 0 ? (
           <EmptyState title="暂无搁置" />
         ) : (
-          <Flex vertical>
-            {shelves.shelves.map((shelf) => (
-              <ShelfRow key={shelf.name} shelf={shelf} acting={acting} onAction={onAction} />
-            ))}
-          </Flex>
+          // 列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：容器/行结构/悬停底色由组件负责，
+          // 调用方只给数据与行内容，不再手写 flex 行。行级 Tooltip 按产品口径不挂（行内按钮的 Tooltip 保留）。
+          <Listy
+            items={shelves.shelves}
+            rowKey={(shelf) => shelf.name}
+            itemRender={(shelf) => <ShelfRow shelf={shelf} acting={acting} onAction={onAction} />}
+            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Card>
       <SaveShelfModal

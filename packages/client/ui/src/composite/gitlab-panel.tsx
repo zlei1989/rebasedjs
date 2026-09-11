@@ -6,6 +6,9 @@
  *  细节：单击选中、state 直接按 state 徽标（opened 绿/merged 紫/closed 灰/locked 橙）、
  *  评论输入框与 review body 共用、REQUEST_CHANGES 带 body、diff 空串不渲染展开区、
  *  合并/新建 MR 确认即关（回调即成功语义，失败由容器处理）、刷新可选（缺省不渲染）。
+ *  列表渲染：MR 列表 / 详情时间线 / 详情改动文件三处统一走 antd Listy（6.6.0 起的列表组件）——
+ *  容器、行容器与悬停底色由组件负责，行内容由调用方 `itemRender` 渲染；行**不挂 Tooltip**
+ *  （产品口径：行级气泡与行内按钮气泡会在同一块悬停区叠弹），行内边距在调用处 `styles.item`。
  */
 import { useState } from 'react';
 import {
@@ -14,6 +17,7 @@ import {
   Checkbox,
   Flex,
   Input,
+  Listy,
   Modal,
   Popconfirm,
   Select,
@@ -111,43 +115,43 @@ function MrRow({
 }): React.ReactNode {
   // 选中底色走主题 token（明亮 #e6f4ff / 暗色 #111a2c），不再硬编码明亮专用色
   const { token } = theme.useToken();
-  // 整行可点 → 气泡挂在行本身（Flex 是真实 DOM 节点）：
-  // 调用处再包一层会与行内气泡叠加成两个气泡，故行 Tooltip 归组件自己持有
+  // 行**不挂 Tooltip**（产品口径：行的可点后果已由行内容自述，且行级气泡会与行内按钮气泡叠弹）。
+  // 逐行统一的 4px 8px 内边距归调用处 Listy 的 `styles.item`；这里只留逐行差异（cursor / 选中底色）。
   return (
-    <Tooltip title="选中该 MR：在右侧详情列加载描述、时间线与文件变更">
-      <Flex
-        data-testid={`gitlab-mr-row-${mr.iid}`}
-        align="center"
-        gap={8}
-        style={{
-          padding: '4px 8px',
-          cursor: 'pointer',
-          backgroundColor: selected ? token.controlItemBgActive : undefined,
-        }}
-        onClick={() => onSelect(mr.iid)}
-      >
-        <Tag style={{ flexShrink: 0 }}>{`#${mr.iid}`}</Tag>
-        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-          {mr.title}
-        </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {mr.author}
-        </Typography.Text>
-        <Tag color={MR_STATE_COLORS[mr.state]} style={{ flexShrink: 0 }}>
-          {mr.state}
-        </Tag>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {formatCommitDate(mr.updatedAtIso)}
-        </Typography.Text>
-      </Flex>
-    </Tooltip>
+    <Flex
+      data-testid={`gitlab-mr-row-${mr.iid}`}
+      align="center"
+      gap={8}
+      style={{
+        // 行内边距留在可点元素自身（下沉到 Listy 的 styles.item 会让那圈内边距落在包装 div 上，不属命中区/选中底色区）
+        padding: '4px 8px',
+        cursor: 'pointer',
+        backgroundColor: selected ? token.controlItemBgActive : undefined,
+      }}
+      onClick={() => onSelect(mr.iid)}
+    >
+      <Tag style={{ flexShrink: 0 }}>{`#${mr.iid}`}</Tag>
+      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+        {mr.title}
+      </Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        {mr.author}
+      </Typography.Text>
+      <Tag color={MR_STATE_COLORS[mr.state]} style={{ flexShrink: 0 }}>
+        {mr.state}
+      </Tag>
+      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        {formatCommitDate(mr.updatedAtIso)}
+      </Typography.Text>
+    </Flex>
   );
 }
 
 /** 时间线条目：kind 徽标（comment 评论/review 审查+reviewState）+ author + 时间 + body（保留换行） */
 function TimelineRow({ entry }: { entry: GitLabTimelineEntry }): React.ReactNode {
   return (
-    <Flex vertical data-testid={`gitlab-timeline-${entry.id}`} style={{ padding: '4px 0' }}>
+    // 行内边距归调用处 Listy 的 `styles.item`（逐行统一的 4px 0）
+    <Flex vertical data-testid={`gitlab-timeline-${entry.id}`}>
       <Flex align="center" gap={8}>
         <Tag color={entry.kind === 'review' ? 'blue' : 'default'} style={{ flexShrink: 0 }}>
           {entry.kind === 'review' ? '审查' : '评论'}
@@ -194,7 +198,8 @@ function FileRow({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <Flex vertical data-testid={`gitlab-file-${index}`} style={{ padding: '4px 0' }}>
+    // 行内边距归调用处 Listy 的 `styles.item`（逐行统一的 4px 0）
+    <Flex vertical data-testid={`gitlab-file-${index}`}>
       <Flex align="center" gap={8}>
         <Tag color={FILE_STATUS_COLORS[file.status]} style={{ flexShrink: 0 }}>
           {file.status}
@@ -598,11 +603,14 @@ function MrDetailBlock({
               timeline === null || timeline.entries.length === 0 ? (
                 <EmptyState title="暂无动态" />
               ) : (
-                <Flex vertical>
-                  {timeline.entries.map((entry) => (
-                    <TimelineRow key={`${entry.kind}-${entry.id}`} entry={entry} />
-                  ))}
-                </Flex>
+                // 时间线走 antd Listy：容器/行容器/悬停底色由组件负责，调用方只给数据 + 行内容；
+                // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px），下边框与悬停底色走组件默认样式
+                <Listy
+                  items={timeline.entries}
+                  rowKey={(entry) => `${entry.kind}-${entry.id}`}
+                  itemRender={(entry) => <TimelineRow entry={entry} />}
+                  styles={{ item: { padding: '4px 0' } }}
+                />
               ),
           },
           {
@@ -612,10 +620,12 @@ function MrDetailBlock({
               files === null || files.files.length === 0 ? (
                 <EmptyState title="暂无文件变更" />
               ) : (
-                <Flex vertical>
-                  {files.files.map((file, index) => (
+                // 改动文件列表走 antd Listy（同上）：index 由 itemRender 的第二参提供，file-N 的 testid 口径不变
+                <Listy
+                  items={files.files}
+                  rowKey={(file) => file.path}
+                  itemRender={(file, index) => (
                     <FileRow
-                      key={file.path}
                       file={file}
                       index={index}
                       loader={loader}
@@ -623,8 +633,9 @@ function MrDetailBlock({
                       onAddDiscussion={onAddDiscussion}
                       commentActing={commentActing}
                     />
-                  ))}
-                </Flex>
+                  )}
+                  styles={{ item: { padding: '4px 0' } }}
+                />
               ),
           },
         ]}
@@ -743,12 +754,16 @@ export function GitLabPanel(props: GitLabPanelProps): React.ReactNode {
         ) : mrs.mrs.length === 0 ? (
           <EmptyState title="暂无合并请求" />
         ) : (
-          <Flex vertical>
-            {mrs.mrs.map((mr) => (
-              // 整行气泡由 MrRow 内部持有（挂在可点 Flex 上），此处不再包一层，避免双气泡
-              <MrRow key={mr.iid} mr={mr} selected={mr.iid === iid} onSelect={onSelectMr} />
-            ))}
-          </Flex>
+          // MR 列表走 antd Listy：容器/行容器/悬停底色由组件负责；行内边距沿用改造前的 4px 8px。
+          // 行（MrRow）自身不挂 Tooltip，此处也不再包一层
+          <Listy
+            items={mrs.mrs}
+            rowKey={(mr) => mr.iid}
+            itemRender={(mr) => (
+              <MrRow mr={mr} selected={mr.iid === iid} onSelect={onSelectMr} />
+            )}
+            styles={{ item: { padding: 0 } }}
+          />
         )}
       </Card>
       {iid !== null ? (

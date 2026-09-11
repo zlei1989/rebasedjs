@@ -7,8 +7,10 @@
  *  打开该提交全量变更文件 Modal（对照平台「Paths affected in <revision>」对话框——ChangeListViewerDialog，
  *  数据由容器经 useCommitFiles 条件拉取，本组件只受控渲染）。纯受控（file/lines/loading/error）；
  *  ui 不调接口，数据与回调由调用方容器注入。
+ *  列表/Listy 边界：Modal 内的「受影响文件清单」是同质条目的列表 → 走 antd Listy（6.6.0 起）；
+ *  溯源正文行（blame-line-*，等宽字体代码行）是代码正文渲染而非条目列表，保持手写行不迁 Listy。
  */
-import { Button, Flex, Modal, Spin, Tooltip, Typography } from 'antd';
+import { Button, Flex, Listy, Modal, Spin, Tooltip, Typography } from 'antd';
 import type { BlameLine, CommittedEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { PageShell } from '../base/page-shell';
@@ -139,31 +141,31 @@ function AffectedFileRow({
   onOpenFile?: (path: string) => void;
 }): React.ReactNode {
   return (
-    /* 整行可点（未注入 onOpenFile 时为只读行）→ 行 Tooltip 说明点击后果；
-       Flex 属 antd 容器组件、脚本按容器豁免，这里按「可点行」口径人工补上 */
-    <Tooltip title={onOpenFile ? '打开该文件与该提交父版本的差异对比' : undefined}>
-      <Flex
-        data-testid={`affected-file-${index}`}
-        align="center"
-        gap={8}
-        style={{ padding: '4px 0', cursor: onOpenFile ? 'pointer' : undefined }}
-        onClick={() => onOpenFile?.(file.path)}
-      >
-        <CommittedStatusTag status={file.status} />
-        {file.renameFrom ? (
-          <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-            {file.renameFrom} →
-          </Typography.Text>
-        ) : null}
-        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-          {file.path}
+    /* 整行可点（未注入 onOpenFile 时为只读行）→ 内边距留在**可点元素自身**：
+       下沉到 Listy 的 styles.item 会让那圈内边距落在包装 div 上（不属本元素命中区）。
+       下边框/悬停底色交给 Listy 行容器。
+       行**不挂 Tooltip**（本次产品口径：行不挂气泡，行内按钮/图标的气泡保留） */
+    <Flex
+      data-testid={`affected-file-${index}`}
+      align="center"
+      gap={8}
+      style={{ padding: '4px 0', cursor: onOpenFile ? 'pointer' : undefined }}
+      onClick={() => onOpenFile?.(file.path)}
+    >
+      <CommittedStatusTag status={file.status} />
+      {file.renameFrom ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+          {file.renameFrom} →
         </Typography.Text>
-      </Flex>
-    </Tooltip>
+      ) : null}
+      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+        {file.path}
+      </Typography.Text>
+    </Flex>
   );
 }
 
-/** 受影响文件 Modal（Show All Affected #34）：提交元信息头 + 全量文件清单；loading/error/空态分派 */
+/** 受影响文件 Modal（Show All Affected #34）：提交元信息头 + 全量文件清单（antd Listy）；loading/error/空态分派 */
 function AffectedFilesModal({
   hash,
   entry,
@@ -205,11 +207,15 @@ function AffectedFilesModal({
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {entry.subject} · {entry.author} · {formatCommitDate(entry.dateIso)}
           </Typography.Text>
-          <Flex vertical>
-            {entry.files.map((file, index) => (
-              <AffectedFileRow key={`${file.path}-${index}`} file={file} index={index} onOpenFile={onOpenFile} />
-            ))}
-          </Flex>
+          {/* 文件清单走 antd Listy（6.6.0 起的列表组件）：行容器/下边框/悬停底色由组件负责，
+              调用方只给数据与行内容。行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。 */}
+          <Listy
+            items={entry.files}
+            // 提交内文件路径唯一（git name-status 逐路径一条），故以 path 作行键
+            rowKey={(file) => file.path}
+            itemRender={(file, index) => <AffectedFileRow file={file} index={index} onOpenFile={onOpenFile} />}
+            styles={{ item: { padding: 0 } }}
+          />
         </Flex>
       )}
     </Modal>
@@ -248,6 +254,9 @@ export function BlameView({
       ) : !lines || lines.length === 0 ? (
         <EmptyState title="暂无溯源信息" />
       ) : (
+        /* 溯源正文行**不迁 Listy**（有意保留手写行）：这是「代码正文」逐行渲染而非同质条目列表——
+           行要按 BlameLine 与内容列严格对齐（等宽字体 + 行号定宽），Listy 行容器会加下边框/悬停底色/统一内边距，
+           会把代码阅读面切成一条条「列表项」，且虚拟化行容器与代码行的对齐语义无关。 */
         <Flex vertical>
           {lines.map((line) => (
             <BlameRow

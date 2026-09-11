@@ -4,9 +4,11 @@
  * stderrTail 小字（无则省略）；「刷新」按钮调 onRefresh；loading 显 Spin；空态 EmptyState。
  *  args 显示折叠（GitConsoleFoldingImpl 语义）：连续 `-c key=value` 序列折叠为单个 `-c …`
  *  （core 日志已剥离 token 的 extraHeader 对，这里是普通 -c 配置项的可读性折叠）。
+ *  记录列表走 antd Listy（6.6.0 起）：行容器/悬停底色由组件负责，调用方只给数据与行内容；
+ *  原实现无虚拟滚动/加载更多分页语义，故不启用 virtual/height（长列表仍全量渲染，行为不变）。
  *  纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
  */
-import { Button, Card, Flex, Spin, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Listy, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { ConsoleEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { formatCommitDate } from '../domain/format';
@@ -46,7 +48,9 @@ export function foldArgs(args: string[]): string {
 function ConsoleRow({ entry }: { entry: ConsoleEntry }): React.ReactNode {
   const ok = entry.exitCode === 0;
   return (
-    <Flex vertical data-testid={`console-row-${entry.id}`} style={{ padding: '4px 0' }}>
+    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 本组件只渲染行内容；`vertical` 与 data-testid 保持原样。
+    <Flex vertical data-testid={`console-row-${entry.id}`}>
       <Flex align="center" gap={8}>
         <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
           {formatCommitDate(entry.atIso)}
@@ -91,11 +95,15 @@ export function ConsolePanel({ entries, loading, onRefresh }: ConsolePanelProps)
       ) : !entries || entries.length === 0 ? (
         <EmptyState title="暂无命令记录" />
       ) : (
-        <Flex vertical>
-          {entries.map((entry) => (
-            <ConsoleRow key={entry.id} entry={entry} />
-          ))}
-        </Flex>
+        // 记录列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：容器/行结构/悬停底色由组件负责，
+        // 调用方只给数据与行内容，不再手写 flex 行。
+        <Listy
+          items={entries}
+          rowKey={(entry) => entry.id}
+          itemRender={(entry) => <ConsoleRow entry={entry} />}
+          // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+          styles={{ item: { padding: '4px 0' } }}
+        />
       )}
     </Card>
   );

@@ -6,7 +6,7 @@
  *  所有可交互元素（按钮/输入）均一对一包 Tooltip；Popconfirm 触发按钮的 Tooltip 放最内层。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Input, Listy, Modal, Popconfirm, Tag, Tooltip, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { TagAction, TagEntry, TagList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -23,7 +23,7 @@ export interface TagPanelProps {
 /** 标签行：name + annotated 徽标 + subject（轻量标签 subject 为 null 时不渲染）+ 推送/删除远程/删除 */
 function TagRow({ tag, onAction }: { tag: TagEntry; onAction: (action: TagAction) => void }): React.ReactNode {
   return (
-    <Flex data-testid={`tag-row-${tag.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    <Flex data-testid={`tag-row-${tag.name}`} align="center" gap={8}>
       {/* 标签名是不可断行串（分支/版本号风格的 ref 名），同行还有附注徽标 + flex:1 的 subject + 3 个按钮；
           原写法 `strong` + `flexShrink: 0` 使它的自动最小尺寸等于整个标签名，与固定宽度的兄弟一起把行顶宽
           （360px 内容盒约 313px，固定兄弟已占约 240px），`ellipsis` 因而不可能生效。
@@ -201,11 +201,14 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
         {tags.tags.length === 0 ? (
           <EmptyState title="暂无标签" />
         ) : (
-          <Flex vertical>
-            {tags.tags.map((tag) => (
-              <TagRow key={tag.name} tag={tag} onAction={onAction} />
-            ))}
-          </Flex>
+          // 行列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：行容器/悬停底色由组件负责，
+          // 调用方只给数据与行内容；行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。
+          <Listy
+            items={tags.tags}
+            rowKey={(tag) => tag.name}
+            itemRender={(tag) => <TagRow tag={tag} onAction={onAction} />}
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Card>
       <CreateTagModal

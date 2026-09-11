@@ -3,8 +3,10 @@
  *  双向提交差异——「分支独有」（current..branch）与「当前独有」（branch..current）两组卡片；
  *  行点击 → 日志页 ?select=<hash>（回跳选中）；顶部「退出对比」返回日志页。
  *  纯 props 驱动：数据由容器经双 range 查询注入；行渲染复用 CommitInfo 字段序列。
+ *  两组提交列表走 antd Listy（6.6.0 起的列表组件）：容器/行结构/悬停底色由组件负责，
+ *  调用方只给数据与行内容；行**不挂 Tooltip**（产品口径：行不挂气泡，行内按钮的气泡保留）。
  */
-import { Button, Card, Flex, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Listy, Tooltip, Typography } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
 import { PageShell } from '../base/page-shell';
 import { formatCommitDate } from '../domain/format';
@@ -44,14 +46,18 @@ function CompareCard({
             无提交
           </Typography.Text>
         ) : (
-          commits.map((c) => (
-            // 整行可点：点击即选中该提交（跳日志页定位）；行内无其它可交互元素，故不需要与内层气泡互斥
-            <Tooltip key={c.hash} title="选中该提交：跳转到提交日志页并定位到这条记录">
+          /* 提交行走 antd Listy：行容器自带下边框/悬停底色；行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。
+             行**不挂 Tooltip**（产品口径）；整行可点的手型光标是逐行样式故留在行元素上。 */
+          <Listy
+            items={commits}
+            rowKey={(c) => c.hash}
+            itemRender={(c) => (
+              // 整行可点：点击即选中该提交（跳日志页定位）；行内无可交互元素，气泡冲突面已由「行不挂 Tooltip」消除
               <Flex
                 data-testid={`compare-row-${title}-${c.shortHash}`}
                 align="center"
                 gap={8}
-                style={{ cursor: 'pointer', padding: '4px 0' }}
+                style={{ padding: '4px 0', cursor: 'pointer' }}
                 onClick={() => onSelectCommit?.(c.hash)}
               >
                 <Typography.Text code style={{ fontSize: 12, flexShrink: 0 }}>
@@ -67,8 +73,8 @@ function CompareCard({
                   {formatCommitDate(c.dateIso)}
                 </Typography.Text>
               </Flex>
-            </Tooltip>
-          ))
+            )}
+          />
         )}
       </Flex>
     </Card>

@@ -1,14 +1,15 @@
 /**
  * 提交图：graph-layout 布局 + 虚拟滚动渲染 + 选中回调。
+ * 虚拟滚动走 antd Listy（6.6.0 起的列表组件）：调用方只给提交行数据与行内容，
+ * 滚动窗口/行容器由组件负责（行间无分隔线、行内边距归零，见下方 styles.item）。
  * UX 对齐 #2：行默认列为 Subject（图 + refs chips）+ Author + Date（Hash 列省）；
  * 分支 chips 默认开，tag chips 默认关（对齐 Java showTagNames=false），由 showTags 打开。
  */
 import { useMemo } from 'react';
-import { Tag, theme } from 'antd';
+import { Listy, Tag, theme } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
 import { buildLayout, type LayoutCommit } from '../graph-layout';
 import { colorForRef } from '../graph-layout/color';
-import { VirtualList } from '../base/virtual-list';
 import { GraphCanvas } from '../base/graph-canvas';
 import { classifyRefs } from './refs';
 import { formatCommitDate } from './format';
@@ -80,11 +81,12 @@ export function CommitGraph({
   // hash → 原始提交（LayoutCommit 只带图字段，行渲染需要 author/date/message）
   const byHash = useMemo(() => new Map(commits.map((c) => [c.hash, c] as const)), [commits]);
   return (
-    <VirtualList
+    <Listy
       items={rows}
-      rowHeight={ROW_HEIGHT}
+      rowKey={(row) => row.commit.hash}
+      virtual
       height={height}
-      renderRow={(row, index) => {
+      itemRender={(row, index) => {
         const commit = byHash.get(row.commit.hash);
         if (!commit) return null;
         // 选中态：底走主题 token（controlItemBgActive），与提交详情面板当前提交一致
@@ -120,6 +122,15 @@ export function CommitGraph({
           </div>
         );
       }}
+      // 行高须恒为 ROW_HEIGHT（24px，与 GraphCanvas 的定长切片对齐）：Listy 默认行内边距（token
+      // itemPaddingBlock/Inline）与 1px 下边框都会把行撑高，故 padding 归零 + 去下边框；
+      // 逐行差异（选中底色、cursor）留在行元素上（styles 只支持静态对象/顶层函数）。
+      // 残留：antd 包装层把 Listy 的 itemHeight 固定推成 fontHeight + 2×itemPaddingBlock（本主题 ≈36px，
+      // 调用方无法传入），而本行实测 24px；因此未渲染过的行按 36px 参与滚动推算，列表刚打开时
+      // scrollHeight 偏大（50 条 1536 vs 真值 1200），真实滚轮滚动过程中会被测量-重算迅速收敛
+      // （实测底部空带 0px、scrollHeight 收敛到 1200）。若要 24px 精确对齐需经 ConfigProvider 反解
+      // antd 内部公式，属内部 API，不采用；回退自研 base/virtual-list 只需还原本文件。
+      styles={{ item: { padding: 0, borderBottom: 'none' } }}
     />
   );
 }

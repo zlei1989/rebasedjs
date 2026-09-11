@@ -4,9 +4,11 @@
  *  文件点击 → onOpenFile(path, hash)——from/to 差值端点映射由容器负责（约定 `${hash}~1` → hash）。
  *  「加载更多」为组件内简单交互：page 数据由容器注入，本组件只显示与回调（onLoadMore/loadingMore）。
  *  纯受控（page/selectedHash + 各回调）；ui 不调接口，数据与回调由调用方容器注入。
+ *  列表/Listy 边界：左栏「提交列表」是同质条目列表 → 走 antd Listy（6.6.0 起，行不挂 Tooltip）；
+ *  右栏「变更文件」是 buildFileTree 出来的递归目录树（目录可折叠、逐级 paddingLeft 缩进），树结构不属列表故不迁 Listy。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Tooltip, Typography, theme } from 'antd';
+import { Button, Card, Flex, Listy, Tooltip, Typography, theme } from 'antd';
 import { CaretDownOutlined, CaretRightOutlined, FolderOutlined } from '@ant-design/icons';
 import type { CommittedEntry, CommittedFileStatus, CommittedPage } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -75,7 +77,8 @@ export function buildFileTree(files: CommittedEntry['files']): FileTreeNode[] {
   return roots;
 }
 
-/** 提交行：短哈希 + subject（弹性）+ 作者 + 日期；整行点击 → onSelectCommit 完整哈希；命中 selectedHash 时底色高亮 */
+/** 提交行：短哈希 + subject（弹性）+ 作者 + 日期；整行点击 → onSelectCommit 完整哈希；命中 selectedHash 时底色高亮
+ *  统一内边距交给 Listy 行容器（styles.item）；选中底色与光标是逐行差异故留在本行元素上 */
 function CommitRow({
   entry,
   index,
@@ -90,37 +93,36 @@ function CommitRow({
   // 选中底色走主题 token（controlItemBgActive：明亮 #e6f4ff / 暗色 #111a2c），不再硬编码明亮专用色
   const { token } = theme.useToken();
   return (
-    // 整行可点（未接 onSelectCommit 时是纯列表行）→ 整行包一个 Tooltip；
-    // 行内没有别的可交互控件（无第二个气泡可冲突），故用默认的悬停触发即可，无需受控 open
-    <Tooltip title={onSelectCommit ? '单击选中该提交，右侧列出它在这次提交里的变更文件' : undefined}>
-      <Flex
-        data-testid={`committed-entry-${index}`}
-        align="center"
-        gap={8}
-        style={{
-          padding: '4px 8px',
-          cursor: onSelectCommit ? 'pointer' : undefined,
-          backgroundColor: selected ? token.controlItemBgActive : undefined,
-        }}
-        onClick={() => onSelectCommit?.(entry.hash)}
-      >
-        {/* 短哈希改 EllipsisText：`mono` 与原 `code` 等价（同走 Typography.Text 的 code 呈现），
-            `title` 给出完整哈希（antd 仅在文本溢出时才弹，短哈希一般不出浮层，故不新增可见行为）；
-            `flexShrink: 0` 去掉——可收缩（超窄时截断而非撑宽行）。 */}
-        <EllipsisText mono title={entry.hash}>
-          {entry.shortHash}
-        </EllipsisText>
-        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-          {entry.subject}
-        </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {entry.author}
-        </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {formatCommitDate(entry.dateIso)}
-        </Typography.Text>
-      </Flex>
-    </Tooltip>
+    // 整行可点（未接 onSelectCommit 时是纯列表行）。
+    // 行**不挂 Tooltip**（本次产品口径：行不挂气泡，行内按钮/图标的气泡保留）——原「整行包一层 Tooltip」已删。
+    <Flex
+      data-testid={`committed-entry-${index}`}
+      align="center"
+      gap={8}
+      style={{
+        // 行内边距留在可点元素自身（下沉到 Listy 的 styles.item 会让那圈内边距落在包装 div 上，不属命中区/选中底色区）
+        padding: '4px 8px',
+        cursor: onSelectCommit ? 'pointer' : undefined,
+        backgroundColor: selected ? token.controlItemBgActive : undefined,
+      }}
+      onClick={() => onSelectCommit?.(entry.hash)}
+    >
+      {/* 短哈希改 EllipsisText：`mono` 与原 `code` 等价（同走 Typography.Text 的 code 呈现），
+          `title` 给出完整哈希（antd 仅在文本溢出时才弹，短哈希一般不出浮层，故不新增可见行为）；
+          `flexShrink: 0` 去掉——可收缩（超窄时截断而非撑宽行）。 */}
+      <EllipsisText mono title={entry.hash}>
+        {entry.shortHash}
+      </EllipsisText>
+      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+        {entry.subject}
+      </Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        {entry.author}
+      </Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        {formatCommitDate(entry.dateIso)}
+      </Typography.Text>
+    </Flex>
   );
 }
 
@@ -243,15 +245,21 @@ export function CommittedChangesPanel({
         <Flex gap={16} align="flex-start">
           <Card size="small" title={`提交列表（${entries.length}）`} style={{ flex: 1, minWidth: 0 }}>
             <Flex vertical>
-              {entries.map((entry, index) => (
-                <CommitRow
-                  key={entry.hash}
-                  entry={entry}
-                  index={index}
-                  selected={entry.hash === selectedHash}
-                  onSelectCommit={onSelectCommit}
-                />
-              ))}
+              {/* 提交列表走 antd Listy（6.6.0 起的列表组件，取代手写 map 行）：容器/行结构/悬停底色由组件负责；
+                  行内边距沿用改造前的 4px 8px（Listy 默认 12px 16px）；行键与原 map 的 key 同（entry.hash）。 */}
+              <Listy
+                items={entries}
+                rowKey={(entry) => entry.hash}
+                itemRender={(entry, index) => (
+                  <CommitRow
+                    entry={entry}
+                    index={index}
+                    selected={entry.hash === selectedHash}
+                    onSelectCommit={onSelectCommit}
+                  />
+                )}
+                styles={{ item: { padding: 0 } }}
+              />
               {/* 「加载更多」：仅在 hasMore 时出现；loading 态由 loadingMore 驱动（数据注入与回调由容器持有） */}
               {page?.hasMore ? (
                 <Tooltip title="继续向后加载下一页提交记录（追加到现有列表）">
@@ -282,7 +290,10 @@ export function CommittedChangesPanel({
               <EmptyState title="该提交无文件变更" />
             ) : (
               <Flex vertical>
-                {/* 目录树：平铺路径经 buildFileTree 组织（目录可折叠；文件叶子保留原数组下标 testid） */}
+                {/* 目录树：平铺路径经 buildFileTree 组织（目录可折叠；文件叶子保留原数组下标 testid）。
+                    **有意不迁 Listy**：这是递归树（一层目录 → 子目录 → 文件叶子），行与行之间存在父子层级与
+                    逐级缩进（paddingLeft: depth * 16），不是同质条目的一维列表；Listy 的行容器无法表达层级，
+                    且树里同时渲染目录行与文件行两类语义不同的行（目录折叠 + 文件差异打开）。 */}
                 {buildFileTree(selected.files).map((node) => (
                   <TreeNodeRow
                     key={node.path}

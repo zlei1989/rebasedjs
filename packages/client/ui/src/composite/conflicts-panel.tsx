@@ -6,9 +6,11 @@
  *  revert→继续还原；全部解决后可用，否则禁用并 Tooltip 提示）。
  *  删除/修改冲突（stages 缺 2 或 3）：对应整侧采纳按钮禁用（该侧无版本，checkout 必失败），
  *  并额外渲染「删除该文件」（Popconfirm 确认；对照 Java 版把采纳映射为删除的路径）。
+ *  分组内条目列表走 antd Listy（6.6.0 起）：分组结构（目录标题 + 分组容器）保持原样，
+ *  只把每个分组内的行列表交给 Listy（行容器/悬停底色由组件负责，行级 Tooltip 按产品口径不挂）。
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入。
  */
-import { Button, Card, Flex, Popconfirm, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Listy, Popconfirm, Tag, Tooltip, Typography } from 'antd';
 import type { ConflictEntry, ConflictList, OperationKind, ResolveConflictBody } from '@rebased/contracts';
 
 export interface ConflictsPanelProps {
@@ -96,7 +98,9 @@ function ConflictRow({
   const hasOurs = entry.stages.includes(2);
   const hasTheirs = entry.stages.includes(3);
   return (
-    <Flex data-testid={`conflict-row-${entry.path}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 本组件只渲染行内容（行内按钮的 Tooltip 全部保留，Popconfirm > Tooltip > Button 嵌套顺序不变）。
+    <Flex data-testid={`conflict-row-${entry.path}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {entry.path}
       </Typography.Text>
@@ -195,7 +199,8 @@ export function ConflictsPanel({
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
       <Card size="small" title={`冲突文件（${remaining}）`}>
-        {/* 行列表用 Flex vertical 渲染（antd v6 已弃用 List）；按目录子标题分组（单层） */}
+        {/* 分组容器保持原结构（目录标题 + 分组容器）；仅把分组内的条目列表换成 antd Listy
+            （6.6.0 起的列表组件，取代老 List）：行容器/行结构/悬停底色由组件负责，不再手写 flex 行 */}
         <Flex vertical>
           {remaining === 0 ? (
             <Typography.Text type="secondary">无冲突</Typography.Text>
@@ -209,15 +214,20 @@ export function ConflictsPanel({
                 >
                   {dirLabel(dir, entries.length)}
                 </Typography.Text>
-                {entries.map((entry) => (
-                  <ConflictRow
-                    key={entry.path}
-                    entry={entry}
-                    resolving={resolving}
-                    onResolve={onResolve}
-                    onOpenMergeView={onOpenMergeView}
-                  />
-                ))}
+                <Listy
+                  items={entries}
+                  rowKey={(entry) => entry.path}
+                  itemRender={(entry) => (
+                    <ConflictRow
+                      entry={entry}
+                      resolving={resolving}
+                      onResolve={onResolve}
+                      onOpenMergeView={onOpenMergeView}
+                    />
+                  )}
+                  // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+                  styles={{ item: { padding: '4px 0' } }}
+                />
               </Flex>
             ))
           )}

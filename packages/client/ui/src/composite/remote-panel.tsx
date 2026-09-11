@@ -7,7 +7,7 @@
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
  */
 import { useState } from 'react';
-import { Button, Card, Flex, Input, Modal, Popconfirm, Select, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Flex, Input, Listy, Modal, Popconfirm, Select, Tag, Tooltip, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { RemoteAction, RemoteInfo, RemoteList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -144,7 +144,7 @@ function RemoteRow({
   onEdit: (remote: RemoteInfo) => void;
 }): React.ReactNode {
   return (
-    <Flex data-testid={`row-remote-${remote.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    <Flex data-testid={`row-remote-${remote.name}`} align="center" gap={8}>
       <Typography.Text strong style={{ minWidth: 80 }}>
         {remote.name}
       </Typography.Text>
@@ -303,17 +303,21 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
         {remotes.remotes.length === 0 ? (
           <EmptyState title="暂无远程" />
         ) : (
-          <Flex vertical>
-            {remotes.remotes.map((remote) => (
+          // 行列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：行容器/悬停底色由组件负责，
+          // 调用方只给数据与行内容；行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。
+          <Listy
+            items={remotes.remotes}
+            rowKey={(remote) => remote.name}
+            itemRender={(remote) => (
               <RemoteRow
-                key={remote.name}
                 remote={remote}
                 onAction={onAction}
                 onFetch={onFetch}
                 onEdit={setEditTarget}
               />
-            ))}
-          </Flex>
+            )}
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Card>
 

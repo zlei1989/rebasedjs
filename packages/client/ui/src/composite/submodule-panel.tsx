@@ -6,7 +6,7 @@
  *  纯 props 驱动：ui 不调接口，数据与全部回调由调用方容器注入；操作失败反馈由容器负责。
  */
 import { useState } from 'react';
-import { Button, Card, Checkbox, Flex, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Checkbox, Flex, Listy, Tag, Tooltip, Typography } from 'antd';
 import type { SubmoduleEntry, SubmoduleList, SubmoduleUpdateBody } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { EllipsisText } from '../base/ellipsis-text';
@@ -41,7 +41,9 @@ function SubmoduleRow({
 }): React.ReactNode {
   const meta = STATUS_META[entry.status];
   return (
-    <Flex data-testid={`submodule-row-${entry.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 本组件只渲染行内容；`gap={8}` 等行内间距仍留在本行，视觉不变。
+    <Flex data-testid={`submodule-row-${entry.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {entry.name}
       </Typography.Text>
@@ -170,11 +172,15 @@ export function SubmodulePanel(props: SubmodulePanelProps): React.ReactNode {
         {submodules.submodules.length === 0 ? (
           <EmptyState title="无子模块" description="未检测到 .gitmodules" />
         ) : (
-          <Flex vertical>
-            {submodules.submodules.map((entry) => (
-              <SubmoduleRow key={entry.name} entry={entry} acting={acting} onUpdate={onUpdate} />
-            ))}
-          </Flex>
+          // 列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：容器/行结构/悬停底色由组件负责，
+          // 调用方只给数据与行内容，不再手写 flex 行。行级 Tooltip 按产品口径不挂（行内按钮的 Tooltip 保留）。
+          <Listy
+            items={submodules.submodules}
+            rowKey={(entry) => entry.name}
+            itemRender={(entry) => <SubmoduleRow entry={entry} acting={acting} onUpdate={onUpdate} />}
+            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Card>
     </Flex>

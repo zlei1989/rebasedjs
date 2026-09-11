@@ -9,7 +9,7 @@
  *  所有可交互元素（按钮/输入/单选组及其选项/勾选）均一对一包 Tooltip；禁用按钮另包 span 承接悬停。
  */
 import { useState } from 'react';
-import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Radio, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Checkbox, Flex, Input, Listy, Modal, Popconfirm, Radio, Tag, Tooltip, Typography } from 'antd';
 import type { WorktreeCreateBody, WorktreeEntry, WorktreeList } from '@rebased/contracts';
 import { EllipsisText } from '../base/ellipsis-text';
 import { EmptyState } from '../base/empty-state';
@@ -45,7 +45,9 @@ function WorktreeRow({
   // 强制移除开关：默认关闭（安全默认）；勾选后带 force 调 onRemove（git worktree remove --force，丢弃其中的未提交改动）
   const [force, setForce] = useState(false);
   return (
-    <Flex data-testid={`worktree-row-${wt.path}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 本组件只渲染行内容；`gap={8}` 等行内间距仍留在本行，视觉不变。
+    <Flex data-testid={`worktree-row-${wt.path}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {wt.path}
       </Typography.Text>
@@ -266,17 +268,22 @@ export function WorktreePanel(props: WorktreePanelProps): React.ReactNode {
         {worktrees.worktrees.length === 0 ? (
           <EmptyState title="暂无工作树" />
         ) : (
-          <Flex vertical>
-            {worktrees.worktrees.map((wt) => (
+          // 列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：容器/行结构/悬停底色由组件负责，
+          // 调用方只给数据与行内容，不再手写 flex 行。行级 Tooltip 按产品口径不挂（行内按钮的 Tooltip 保留）。
+          <Listy
+            items={worktrees.worktrees}
+            rowKey={(wt) => wt.path}
+            itemRender={(wt) => (
               <WorktreeRow
-                key={wt.path}
                 wt={wt}
                 current={currentPath === undefined ? false : wt.path === currentPath}
                 acting={acting}
                 onRemove={onRemove}
               />
-            ))}
-          </Flex>
+            )}
+            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+            styles={{ item: { padding: '4px 0' } }}
+          />
         )}
       </Card>
       <CreateWorktreeModal

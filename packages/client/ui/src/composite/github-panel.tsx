@@ -3,6 +3,9 @@
  *  纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入（hooks 在应用层装配）；
  *  状态切换 Tab 由容器/页面做，面板只渲染当前 state 的 prs；细节：单击选中、merged 加「已合并」标记、
  *  评论输入框与 review body 共用、REQUEST_CHANGES 带 body、patch 空串不渲染展开区。
+ *  列表渲染：PR 列表 / 详情时间线 / 详情改动文件三处统一走 antd Listy（6.6.0 起的列表组件）——
+ *  容器、行容器与悬停底色由组件负责，行内容由调用方 `itemRender` 渲染；行**不挂 Tooltip**
+ *  （产品口径：行级气泡与行内按钮气泡会在同一块悬停区叠弹），行内边距在调用处 `styles.item`。
  */
 import { useState } from 'react';
 import {
@@ -10,6 +13,7 @@ import {
   Card,
   Flex,
   Input,
+  Listy,
   Modal,
   Popconfirm,
   Radio,
@@ -109,48 +113,48 @@ function PrRow({
 }): React.ReactNode {
   // 选中底色走主题 token（明亮 #e6f4ff / 暗色 #111a2c），不再硬编码明亮专用色
   const { token } = theme.useToken();
-  // 整行可点 → 气泡挂在行本身（Flex 是真实 DOM 节点）：
-  // 调用处再包一层会与行内气泡叠加成两个气泡，故行 Tooltip 归组件自己持有
+  // 行**不挂 Tooltip**（产品口径：行的可点后果已由行内容自述，且行级气泡会与行内按钮气泡叠弹）。
+  // 逐行统一的 4px 8px 内边距归调用处 Listy 的 `styles.item`；这里只留逐行差异（cursor / 选中底色）。
   return (
-    <Tooltip title="选中该 PR：在右侧详情列加载描述、时间线与文件变更">
-      <Flex
-        data-testid={`github-pr-row-${pr.number}`}
-        align="center"
-        gap={8}
-        style={{
-          padding: '4px 8px',
-          cursor: 'pointer',
-          backgroundColor: selected ? token.controlItemBgActive : undefined,
-        }}
-        onClick={() => onSelect(pr.number)}
-      >
-        <Tag style={{ flexShrink: 0 }}>{`#${pr.number}`}</Tag>
-        <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-          {pr.title}
-        </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {pr.author}
-        </Typography.Text>
-        <Tag color={pr.state === 'open' ? 'success' : 'default'} style={{ flexShrink: 0 }}>
-          {pr.state}
+    <Flex
+      data-testid={`github-pr-row-${pr.number}`}
+      align="center"
+      gap={8}
+      style={{
+        // 行内边距留在可点元素自身（下沉到 Listy 的 styles.item 会让那圈内边距落在包装 div 上，不属命中区/选中底色区）
+        padding: '4px 8px',
+        cursor: 'pointer',
+        backgroundColor: selected ? token.controlItemBgActive : undefined,
+      }}
+      onClick={() => onSelect(pr.number)}
+    >
+      <Tag style={{ flexShrink: 0 }}>{`#${pr.number}`}</Tag>
+      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
+        {pr.title}
+      </Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        {pr.author}
+      </Typography.Text>
+      <Tag color={pr.state === 'open' ? 'success' : 'default'} style={{ flexShrink: 0 }}>
+        {pr.state}
+      </Tag>
+      {pr.merged ? (
+        <Tag color="blue" style={{ flexShrink: 0 }}>
+          已合并
         </Tag>
-        {pr.merged ? (
-          <Tag color="blue" style={{ flexShrink: 0 }}>
-            已合并
-          </Tag>
-        ) : null}
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-          {formatCommitDate(pr.updatedAtIso)}
-        </Typography.Text>
-      </Flex>
-    </Tooltip>
+      ) : null}
+      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        {formatCommitDate(pr.updatedAtIso)}
+      </Typography.Text>
+    </Flex>
   );
 }
 
 /** 时间线条目：kind 徽标（comment 评论/review 审查+reviewState）+ author + 时间 + body（保留换行） */
 function TimelineRow({ entry }: { entry: GitHubTimelineEntry }): React.ReactNode {
   return (
-    <Flex vertical data-testid={`github-timeline-${entry.id}`} style={{ padding: '4px 0' }}>
+    // 行内边距归调用处 Listy 的 `styles.item`（逐行统一的 4px 0）
+    <Flex vertical data-testid={`github-timeline-${entry.id}`}>
       <Flex align="center" gap={8}>
         <Tag color={entry.kind === 'review' ? 'blue' : 'default'} style={{ flexShrink: 0 }}>
           {entry.kind === 'review' ? '审查' : '评论'}
@@ -197,7 +201,8 @@ function FileRow({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <Flex vertical data-testid={`github-file-${index}`} style={{ padding: '4px 0' }}>
+    // 行内边距归调用处 Listy 的 `styles.item`（逐行统一的 4px 0）
+    <Flex vertical data-testid={`github-file-${index}`}>
       <Flex align="center" gap={8}>
         <Tag color={FILE_STATUS_COLORS[file.status]} style={{ flexShrink: 0 }}>
           {file.status}
@@ -526,11 +531,14 @@ function PrDetailBlock({
               timeline === null || timeline.entries.length === 0 ? (
                 <EmptyState title="暂无动态" />
               ) : (
-                <Flex vertical>
-                  {timeline.entries.map((entry) => (
-                    <TimelineRow key={`${entry.kind}-${entry.id}`} entry={entry} />
-                  ))}
-                </Flex>
+                // 时间线走 antd Listy：容器/行容器/悬停底色由组件负责，调用方只给数据 + 行内容；
+                // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px），下边框与悬停底色走组件默认样式
+                <Listy
+                  items={timeline.entries}
+                  rowKey={(entry) => `${entry.kind}-${entry.id}`}
+                  itemRender={(entry) => <TimelineRow entry={entry} />}
+                  styles={{ item: { padding: '4px 0' } }}
+                />
               ),
           },
           {
@@ -540,10 +548,12 @@ function PrDetailBlock({
               files === null || files.files.length === 0 ? (
                 <EmptyState title="暂无文件变更" />
               ) : (
-                <Flex vertical>
-                  {files.files.map((file, index) => (
+                // 改动文件列表走 antd Listy（同上）：index 由 itemRender 的第二参提供，file-N 的 testid 口径不变
+                <Listy
+                  items={files.files}
+                  rowKey={(file) => file.path}
+                  itemRender={(file, index) => (
                     <FileRow
-                      key={file.path}
                       file={file}
                       index={index}
                       loader={loader}
@@ -551,8 +561,9 @@ function PrDetailBlock({
                       onAddReviewComment={onAddReviewComment}
                       commentActing={commentActing}
                     />
-                  ))}
-                </Flex>
+                  )}
+                  styles={{ item: { padding: '4px 0' } }}
+                />
               ),
           },
         ]}
@@ -644,12 +655,16 @@ export function GitHubPanel(props: GitHubPanelProps): React.ReactNode {
         ) : prs.prs.length === 0 ? (
           <EmptyState title="暂无拉取请求" />
         ) : (
-          <Flex vertical>
-            {prs.prs.map((pr) => (
-              // 整行气泡由 PrRow 内部持有（挂在可点 Flex 上），此处不再包一层，避免双气泡
-              <PrRow key={pr.number} pr={pr} selected={pr.number === number} onSelect={onSelectPr} />
-            ))}
-          </Flex>
+          // PR 列表走 antd Listy：容器/行容器/悬停底色由组件负责；行内边距沿用改造前的 4px 8px。
+          // 行（PrRow）自身不挂 Tooltip，此处也不再包一层
+          <Listy
+            items={prs.prs}
+            rowKey={(pr) => pr.number}
+            itemRender={(pr) => (
+              <PrRow pr={pr} selected={pr.number === number} onSelect={onSelectPr} />
+            )}
+            styles={{ item: { padding: 0 } }}
+          />
         )}
       </Card>
       {number !== null ? (
