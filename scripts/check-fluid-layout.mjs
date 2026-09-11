@@ -27,6 +27,9 @@
  *   另需一个已注册的真实夹具仓库（默认 rebased-smoke，用 --repo 改）。
  *
  * 注意：
+ *   - 每格的就绪是**两段式**：`ready`（页面壳 / 工具行出现）+ `content`（数据级条目真的渲染出来）。
+ *     只等 `ready` 会量到「数据还没到」的页面，而空页永远不会横向溢出 —— 那样的绿什么都没证明，
+ *     所以带 `content` 的格子在该选择器一条都没命中时**直接判红**（而不是静静地绿过去）。
  *   - 主题是**服务端持久化设置**（PUT /api/settings）：脚本先读原值、跑完恢复，不留痕。
  *   - GitHub/GitLab 面板需要真实令牌，本检出没有：用 page.route 打桩**宿主 API 数据**，
  *     断言落到的仍是真实组件（GitHubPanel/GitLabPanel/HunkDiffView/Monaco）与真实 DOM。
@@ -198,16 +201,26 @@ async function putJson(url, body) {
  * 从 split-pane.tsx 源码读 collapseBelow 的当前默认值。
  * 为什么读源码而不是抄常量：本脚本要断言的正是「默认值行为」，抄一份常量就会出现
  * 「改了原语、脚本还在按旧阈值判定」的假绿。
+ * 为什么读不到就**报错**而不是回落 768：静默回落恰好会重新引入它要防的那种假绿 ——
+ * 默认值一旦改成非字面量（如 `collapseBelow = DEFAULT_COLLAPSE_BELOW`、`= 768 * 1`），
+ * 正则失配，脚本会拿一个与实现无关的旧阈值去判定例外①，且不会有任何提示。
  */
 function readCollapseBelow() {
+  const file = join(ROOT, 'packages', 'client', 'ui', 'src', 'base', 'split-pane.tsx');
+  let src;
   try {
-    const src = readFileSync(join(ROOT, 'packages', 'client', 'ui', 'src', 'base', 'split-pane.tsx'), 'utf8');
-    const match = /collapseBelow\s*=\s*(\d+)/.exec(src);
-    if (match !== null) return Number(match[1]);
-  } catch {
-    // 读不到源码时退回与实现一致的已知默认值
+    src = readFileSync(file, 'utf8');
+  } catch (error) {
+    throw new Error(`读不到 ${file}（例外①要按它的当前默认值判定，不能猜）：${error instanceof Error ? error.message : String(error)}`);
   }
-  return 768;
+  const match = /collapseBelow\s*=\s*(\d+)/.exec(src);
+  if (match === null) {
+    throw new Error(
+      `${file} 里匹配不到 collapseBelow 的字面量默认值（正则 /collapseBelow\\s*=\\s*(\\d+)/）。\n` +
+        '默认值若改成了非常量写法，请同步更新本脚本的读取方式；**不回落任何缺省值**——按旧阈值判定等于假绿。',
+    );
+  }
+  return Number(match[1]);
 }
 
 // ---------------------------------------------------------------- 夹具上下文
@@ -384,7 +397,6 @@ async function assertMonacoInternalScroll(page) {
           contentWidth,
           contentX: lines === null ? null : Math.round(lines.getBoundingClientRect().x),
           hasHorizontalScrollbar: el.querySelector('.scrollbar.horizontal') !== null,
-          scrollableOverflowX: scrollable === null ? null : getComputedStyle(scrollable).overflowX,
           // Monaco 自己的滚动宿主（.monaco-scrollable-element 即类名里的 editor-scrollable）：
           // 它的 scrollWidth 是 Monaco 的「大滚动」哨兵（实测 16777216），**不是长行的度量**，
           // 故只用来断言「该容器确实持有可横向滚动的区间」；长行由 contentWidth 度量。
@@ -511,7 +523,15 @@ async function assertMonacoInternalScroll(page) {
 /**
  * 路由表 = web-next 全部 24 个页面（/ 首页 + /repos/:id 日志页 + 22 个子页），
  * 加两种「静态加载不产生」的日志页状态（?select= 选中提交、?compare= 分支对比）。
- * ready 一律用既有 data-testid：避免把「数据没到、页面空着」误判成通过。
+ *
+ * 两段式就绪门（`ready` + `content`）：
+ *   - `ready`   = 页面壳/工具行出现（证明路由挂上了）；
+ *   - `content` = **数据级**选择器，必须真的命中条目。
+ * 为什么必须两段：这些页面上不少 `ready` 点是「卡头工具行 / 状态卡」这类**静态**元素，
+ * 数据还没到时它们照样渲染 —— 只等 `ready` 就会量到一个尚未装数据的页面，而**空页永远不会
+ * 横向溢出**，该格于是成了白通过（不是失败，也不是跳过，是「什么都没证明的绿」）。
+ * `content` 逐页核实过数据来源（组件源码里「数据到齐才渲染」的那一支），注释里给出依据；
+ * 某页确实没有任何数据级内容时（对话-only 页 / 该夹具下必然为空），**在行内写明原因**而不是留白。
  */
 function routeCells(ctx) {
   const q = encodeURIComponent;
@@ -520,7 +540,9 @@ function routeCells(ctx) {
     { name: 'log', path: `/repos/${ctx.repo.id}`, ready: '[data-testid="commit-graph-row"]' },
     { name: 'log-select', path: `/repos/${ctx.repo.id}?select=${ctx.hash}`, ready: '[data-testid="commit-details"]' },
     { name: 'log-compare', path: `/repos/${ctx.repo.id}?compare=${ctx.branch}`, ready: '[data-testid="compare-title"]' },
-    { name: 'browse', path: `/repos/${ctx.repo.id}/browse?rev=${ctx.hash}`, ready: '[data-testid="split-side-host"]' },
+    // browse：split-side-host 只在 entries 到齐且非空时渲染（browse-panel.tsx：!entries || length===0 → EmptyState），
+    // 再要求文件树节点真的铺出来（nodes 由 entries 推导），把「树空了但宿主在」也挡住
+    { name: 'browse', path: `/repos/${ctx.repo.id}/browse?rev=${ctx.hash}`, ready: '[data-testid="split-side-host"]', content: '[data-testid="split-side-host"] .ant-tree-treenode' },
     { name: 'blame', path: `/repos/${ctx.repo.id}/blame?file=${q(ctx.file)}`, ready: '[data-testid="blame-file"]' },
     { name: 'branches', path: `/repos/${ctx.repo.id}/branches`, ready: '[data-testid^="row-local-"]' },
     { name: 'committed', path: `/repos/${ctx.repo.id}/committed`, ready: '[data-testid="committed-entry-0"]' },
@@ -528,25 +550,44 @@ function routeCells(ctx) {
     { name: 'search', path: `/repos/${ctx.repo.id}/search`, ready: '[data-testid^="branch-quick-"]' },
     { name: 'merge', path: `/repos/${ctx.repo.id}/merge`, ready: '[data-testid="merge-branch-select"]' },
     { name: 'remotes', path: `/repos/${ctx.repo.id}/remotes`, ready: '[data-testid^="row-remote-"]' },
-    { name: 'conflicts', path: `/repos/${ctx.repo.id}/conflicts`, ready: '[data-testid="continue-merge-wrap"]' },
+    // conflicts：就绪点是页脚那个「继续」按钮的 span（`ConflictRow` 一条都不渲染时它也在），
+    // 故内容级门改成**计数标题**「冲突文件（N）」—— 它的 N 来自 `conflictList`，且容器在
+    // `if (!conflictList) return null` 之前不渲染任何东西，标题出现即等价于冲突列表已到达。
+    // 该夹具（rebased-smoke）`GET /conflicts` 返回 `{"conflicts":[]}`，所以**没有** `conflict-row-*`
+    // 可等：这一格证明的是「数据到达后的空态页不溢出」，冲突行态的几何仍是未覆盖项（见 e2e 文档 §5.16④）。
+    { name: 'conflicts', path: `/repos/${ctx.repo.id}/conflicts`, ready: '[data-testid="continue-merge-wrap"]', content: 'text=冲突文件（' },
     {
       name: 'diff',
       path: `/repos/${ctx.repo.id}/diff?file=${q(ctx.file)}&from=${ctx.prevHash}&to=${ctx.hash}`,
       ready: '.monaco-editor .view-lines',
       after: assertMonacoInternalScroll,
     },
-    { name: 'settings', path: `/repos/${ctx.repo.id}/settings`, ready: '[data-testid="git-executable-card"]' },
-    { name: 'stashes', path: `/repos/${ctx.repo.id}/stashes`, ready: '[data-testid="stash-save-button"]' },
-    { name: 'status', path: `/repos/${ctx.repo.id}/status`, ready: '[data-testid="manage-changelists"]' },
-    { name: 'tags', path: `/repos/${ctx.repo.id}/tags`, ready: '[data-testid="tag-create-button"]' },
-    { name: 'patches', path: `/repos/${ctx.repo.id}/patches`, ready: '[data-testid="patch-create-button"]' },
-    { name: 'shelves', path: `/repos/${ctx.repo.id}/shelves`, ready: '[data-testid="shelf-save-button"]' },
-    { name: 'console', path: `/repos/${ctx.repo.id}/console`, ready: '[data-testid="console-refresh"]' },
+    // settings：git-executable-card 是**静态** Card（SettingsPage 无条件渲染全部卡片，容器也没有提前 return），
+    // 数据没到时它照样在 —— 这正是「量到未装数据的页面」的典型；改成等 git 配置行（9 个 CONFIG_KEYS 的
+    // 输入行，`config-view` 的响应到达才渲染）真的出现
+    { name: 'settings', path: `/repos/${ctx.repo.id}/settings`, ready: '[data-testid="git-executable-card"]', content: '[data-testid^="config-input-"]' },
+    { name: 'stashes', path: `/repos/${ctx.repo.id}/stashes`, ready: '[data-testid="stash-save-button"]', content: '[data-testid^="row-stash-"]' },
+    // status：manage-changelists 是工具行按钮；内容级门等变更行（staged/unstaged/untracked 三组任一）
+    { name: 'status', path: `/repos/${ctx.repo.id}/status`, ready: '[data-testid="manage-changelists"]', content: '[data-testid^="row-staged-"], [data-testid^="row-unstaged-"], [data-testid^="row-untracked-"]' },
+    { name: 'tags', path: `/repos/${ctx.repo.id}/tags`, ready: '[data-testid="tag-create-button"]', content: '[data-testid^="tag-row-"]' },
+    { name: 'patches', path: `/repos/${ctx.repo.id}/patches`, ready: '[data-testid="patch-create-button"]', content: '[data-testid^="row-patch-"]' },
+    { name: 'shelves', path: `/repos/${ctx.repo.id}/shelves`, ready: '[data-testid="shelf-save-button"]', content: '[data-testid^="row-shelf-"]' },
+    // console：这一页**没有**提前 return（ConsolePanel 无条件渲染，entries 未到时只是空列表），
+    // 故 console-refresh 是纯静态元素 —— 必须等内容行 `console-row-<id>`（服务端 exec 缓冲的记录）
+    { name: 'console', path: `/repos/${ctx.repo.id}/console`, ready: '[data-testid="console-refresh"]', content: '[data-testid^="console-row-"]' },
+    // ignore：**对话-only 页**——页面主体只有「返回日志」+「编辑忽略规则」两个按钮，忽略规则正文只在 Modal 里，
+    // 页面上不存在任何数据级内容可等。容器 `if (!contents) return null`（useIgnore 未返回前整页不渲染），
+    // 故 `edit-ignore-button` 出现本身已蕴含 contents 到达；其后页面再无别的数据会晚到，不存在「量到空页」的窗口。
+    // （Modal 内的规则正文属弹窗内部滚动，不在页面级口径内，见 e2e 文档 §5.16④。）
     { name: 'ignore', path: `/repos/${ctx.repo.id}/ignore`, ready: '[data-testid="edit-ignore-button"]' },
+    // github / gitlab：容器 `if (status === undefined) return null`，状态到达前整页不渲染；
+    // 该夹具 status.detected=false（无远程/无令牌），面板就只有「未检测到远程/未配置令牌」提示卡这一种内容，
+    // PR/MR 列表根本不渲染 —— 页面上不存在别的数据级内容可等。
+    // 装好数据后的列表形态由 `state:github-expanded-diff` / `state:gitlab-expanded-diff` 两格覆盖（打桩宿主 API）。
     { name: 'github', path: `/repos/${ctx.repo.id}/github`, ready: '[data-testid="github-status-card"]' },
     { name: 'gitlab', path: `/repos/${ctx.repo.id}/gitlab`, ready: '[data-testid="gitlab-status-card"]' },
-    { name: 'worktrees', path: `/repos/${ctx.repo.id}/worktrees`, ready: '[data-testid="worktree-refresh"]' },
-    { name: 'submodules', path: `/repos/${ctx.repo.id}/submodules`, ready: '[data-testid="submodule-refresh"]' },
+    { name: 'worktrees', path: `/repos/${ctx.repo.id}/worktrees`, ready: '[data-testid="worktree-refresh"]', content: '[data-testid^="worktree-row-"]' },
+    { name: 'submodules', path: `/repos/${ctx.repo.id}/submodules`, ready: '[data-testid="submodule-refresh"]', content: '[data-testid^="submodule-row-"]' },
   ];
 }
 
@@ -605,14 +646,26 @@ async function stubJson(page, entries) {
   }
 }
 
-/** 展开差异格的自有断言：hunk-diff-view 真的渲染出来了（而不是只开了个空壳） */
+/**
+ * 展开差异格的自有断言：hunk-diff-view 真的渲染出来了（而不是只开了个空壳）。
+ * **两个**条件都是断言，缺一即失败：① `hunk-diff-block-0` 存在；② 展开区内至少有一个**可见的**
+ * `.monaco-editor`。此前②只写进 reason 文本、不参与判定，于是「展开的 diff 内含 Monaco」只是注释——
+ * 一旦 hunk-diff-view 退化成纯文本渲染，该格仍会绿。Monaco 是懒加载的（`monaco-lazy`），
+ * 故给它一段有界的等待（10s）再判失败，避免把「还没加载完」误判成退化。
+ */
 async function assertHunkExpanded(page) {
   if ((await page.locator('[data-testid="hunk-diff-block-0"]').count()) === 0) {
     return { status: 'fail', reason: 'hunk-diff-view 未渲染（hunk-diff-block-0 缺失）' };
   }
-  const monaco = await page.evaluate(() =>
-    [...document.querySelectorAll('.monaco-editor')].filter((el) => el.clientWidth > 0).length,
-  );
+  let monaco = 0;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    monaco = await page.evaluate(() => [...document.querySelectorAll('.monaco-editor')].filter((el) => el.clientWidth > 0).length);
+    if (monaco > 0) break;
+    await page.waitForTimeout(500);
+  }
+  if (monaco < 1) {
+    return { status: 'fail', reason: 'hunk-diff-view 已展开但展开区内没有可见的 .monaco-editor（期望 ≥1）：展开的 diff 必须内含 Monaco' };
+  }
   return { status: 'pass', reason: `hunk-diff-view 已展开，内含 ${monaco} 个可见 Monaco 编辑器` };
 }
 
@@ -842,6 +895,13 @@ async function settle(page, { tries = 15, gap = 200 } = {}) {
 }
 
 /**
+ * 主题探针是否落在期望档（waitForTheme 的返回值 → 布尔）。
+ */
+function themeApplied(probe, theme) {
+  return theme === 'dark' ? probe.isDark === true : probe.isDark === false;
+}
+
+/**
  * 等主题真的落到文档上。
  * 为什么需要：主题来自 GET /api/settings，首帧按暗色兜底、设置到达后才写 data-theme/底色；
  * 切换主题后的第一次加载可能量到兜底色（实测 light 档第一格读出 data-theme=dark），属测量竞态。
@@ -870,16 +930,35 @@ async function waitForTheme(page, theme, timeout = 8000) {
   }
 }
 
-/** 导航并等就绪；就绪选择器缺失 → 返回原因（空页上的溢出断言没有意义） */
-async function openCell(page, url, ready, timeout) {
+/**
+ * 导航 → 两段式就绪门 → 等静止。
+ * 就绪选择器缺失或**内容级断言不成立**（cell.content 存在但一条都没命中）→ 返回失败原因：
+ * 空页上的溢出断言没有意义，宁可把这一格判红，也不能让它以「没有内容可溢出」的方式绿掉。
+ * 返回 `{ error, count }`：count 为内容级选择器的命中数（记进明细，作为「这一格确实量的是有数据的页面」的证据）。
+ */
+async function openCell(page, url, cell, timeout) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
   try {
-    await page.waitForSelector(ready, { timeout, state: 'attached' });
+    await page.waitForSelector(cell.ready, { timeout, state: 'attached' });
   } catch {
-    return `就绪选择器未出现：${ready}`;
+    return { error: `就绪选择器未出现：${cell.ready}`, count: null };
+  }
+  let count = null;
+  if (cell.content !== undefined) {
+    const min = cell.min ?? 1;
+    try {
+      await page.waitForSelector(cell.content, { timeout, state: 'attached' });
+    } catch {
+      return {
+        error: `内容级就绪选择器未出现：${cell.content}（只等 ${cell.ready} 会量到尚未装数据的页面，空页永不溢出 → 该格是白通过）`,
+        count: 0,
+      };
+    }
+    count = await page.locator(cell.content).count();
+    if (count < min) return { error: `内容级就绪断言不成立：${cell.content} 命中 ${count} 条 < ${min}`, count };
   }
   await settle(page);
-  return null;
+  return { error: null, count };
 }
 
 async function run(opts, pw, exe) {
@@ -909,8 +988,19 @@ async function run(opts, pw, exe) {
           const record = { app: opts.label, theme, width, cell: cell.name, kind: cell.kind ?? 'route' };
           try {
             if (cell.setup !== undefined) await cell.setup(page);
-            const notReady = await openCell(page, opts.base + cell.path, cell.ready, opts.timeout);
-            const themeProbe = notReady === null ? await waitForTheme(page, theme) : null;
+            const opened = await openCell(page, opts.base + cell.path, cell, opts.timeout);
+            const notReady = opened.error;
+            record.readyItems = opened.count;
+            let themeProbe = notReady === null ? await waitForTheme(page, theme) : null;
+            // 主题是**服务端共享的可变设置**，不是本进程私有的：本机同时开着别的会话时（如有人在浏览器里
+            // 点设置页「保存」），那个会话会把 theme 一起写回去，脚本这一轮的主题就没了 —— 实测发生过
+            // （light 块跑到第 21 格起连片失败，全是「主题未生效」）。这里**只把测量前提重新立起来**：
+            // 发现不匹配就重发一次 PUT /api/settings 再等一次；最终仍以实测探针为准（判定没有被放宽），
+            // 确实不生效时该格照旧判红。
+            if (themeProbe !== null && !themeApplied(themeProbe, theme)) {
+              await putJson(`${opts.base}/api/settings`, { theme });
+              themeProbe = await waitForTheme(page, theme);
+            }
             let extra = null;
             if (notReady === null && cell.interact !== undefined) await cell.interact(page);
             if (notReady === null && cell.verify !== undefined) extra = await cell.verify(page);
@@ -970,7 +1060,7 @@ function report(results, opts) {
   } else {
     for (const r of failed) {
       console.log(`  ✗ ${r.theme}/${r.width}px ${r.cell}: ${r.reason}`);
-      console.log(`      scrollWidth=${r.scrollWidth} clientWidth=${r.clientWidth}`);
+      console.log(`      scrollWidth=${r.scrollWidth} clientWidth=${r.clientWidth} 内容级就绪命中=${r.readyItems ?? '—'}`);
       for (const o of r.offenders ?? []) {
         console.log(`      越界元素: <${o.tag}> right=${o.right} width=${o.width} testid=${o.testid} text=${JSON.stringify(o.text)}`);
       }
