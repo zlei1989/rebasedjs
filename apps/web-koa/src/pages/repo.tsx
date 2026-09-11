@@ -25,6 +25,7 @@ import {
   useGitlabStatus,
   useInteractiveRebase,
   useLogPage,
+  useLogPages,
   useLogStream,
   useOperation,
   usePull,
@@ -72,17 +73,27 @@ export function RepoPage(): React.ReactNode {
   // 分支对比视图（?compare=<branch>，GitCompareWithBranchAction 语义）：双 range 查询
   // current..branch（分支独有）与 branch..current（当前独有）；status readiness 由下方守卫保证。
   const compareBranch = searchParams.get('compare');
-  // 过滤/分页（P2 收取）：author/path 过滤（文本即滤，对齐 Java）；limit 阶梯放大（50→500 上限）实现「加载更多」。
-  // 过滤或翻页会改变查询语义——此时流（Ruling 6 同查询渐进渲染）与快照不再同查询，故仅默认视图（无过滤且 limit=50）接入流合并
+  // 过滤/按需分页（P2 收取）：author/path 过滤（文本即滤，对齐 Java）；分页走 useLogPages 的累积页
+  // （页大小 50→100→200→400→500 阶梯，skip 逐页累加），滚到列表底部自动追加下一页，
+  // 直到服务端回报 hasMore=false —— 也就是仓库第一条提交进了列表（此前写死 500 上限，超过 500 条
+  // 提交的仓库永远看不到最早一条）。
+  // 过滤或翻页会改变查询语义——此时流（Ruling 6 同查询渐进渲染）与快照不再同查询，故仅默认视图
+  // （无过滤且只加载了第一页）接入流合并
   const [author, setAuthor] = useState('');
   const [path, setPath] = useState('');
-  const [limit, setLimit] = useState(50);
-  const streamEnabled = author === '' && path === '' && limit === 50;
-  const { data: page, mutate: mutateLog, isLoading: logLoading } = useLogPage(repoId, {
+  const {
+    commits: pageCommits,
+    hasMore: logHasMore,
+    loadingMore: loadingMoreLog,
+    loadMore: loadMoreLog,
+    reset: resetLogPages,
+    size: logPageCount,
+    mutate: mutateLog,
+  } = useLogPages(repoId, {
     ...(author === '' ? {} : { author }),
     ...(path === '' ? {} : { path }),
-    limit,
   });
+  const streamEnabled = author === '' && path === '' && logPageCount === 1;
   const [refreshKey, setRefreshKey] = useState(0);
   const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId, refreshKey);
   const { data: status, mutate } = useRepoStatus(repoId);
@@ -155,9 +166,9 @@ export function RepoPage(): React.ReactNode {
   const commits = useMemo(
     () =>
       streamEnabled
-        ? mergeLogCommits(page?.commits ?? [], streamCommits, streamConnected)
-        : page?.commits ?? [],
-    [page, streamCommits, streamConnected, streamEnabled],
+        ? mergeLogCommits(pageCommits, streamCommits, streamConnected)
+        : pageCommits,
+    [pageCommits, streamCommits, streamConnected, streamEnabled],
   );
   const selectedCommit: CommitInfo | null = commits.find((c) => c.hash === selectedHash) ?? null;
   // 「Reset 到此处」：从 commits 找目标提交生成展示 label（短哈希 + 主题），打开 ResetDialog
@@ -397,7 +408,7 @@ export function RepoPage(): React.ReactNode {
     setChangesHash('');
     setAuthor('');
     setPath('');
-    setLimit(50);
+    resetLogPages();
   }, [repoId]);
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）。
   // **必须放在上面这个 hook 之后**：本句是提前 return，若其上方还有 hook，首帧（status 未就绪）会少调一个 hook、
@@ -503,14 +514,14 @@ export function RepoPage(): React.ReactNode {
         onOpenRemotes={() => navigate(`/repos/${repoId}/remotes`)}
         filters={{ author, path }}
         onFiltersChange={(f) => {
-          // 过滤变更：回到首屏窗口（limit 复位 50），选定提交不在窗口时的降级由详情面板缺省逻辑承载
+          // 过滤变更：回到首屏窗口（分页复位到第一页），选定提交不在窗口时的降级由详情面板缺省逻辑承载
           setAuthor(f.author ?? '');
           setPath(f.path ?? '');
-          setLimit(50);
+          resetLogPages();
         }}
-        hasMore={(page?.hasMore ?? false) && limit < 500}
-        loadingMore={logLoading && limit > 50}
-        onLoadMore={() => setLimit((prev) => Math.min(prev * 2, 500))}
+        hasMore={logHasMore}
+        loadingMore={loadingMoreLog}
+        onLoadMore={loadMoreLog}
         onCheckoutRevision={(hash) => {
           Modal.confirm({
             title: '检出此提交',

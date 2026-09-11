@@ -131,6 +131,78 @@ describe('CommitGraph', () => {
     expect(screen.queryAllByTestId('commit-graph-row')).toHaveLength(0);
   });
 
+  /**
+   * 按需加载（「一路加载到最早一条」的 UI 侧闸门）：两个触发源——
+   *   ① 已加载内容填不满视口（行数 × 24 ≤ height）：首次只来 50 条、窗口很高时列表根本滚不动，
+   *      没有这一条就永远等不到滚动事件；
+   *   ② 滚到距底部 3 行以内（几何只有滚动事件能拿到）。
+   * 不变量：同一版数据（行数不变）只回调一次，避免「追加回来 → 副作用重跑 → 再请求同页」的连环请求。
+   */
+  describe('按需加载（onReachBottom）', () => {
+    /**
+     * jsdom 无布局：给 holder 造一份**恒定**的合成滚动几何再派发真实 scroll 事件。
+     * scrollTop 用 getter/setter 固定住 —— jsdom 的 scrollTop setter 会按它自己的（空）几何把值夹回，
+     * 而 rc-listy 内部还会把滚动位置写回该元素，直接赋值会被改掉，断言就失去判别力。
+     */
+    function scrollHolderTo(scrollTop: number): void {
+      const holder = document.querySelector('.ant-listy-holder') as HTMLElement;
+      Object.defineProperties(holder, {
+        scrollHeight: { value: 1000, configurable: true },
+        clientHeight: { value: 100, configurable: true },
+        scrollTop: { get: () => scrollTop, set: () => {}, configurable: true },
+      });
+      fireEvent.scroll(holder);
+    }
+
+    it('内容填不满视口时挂载即回调一次；同一版数据不重复回调', () => {
+      const onReachBottom = vi.fn();
+      // 6 行 × 24 = 144 ≤ 480（height 缺省）→ 视口没填满
+      const { rerender } = render(<CommitGraph commits={mergeCommits} onReachBottom={onReachBottom} />);
+      expect(onReachBottom).toHaveBeenCalledTimes(1);
+
+      // 同一版数据重渲染（行数没变）：不再回调，避免同页重复请求
+      rerender(<CommitGraph commits={mergeCommits} onReachBottom={onReachBottom} />);
+      expect(onReachBottom).toHaveBeenCalledTimes(1);
+
+      // 追加了一页但仍填不满视口 → 继续回调（这就是滚一次到底、逐页补到最早一条的链）
+      const moreCommits: CommitInfo[] = [
+        ...mergeCommits,
+        ...Array.from({ length: 10 }, (_, i) => makeCommit({ hash: `x${i}` })),
+      ];
+      rerender(<CommitGraph commits={moreCommits} onReachBottom={onReachBottom} />);
+      expect(onReachBottom).toHaveBeenCalledTimes(2);
+
+      // 内容已经超出视口 → 不再自动补，交给滚动触发
+      const filled: CommitInfo[] = [...moreCommits, ...Array.from({ length: 24 }, (_, i) => makeCommit({ hash: `y${i}` }))];
+      rerender(<CommitGraph commits={filled} onReachBottom={onReachBottom} />);
+      expect(onReachBottom).toHaveBeenCalledTimes(2);
+    });
+
+    it('滚到接近底部才回调；未到底不回调，到底后同一版数据不重复回调', () => {
+      const onReachBottom = vi.fn();
+      // height=100 < 6 行 × 24 = 144：内容撑满视口，故挂载时不回调（只有真实滚动才算「需要更早的提交」）
+      render(<CommitGraph commits={mergeCommits} height={100} onReachBottom={onReachBottom} />);
+      expect(onReachBottom).not.toHaveBeenCalled();
+
+      // 距底部 100px（> 3 行 = 72px 的余量）→ 还不够近
+      scrollHolderTo(800);
+      expect(onReachBottom).not.toHaveBeenCalled();
+
+      // 距底部 20px → 触发
+      scrollHolderTo(880);
+      expect(onReachBottom).toHaveBeenCalledTimes(1);
+
+      // 仍停在底部、数据没变：不重复回调
+      scrollHolderTo(900);
+      expect(onReachBottom).toHaveBeenCalledTimes(1);
+    });
+
+    it('缺省 onReachBottom：滚到底也不回调（已到最早的提交，没有下一页）', () => {
+      render(<CommitGraph commits={mergeCommits} height={100} />);
+      expect(() => scrollHolderTo(900)).not.toThrow();
+    });
+  });
+
   // 冒烟 F-021：?select=<hash> 深链与点击选中均需行级选中态（否则「选中哪一行」无从辨认）
   it('selectedHash 命中的行带选中底色，其余行无底色', () => {
     render(<CommitGraph commits={commits} selectedHash="c2" />);

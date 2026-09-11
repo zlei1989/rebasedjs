@@ -15,7 +15,7 @@
  * 间距口径（2026-09-12）：说明区内的间距**一律不写内联 gap / 自定义 class**，由 antd `Flex` 的档位给
  *   （`gap="middle"` = 主题 `padding` token；全站默认紧凑密度下恰为 8px，见下方说明区注释与测试锚点）。
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ConfigProvider, Flex, Listy, Space, Tag, theme } from 'antd';
 import type { ThemeConfig } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
@@ -36,10 +36,21 @@ export interface CommitGraphProps {
   showTags?: boolean;
   /** 选中行高亮（详情面板当前提交；`?select=<hash>` 深链与点击选中均经此呈现选中态） */
   selectedHash?: string | null;
+  /**
+   * 需要更早的提交时回调（按需加载：滚到接近底部，或已加载内容还填不满视口）。
+   * 缺省不触发（= 已到最早的提交，没有下一页）。同一版数据只回调一次：追加出新数据后若仍未填满
+   * 视口会再回调一次，因此「一次滚动到底 → 逐页追加直到最早一条可见」能自动完成。
+   */
+  onReachBottom?: () => void;
 }
 
 const ROW_HEIGHT = 24;
 const LANE_WIDTH = 18;
+/**
+ * 触底判定的余量（3 行）：滚到距底部 3 行以内就算「该要下一页了」，
+ * 让下一页在用户真正撞到底之前就在路上，避免每次到底都要停一下再补。
+ */
+const REACH_BOTTOM_THRESHOLD = ROW_HEIGHT * 3;
 /**
  * 图列左右留白：不留会让最左/最右 lane 的圆点被视口边缘切掉。
  * 注意它会进入「圆点中心 → 图列右边界」的距离（= GRAPH_PADDING_X + LANE_WIDTH/2），
@@ -139,6 +150,7 @@ export function CommitGraph({
   height = 480,
   showTags = false,
   selectedHash = null,
+  onReachBottom,
 }: CommitGraphProps): React.ReactNode {
   // 日期列用主题次要文本色（原 #888 是暗色专用硬编码，明亮主题下对比不足）
   const { token } = theme.useToken();
@@ -159,6 +171,23 @@ export function CommitGraph({
   // 而 Listy 内部算 itemHeight 读的正是同一个值，故这里按运行时口径窄化读取（缺失时按紧凑密度实测值 20）。
   const fontHeight = (token as { fontHeight?: number }).fontHeight ?? 20;
   const listyTheme = useMemo(() => listyRowHeightTheme(fontHeight), [fontHeight]);
+  // 按需加载的触发条件之一：滚到接近底部（几何只有滚动事件能拿到，故由 onScroll 上报）
+  const [atBottom, setAtBottom] = useState(false);
+  // 已触发过的数据版本（行数）：同一版数据只回调一次，避免「追加页回来 → 副作用重跑 → 再请求」的连环请求；
+  // 数据变多后行数变化即视为新版本，若仍未填满视口就继续追加（这正是「一路加载到最早一条」的链）
+  const reachedRowsRef = useRef<number | null>(null);
+  // 触发条件之二：已加载内容还填不满视口（行高恒为 ROW_HEIGHT，故内容高 = 行数 × ROW_HEIGHT）。
+  // 必须有这一条：首次只有 50 条、窗口却很高时，列表根本滚不动，也就永远不会产生滚动事件
+  const contentNotFilled = rows.length * ROW_HEIGHT <= height;
+  useEffect(() => {
+    if (onReachBottom === undefined) return;
+    if (!atBottom && !contentNotFilled) return;
+    if (reachedRowsRef.current === rows.length) return;
+    reachedRowsRef.current = rows.length;
+    // 触发后先把「触底」复位：几何要等下一次真实滚动事件才更新，不复位会在内容变高后仍按旧几何重复追加
+    setAtBottom(false);
+    onReachBottom();
+  }, [atBottom, contentNotFilled, rows.length, onReachBottom]);
 
   return (
     /* ConfigProvider 只包图这一棵子树（见 listyRowHeightTheme）：嵌套 ConfigProvider 与父主题是
@@ -170,6 +199,14 @@ export function CommitGraph({
         rowKey={(row) => row.commit.hash}
         virtual
         height={height}
+        // 触底上报（按需加载更早提交的触发源）：holder 是真正的滚动容器，滚动事件带出它的几何；
+        // 滚离底部时不清 reachedRowsRef ——「同一版数据只回调一次」的判据是行数，不是滚动位置，
+        // 用户来回滚不会重复请求，而数据一旦变多就能继续链式追加
+        onScroll={(event) => {
+          const holder = event.currentTarget;
+          const bottom = holder.scrollHeight - holder.scrollTop - holder.clientHeight <= REACH_BOTTOM_THRESHOLD;
+          setAtBottom(bottom);
+        }}
         itemRender={(row, index) => {
           const commit = byHash.get(row.commit.hash);
           if (!commit) return null;

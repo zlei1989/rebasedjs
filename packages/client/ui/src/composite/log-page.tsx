@@ -7,6 +7,9 @@
  * 收进「更多」Dropdown，
  * 仅在容器注入对应回调时出现对应菜单项，
  * 回调全缺省时不渲染「更多」按钮。
+ * 按需加载：hasMore 为真且未在加载时，把 onLoadMore 作为 CommitGraph 的 onReachBottom 注入
+ * （滚到列表底部、或已加载内容填不满视口即自动追加下一页），直到最早的一条提交进入列表；
+ * 「加载更多」按钮保留为手动兜底入口。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
 import { Alert, Button, Col, Dropdown, Flex, Input, Modal, Popconfirm, Row, Skeleton, Space, Switch, Tooltip, Typography, theme } from 'antd';
@@ -369,6 +372,10 @@ export function LogPage({
   // 主区（提交图）：与右侧详情面板共同构成两栏——宽屏并排、窄屏纵向堆叠由 SplitPane 承担。
   // 提取成变量是因为详情面板按需出现（未选中提交时整块不渲染），而 SplitPane 的侧栏宿主恒存在：
   // 把条件放进 side 会让默认视图（未选中）右侧永久留一条 320px 空列，故两栏块整体按需切换。
+  // 是否允许「按需加载下一页」：还有更早的提交、当前没有请求在飞、且容器注入了加载回调。
+  // 三者缺一即不注入 onReachBottom（回调节点缺省 = CommitGraph 不再触发触底加载），
+  // 这也是「加载中不重复请求」的闸门——触底是持续状态，回调若一直在就会连发。
+  const canLoadMore = hasMore === true && loadingMore !== true && onLoadMore !== undefined;
   const graphArea = (
     <>
       {/* 空仓（unborn HEAD，如刚 init）与过滤无命中：显式空态——否则整片空白无法区分「在加载」与「没有提交」 */}
@@ -389,6 +396,9 @@ export function LogPage({
               onContextMenu={setMenuHash}
               showTags={showTags}
               selectedHash={selectedCommit?.hash ?? null}
+              // 按需加载：滚到列表底部（或内容还填不满视口）时自动追加下一页，直到最早的一条进来。
+              // 正在加载时不注入（回调缺省即不再触发）——避免同一页被连点/触底撞出两次请求
+              {...(canLoadMore ? { onReachBottom: onLoadMore } : {})}
             />
           </div>
         </Dropdown>
@@ -589,9 +599,10 @@ export function LogPage({
             </Typography.Text>
           </Flex>
           {hasMore !== undefined && onLoadMore !== undefined ? (
-            // 到达快照上限时按钮禁用；禁用按钮不派发 hover，故在 Tooltip 与 Button 之间包 span 承接悬停。
-            // 外层 span 承接原先挂在按钮上的 marginLeft:auto（按钮自身 style 保持不变），右对齐位置不变
-            <Tooltip title={hasMore ? '继续加载更早的提交：按阶梯放大查询数量，结果追加在列表下方' : '已到本次快照的加载上限：请收窄过滤条件或重新查询后再加载'}>
+            // 没有更早的提交（已到仓库第一条）时按钮禁用；禁用按钮不派发 hover，故在 Tooltip 与 Button
+            // 之间包 span 承接悬停。外层 span 承接原先挂在按钮上的 marginLeft:auto（按钮自身 style 不变），
+            // 右对齐位置不变。这只是「手动兜底」入口：正常路径是滚到列表底部自动按需加载（见 onReachBottom）
+            <Tooltip title={hasMore ? '继续加载更早的提交：滚到列表底部会自动加载，也可以点这里手动加载；结果追加在列表下方' : '已到最早的提交：该仓库的全部提交都已加载（含第一条）'}>
               <span style={{ marginLeft: 'auto' }}>
                 <Button
                   size="small"
@@ -601,7 +612,7 @@ export function LogPage({
                   onClick={onLoadMore}
                   style={{ marginLeft: 'auto' }}
                 >
-                  加载更多
+                  {hasMore ? '加载更多' : '已到最早的提交'}
                 </Button>
               </span>
             </Tooltip>

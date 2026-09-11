@@ -163,7 +163,7 @@
 | F-023 | 「更多」菜单 18 项 | 展开「更多」下拉 | 18 项齐全（拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块） | ✅ | log-page-15.png（本仓渲染 16 项；GitHub/GitLab 两项受检测门约束，见 F-134/F-140） |
 | F-024 | OperationStatus 操作条（kind + 中止） | 进入 rebase 冲突（见 F-076 前置）→ 观察操作条 → 点「中止」 | 操作条显示进行中操作 + 中止按钮；中止后恢复干净态（CLI） | ✅ | log-page-16.png |
 | F-025 | 远程操作认证重试回路 | 向需认证的 HTTP 远端 push（依赖外部凭据服务；不具备 → 跳过） | 401 → AuthDialog 弹出（host 自 context、不含 token）→ 录入后 retry 重放 | ✅ | remote-04.png（补测：本地起恒 401 的 git smart-http 服务 `http://127.0.0.1:9418` 作为远程，日志页「拉取」触发 → 401 `AUTH_FAILED` → 「需要认证」对话框（主机自 `context.host` 预填 127.0.0.1、界面不含 token）→ 填账户/令牌 →「保存并重试」；401 服务日志显示重放请求携 `Authorization: Bearer …`，凭据落盘 `config.json` → `auth.accounts`。与 F-092 同一次实测） |
-| F-026 | 分页「加载更多」（limit ≤500） | 打开 `rebased-smoke-big` → 点「加载更多」 | 首屏 50 行 → 逐次放大（50→100→…→500 封顶），行数增长正确 | ✅ | log-page-18.png |
+| F-026 | 按需加载更早提交（页大小 ≤500 + skip 游标） | 打开 `rebased-smoke-big` → 滚到列表底部（或点「加载更多」手动兜底） | 首屏 50 行 → 触底自动追加（页大小 50→100→200→400→500，skip 逐页累加），一路到服务端 `hasMore=false`：最早一条（`chore: bulk commit 1`）可见、按钮转「已到最早的提交」且禁用 | ✅ | log-page-18.png；2026-09-12 复验（超出旧 500 上限的场景）：临时建 620 提交仓 `rebased-smoke-huge`，滚 4 步把 620 条全部加载、最后一行 = 根提交「初始提交（最早的一条）」、按钮转禁用；分页档位只有 4 个（`limit/skip` = 50/0、100/50、200/150、400/350，第 4 页 270 条 < 400 → `hasMore=false`）；超高视口（1600 高）下无滚动也自动补了一页（50 行填不满 1539px 列表区） |
 | F-027 | 过滤（author / path） | 输入作者名 → Enter；清空恢复 | 列表只剩该作者提交；清空后全量恢复 | ✅ | log-page-19.png |
 | F-028 | 行右键菜单形态 | 右键提交行 | 菜单项齐全：检出（游离 HEAD）/从此处新建分支/从此处新建标签/在浏览器中打开/Push up to Commit/Fixup/Squash/Reword/Drop/Squash/Fixup Commit | ✅ | log-page-20.png |
 

@@ -225,7 +225,7 @@
 | 「更多」菜单：18 项入口聚合 | ✅ | 拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块；GitHub/GitLab 带检测门，工作树/子模块恒渲染 |
 | OperationStatus 操作条（kind 展示 + 中止） | ✅ | `GET /operation` + `operation.state-changed` + `POST /operation/abort` |
 | 远程操作认证重试回路 | ✅ | `AUTH_FAILED` → 关对话框开 AuthDialog（host 自 context，不含 token）→ retry 重放 |
-| 分页（limit ≤500 / skip 游标） | ✅ | 「加载更多」limit 阶梯放大（50→100→…→500 封顶）；过滤或翻页时切快照模式（流仅默认视图接入，Ruling 6 同查询约束） |
+| 分页（limit ≤500 / skip 游标） | ✅ | 按需加载：滚到列表底部（或已加载内容填不满视口）自动追加下一页，页大小 50→100→200→400→500 阶梯、skip 逐页累加，直到服务端 `hasMore=false`（= 仓库第一条进列表，按钮转「已到最早的提交」）；「加载更多」保留为手动入口。过滤或翻页时切快照模式（流仅默认视图第一页接入，Ruling 6 同查询约束） |
 | 过滤（author / path） | ✅ | 「文本即滤」双输入（作者/路径，Enter/失焦提交，去首尾空白；清空即恢复）；与服务端 `--author`/`-- path` 过滤一致 |
 | 行右键菜单形态 | ✅ | 行右键菜单（对齐 Java `Vcs.Log.ContextMenu` 组）：检出（游离 HEAD）/ 从此处新建分支（创建后检出）/ 从此处新建标签（附注可选）/ 在浏览器中打开（GitHub/GitLab 提交页链接）+ 摘樱桃·还原·Reset·浏览快照复用面板按钮 + Push up to Commit（#17）+ Fixup/Squash Commit（auto-squash，§4.9）+ 单提交编辑直通 Reword/Drop/Squash/Fixup（`POST /commit-edit`，§4.9——reword 行右键 Modal 收集新信息） |
 | 分支折叠 / PermanentGraph 高级视图 | ⏸ 可选 | 2026-09-08 重新裁定：由「明确不做」改为可选任务——重裁定理由、前置依赖与触发条件见 §7.9（过滤 UI 前置已落地，仅剩 PermanentGraph 类缓存结构） |
@@ -850,7 +850,7 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 
 ### 7.3 P2：各域功能点补齐（48 项）——✅ 全部清零（2026-09-21 终核）
 
-各域剩余项全部清零，终态已逐页写入 §四：LogPage（分页「加载更多」limit 50→500 封顶、过滤行「文本即滤」、行右键菜单形态、Push up to Commit、单提交编辑直通）、DiffPage（与分支比较、hunk 级应用/回退等效通道）、StatusPage（三版本对比、动作入口五连 #43/#44/#45/#47/#49）、CommitDialog 等效面（GPG/commit template、amend 历史提交、CRLF 提示、commit&push）、BranchPanel（检出并变基/检出并更新、force-push 修复、最近检出/标签组、清理已合并、保护分支联动）、MergeDialog（远程分支直接合并）、RebaseDialog（auto-squash/fixup、squash by subject、skip）、StashPanel（keep index、Unstash As、Show Diff）、TagPanel（删除远程标签/推送全部）、RemotePanel（shallow 徽标）、PushDialog（rejected→Update 联动）、UpdateProjectDialog（结果汇总、Reset to tracked）、BlameView（Show All Affected）、HistoryPanel（双击→Diff、Annotate Revision）、CommittedChangesPanel（目录树）、SearchPanel（分支快速搜索）、ConflictsPanel（skip、按目录分组）、PatchPanel（Import into Shelf）、ShelfPanel（Shelve from Status、Unshelve 回边）、GitConsole（输出折叠）、SettingsPage（git 可执行检测、GPG 配置对话框、保护分支设置；SSH 对话框与自动 fetch 已定稿 ➖）、GitHub/GitLabPanel（行级评论，见 §7.7）。Show Git Log for Command 归 ➖（internal 动作，§5.3.2 #39）。
+各域剩余项全部清零，终态已逐页写入 §四：LogPage（按需分页——滚到底自动追加页大小 50→100→200→400→500 阶梯、skip 累加，直到最早一条进列表、过滤行「文本即滤」、行右键菜单形态、Push up to Commit、单提交编辑直通）、DiffPage（与分支比较、hunk 级应用/回退等效通道）、StatusPage（三版本对比、动作入口五连 #43/#44/#45/#47/#49）、CommitDialog 等效面（GPG/commit template、amend 历史提交、CRLF 提示、commit&push）、BranchPanel（检出并变基/检出并更新、force-push 修复、最近检出/标签组、清理已合并、保护分支联动）、MergeDialog（远程分支直接合并）、RebaseDialog（auto-squash/fixup、squash by subject、skip）、StashPanel（keep index、Unstash As、Show Diff）、TagPanel（删除远程标签/推送全部）、RemotePanel（shallow 徽标）、PushDialog（rejected→Update 联动）、UpdateProjectDialog（结果汇总、Reset to tracked）、BlameView（Show All Affected）、HistoryPanel（双击→Diff、Annotate Revision）、CommittedChangesPanel（目录树）、SearchPanel（分支快速搜索）、ConflictsPanel（skip、按目录分组）、PatchPanel（Import into Shelf）、ShelfPanel（Shelve from Status、Unshelve 回边）、GitConsole（输出折叠）、SettingsPage（git 可执行检测、GPG 配置对话框、保护分支设置；SSH 对话框与自动 fetch 已定稿 ➖）、GitHub/GitLabPanel（行级评论，见 §7.7）。Show Git Log for Command 归 ➖（internal 动作，§5.3.2 #39）。
 
 ### 7.4 P3：导航边核销——✅ 完成（0 条 ❌ 可做 + 1 条 🟡 形态）
 

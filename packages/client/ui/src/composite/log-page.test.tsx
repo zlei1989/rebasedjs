@@ -661,7 +661,7 @@ describe('LogPage 过滤/分页', () => {
     expect(onFiltersChange).toHaveBeenCalledWith({ path: 'lib/' });
   });
 
-  it('hasMore 与 onLoadMore 提供时渲染「加载更多」，点击触发回调；hasMore=false 时禁用', () => {
+  it('hasMore 与 onLoadMore 提供时渲染「加载更多」；内容填不满视口则挂载即自动按需加载一次，点击再触发一次', () => {
     const onLoadMore = vi.fn();
     const { rerender } = render(
       <LogPage
@@ -673,13 +673,32 @@ describe('LogPage 过滤/分页', () => {
         onLoadMore={onLoadMore}
       />,
     );
-    fireEvent.click(screen.getByTestId('log-load-more'));
+    // jsdom 无布局：视口高取 CommitGraph 默认 480，2 行 × 24px 显然填不满 → 挂载即视为「还需要更早的提交」
     expect(onLoadMore).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(screen.getByTestId('log-load-more'));
+    expect(onLoadMore).toHaveBeenCalledTimes(2);
+
+    // hasMore=false（已到最早的提交）：按钮禁用并换文案，且不再注入 onReachBottom → 不再自动加载
     rerender(
       <LogPage repoName="alpha" status={status} commits={commits} onFiltersChange={() => {}} hasMore={false} onLoadMore={onLoadMore} />,
     );
     expect(screen.getByTestId('log-load-more').closest('button')).toBeDisabled();
+    expect(screen.getByTestId('log-load-more')).toHaveTextContent('已到最早的提交');
+    expect(onLoadMore).toHaveBeenCalledTimes(2);
+  });
+
+  it('loadingMore 期间不注入 onReachBottom（触底是持续状态，回调若在就会连发同页请求）', () => {
+    const onLoadMore = vi.fn();
+    const { rerender } = render(
+      <LogPage repoName="alpha" status={status} commits={commits} onFiltersChange={() => {}} hasMore loadingMore onLoadMore={onLoadMore} />,
+    );
+    expect(onLoadMore).not.toHaveBeenCalled();
+
+    rerender(
+      <LogPage repoName="alpha" status={status} commits={commits} onFiltersChange={() => {}} hasMore onLoadMore={onLoadMore} />,
+    );
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
   });
 
   it('未传 onLoadMore 时不渲染「加载更多」', () => {
