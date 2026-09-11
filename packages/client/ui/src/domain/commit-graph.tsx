@@ -36,11 +36,24 @@ export interface CommitGraphProps {
 
 const ROW_HEIGHT = 24;
 const LANE_WIDTH = 18;
-/** 图列左右留白：不留会让 lane 0 的圆点被视口边缘切掉 */
+/**
+ * 图列左右留白：不留会让最左/最右 lane 的圆点被视口边缘切掉。
+ * 注意它会进入「圆点中心 → 图列右边界」的距离（= GRAPH_PADDING_X + LANE_WIDTH/2），
+ * 该距离又被图列的负右边距抵消，见 laneMarginRight。
+ */
 const GRAPH_PADDING_X = 10;
-/** refs（分支/标签 chip）列宽：所有行的说明从同一列之后起排 */
+/**
+ * 说明文字与**本行圆点中心**的间距（用户口径：8px）。
+ * 换算：图列宽度 = (lane+1) × LANE_WIDTH + 2×GRAPH_PADDING_X，圆点中心距图列右边界恒为
+ * GRAPH_PADDING_X + LANE_WIDTH/2，故给图列一个负右边距把说明拉近：
+ *   laneMarginRight = DOT_GUTTER − (GRAPH_PADDING_X + LANE_WIDTH/2)
+ * 实测该口径下「文字距圆点中心」在所有 lane、所有 4 个仓库都是同一个值（不受 lane 数影响）。
+ */
+const DOT_GUTTER = 8;
+/** 说明文字与 refs chips 之间的间距（用户口径：8px） */
+const CHIP_GAP = 8;
+/** refs（分支/标签 chip）列宽上限：单个超长 ref 名在列内横向滚动，不挤掉说明列 */
 const REF_COLUMN_WIDTH = 140;
-const REF_COLUMN_MIN_WIDTH = 96;
 
 /**
  * 单行 refs chips：分支 chip 底色 = 该分支名的图列色（colorForRef，ref 名 hash → HSB 色板），
@@ -56,7 +69,7 @@ function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): Re
           key={b}
           data-testid={`ref-chip-${b}`}
           style={{
-            marginInlineEnd: 4,
+            // 不设 marginInlineEnd：与说明文字的间距由外层容器的 gap 统一给（用户口径 8px）
             backgroundColor: colorForRef(b),
             borderColor: 'transparent',
             color: '#fff',
@@ -67,7 +80,7 @@ function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): Re
       ))}
       {showTags
         ? tags.map((t) => (
-          <Tag key={t} color="orange" style={{ marginInlineEnd: 4 }}>
+          <Tag key={t} color="orange">
             {t}
           </Tag>
         ))
@@ -97,21 +110,8 @@ export function CommitGraph({
     () => buildRowSegments(rows, rowEdges, ROW_HEIGHT, LANE_WIDTH),
     [rows, rowEdges],
   );
-  // 全图 lane 数：所有行共用同一宽度，保证各行竖线的 x 完全一致
-  const laneCount = useMemo(() => {
-    let maxLane = 0;
-    rows.forEach((row, i) => {
-      maxLane = Math.max(maxLane, row.lane, ...row.edges.map((e) => Math.max(e.fromLane, e.toLane)));
-      rowEdges[i].forEach((e) => {
-        maxLane = Math.max(maxLane, e.fromLane, e.toLane);
-      });
-    });
-    return rows.length === 0 ? 1 : maxLane + 1;
-  }, [rows, rowEdges]);
   // hash → 原始提交（LayoutCommit 只带图字段，行渲染需要 author/date/message）
   const byHash = useMemo(() => new Map(commits.map((c) => [c.hash, c] as const)), [commits]);
-  const graphWidth = laneCount * LANE_WIDTH;
-  const viewportWidth = graphWidth + GRAPH_PADDING_X * 2;
 
   return (
     <Listy
@@ -124,9 +124,16 @@ export function CommitGraph({
         if (!commit) return null;
         // 选中态：底走主题 token（controlItemBgActive），与提交详情面板当前提交一致
         const selected = selectedHash !== null && row.commit.hash === selectedHash;
-        // 本行预留的 lane 列数（本行节点 + 经过本行的长边）→ 说明文字的缩进，随线条走
-        const maxLane = rowEdges[index]?.reduce((m, e) => Math.max(m, e.fromLane, e.toLane), row.lane) ?? row.lane;
-        const indent = (maxLane + 1) * LANE_WIDTH;
+        // 本行图列的宽度：按**本行圆点所在 lane** 算（lane 0 的行只占 1 条 lane），
+        // 不用全图最宽、也不用「经过本行的长边」——后者只是从文字下方穿过，不该把本行文字推远。
+        // 画到更右 lane 的边会被视口裁掉（切线朝下/朝上走，视觉上仍连续）。
+        const laneAreaWidth = (row.lane + 1) * LANE_WIDTH + GRAPH_PADDING_X * 2;
+        const viewMinX = -GRAPH_PADDING_X;
+        // 图列右边界到「本行圆点中心」的距离恒为 GRAPH_PADDING_X + LANE_WIDTH/2（与 lane 无关）。
+        // 用图列的**负右边距**把说明文字拉到「圆点中心 + DOT_GUTTER」：
+        // margin 可以往回吃，padding 只能往外推（最小 0，之前几轮就是卡在这，怎么调都差 20 多像素）。
+        // 实测口径：文字距圆点中心 = DOT_GUTTER，所有 lane、所有仓库都是同一个值。
+        const laneMarginRight = DOT_GUTTER - (GRAPH_PADDING_X + LANE_WIDTH / 2);
         return (
           <div
             data-testid="commit-graph-row"
@@ -143,17 +150,17 @@ export function CommitGraph({
             onContextMenu={() => onContextMenu?.(commit.hash)}
           >
             {/*
-              图列 = 整图的一个视口：SVG 自身只有一行高，viewBox 取全局坐标
-              y ∈ [本行顶, 本行底]、x ∈ [−padding, 图宽 + padding]。
-              线段与圆点都由 GraphCanvas 按全局坐标画，故：竖线跨行不断、斜线端点落在竖线上。 */}
+              图列 = 整图的一个视口：SVG 只有一行高，viewBox 覆盖 x ∈ [−留白, 本行最大 lane]，y = 本行那条带。
+              线段与圆点都由 GraphCanvas 按全局坐标画，故竖线跨行不断、斜线端点落在竖线上。
+              视口宽度 = 用户单位宽度，viewBox 与 width 一致 → 1 用户单位 = 1px，无缩放偏移。 */}
             <div
               data-testid="commit-graph-lane"
-              style={{ position: 'relative', width: viewportWidth, height: ROW_HEIGHT, flexShrink: 0 }}
+              style={{ position: 'relative', width: laneAreaWidth, height: ROW_HEIGHT, flexShrink: 0, marginRight: laneMarginRight }}
             >
               <svg
-                width={viewportWidth}
+                width={laneAreaWidth}
                 height={ROW_HEIGHT}
-                viewBox={`${-GRAPH_PADDING_X} ${index * ROW_HEIGHT} ${viewportWidth} ${ROW_HEIGHT}`}
+                viewBox={`${viewMinX} ${index * ROW_HEIGHT} ${laneAreaWidth} ${ROW_HEIGHT}`}
                 style={{ display: 'block', overflow: 'hidden' }}
               >
                 <GraphCanvas
@@ -165,35 +172,41 @@ export function CommitGraph({
               </svg>
             </div>
             {/*
-              refs 列：宽度**按本行的 ref 内容自适应**（有 chip 就占位、没有就不占位）。
-              为什么不给固定宽度：绝大多数行没有分支/标签，固定宽度会让这些行白白空出一整列
-              （实测 140px），说明文字被顶到很右边、与左侧线条的联系被切断 —— 这就是「缩进还有点问题」的观感来源。
-              上限 REF_COLUMN_WIDTH + 溢出滚动：单个超长 ref 名不会把说明列挤没。
-              说明文字自己的缩进（paddingLeft = lane 列数 × LANE_WIDTH）另行叠加，保持「随线条缩进」。 */}
-            <span
-              style={{
-                flexGrow: 0,
-                flexShrink: 0,
-                maxWidth: REF_COLUMN_WIDTH,
-                overflowX: 'auto',
-                overflowY: 'hidden',
-                scrollbarWidth: 'none',
-              }}
-            >
-              <RefChips refs={commit.refs} showTags={showTags} />
-            </span>
-            <span
+              说明区：**说明文字 + refs chips 作为一个整体**（chips 跟在说明之后，间距 CHIP_GAP = 8px）。
+              间距口径（用户明确）：
+                · 说明文字距**本行自己的圆点中心** DOT_GUTTER = 8px；
+                · chips 距说明文字 CHIP_GAP = 8px。
+              用 marginLeft（可为负）而不是 paddingLeft（最小为 0）：图列宽度随 lane 变化，
+              若用 padding 会把「本行图列宽 − 圆点位置」的差值夹成 0，文字于是比预期远 15~20px——
+              那正是之前几轮反复对不上的根因。margin 可以直接落位到「圆点右缘 + 8px」。
+              「缩进随线条」由 lane 的横向位置自然带来（lane 越深，圆点与文字一起右移）。 */}
+            <div
+              data-testid="commit-graph-message"
               style={{
                 flex: 1,
-                minWidth: 80,
-                // 说明缩进 = 本行预留的 lane 列数 × lane 宽（随线条缩进）
-                paddingLeft: indent,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
+                minWidth: 0,
+                // 图列的负右边距已经把文字拉到「圆点中心 + DOT_GUTTER」，这里无需 padding
               }}
             >
-              {commit.message.split('\n')[0]}
-            </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: CHIP_GAP, minWidth: 0 }}>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {commit.message.split('\n')[0]}
+                </span>
+                {/* refs chips：宽度按内容自适应（有就占位、没有就不占）；上限 REF_COLUMN_WIDTH + 列内滚动 */}
+                <span
+                  style={{
+                    flexGrow: 0,
+                    flexShrink: 0,
+                    maxWidth: REF_COLUMN_WIDTH,
+                    overflowX: 'auto',
+                    overflowY: 'hidden',
+                    scrollbarWidth: 'none',
+                  }}
+                >
+                  <RefChips refs={commit.refs} showTags={showTags} />
+                </span>
+              </div>
+            </div>
             <span style={{ width: 160, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author}</span>
             <span style={{ width: 140, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: token.colorTextSecondary }}>{formatCommitDate(commit.dateIso)}</span>
           </div>
