@@ -11,9 +11,12 @@
  *
  * UX 对齐 #2：行默认列为 Subject（图 + refs chips）+ Author + Date（Hash 列省）；
  * 分支 chips 默认开，tag chips 默认关（对齐 Java showTagNames=false），由 showTags 打开。
+ *
+ * 间距口径（2026-09-12）：说明区内的间距**一律不写内联 gap / 自定义 class**，由 antd `Flex` 的档位给
+ *   （`gap="middle"` = 主题 `padding` token；全站默认紧凑密度下恰为 8px，见下方说明区注释与测试锚点）。
  */
 import { useMemo } from 'react';
-import { Listy, Tag, theme } from 'antd';
+import { Flex, Listy, Space, Tag, theme } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
 import { buildLayout, edgesInRow, type LayoutCommit } from '../graph-layout';
 import { colorForRef } from '../graph-layout/color';
@@ -50,8 +53,6 @@ const GRAPH_PADDING_X = 10;
  * 实测该口径下「文字距圆点中心」在所有 lane、所有 4 个仓库都是同一个值（不受 lane 数影响）。
  */
 const DOT_GUTTER = 8;
-/** 说明文字与 refs chips 之间的间距（用户口径：8px） */
-const CHIP_GAP = 8;
 /** refs（分支/标签 chip）列宽上限：单个超长 ref 名在列内横向滚动，不挤掉说明列 */
 const REF_COLUMN_WIDTH = 140;
 
@@ -59,34 +60,46 @@ const REF_COLUMN_WIDTH = 140;
  * 单行 refs chips：分支 chip 底色 = 该分支名的图列色（colorForRef，ref 名 hash → HSB 色板），
  * 与图车道颜色同源——同一分支在图中与 chip 上恒定同色（Java 分支标签着色的等价承载）；
  * 标签 chip 保持橙色预设色（tag 不参与分支着色）。
+ *
+ * 多个 chip 之间的间距（用户口径 4px，视觉上更紧凑）：由 antd `Space` 的 `size="small"` 档位类名统一给
+ * （`.ant-space-gap-col-small` = 主题 `paddingXS` token，紧凑密度下 4px；
+ * 与说明区 Flex 的 `gap="middle"`（= `padding` = 8px）是两个独立档位，互不影响）。
+ * 注意两点，否则「间距会静默消失」：
+ *   1. `Space` 只对**直接子项**加间距 —— 必须把 chips 摊平成数组直接交给它，
+ *      不能用一个 Fragment 把全部 chip 包成一坨（那样 Space 只看到 1 个子项，chip 之间一个像素都没有）；
+ *   2. 不写内联 `gap` / 不给 `Tag` 加 margin（antd v6 的 Tag 本就无默认 margin，实测 0，
+ *      故 Space 的档位间距不会被叠加成两份）。
+ * 无 refs 时返回 null（不留空壳 DOM）。
  */
 function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): React.ReactNode {
   const { branches, tags } = classifyRefs(refs);
-  return (
-    <>
-      {branches.map((b) => (
-        <Tag
-          key={b}
-          data-testid={`ref-chip-${b}`}
-          style={{
-            // 不设 marginInlineEnd：与说明文字的间距由外层容器的 gap 统一给（用户口径 8px）
-            backgroundColor: colorForRef(b),
-            borderColor: 'transparent',
-            color: '#fff',
-          }}
-        >
-          {b}
+  // 摊平成一个数组：分支 chips 在前、标签 chips 在后（顺序与 classifyRefs 的分类一致）。
+  // key 加前缀：两类 chip 现在同处一个 children 数组，避免「分支名与标签名同名」时 key 撞车。
+  const chips = [
+    ...branches.map((b) => (
+      <Tag
+        key={`branch:${b}`}
+        data-testid={`ref-chip-${b}`}
+        style={{
+          // 不设 marginInlineEnd：与说明文字的间距由说明区 Flex 的 gap 统一给（用户口径 8px）
+          backgroundColor: colorForRef(b),
+          borderColor: 'transparent',
+          color: '#fff',
+        }}
+      >
+        {b}
+      </Tag>
+    )),
+    ...(showTags
+      ? tags.map((t) => (
+        <Tag key={`tag:${t}`} color="orange">
+          {t}
         </Tag>
-      ))}
-      {showTags
-        ? tags.map((t) => (
-          <Tag key={t} color="orange">
-            {t}
-          </Tag>
-        ))
-        : null}
-    </>
-  );
+      ))
+      : []),
+  ];
+  if (chips.length === 0) return null;
+  return <Space size="small">{chips}</Space>;
 }
 
 export function CommitGraph({
@@ -172,41 +185,47 @@ export function CommitGraph({
               </svg>
             </div>
             {/*
-              说明区：**说明文字 + refs chips 作为一个整体**（chips 跟在说明之后，间距 CHIP_GAP = 8px）。
+              说明区：**说明文字 + refs chips 作为一个整体**（chips 跟在说明之后）。
               间距口径（用户明确）：
-                · 说明文字距**本行自己的圆点中心** DOT_GUTTER = 8px；
-                · chips 距说明文字 CHIP_GAP = 8px。
+                · 说明文字距**本行自己的圆点中心** DOT_GUTTER = 8px —— 由上面图列的负右边距落位；
+                · chips 距说明文字 8px —— **不写内联 gap**，交给这层 antd Flex 的 `gap="middle"` 档位类名
+                  （`.ant-flex-gap-middle`；该档取主题 `padding` token，全站默认紧凑密度下恰为 8px，
+                  见 base/page-shell.tsx + base/density.ts）。该等式的锚点见
+                  commit-graph.test.tsx「说明区不写内联间距」用例：density token 一动它就红。
+              为什么说明区只有这一层（原为「块级 div 套 flex div」两层）：外层本来只承担
+              flex:1 + minWidth:0 这两个**收缩契约**，与内层合并后 DOM 少一层，
+              收缩/省略行为逐字不变，`style` 里也只剩收缩契约、不含任何间距。
               用 marginLeft（可为负）而不是 paddingLeft（最小为 0）：图列宽度随 lane 变化，
               若用 padding 会把「本行图列宽 − 圆点位置」的差值夹成 0，文字于是比预期远 15~20px——
               那正是之前几轮反复对不上的根因。margin 可以直接落位到「圆点右缘 + 8px」。
               「缩进随线条」由 lane 的横向位置自然带来（lane 越深，圆点与文字一起右移）。 */}
-            <div
+            <Flex
               data-testid="commit-graph-message"
-              style={{
-                flex: 1,
-                minWidth: 0,
-                // 图列的负右边距已经把文字拉到「圆点中心 + DOT_GUTTER」，这里无需 padding
-              }}
+              align="center"
+              gap="middle"
+              style={{ flex: 1, minWidth: 0 }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: CHIP_GAP, minWidth: 0 }}>
-                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {commit.message.split('\n')[0]}
-                </span>
-                {/* refs chips：宽度按内容自适应（有就占位、没有就不占）；上限 REF_COLUMN_WIDTH + 列内滚动 */}
-                <span
-                  style={{
-                    flexGrow: 0,
-                    flexShrink: 0,
-                    maxWidth: REF_COLUMN_WIDTH,
-                    overflowX: 'auto',
-                    overflowY: 'hidden',
-                    scrollbarWidth: 'none',
-                  }}
-                >
-                  <RefChips refs={commit.refs} showTags={showTags} />
-                </span>
-              </div>
-            </div>
+              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {commit.message.split('\n')[0]}
+              </span>
+              {/*
+                refs chips 列：宽度按内容自适应（有就占位、没有就不占）；上限 REF_COLUMN_WIDTH + 列内滚动。
+                本容器只负责**布局契约**（收缩行为 + 上限 + 列内横向滚动），
+                chip 之间与 chips 前后的间距都不在这里写，见 RefChips 与说明区 Flex。 */}
+              <span
+                data-testid="commit-graph-refs"
+                style={{
+                  flexGrow: 0,
+                  flexShrink: 0,
+                  maxWidth: REF_COLUMN_WIDTH,
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                  scrollbarWidth: 'none',
+                }}
+              >
+                <RefChips refs={commit.refs} showTags={showTags} />
+              </span>
+            </Flex>
             <span style={{ width: 160, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author}</span>
             <span style={{ width: 140, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: token.colorTextSecondary }}>{formatCommitDate(commit.dateIso)}</span>
           </div>

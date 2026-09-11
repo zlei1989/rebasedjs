@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { theme } from 'antd';
 import { describe, expect, it, vi } from 'vitest';
 import type { CommitInfo } from '@rebased/contracts';
 import { CommitGraph } from './commit-graph';
 import { colorForRef } from '../graph-layout/color';
+import { compactTheme } from '../base/density';
 
 /** 测试提交工厂：补全 CommitInfo 必填字段，按需覆盖 */
 function makeCommit(overrides: Partial<CommitInfo> & { hash: string }): CommitInfo {
@@ -68,6 +70,60 @@ describe('CommitGraph', () => {
     expect(screen.getByTestId('ref-chip-main')).toHaveStyle({ backgroundColor: colorForRef('main') });
     expect(screen.getByTestId('ref-chip-feature')).toHaveStyle({ backgroundColor: colorForRef('feature') });
     expect(colorForRef('main')).not.toBe(colorForRef('feature'));
+  });
+
+  // 行内间距口径（用户口径 8px）：说明区「说明文字 ↔ refs chips」的间距交给 antd Flex 的档位类名，
+  // 组件与调用点都不再写内联 gap —— 内联间距绕过主题密度，且一个档位调不了两处。
+  it('说明区不写内联间距：8px 由 antd Flex 的档位类名提供', () => {
+    render(<CommitGraph commits={commits} />);
+    const box = within(screen.getAllByTestId('commit-graph-row')[0]).getByTestId('commit-graph-message');
+    // 不变量：该子树里任何元素都不得用内联 gap/columnGap/rowGap 表达间距
+    const inlineGap = [...box.querySelectorAll<HTMLElement>('*')].filter(
+      (el) => el.style.gap !== '' || el.style.columnGap !== '' || el.style.rowGap !== '',
+    );
+    expect(inlineGap.map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
+    // 机制：间距与交叉轴居中都由类名提供（gap=middle → .ant-flex-gap-middle）
+    expect(box.className).toContain('ant-flex-gap-middle');
+    expect(box.className).toContain('ant-flex-align-center');
+    // 口径锚点：middle 档 = 主题 `padding` token，而全站默认密度为紧凑
+    // （PageShell → base/density.ts 的 compactAlgorithm）——两者相等，8px 才成立。
+    // 谁动了 density.ts 的间距 token、或把该行挂到非紧凑子树下，这里立刻变红。
+    expect(theme.getDesignToken(compactTheme('light')).padding).toBe(8);
+    expect(theme.getDesignToken(compactTheme('dark')).padding).toBe(8);
+  });
+
+  // 多个 ref chip 之间的间距（用户口径 4px，视觉上更紧凑）：chips 之间的空隙由 antd Space 的档位类名统一给。
+  // 关键不变量：每个 chip 必须是 Space 的**直接子项**（Space 只对直接子项加间距；
+  // 若用一个 Fragment 把全部 chip 包成一坨，Space 只看到 1 个子项 → chip 之间一个像素都不会有）。
+  it('多个 chip 之间的间距走 antd Space 档位：每个 chip 一个直接子项', () => {
+    const withRefs: CommitInfo[] = [
+      makeCommit({ hash: 'r1', refs: ['main', 'feature', 'tag: v1.0'], message: '多引用' }),
+    ];
+    render(<CommitGraph commits={withRefs} showTags />);
+    const wrap = screen.getByTestId('commit-graph-refs');
+    const space = wrap.firstElementChild as HTMLElement;
+    expect(space.className).toContain('ant-space');
+    expect(space.className).toContain('ant-space-gap-col-small');
+    // 间距既不写内联、也不靠 chip 自己的 margin（antd v6 的 Tag 无默认 margin，实测 0）
+    expect(space.style.columnGap).toBe('');
+    expect(space.style.rowGap).toBe('');
+    // 口径锚点：small 档 = 主题 `paddingXS` token，紧凑密度下恰为 4px
+    // （与说明区 Flex 的 `middle` = `padding` = 8px 是两个档位，互不影响）
+    expect(theme.getDesignToken(compactTheme('light')).paddingXS).toBe(4);
+    expect(theme.getDesignToken(compactTheme('dark')).paddingXS).toBe(4);
+    // 3 个 chip（main / feature / v1.0）→ 3 个非空子项，每个子项恰好 1 个 chip
+    const items = [...space.children].filter(
+      (el) => el.classList.contains('ant-space-item') && el.firstElementChild !== null,
+    );
+    expect(items).toHaveLength(3);
+    expect(items.map((it) => it.children.length)).toEqual([1, 1, 1]);
+    expect(wrap.querySelectorAll('.ant-space-item > .ant-tag')).toHaveLength(3);
+  });
+
+  // 无 refs 时 chips 容器必须是空壳（「有就占位、没有就不占」）：Space 空子项返回 null，不留隐藏节点
+  it('无 refs 时不渲染 chips 空壳', () => {
+    render(<CommitGraph commits={[makeCommit({ hash: 'r0', message: '无引用' })]} />);
+    expect(screen.getByTestId('commit-graph-refs')).toBeEmptyDOMElement();
   });
 
   it('空提交列表不渲染行', () => {
