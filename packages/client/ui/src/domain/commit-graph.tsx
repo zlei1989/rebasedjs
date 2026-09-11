@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 import { Listy, Tag, theme } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
 import { buildLayout, type LayoutCommit } from '../graph-layout';
+import { rowCanvasWindow } from './commit-graph-window';
 import { colorForRef } from '../graph-layout/color';
 import { GraphCanvas } from '../base/graph-canvas';
 import { classifyRefs } from './refs';
@@ -91,6 +92,14 @@ export function CommitGraph({
         if (!commit) return null;
         // 选中态：底走主题 token（controlItemBgActive），与提交详情面板当前提交一致
         const selected = selectedHash !== null && row.commit.hash === selectedHash;
+        // 画布窗口几何：切片（前一行 + 本行 + 后一行）与画布在裁剪窗口内的 top 偏移。
+        // 口径与不变量（本行圆点必须落在本行窗口中点）见 commit-graph-window.ts 与其单测。
+        const win = rowCanvasWindow(index, rows.length, ROW_HEIGHT);
+        const slicedRows = rows.slice(win.sliceStart, win.sliceStart + win.canvasRows);
+        // 画布窗口宽度：取全量布局的最大 lane 数（GraphCanvas 自身的宽度就是这么算的）。
+        // 必须显式给宽度：外框是 relative 的定高裁剪盒，若不定宽，其绝对定位的唯一子元素
+        // 不参与父盒宽度计算 —— 宽度会塌成 0，整列图直接不可见（实测踩过）。
+        const graphWidth = (rows.reduce((m, r) => Math.max(m, r.lane, ...r.edges.map((e) => Math.max(e.fromLane, e.toLane))), 0) + 1) * LANE_WIDTH;
         return (
           <div
             data-testid="commit-graph-row"
@@ -106,13 +115,26 @@ export function CommitGraph({
             onClick={() => onSelect?.(commit.hash)}
             onContextMenu={() => onContextMenu?.(commit.hash)}
           >
-            <GraphCanvas
-              rows={rows.slice(Math.max(0, index - 1), index + 2)}
-              rowHeight={ROW_HEIGHT}
-              laneWidth={LANE_WIDTH}
-              // 切片起点即行偏移：边段全量行号须平移到切片局部坐标系
-              rowOffset={Math.max(0, index - 1)}
-            />
+            {/*
+              画布窗口（错位修复）：GraphCanvas 每行画的是「前一行 + 本行 + 后一行」共 2~3 行高，
+              而本行只有 ROW_HEIGHT 高 —— 改造前每行是**绝对定位的定高盒子**（height: ROW_HEIGHT），
+              画布的溢出部分被隐式裁掉；换成 Listy 的普通流之后行不再裁剪，整块画布盖到上下相邻行上，
+              同一列于是出现 12px 步进的重复圆点，肉眼就是「图与右侧文字行错位」。
+              怎么做：外框定高 ROW_HEIGHT + overflow:hidden 还原裁剪面；内层画布按 win.canvasTop
+              绝对定位，使本行圆点恰落在本行窗口中点（几何见 domain/commit-graph-window.ts）。
+              不要用 top:'50%' + translateY(-50%)：那条路把画布居中在容器盒上，实测整体偏下 ~3px。
+              裁剪掉的相邻行内容由邻居行各自的窗口覆盖（窗口在行边界处首尾无缝相接），跨行连线仍连续。 */}
+            <div style={{ position: 'relative', width: graphWidth, height: ROW_HEIGHT, overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ position: 'absolute', left: 0, top: win.canvasTop }}>
+                <GraphCanvas
+                  rows={slicedRows}
+                  rowHeight={ROW_HEIGHT}
+                  laneWidth={LANE_WIDTH}
+                  // 切片起点即行偏移：边段全量行号须平移到切片局部坐标系
+                  rowOffset={win.sliceStart}
+                />
+              </div>
+            </div>
             <span style={{ flex: 1, minWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               <RefChips refs={commit.refs} showTags={showTags} />
               {commit.message.split('\n')[0]}
