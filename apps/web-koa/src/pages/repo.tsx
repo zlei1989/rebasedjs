@@ -89,6 +89,7 @@ export function RepoPage(): React.ReactNode {
     reset: resetLogPages,
     size: logPageCount,
     mutate: mutateLog,
+    isLoading: logInitialLoading,
   } = useLogPages(repoId, {
     ...(author === '' ? {} : { author }),
     ...(path === '' ? {} : { path }),
@@ -519,6 +520,7 @@ export function RepoPage(): React.ReactNode {
           setPath(f.path ?? '');
           resetLogPages();
         }}
+        initialLoading={logInitialLoading}
         hasMore={logHasMore}
         loadingMore={loadingMoreLog}
         onLoadMore={loadMoreLog}

@@ -92,6 +92,7 @@ export default function Page({
     reset: resetLogPages,
     size: logPageCount,
     mutate: mutateLog,
+    isLoading: logInitialLoading,
   } = useLogPages(repoId, {
     ...(author === '' ? {} : { author }),
     ...(path === '' ? {} : { path }),
@@ -523,6 +524,7 @@ export default function Page({
           setPath(f.path ?? '');
           resetLogPages();
         }}
+        initialLoading={logInitialLoading}
         hasMore={logHasMore}
         loadingMore={loadingMoreLog}
         onLoadMore={loadMoreLog}

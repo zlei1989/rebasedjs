@@ -216,6 +216,69 @@ describe('useLogPages（按需加载到最早一条）', () => {
     await probe.unmount();
   });
 
+  it('后台重取（容器 status 事件里的 mutate）期间触底追加不会被静默吞掉', async () => {
+    const calls: string[] = [];
+    stubLogServer(300, (url) => calls.push(url));
+    const probe = await mountPages('r-pages-5');
+    await act(async () => {
+      await vi.waitFor(() => expect(probe.current.commits).toHaveLength(50));
+    });
+    calls.length = 0;
+    // 模拟容器在 status 事件里调 mutate()：所有已加载页开始重取（全局 isValidating = true）
+    await act(async () => {
+      void probe.current.mutate();
+      // 同一刻触底追加：必须真的追加（旧实现按 isValidating 挡下 → 用户停在底部、滚轮不再产生
+      // scroll 事件，就永远补不上这一页）
+      probe.current.loadMore();
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(probe.current.commits).toHaveLength(150));
+    });
+    expect(calls.filter((c) => c.includes('limit=100&skip=50'))).toHaveLength(1);
+    await probe.unmount();
+  });
+
+  it('上一页还在路上时再调 loadMore 不重复追加同一页；loadingMore 只表示「追加在飞」', async () => {
+    let releaseSecondPage!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseSecondPage = resolve;
+    });
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: string) => {
+      calls.push(String(url));
+      const u = new URL(String(url), 'http://localhost');
+      const limit = Number(u.searchParams.get('limit'));
+      const skip = Number(u.searchParams.get('skip'));
+      // 第二页挂起：制造可控的「追加在飞」窗口
+      if (skip === 50) await gate;
+      const count = Math.max(0, Math.min(limit, 300 - skip));
+      return new Response(JSON.stringify({ commits: makeCommits(count, skip), hasMore: count === limit }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const probe = await mountPages('r-pages-6');
+    await act(async () => {
+      await vi.waitFor(() => expect(probe.current.commits).toHaveLength(50));
+    });
+    expect(probe.current.loadingMore).toBe(false);
+
+    await act(async () => {
+      probe.current.loadMore();
+    });
+    expect(probe.current.loadingMore).toBe(true);
+    await act(async () => {
+      probe.current.loadMore(); // 追加在飞：应被挡下，不会再多要一页
+    });
+    expect(calls.filter((c) => c.includes('skip=50'))).toHaveLength(1);
+    expect(calls.filter((c) => c.includes('skip=150'))).toHaveLength(0);
+
+    await act(async () => {
+      releaseSecondPage();
+      await vi.waitFor(() => expect(probe.current.commits).toHaveLength(150));
+    });
+    expect(probe.current.loadingMore).toBe(false);
+    await probe.unmount();
+  });
+
   it('repoId 为空串：挂 null key 不发请求；过滤条件进查询串', async () => {
     const calls: string[] = [];
     stubLogServer(200, (url) => calls.push(url));

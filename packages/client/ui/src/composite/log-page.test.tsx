@@ -705,6 +705,36 @@ describe('LogPage 过滤/分页', () => {
     render(<LogPage repoName="alpha" status={status} commits={commits} onFiltersChange={() => {}} hasMore />);
     expect(screen.queryByTestId('log-load-more')).not.toBeInTheDocument();
   });
+
+  // 首屏拉取期间（实测可达数秒）不能把「还在加载」说成「没有提交」或「历史看完了」——
+  // 这两句都会让用户以为仓库是空的 / 已经到底了，从而放弃等待或放弃继续加载
+  it('initialLoading：空列表渲染加载态而不是「暂无提交」', () => {
+    render(<LogPage repoName="alpha" status={status} commits={[]} initialLoading />);
+    expect(screen.queryByText('暂无提交')).not.toBeInTheDocument();
+    expect(document.querySelector('.ant-skeleton')).not.toBeNull();
+  });
+
+  it('initialLoading：加载完成后仍为空才显示「暂无提交」', () => {
+    const { rerender } = render(<LogPage repoName="alpha" status={status} commits={[]} initialLoading />);
+    rerender(<LogPage repoName="alpha" status={status} commits={[]} initialLoading={false} />);
+    expect(screen.getByText('暂无提交')).toBeInTheDocument();
+  });
+
+  it('initialLoading：「加载更多」呈加载中且不宣称「已到最早的提交」', () => {
+    const onLoadMore = vi.fn();
+    const { rerender } = render(
+      <LogPage repoName="alpha" status={status} commits={[]} initialLoading hasMore={false} onFiltersChange={() => {}} onLoadMore={onLoadMore} />,
+    );
+    // hasMore=false 只是「还没有数据」，此刻不得写成「已到最早的提交」
+    expect(screen.getByTestId('log-load-more')).toHaveTextContent('加载更多');
+    expect(screen.getByTestId('log-load-more').closest('button')).toBeDisabled();
+    expect(onLoadMore).not.toHaveBeenCalled();
+
+    rerender(
+      <LogPage repoName="alpha" status={status} commits={commits} initialLoading={false} hasMore onFiltersChange={() => {}} onLoadMore={onLoadMore} />,
+    );
+    expect(screen.getByTestId('log-load-more')).toHaveTextContent('加载更多');
+  });
 });
 
 describe('LogPage 行右键菜单', () => {

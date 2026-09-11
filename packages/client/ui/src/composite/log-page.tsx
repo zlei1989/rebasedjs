@@ -129,6 +129,10 @@ export interface LogPageProps {
   filters?: LogFilters;
   /** 过滤变更回调（输入去首尾空白后上抛；清空 = 空对象） */
   onFiltersChange?: (filters: LogFilters) => void;
+  /** 首屏提交加载中（容器注入分页 hook 的 isLoading）：空列表时渲染加载态而不是「暂无提交」，
+   *  并把「加载更多」按钮置为加载中——否则首屏拉取期间（实测可达数秒）会被误呈现成
+   *  「这个仓库没有提交」+「已到最早的提交」，用户既看不出在加载、也看不出还有更早的提交 */
+  initialLoading?: boolean;
   /** 还有更早的提交可加载（容器分页快照的 hasMore）；与 onLoadMore 同传时渲染「加载更多」按钮。
    *  false = 已到仓库第一条（按钮转「已到最早的提交」并禁用），此时也不再按需加载 */
   hasMore?: boolean;
@@ -209,6 +213,7 @@ export function LogPage({
   hasMore,
   loadingMore,
   onLoadMore,
+  initialLoading,
   onCheckoutRevision,
   onCheckoutNewBranch,
   onCreateTag,
@@ -383,9 +388,15 @@ export function LogPage({
   const canLoadMore = hasMore === true && loadingMore !== true && onLoadMore !== undefined;
   const graphArea = (
     <>
-      {/* 空仓（unborn HEAD，如刚 init）与过滤无命中：显式空态——否则整片空白无法区分「在加载」与「没有提交」 */}
+      {/* 空列表：首屏还在拉取时先给加载态，只有确实加载完且为空才说「暂无提交」——
+          否则首屏拉取期间（实测可达数秒）会把「在加载」误呈现成「这个仓库没有提交」 */}
       {commits.length === 0 ? (
-        <EmptyState title="暂无提交" description="该仓库还没有任何提交，或当前过滤条件没有匹配结果" />
+        initialLoading === true ? (
+          <Skeleton active />
+        ) : (
+          /* 空仓（unborn HEAD，如刚 init）与过滤无命中：显式空态——否则整片空白无法区分「在加载」与「没有提交」 */
+          <EmptyState title="暂无提交" description="该仓库还没有任何提交，或当前过滤条件没有匹配结果" />
+        )
       ) : (
         /* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
            antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */
@@ -606,18 +617,20 @@ export function LogPage({
           {hasMore !== undefined && onLoadMore !== undefined ? (
             // 没有更早的提交（已到仓库第一条）时按钮禁用；禁用按钮不派发 hover，故在 Tooltip 与 Button
             // 之间包 span 承接悬停。外层 span 承接原先挂在按钮上的 marginLeft:auto（按钮自身 style 不变），
-            // 右对齐位置不变。这只是「手动兜底」入口：正常路径是滚到列表底部自动按需加载（见 onReachBottom）
-            <Tooltip title={hasMore ? '继续加载更早的提交：滚到列表底部会自动加载，也可以点这里手动加载；结果追加在列表下方' : '已到最早的提交：该仓库的全部提交都已加载（含第一条）'}>
+            // 右对齐位置不变。这只是「手动兜底」入口：正常路径是滚到列表底部自动按需加载（见 onReachBottom）。
+            // 首屏加载中（initialLoading）：hasMore 此刻还是未知（false 只表示「还没有数据」），
+            // 故按钮呈加载中且不宣称「已到最早的提交」——否则会把「还在拉第一页」说成「历史看完了」
+            <Tooltip title={initialLoading === true ? '正在加载提交记录…' : hasMore ? '继续加载更早的提交：滚到列表底部会自动加载，也可以点这里手动加载；结果追加在列表下方' : '已到最早的提交：该仓库的全部提交都已加载（含第一条）'}>
               <span style={{ marginLeft: 'auto' }}>
                 <Button
                   size="small"
                   data-testid="log-load-more"
-                  disabled={!hasMore}
-                  loading={loadingMore}
+                  disabled={initialLoading === true || !hasMore}
+                  loading={initialLoading === true || loadingMore}
                   onClick={onLoadMore}
                   style={{ marginLeft: 'auto' }}
                 >
-                  {hasMore ? '加载更多' : '已到最早的提交'}
+                  {initialLoading === true || hasMore ? '加载更多' : '已到最早的提交'}
                 </Button>
               </span>
             </Tooltip>

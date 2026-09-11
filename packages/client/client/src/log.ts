@@ -45,7 +45,7 @@ export function logPageSkip(index: number): number {
 export function useLogPages(repoId: string, query?: { author?: string; path?: string }) {
   const author = query?.author ?? '';
   const path = query?.path ?? '';
-  const { data, size, setSize, isValidating, isLoading, error, mutate } = useSWRInfinite<LogPage>(
+  const { data, size, setSize, isLoading, error, mutate } = useSWRInfinite<LogPage>(
     (index, previousPage) => {
       // '' = 条件拉取关闭（无仓库）；上一页没满 = 已到最早的提交，不再要下一页
       if (repoId === '') return null;
@@ -77,11 +77,18 @@ export function useLogPages(repoId: string, query?: { author?: string; path?: st
   }, [pages]);
   const lastPage = pages.length > 0 ? pages[pages.length - 1] : undefined;
   const hasMore = lastPage?.hasMore === true;
+  /**
+   * 「追加页是否已在路上」= 请求的页数（size）还没被数据填满（该槽位在 SWRInfinite 里是 undefined）。
+   * 为什么不看全局 isValidating：后台重取（容器在 status 事件里调 mutate()）期间 isValidating 也是 true，
+   * 按它挡会把这一刻的触底追加**静默丢掉**——用户已停在底部、滚轮不再产生 scroll 事件，就再也不补页了。
+   * 出错时（重试耗尽）放行，避免槽位永远空着把后续追加一起堵死（SWR 自身也会按退避重试）。
+   */
+  const appending = pages.length < size && error === undefined;
   const loadMore = useCallback((): void => {
-    // 到底了、或已有请求在飞（含手动连点与触底自动加载撞车）时不再追加，避免同页重复请求
-    if (!hasMore || isValidating) return;
+    // 已到最早一条、或上一页还在路上：不再追加（手动连点与触底自动加载撞车时也只发一页）
+    if (!hasMore || appending) return;
     void setSize(size + 1);
-  }, [hasMore, isValidating, setSize, size]);
+  }, [appending, hasMore, setSize, size]);
   /** 回到第一页（过滤条件变更后回到首屏窗口；SWR 会按新 key 重新取第一页） */
   const reset = useCallback((): void => {
     void setSize(1);
@@ -89,8 +96,8 @@ export function useLogPages(repoId: string, query?: { author?: string; path?: st
   return {
     commits,
     hasMore,
-    /** 追加页请求中（首屏加载不算「加载更多」，由 isLoading 表达） */
-    loadingMore: isValidating && !isLoading,
+    /** 追加页请求中（首屏加载与后台重取都不算——见 appending 注释；首屏另有 isLoading） */
+    loadingMore: appending,
     isLoading,
     error,
     loadMore,
