@@ -29,6 +29,9 @@ export interface CommitGraphProps {
 
 const ROW_HEIGHT = 24;
 const LANE_WIDTH = 18;
+/** refs（分支/标签 chip）列宽：让提交说明在所有行上起排于同一条竖线；窄屏下可收缩到 REF_COLUMN_MIN_WIDTH */
+const REF_COLUMN_WIDTH = 140;
+const REF_COLUMN_MIN_WIDTH = 96;
 
 /** 画布切片的空位行（首行的前一行 / 末行的后一行）：无节点无边段，只为占满 3 行画布的高度。
  *  hash 带上位置与行号：空位行在切片里可能出现两次（如只有 1 行数据时前、后都是空位），
@@ -161,8 +164,31 @@ export function CommitGraph({
                 </g>
               </svg>
             </div>
-            <span style={{ flex: 1, minWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {/*
+              refs 列（「备注缩进」的修复）：分支/标签 chip 与提交说明同行时，chip 宽度会把说明顶到右边
+              （实测修前：有 chip 的行说明从 x=119.8 起、无 chip 的行从 x=72 起），一列说明参差不齐。
+              做法：**每行都预留同一宽度的 refs 列**（REF_COLUMN_WIDTH，窄屏可收缩到 REF_COLUMN_MIN_WIDTH），
+              提交说明一律从该列之后起排 —— 有 chip / 无 chip / chip 长短不同的行，说明都落在同一条竖线上。
+              chip 超出预留宽度时在该列内独立横向滚动（不挤压说明列）。
+              注意：要「每行都占位」而不是「有 chip 才占位」，否则无 chip 的行说明仍会左移一段。 */}
+            <span
+              style={{
+                // 用长写（flexGrow/Basis）而不是 flex 简写：与同行其它 flex 长写属性混用会触发 React 的
+                // 「shorthand 与 longhand 冲突」告警（实测 6 条 console error）
+                flexGrow: 0,
+                flexShrink: 1,
+                flexBasis: REF_COLUMN_WIDTH,
+                minWidth: REF_COLUMN_MIN_WIDTH,
+                maxWidth: REF_COLUMN_WIDTH,
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                scrollbarWidth: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
               <RefChips refs={commit.refs} showTags={showTags} />
+            </span>
+            <span style={{ flex: 1, minWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {commit.message.split('\n')[0]}
             </span>
             <span style={{ width: 160, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author}</span>
