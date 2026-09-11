@@ -1146,6 +1146,36 @@ async function prepareCell(page, url, cell, theme, timeout, base) {
   return { error: null, count: last.count, themeProbe: await readThemeProbe(page) };
 }
 
+/**
+ * 这一格的失败是「环境中断」还是「结论」？
+ *
+ * 只有下面这些情形算**环境中断**（允许整格重来一次）：页面在预算内根本没渲染出来、导航/选择器超时、
+ * 执行上下文被导航打断、主题还没落到文档上。它们全都不涉及任何断言判据。
+ *
+ * **永远不算中断**（不重试，直接判红）：
+ *   - 页面级横向溢出 —— 这是本脚本要给的结论本身；
+ *   - 例外断言失败（两栏堆叠 / Monaco 拖动没位移 / tooltip 该弹没弹或不该弹却弹了）——同样是结论；
+ *   - 内容级命中数低于下限 —— 说明量到的是「部分加载」的页面，也是结论。
+ *
+ * 为什么这条不是「把超时调大」：**每次尝试的预算一字未改**（25s / 例外②的 60s），两次都没过**照样判红**；
+ * 而且尝试次数与**首轮**失败原因都写进明细 JSON（`attempts` / `firstAttemptReason`）并在汇总里逐格列出，
+ * 所以「哪些格子是重试之后才绿的」在产物里一眼可见，不会被当成一次通过。
+ * 它解决的是本环境的真实噪声：dev 服务按需编译 + 同一工作区别的会话改代码/切夹具分支时，
+ * 页码窗口里整页不渲染，那种红与本任务要断言的布局毫无关系。
+ */
+function isStall(record) {
+  if (record.status !== 'fail') return false;
+  const reason = record.reason ?? '';
+  const measured = record.scrollWidth !== null && record.clientWidth !== null;
+  if (measured && record.scrollWidth > record.clientWidth + OVERFLOW_TOLERANCE) return false;
+  if (/例外断言:/.test(reason)) return false;
+  if (/命中 \d+ 条 < 下限/.test(reason)) return false;
+  return /就绪选择器未出现|page\.goto: Timeout|page\.waitForSelector: Timeout|Execution context was destroyed|主题未生效/.test(reason);
+}
+
+/** 最多尝试几次（1 次重试）。常量写在这里是为了让上面的判据有据可依、也便于将来收紧。 */
+const MAX_CELL_ATTEMPTS = 2;
+
 async function run(opts, pw, exe) {
   const collapseBelow = readCollapseBelow();
   const ctx = await loadFixture(opts.base, opts.repo);
@@ -1186,47 +1216,68 @@ async function run(opts, pw, exe) {
           if (httpIssues.length < 5) httpIssues.push(`requestfailed ${request.failure()?.errorText ?? ''} ${request.url().slice(0, 100)}`);
         });
         for (const cell of cells) {
-          const record = { app: opts.label, theme, width, cell: cell.name, kind: cell.kind ?? 'route' };
-          httpIssues.length = 0;
-          try {
-            if (cell.setup !== undefined) await cell.setup(page);
-            // 就绪门 + 主题门**一起**做（prepareCell）：主题门里若发生整页重载，就绪门会被整套重跑，
-            // 避免量到「刚重载、数据还没到」的空页并判绿（Fix round 2 的回归修复）。
-            const prepared = await prepareCell(page, opts.base + cell.path, cell, theme, opts.timeout, opts.base);
-            const notReady = prepared.error;
-            const themeProbe = prepared.themeProbe;
-            record.readyItems = prepared.count;
-            let extra = null;
-            if (notReady === null && cell.interact !== undefined) await cell.interact(page);
-            if (notReady === null && cell.verify !== undefined) extra = await cell.verify(page);
-            if (notReady === null && cell.after !== undefined) extra = await cell.after(page);
-            if (notReady === null && (cell.name === 'browse' || cell.name === 'log-select')) {
-              extra = await assertPanes(page, width, collapseBelow);
+          // setup 只做一次：page.route 的打桩跨导航有效（重试时重新 goto 仍在），重复注册只会叠加处理器
+          if (cell.setup !== undefined) await cell.setup(page);
+          // 一格最多跑两次：第一次若被**环境中断**（见 isStall）就整格重来一次（重新导航 + 完整就绪门 +
+          // 全部断言与测量），结论类失败不重试。两次都没过照样判红；尝试次数与首轮原因写进产物。
+          let record = null;
+          let stallReason = null;
+          for (let attempt = 1; attempt <= MAX_CELL_ATTEMPTS; attempt += 1) {
+            pageErrors.length = 0;
+            benignErrors.length = 0;
+            httpIssues.length = 0;
+            record = { app: opts.label, theme, width, cell: cell.name, kind: cell.kind ?? 'route' };
+            try {
+              // 就绪门 + 主题门**一起**做（prepareCell）：主题门里若发生整页重载，就绪门会被整套重跑，
+              // 避免量到「刚重载、数据还没到」的空页并判绿（Fix round 2 的回归修复）。
+              const prepared = await prepareCell(page, opts.base + cell.path, cell, theme, opts.timeout, opts.base);
+              const notReady = prepared.error;
+              const themeProbe = prepared.themeProbe;
+              record.readyItems = prepared.count;
+              let extra = null;
+              if (notReady === null && cell.interact !== undefined) await cell.interact(page);
+              if (notReady === null && cell.verify !== undefined) extra = await cell.verify(page);
+              if (notReady === null && cell.after !== undefined) extra = await cell.after(page);
+              if (notReady === null && (cell.name === 'browse' || cell.name === 'log-select')) {
+                extra = await assertPanes(page, width, collapseBelow);
+              }
+              const overflow = await assertNoPageOverflow(page, theme, themeProbe);
+              if (notReady !== null) {
+                overflow.status = 'fail';
+                overflow.reason = notReady;
+              }
+              if (overflow.themeStatus === 'fail') {
+                overflow.status = 'fail';
+                overflow.reason = `${overflow.reason ?? ''} | ${overflow.themeReason}`.trim();
+              }
+              if (extra !== null && extra.status === 'fail') {
+                overflow.status = 'fail';
+                overflow.reason = `${overflow.reason ?? ''} | 例外断言: ${extra.reason}`.trim();
+              }
+              Object.assign(record, overflow, { extra });
+            } catch (error) {
+              record.status = 'fail';
+              record.scrollWidth = record.scrollWidth ?? null;
+              record.clientWidth = record.clientWidth ?? null;
+              record.reason = `执行异常：${error instanceof Error ? error.message.split('\n')[0] : String(error)}`;
             }
-            const overflow = await assertNoPageOverflow(page, theme, themeProbe);
-            if (notReady !== null) {
-              overflow.status = 'fail';
-              overflow.reason = notReady;
+            // HTTP 异常只在判红时并入失败原因（判绿时它只是背景噪声，例如 favicon 404）
+            if (httpIssues.length > 0 && record.status === 'fail') {
+              record.httpIssues = [...httpIssues];
+              record.reason = `${record.reason ?? ''} | 本格 HTTP 异常：${record.httpIssues.slice(0, 3).join('、')}`.trim();
             }
-            if (overflow.themeStatus === 'fail') {
-              overflow.status = 'fail';
-              overflow.reason = `${overflow.reason ?? ''} | ${overflow.themeReason}`.trim();
+            if (attempt === 1 && isStall(record)) {
+              stallReason = record.reason;
+              record = null;
+              console.log(`[fluid] ${theme}/${width}px ${cell.name}: 首轮被环境中断，重跑这一格（${String(stallReason).slice(0, 100)}）`);
+              continue;
             }
-            if (extra !== null && extra.status === 'fail') {
-              overflow.status = 'fail';
-              overflow.reason = `${overflow.reason ?? ''} | 例外断言: ${extra.reason}`.trim();
-            }
-            Object.assign(record, overflow, { extra });
-          } catch (error) {
-            record.status = 'fail';
-            record.scrollWidth = record.scrollWidth ?? null;
-            record.clientWidth = record.clientWidth ?? null;
-            record.reason = `执行异常：${error instanceof Error ? error.message.split('\n')[0] : String(error)}`;
+            break;
           }
-          // HTTP 异常只在判红时并入失败原因（判绿时它只是背景噪声，例如 favicon 404）
-          if (httpIssues.length > 0 && record.status === 'fail') {
-            record.httpIssues = [...httpIssues];
-            record.reason = `${record.reason ?? ''} | 本格 HTTP 异常：${record.httpIssues.slice(0, 3).join('、')}`.trim();
+          if (record === null) throw new Error('unreachable: 单元格尝试循环没有产生结果');
+          if (stallReason !== null) {
+            record.attempts = MAX_CELL_ATTEMPTS;
+            record.firstAttemptReason = stallReason;
           }
           if (pageErrors.length > 0) record.pageErrors = pageErrors.splice(0, pageErrors.length);
           if (benignErrors.length > 0) record.pageErrorsBenign = benignErrors.splice(0, benignErrors.length);
@@ -1294,6 +1345,16 @@ function report(results, opts) {
   if (unstable.length > 0) {
     console.log('\n内容级就绪命中数不一致（告警，不参与判定）:');
     for (const [name, counts] of unstable) console.log(`  - ${name}: ${[...counts].sort((a, b) => a - b).join(' / ')}`);
+  }
+  // 环境中断重试的**逐格披露**：哪些格子重试过、重试后是绿是红、首轮到底报了什么。
+  // 有了这一段，「重试过的绿」不会被误读成「一次通过的绿」。
+  const retried = results.filter((r) => r.attempts === MAX_CELL_ATTEMPTS);
+  if (retried.length > 0) {
+    const recovered = retried.filter((r) => r.status === 'pass').length;
+    console.log(`\n环境中断重试（判据见 isStall；首轮失败原因逐格列出）: ${retried.length} 格 —— 重试后通过 ${recovered} 格 / 两次均失败 ${retried.length - recovered} 格`);
+    for (const r of retried) {
+      console.log(`  - ${r.theme}/${r.width}px ${r.cell}: ${r.status === 'pass' ? '重试后通过' : '两次均失败'}｜首轮：${String(r.firstAttemptReason ?? '').slice(0, 140)}`);
+    }
   }
   if (opts.json !== null) {
     writeFileSync(resolve(ROOT, opts.json), JSON.stringify({ app: opts.label, widths: opts.widths, themes: opts.themes, results }, null, 2));
