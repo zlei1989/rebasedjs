@@ -164,13 +164,16 @@ export function CommitGraph({
                 />
               </svg>
             </div>
-            {/* refs 列：固定宽度，保证各行说明从同一条竖线起排 */}
+            {/*
+              refs 列：宽度**按本行的 ref 内容自适应**（有 chip 就占位、没有就不占位）。
+              为什么不给固定宽度：绝大多数行没有分支/标签，固定宽度会让这些行白白空出一整列
+              （实测 140px），说明文字被顶到很右边、与左侧线条的联系被切断 —— 这就是「缩进还有点问题」的观感来源。
+              上限 REF_COLUMN_WIDTH + 溢出滚动：单个超长 ref 名不会把说明列挤没。
+              说明文字自己的缩进（paddingLeft = lane 列数 × LANE_WIDTH）另行叠加，保持「随线条缩进」。 */}
             <span
               style={{
                 flexGrow: 0,
-                flexShrink: 1,
-                flexBasis: REF_COLUMN_WIDTH,
-                minWidth: REF_COLUMN_MIN_WIDTH,
+                flexShrink: 0,
                 maxWidth: REF_COLUMN_WIDTH,
                 overflowX: 'auto',
                 overflowY: 'hidden',
