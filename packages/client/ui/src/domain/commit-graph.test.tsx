@@ -201,6 +201,26 @@ describe('CommitGraph', () => {
       render(<CommitGraph commits={mergeCommits} height={100} />);
       expect(() => scrollHolderTo(900)).not.toThrow();
     });
+
+    /**
+     * 嵌入式宿主约束（用户口径）：高度判定只允许用**传入的 height 与 holder 自身几何**，
+     * 不许读 window.innerHeight / 100vh —— 组件被嵌入到任意高度的宿主里时，
+     * 视口高度与它实际能占的高度是两回事（实测：窗口 1600 高、宿主只有 459 高时，
+     * 必须按 459 判「填不满」，而不是按 1600）。
+     */
+    it('高度判定不看视口高度：把 window.innerHeight 抬到远超内容，也不误判为「填不满」', () => {
+      const onReachBottom = vi.fn();
+      const original = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+      Object.defineProperty(window, 'innerHeight', { value: 4000, configurable: true });
+      try {
+        // height=100 < 6 行 × 24 = 144 → 内容撑满宿主；若实现里用了 window.innerHeight（4000），
+        // 就会误判成「填不满」而在挂载时回调
+        render(<CommitGraph commits={mergeCommits} height={100} onReachBottom={onReachBottom} />);
+        expect(onReachBottom).not.toHaveBeenCalled();
+      } finally {
+        if (original) Object.defineProperty(window, 'innerHeight', original);
+      }
+    });
   });
 
   // 冒烟 F-021：?select=<hash> 深链与点击选中均需行级选中态（否则「选中哪一行」无从辨认）

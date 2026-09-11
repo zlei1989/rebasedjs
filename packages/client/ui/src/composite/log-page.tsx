@@ -229,7 +229,10 @@ export function LogPage({
   // 提交图区域高度：随可用空间自适应。CommitGraph 的 height 缺省是写死的 480（虚拟滚动的滚动窗口
   // 需要确定高度），窗口比 480 高时图下方留一片空白、更矮时列表溢出宿主盒子；故本页量出宿主盒子的
   // 实测高度交给它。行高/滚动窗口仍归 CommitGraph，本页只负责「这块区域有多高」。
-  // undefined = 量不到（宿主未挂载 / jsdom 无布局），由 CommitGraph 的默认高度兜底。
+  // 量的是**宿主元素**而不是 window：本页会被嵌进任意宿主（SplitPane 主区、独占满宽、将来的分栏/面板），
+  // 视口高度与它实际能占的高度不是一回事；ResizeObserver 也顺带覆盖了「宿主被外部改高」的情形
+  // （窗口 resize 只是其中一种触发源）。
+  // undefined = 量不到（宿主未挂载 / jsdom 无布局 / 宿主高度为 auto），由 CommitGraph 的默认高度兜底。
   const [graphHeight, setGraphHeight] = useState<number | undefined>(undefined);
   // 观察器挂在 ref 里而不是 effect 里：宿主 div 只在「有提交」分支渲染，而首次查询回来前它是缺席的
   // （挂载时 effect 已跑过一次，且不会因 commits 到达而重跑），故用回调 ref 随挂载/卸载重新接线。
@@ -245,7 +248,7 @@ export function LogPage({
     measure();
     // 无 ResizeObserver 的环境（jsdom 测试）只保留首帧这一次测量
     if (typeof ResizeObserver === 'undefined') return;
-    // 跟随窗口缩放、详情面板开合、过滤行换行等一切会改变宿主盒子高度的事件
+    // 宿主盒子高度变化即重测（外部改高、窗口缩放、详情面板开合、过滤行换行……）
     const observer = new ResizeObserver(measure);
     observer.observe(host);
     graphObserverRef.current = observer;
