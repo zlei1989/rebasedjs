@@ -13,6 +13,7 @@
 import { useSettings } from '@rebased/client';
 import { App as AntdApp, ConfigProvider, theme } from 'antd';
 import type { ThemeConfig } from 'antd';
+import { DensityProvider } from '@rebased/ui';
 import { useEffect, useMemo, type ReactNode } from 'react';
 
 export function Providers({ children }: { children: ReactNode }): ReactNode {
@@ -36,7 +37,10 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
   }, [mode, themeConfig]);
   return (
     <ConfigProvider theme={themeConfig}>
-      <AntdApp>{children}</AntdApp>
+      {/* 明暗 mode 传给 ui 包的 PageShell：其紧凑密度主题需据此选底色算法 */}
+      <DensityProvider mode={mode}>
+        <AntdApp>{children}</AntdApp>
+      </DensityProvider>
     </ConfigProvider>
   );
 }

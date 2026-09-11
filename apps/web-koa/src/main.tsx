@@ -6,6 +6,7 @@
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
+import { DensityProvider } from '@rebased/ui';
 import './index.css';
 import { ReposPage } from './pages';
 import { RepoBlamePage } from './pages/blame';
@@ -34,35 +35,38 @@ import { RepoWorktreesPage } from './pages/worktrees';
 
 createRoot(document.getElementById('root')!).render(
   <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
-    <AntApp>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<ReposPage />} />
-          <Route path="/repos/:repoId" element={<RepoPage />} />
-          <Route path="/repos/:repoId/browse" element={<RepoBrowsePage />} />
-          <Route path="/repos/:repoId/blame" element={<RepoBlamePage />} />
-          <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
-          <Route path="/repos/:repoId/committed" element={<RepoCommittedPage />} />
-          <Route path="/repos/:repoId/history" element={<RepoHistoryPage />} />
-          <Route path="/repos/:repoId/search" element={<RepoSearchPage />} />
-          <Route path="/repos/:repoId/merge" element={<RepoMergePage />} />
-          <Route path="/repos/:repoId/remotes" element={<RepoRemotesPage />} />
-          <Route path="/repos/:repoId/conflicts" element={<RepoConflictsPage />} />
-          <Route path="/repos/:repoId/diff" element={<RepoDiffPage />} />
-          <Route path="/repos/:repoId/settings" element={<RepoSettingsPage />} />
-          <Route path="/repos/:repoId/stashes" element={<RepoStashesPage />} />
-          <Route path="/repos/:repoId/status" element={<RepoStatusPage />} />
-          <Route path="/repos/:repoId/tags" element={<RepoTagsPage />} />
-          <Route path="/repos/:repoId/patches" element={<RepoPatchesPage />} />
-          <Route path="/repos/:repoId/shelves" element={<RepoShelvesPage />} />
-          <Route path="/repos/:repoId/console" element={<RepoConsolePage />} />
-          <Route path="/repos/:repoId/ignore" element={<RepoIgnorePage />} />
-          <Route path="/repos/:repoId/github" element={<RepoGithubPage />} />
-          <Route path="/repos/:repoId/gitlab" element={<RepoGitlabPage />} />
-          <Route path="/repos/:repoId/worktrees" element={<RepoWorktreesPage />} />
-          <Route path="/repos/:repoId/submodules" element={<RepoSubmodulesPage />} />
-        </Routes>
-      </BrowserRouter>
-    </AntApp>
+    {/* SPA 固定暗色：mode 恒为 'dark'，供 PageShell 的紧凑密度主题使用 */}
+    <DensityProvider mode="dark">
+      <AntApp>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<ReposPage />} />
+            <Route path="/repos/:repoId" element={<RepoPage />} />
+            <Route path="/repos/:repoId/browse" element={<RepoBrowsePage />} />
+            <Route path="/repos/:repoId/blame" element={<RepoBlamePage />} />
+            <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
+            <Route path="/repos/:repoId/committed" element={<RepoCommittedPage />} />
+            <Route path="/repos/:repoId/history" element={<RepoHistoryPage />} />
+            <Route path="/repos/:repoId/search" element={<RepoSearchPage />} />
+            <Route path="/repos/:repoId/merge" element={<RepoMergePage />} />
+            <Route path="/repos/:repoId/remotes" element={<RepoRemotesPage />} />
+            <Route path="/repos/:repoId/conflicts" element={<RepoConflictsPage />} />
+            <Route path="/repos/:repoId/diff" element={<RepoDiffPage />} />
+            <Route path="/repos/:repoId/settings" element={<RepoSettingsPage />} />
+            <Route path="/repos/:repoId/stashes" element={<RepoStashesPage />} />
+            <Route path="/repos/:repoId/status" element={<RepoStatusPage />} />
+            <Route path="/repos/:repoId/tags" element={<RepoTagsPage />} />
+            <Route path="/repos/:repoId/patches" element={<RepoPatchesPage />} />
+            <Route path="/repos/:repoId/shelves" element={<RepoShelvesPage />} />
+            <Route path="/repos/:repoId/console" element={<RepoConsolePage />} />
+            <Route path="/repos/:repoId/ignore" element={<RepoIgnorePage />} />
+            <Route path="/repos/:repoId/github" element={<RepoGithubPage />} />
+            <Route path="/repos/:repoId/gitlab" element={<RepoGitlabPage />} />
+            <Route path="/repos/:repoId/worktrees" element={<RepoWorktreesPage />} />
+            <Route path="/repos/:repoId/submodules" element={<RepoSubmodulesPage />} />
+          </Routes>
+        </BrowserRouter>
+      </AntApp>
+    </DensityProvider>
   </ConfigProvider>,
 );
