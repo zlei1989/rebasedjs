@@ -418,12 +418,13 @@ token: { fontSizeSM: 11 }   // 实效 fontSize / fontSizeSM / fontSizeLG = 12 / 
 
 ### 6.4 允许横向滚动的例外清单
 
-页面级横向滚动必须为 0（§6.5）；**组件内部**的横向滚动是允许的，且只有两类：
+页面级横向滚动必须为 0（§6.5）；**组件内部**的横向滚动是允许的，且只有三类：
 
 | 例外 | 位置 | 为什么必须允许 | 断言口径 |
 |------|------|----------------|----------|
 | Monaco 编辑器 | `MonacoDiffView` / `MonacoTextView` / `HunkDiffView`（`github-panel` / `gitlab-panel` 展开差异） | 代码行不换行是编辑器语义；长行必须靠编辑器自己的横向滚动条可达。编辑器宿主（`.monaco-editor`）本身是**裁剪容器**（`scrollWidth == clientWidth`），溢出**不外泄**到文档；真正持有横向滚动区间的是它内部的 `.monaco-scrollable-element` | 四条同时成立：① 长行真实存在（`.view-lines` 宽 > 编辑器 `clientWidth`）；② 宿主 `scrollWidth <= clientWidth + 1`（裁剪，不外泄）；③ `.monaco-scrollable-element` 的 `scrollWidth > clientWidth`（**注意其值是 Monaco 的大滚动哨兵 16777216，不能当长行的度量**）；④ 拖动 Monaco 自己的横向滚动条滑块后内容真的位移 |
 | 长文本块 | `browse-panel` 的内容 `<pre>`、console / patch 预览等等宽文本块 | 等宽原文不折行，属于内容语义 | 这些块自身带 `overflow: auto`，滚动发生在块内 |
+| 浮层 / 弹窗包裹层（overlay） | antd 的 `.ant-modal-wrap`（所有 `Modal`：认证弹窗、重置弹窗、忽略配置、CRLF 三选、手动合并全屏 Modal 等），以及同为 `position: fixed` 的浮层容器 | 浮层是**页面之外**的一层，其定位基准是视口而不是文档流：`.ant-modal-wrap` 自带 `overflow: auto`，弹窗内容横向变宽时滚动发生在这层包裹容器里，**不会**传播成文档级横向滚动。这正是「弹窗内部溢出被包裹层吃掉」的机制 | 页面级断言（§6.5）对弹窗开口的格子只能证明「**弹窗背后的页面**不溢出」——`position: fixed` 的元素既不参与文档滚动宽的计算，也被越界元素清单刻意跳过。**弹窗内部**的横向溢出要用另一把尺子：`.ant-modal-wrap`（或 `.ant-modal`）自身的 `scrollWidth <= clientWidth + 1`。目前验收脚本只做了前者，后者列为未覆盖项（`docs/e2e-verification.md` §5.16④） |
 
 **不允许**的横向滚动：任何页面级横向滚动条（= 上述断言失败），以及「长 hash / 长路径 / 长分支名」把所在行顶宽——后者用 `EllipsisText`（截断 + 溢出时 tooltip）收口，不是滚动。
 
@@ -439,6 +440,7 @@ node scripts/check-fluid-layout.mjs --shots-only --widths=360,768,1440
 
 - **核心断言**：六档宽度 `360 / 480 / 768 / 1024 / 1440 / 1920` × 明暗两主题 × 每个路由与状态，逐格断言
   `document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1`（+1 容亚像素）。
+- **两段式就绪门**：每格先等 `ready`（页面壳 / 工具行），再等 `content`（**数据级**条目，如 `row-stash-*` / `tag-row-*` / `config-input-*` / `.ant-tree-treenode`）真的命中；命中数记进明细。只等页面壳会量到「数据还没到」的页面，而**空页永远不会横向溢出** —— 那样的绿什么都没证明，故内容级选择器一条都没命中时该格直接判红。页面上确实不存在数据级内容时（对话-only 页、该夹具下必然为空的页）在脚本内逐行写明原因，不留白。
 - **覆盖**：两个 app 的全部 24 个页面（`/` 首页 + `/repos/:id` 日志页 + 22 个子页），另加静态加载不产生的状态：`?select=`（选中提交）、`?compare=`（分支对比）、GitHub/GitLab 面板**展开「查看差异」**（`hunk-diff-view`）、认证弹窗、重置弹窗、`EllipsisText` 悬停浮层。
 - **例外断言**（反向断言，防止后续把例外当缺陷改掉）：① `SplitPane` 在 `collapseBelow` 以上左右并排、以下纵向堆叠且各占满宽度（阈值从 `split-pane.tsx` 源码读取，不抄常量）；② Monaco 内部横向滚动可达而页面级仍为 0。
 - **`collapseBelow` 校准结论：维持 768**。实测 768px 下 browse 为「侧栏 300 + 主区 424」，可用；但日志页在同一阈值下主区只有 448px，提交信息已被截断到约 10 个字符。试降为 640 后实测（`collapsebelow-experiment-640-*.png`）日志页主区只剩 320px（比它旁边 320px 的详情栏还窄），提交信息与日期列被压到「ch…」「2026-09-11 …」，明显劣于堆叠，故不采用 640。

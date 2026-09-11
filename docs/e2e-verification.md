@@ -564,8 +564,8 @@
 | 24 个页面：`/` 首页、`/repos/:id` 日志页、browse·blame·branches·committed·history·search·merge·remotes·conflicts·diff·settings·stashes·status·tags·patches·shelves·console·ignore·github·gitlab·worktrees·submodules | 360 / 480 / 768 / 1024 / 1440 / 1920 × 暗 + 明 | ✅ 384/384 格 |
 | 静态加载不产生的日志页状态：`?select=`（选中提交）、`?compare=`（分支对比） | 同上 | ✅ |
 | `/github`、`/gitlab` 两面板**展开「查看差异」**（渲染共享 `hunk-diff-view`，无别的路由覆盖它） | 同上 | ✅ |
-| 认证弹窗（推送被服务端 401 AUTH_FAILED → 容器开 AuthDialog） | 同上 | ✅ |
-| 重置弹窗（选中提交 → 「Reset 当前分支到此处」→ ResetDialog） | 同上 | ✅ |
+| 认证弹窗（推送被服务端 401 AUTH_FAILED → 容器开 AuthDialog） | 同上 | ✅ **仅**证明弹窗打开时「弹窗背后的页面」不溢出（弹窗内部另论，见下方口径说明与 ④） |
+| 重置弹窗（选中提交 → 「Reset 当前分支到此处」→ ResetDialog） | 同上 | ✅ 同上（页面级口径，**不含**弹窗内部） |
 | `EllipsisText` 悬停浮层（溢出必弹 + 内容=完整值；两个站点各测，正反两半都被实测到） | 同上 | ✅ |
 | 例外①：browse / log 两栏在 `collapseBelow` 以下纵向堆叠且各占满宽度、以上左右并排 | 同上（双向断言） | ✅ |
 | 例外②：Monaco 内容宽于编辑器和宿主不溢出 + 拖动其横向滚动条内容真位移 + 页面级仍为 0 | 同上 | ✅ |
@@ -573,10 +573,12 @@
 | **跳过**：conflicts 页的「冲突行」状态 | — | 跳过：需仓库停在冲突态；本轮不动共享夹具（用户可能正在使用），空态已断言。后续用 `rebased-smoke-conflict` 现造冲突态补测 |
 | **跳过**：Monaco 在 1440/1920 档的「内部横向滚动」 | — | 非跳过而是否定式通过：该两档长行放得下（内容 889px ≤ 编辑器 937px），断言按分支记 pass（本档无需内部滚动） |
 
+> **两条 Modal 格的口径（重要，勿按字面读成「弹窗内容也不溢出」）**：本轮的断言对象始终是 `document.documentElement.scrollWidth`。antd v6 的 `.ant-modal-wrap` 是 `position: fixed; overflow: auto` —— **弹窗内部的横向溢出被这层包裹容器自己吃掉**，不可能增长文档滚动宽；测量助手在列越界元素时也刻意跳过 `position: fixed` 的元素（浮层是「页面之外」的一层，不参与文档级判定）。因此这两格能证明的只有「**弹窗打开时它背后的页面**没有横向溢出」，**不能**证明「弹窗自己的内容没有横向溢出」。后者的度量对象应是 `.ant-modal-wrap` / `.ant-modal` 自身的 `scrollWidth vs clientWidth`，本轮未做，已列入 ④ 未覆盖项。
+
 #### ② 操作路径（点击/输入序列）
 
 1. `pnpm dev`（web-next :3030 / web-koa API :3031）+ `pnpm --filter @rebased/web-koa dev:web`（SPA :5173）；三个端口启动前均为空闲，无需 kill。
-2. 断言脚本自动驱动：`PUT /api/settings {theme}` 切主题（跑完还原）→ 逐格 `goto(<路由>)` → 等该路由的 `data-testid` 就绪 → 等布局静止（滚动量/高度/节点数连续两次采样一致）→ 读 `scrollWidth`/`clientWidth`。
+2. 断言脚本自动驱动：`PUT /api/settings {theme}` 切主题（跑完还原）→ 逐格 `goto(<路由>)` → **两段式就绪门**（先等该路由的页面壳 `data-testid`，再等**内容级**条目选择器如 `row-stash-*`/`tag-row-*`/`config-input-*` 真的命中，命中数记进明细）→ 等布局静止（滚动量/高度/节点数连续两次采样一致）→ 读 `scrollWidth`/`clientWidth`。只等页面壳会量到数据未到的页面，而空页永远不溢出（该格的绿等于没证明任何东西），故内容级选择器一条未命中即判该格红。
 3. 状态格的真实点击序列：
    - **GitHub 展开差异**：`goto /repos/:id/github` → 点 PR 行 `[data-testid="github-pr-row-7"]` → 点 Tab「文件」→ 点「查看差异」`[data-testid="github-diff-toggle-0"]` → 等 `hunk-diff-block-0`（GitLab 同序列，iid=9）。
    - **认证弹窗**：`goto /repos/:id` → 顶栏「更多」→ 菜单「推送」→ 弹窗「确定」→（`POST …/push` 被脚本打桩成 401 AUTH_FAILED）→ 出现「需要认证」弹窗。
@@ -594,7 +596,7 @@
 - **修复前基线（同一脚本，改动前）**：`375/384`，9 格红——`stashes` 在 360/480 两档两主题 `scrollWidth 492 > clientWidth 360/480`（越界元素 = 该行 5 个操作按钮的 `<span>`/`<button>`），另有 4 格是**断言脚本自身的测量竞态**（主题首帧兜底、Monaco 拖动时滑块在视口外、EllipsisText 悬停目标不可见），已逐条修断言而非改产品。
 - **例外①实测**（browse）：360 → side/main 各占满容器（328/328，纵向堆叠）；768 → side 300 / main 424（左右并排）；1440 → side 300 / main 1096。log 页（侧栏在右）：768 → main 448 / side 320。
 - **例外②实测**（diff @360，文件 `src/app.ts` 含 115 字符长行）：Monaco 内容（`.view-lines`）694px > 编辑器 276px，编辑器宿主自身 `scrollWidth 276 == clientWidth 276`（不溢出），拖动横向滚动条后内容左移 195px，同时 `documentElement.scrollWidth 360 == clientWidth 360`。
-- **EllipsisText 浮层实测**：重置弹窗内 `短哈希 + 提交信息` 溢出（438 > 423）→ 悬停弹出浮层且文本 = 完整值 `1ccdf5b docs(smoke): sign-off 提交冒烟（F-055 amend 到历史提交后）`；submodules 页 URL 在 480 档溢出（107 > 81）同样弹出，在 1440 档不溢出（196 ≤ 220）则**不弹**（antd 以真实溢出为准）。
+- **EllipsisText 浮层实测**：重置弹窗内 `短哈希 + 提交信息` 溢出（438 > 423）→ 悬停弹出浮层且文本 = 完整值 `1ccdf5b docs(smoke): sign-off 提交冒烟（F-055 amend 到历史提交后）`；submodules 页 URL 在 **360** 档溢出（196 > 81）、**480** 档同样溢出（196 > 158）也弹出，768 档起不溢出（768：230 ≤ 230）则**不弹**（antd 以真实溢出为准）。
 
 **浏览器 ↔ CLI 互证**（页面数字与仓库事实一致；CLI 在 `D:\zhanglei1120\Github\rebased-smoke`）：
 
@@ -618,6 +620,7 @@
 | D-37 | **视觉回归**（重构引入）：`Tooltip > Button type="link"` 作为 `PageShell` 直接子项时被拉伸到**整行宽**、文字居中（实测 1440 档按钮宽 1440px、`justify-content:center`），悬停/下划线区域横贯整行；原先是紧凑的左对齐链接 | `PageShell` 刻意不设 `alignItems`（这正是「横向沾满」的修法），纵向 Flex 的交叉轴是水平方向，未显式声明 `alignSelf` 的子项即被拉伸 | 在两个 app 共 **36 处**调用点就地写 `style={{ alignSelf: 'flex-start' }}`（web-next 18 + web-koa 18，两侧对称；github/gitlab 页里那两对按钮在 `<Flex gap={8}>` 内，不受影响、保持原样），**不改 `PageShell` 契约** | 截图 `link-stretch-1440-console-before.png`（拉伸态、文字居中）↔ `responsive-1440-console.png`（修复后紧凑左对齐），并复跑全量断言确认无横向溢出 |
 
 #### ④ 未覆盖项与后续计划
+- **弹窗（overlay）内部的横向溢出**未覆盖：本轮两条 Modal 格按页面级口径只证明了「弹窗背后的页面不溢出」（原因见 ① 的口径说明——`.ant-modal-wrap` 是 `position: fixed; overflow: auto`，内部溢出被它自己吃掉，且测量助手跳过 `position: fixed` 元素）。后续补一轮把度量对象换成 `.ant-modal-wrap` 自身：断言其 `scrollWidth <= clientWidth + 1`，或断言 `.ant-modal` 内不存在右边界超出 wrap 的元素 —— 那才真正证明「弹窗内容不横向溢出」。
 - **conflicts 页的冲突行态**未覆盖（本轮只断言了「无冲突」空态），理由见 ①；后续在 `rebased-smoke-conflict` 上现造 merge/rebase 冲突后补一轮。
 - **GitHub/GitLab 的真实远端数据**未覆盖（无 PAT）：本轮只覆盖「展开差异」这一最易溢出的渲染形态；真实 PR/MR 列表、时间线、行级评论的几何未测，与 R17 的跳过项同源。
 - **Monaco 在 1440/1920 档不产生内部横向滚动**（长行放得下）——这是正确行为而非缺口，若后续引入更长行，该档断言会自动转为「内部滚动」分支。

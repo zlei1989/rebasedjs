@@ -37,8 +37,9 @@ export function RepoIgnorePage(): React.ReactNode {
           返回日志
         </Button>
       </Tooltip>
+      {/* alignSelf: 同「返回日志」——PageShell 不设 alignItems，直接子项会被拉成整行宽的填充条（本处是 primary 按钮，比链接更显眼）；就地收回内容宽 */}
       <Tooltip title="打开忽略规则编辑器：选 .gitignore 或 .git/info/exclude 编辑规则，确认后写盘">
-        <Button type="primary" data-testid="edit-ignore-button" onClick={() => setOpen(true)}>
+        <Button style={{ alignSelf: 'flex-start' }} type="primary" data-testid="edit-ignore-button" onClick={() => setOpen(true)}>
           编辑忽略规则
         </Button>
       </Tooltip>
