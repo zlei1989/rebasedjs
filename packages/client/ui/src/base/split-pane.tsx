@@ -46,6 +46,15 @@ export interface SplitPaneProps {
   sidePosition?: 'start' | 'end';
   /** 视口窄于此值时改为纵向堆叠，默认 768 */
   collapseBelow?: number;
+  /**
+   * 两栏间距（px）；不传则**不落 style**（既有调用点保持在先的零间距行为）。
+   * 为什么要有：两栏之间的缝原本由调用点的 <Flex gap={12}> 提供，迁到本原语后必须仍能表达它；
+   *   若改由调用点用 marginRight 之类的单边外边距补，宽屏（行）碰巧是对的，一旦视口过窄塌缩成列
+   *   （纵轴）就把缝加错了方向。
+   * 怎么做：落在两栏容器（宽屏是行、塌缩是列）的 flex `gap` 上——行容器给横轴间距、列容器给纵轴
+   *   间距，**两个分支都轴正确**，故缝隙属于原语而非调用点。
+   */
+  gap?: number;
 }
 
 export function SplitPane({
@@ -54,8 +63,18 @@ export function SplitPane({
   sideWidth = 300,
   sidePosition = 'start',
   collapseBelow = 768,
+  gap,
 }: SplitPaneProps): ReactNode {
   const collapsed = useViewportBelow(collapseBelow);
+
+  // 两栏容器的 style：宽屏（行）与塌缩（列）两个分支**逐值相同**，故在此只算一次。
+  const containerStyle: CSSProperties = { flex: 1, minWidth: 0, minHeight: 0 };
+  // gap 仅在显式传入时落 style（与 PageShell 的 padding/gap 同口径）：不传即不落，
+  // 既有调用点（log 页等本就没有栏间距）不会被凭空加上间距。
+  // 用 `!== undefined` 而非真值判断——`gap={0}` 是合法取值（显式清零），不能被当成「没传」丢掉。
+  if (gap !== undefined) {
+    containerStyle.gap = gap;
+  }
 
   if (collapsed) {
     // 纵向堆叠：两者都占满宽度（横向溢出归零），并**等分可用高度、各自内部滚动**。
@@ -87,7 +106,7 @@ export function SplitPane({
       overflow: 'auto',
     };
     return (
-      <Flex vertical style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+      <Flex vertical style={containerStyle}>
         <div style={stackedSide} data-testid="split-side-host">
           {side}
         </div>
@@ -101,7 +120,7 @@ export function SplitPane({
   const sideStyle: CSSProperties = { width: sideWidth, flexShrink: 0, overflow: 'auto' };
   const mainStyle: CSSProperties = { flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' };
   return (
-    <Flex style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+    <Flex style={containerStyle}>
       {sidePosition === 'start' ? (
         <>
           <div style={sideStyle} data-testid="split-side-host">

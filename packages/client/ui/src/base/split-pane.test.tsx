@@ -5,7 +5,7 @@
  * 定位口径：`data-testid="split-side-host"` / `"split-main-host"` 落在 **宿主 div**（承载
  * width/flex/overflow 的那一层，由本组件渲染）；测试里作为 `side` / `children` 传入的
  * `data-testid="split-side"` / `"split-main"` 是**业务子节点**，不是宿主。
- * 本组件自己写进 style 的属性（width / flex / flexShrink / flexGrow / minWidth / minHeight / overflow）
+ * 本组件自己写进 style 的属性（width / flex / flexShrink / flexGrow / minWidth / minHeight / overflow / gap）
  * 故一律断内联串；惟 `flexDirection` 由 antd `Flex vertical` 的类名控制，按 Tasks 3–5 的既定规则
  * 断 getComputedStyle 计算值。
  */
@@ -148,6 +148,62 @@ describe('SplitPane', () => {
       </SplitPane>,
     );
     expect(hosts().side.style.width).toBe('320px');
+  });
+
+  // 两栏之间的缝原本由调用点的 <Flex gap={12}> 提供，迁到本原语后必须仍能表达（见 split-pane.tsx 的 gap JSDoc）。
+  it('gap 生效：落在宽屏行容器的 flex gap 上', () => {
+    stubViewport(false);
+    const { container } = render(
+      <SplitPane gap={12} side={<span data-testid="split-side">侧</span>}>
+        <span data-testid="split-main">主</span>
+      </SplitPane>,
+    );
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.style.gap).toBe('12px');
+  });
+
+  // 塌缩分支的缝必须落在**列**容器上（纵轴）：若 gap 只写进宽屏那条 return，
+  // 窄屏就静默丢缝，而上面那条用例只看宽屏、对此毫无察觉（本组用例的存在理由）。
+  it('窄屏：gap 同样落在塌缩后的列容器上（纵轴间距）', () => {
+    stubViewport(true);
+    const { container } = render(
+      <SplitPane gap={12} side={<span data-testid="split-side">侧</span>}>
+        <span data-testid="split-main">主</span>
+      </SplitPane>,
+    );
+    const root = container.firstElementChild as HTMLElement;
+    expect(getComputedStyle(root).flexDirection).toBe('column');
+    expect(root.style.gap).toBe('12px');
+  });
+
+  // **判别性用例**：gap={0} 是显式传值，必须照样落 style。
+  // 若守卫写成真值判断 `if (gap)`（而不是 `!== undefined`），0 会被误判成「没传」而丢掉，
+  // 本用例失败、而上面 gap={12} 那条仍通过 —— 即本用例能把「对的守卫」与「出错的守卫」分开。
+  // 实测（临时把守卫改成 `if (gap)` 后重跑）：仅本用例失败，见 task-11-report.md「Fix round 1」§1.3。
+  it('gap={0} 是显式取值，不被当作未传而丢弃', () => {
+    stubViewport(false);
+    const { container } = render(
+      <SplitPane gap={0} side={<span data-testid="split-side">侧</span>}>
+        <span data-testid="split-main">主</span>
+      </SplitPane>,
+    );
+    expect((container.firstElementChild as HTMLElement).style.gap).toBe('0px');
+  });
+
+  // 反向用例：不传 gap 时**不落 gap**（既有调用点如 log 页保持在先的零间距行为）。
+  // 同时断言结构性不变量仍在，避免「不落 gap」被写成「整个 style 不落」而误判通过。
+  it('不传 gap：容器 style 里没有 gap，但结构几何不变', () => {
+    stubViewport(false);
+    const { container } = render(
+      <SplitPane side={<span data-testid="split-side">侧</span>}>
+        <span data-testid="split-main">主</span>
+      </SplitPane>,
+    );
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.style.gap).toBe('');
+    expect(row.style.flexGrow).toBe('1');
+    expect(row.style.minWidth).toBe('0px');
+    expect(row.style.minHeight).toBe('0px');
   });
 
   // collapseBelow 的默认值随后续任务按真机截图校准（768 可能变成 640），
