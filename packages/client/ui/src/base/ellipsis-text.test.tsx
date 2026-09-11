@@ -1,6 +1,6 @@
 /**
  * EllipsisText 测试：断言文本渲染、等宽开关、自带 minWidth:0（flex 内截断的前提）、
- * maxWidth 守卫（含 maxWidth={0}）与 **ellipsis 启用标记**。
+ * maxWidth 守卫（含 maxWidth={0}）、**ellipsis 启用标记**与 **type 透传（承色类，成对正/反断言）**。
  *
  * 这里能断什么、不能断什么（antd 6.6.1 实测结论）：
  *
@@ -40,6 +40,24 @@ describe('EllipsisText', () => {
   it('mono 用等宽（code）呈现', () => {
     const { container } = render(<EllipsisText mono>6f4a2c1</EllipsisText>);
     expect(container.querySelector('code')).not.toBeNull();
+  });
+
+  // type 透传（Ruling P17）：次要色长文本转进本原语后必须仍然保持次要色。
+  // 判别性来自**成对断言**：只断「传了 type 有类名」无法区分「真的转发」与「实现里写死了 type="secondary"」；
+  // 反向再断「不传 type 时该类名缺席」，才把两条实现路径分开。
+  // 类名是实测口径（antd 6.6.1 用 CSS 类承色，非内联样式）：
+  //   传 type="secondary" → 根 <span> 类名含 `ant-typography-secondary`（并含 ant-typography-ellipsis*）；
+  //   不传 type        → 类名只有 `ant-typography ant-typography-ellipsis ant-typography-ellipsis-single-line` 等，无 `-secondary`。
+  it('type 转发到 antd：传 secondary 有承色类，未传则无该类', () => {
+    const { container, unmount } = render(<EllipsisText type="secondary">origin/feature-x</EllipsisText>);
+    const el = container.querySelector('.ant-typography') as HTMLElement;
+    expect(el).toHaveClass('ant-typography-secondary');
+    // 顺带守住「转发 type 不该弄丢截断」：两件事必须同时成立
+    expect(el).toHaveClass('ant-typography-ellipsis');
+
+    unmount();
+    const { container: plain } = render(<EllipsisText>origin/feature-x</EllipsisText>);
+    expect(plain.querySelector('.ant-typography')).not.toHaveClass('ant-typography-secondary');
   });
 
   it('maxWidth 落 style', () => {
