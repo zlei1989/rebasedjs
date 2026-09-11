@@ -75,3 +75,4 @@ export { DensityProvider, useDensityMode, type DensityProviderProps } from './ba
 export { PageShell, type PageShellProps } from './base/page-shell';
 export { Toolbar, type ToolbarProps } from './base/toolbar';
 export { EllipsisText, type EllipsisTextProps } from './base/ellipsis-text';
+export { SplitPane, type SplitPaneProps } from './base/split-pane';
