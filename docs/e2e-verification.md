@@ -553,7 +553,9 @@
 ### 5.16 R22 全站流体布局与密度六档验收（Task 16，2026-09-11）
 
 > 本轮不按 F-xx 功能行冒烟，而是对「全站流体布局与密度统一」重构做**几何验收**：六档宽度 × 明暗两主题 × 每个页面与状态，逐格断言页面级横向溢出为 0。入口：`scripts/check-fluid-layout.mjs`（Playwright 驱动，先 `pnpm dev` 起真实服务）。
-> 被测端：web-next `http://localhost:3030`（六档 × 明暗）、web-koa `http://localhost:5173`（其 SPA 固定暗色，故只跑暗色）；夹具：既有主冒烟仓 `rebased-smoke`（id `18726c5c-f4b2-499d-ac82-6eac8f46ec26`），**未**重建夹具。
+> 被测端：web-next `http://localhost:3030`（六档 × 明暗）、web-koa `http://localhost:5173`（其 SPA 固定暗色，故只跑暗色）；夹具：既有主冒烟仓 `rebased-smoke`（id `18726c5c-f4b2-499d-ac82-6eac8f46ec26`，`sub-b @ 4f27441`，23 提交、2 stash、2 tag、2 shelf、2 worktree、2 submodule），**未**重建夹具。
+>
+> **夹具耦合（跑之前先看这条）**：内容级就绪门要求夹具里**真的有那些内容** —— browse 的树节点、settings 的 git 配置行（键集由代码里的 `CONFIG_KEYS` 决定，与夹具无关）、status 的变更行、stashes、tags、patches、shelves、worktrees、submodules、console 的历史记录。其中 stash / 未跟踪文件 / tag / patch / shelf / worktree / submodule 都是**可变状态**：一旦有人 drop 掉一个 stash、把未跟踪文件提交掉或删掉 tag，对应的格子会**如实判红**（提示「内容级就绪选择器未出现」）而不是静默跳过 —— 那一格此时没有可量的数据，绿了才是错的。排查顺序是先看夹具（`git stash list` / `git status --porcelain` / `git tag` …），不要先动门。另注：本轮期间实测到**另一个会话在同一夹具仓库上来回 checkout 分支**（`git reflog`：`master ↔ sub-b`），那会让日志页/对比页的内容中途换一批；跑验收前请确认没有别的会话在使用该夹具。
 
 #### ① 范围清单（逐项 ✅/❌/跳过+理由）
 
@@ -561,7 +563,7 @@
 
 | 覆盖项 | 档位 | 结果 |
 |--------|------|------|
-| 24 个页面：`/` 首页、`/repos/:id` 日志页、browse·blame·branches·committed·history·search·merge·remotes·conflicts·diff·settings·stashes·status·tags·patches·shelves·console·ignore·github·gitlab·worktrees·submodules | 360 / 480 / 768 / 1024 / 1440 / 1920 × 暗 + 明 | ✅ 384/384 格 |
+| 24 个页面：`/` 首页、`/repos/:id` 日志页、browse·blame·branches·committed·history·search·merge·remotes·conflicts·diff·settings·stashes·status·tags·patches·shelves·console·ignore·github·gitlab·worktrees·submodules | 360 / 480 / 768 / 1024 / 1440 / 1920 × 暗 + 明 | ✅ 384 格全部跑到；**数字按脚本版本与运行分别记账，见 ③**（早先的 384/384 出自加严前的脚本，加严后控制器复跑为 381/384，Fix round 2 实跑为 377/384 —— 三次都**没有一格是横向溢出**） |
 | 静态加载不产生的日志页状态：`?select=`（选中提交）、`?compare=`（分支对比） | 同上 | ✅ |
 | `/github`、`/gitlab` 两面板**展开「查看差异」**（渲染共享 `hunk-diff-view`，无别的路由覆盖它） | 同上 | ✅ |
 | 认证弹窗（推送被服务端 401 AUTH_FAILED → 容器开 AuthDialog） | 同上 | ✅ **仅**证明弹窗打开时「弹窗背后的页面」不溢出（弹窗内部另论，见下方口径说明与 ④） |
@@ -578,7 +580,9 @@
 #### ② 操作路径（点击/输入序列）
 
 1. `pnpm dev`（web-next :3030 / web-koa API :3031）+ `pnpm --filter @rebased/web-koa dev:web`（SPA :5173）；三个端口启动前均为空闲，无需 kill。
-2. 断言脚本自动驱动：`PUT /api/settings {theme}` 切主题（跑完还原）→ 逐格 `goto(<路由>)` → **两段式就绪门**（先等该路由的页面壳 `data-testid`，再等**内容级**条目选择器如 `row-stash-*`/`tag-row-*`/`config-input-*` 真的命中，命中数记进明细）→ 等布局静止（滚动量/高度/节点数连续两次采样一致）→ 读 `scrollWidth`/`clientWidth`。只等页面壳会量到数据未到的页面，而空页永远不溢出（该格的绿等于没证明任何东西），故内容级选择器一条未命中即判该格红。
+2. 断言脚本自动驱动：`PUT /api/settings {theme}` 切主题（跑完还原）→ 逐格 `goto(<路由>)` → **两段式就绪门**（先等该路由的页面壳 `data-testid`，再等**内容级**条目选择器如 `row-stash-*`/`tag-row-*`/`config-input-*` 真的命中，命中数记进明细、大列表另有命中数下限）→ 等布局静止（滚动量/高度/节点数连续两次采样一致）→ 读 `scrollWidth`/`clientWidth`。只等页面壳会量到数据未到的页面，而空页永远不溢出（该格的绿等于没证明任何东西），故内容级选择器一条未命中（或低于下限）即判该格红。
+   - **就绪门与主题门串联（Fix round 2 补）**：主题探针迟迟不落时脚本会兜底整页重载一次；重载会把页面打回「数据还没到」的状态，所以「导航 + 就绪门 + 等静止」与主题门由同一个入口串联，**只要这一轮发生过整页重载，就绪门就整套重跑**才允许测量。绕过这条规则的后果是实测过的：在「重载后直接测量」的旧流程下，`settings` 格在内容 **0 条**的空页上被判**通过**（`scrollWidth == clientWidth`）—— 正是内容级就绪门要堵的那种假绿。
+   - **页面 JS 异常分两栏记录**：真异常照旧列出；唯一被过滤的良性噪声是 Monaco 的 diff worker 取消（`Canceled`，stack 落在 `monaco-editor` 的 `computeDiff`）—— 实测**每次渲染 diff 都会发生**（本轮 3 个含 Monaco 的格子 × 6 档 × 2 主题 = 36 格），而页面完全正常。判据锚在 stack 上而不是消息文本上，避免把同名真缺陷一起过滤掉。
 3. 状态格的真实点击序列：
    - **GitHub 展开差异**：`goto /repos/:id/github` → 点 PR 行 `[data-testid="github-pr-row-7"]` → 点 Tab「文件」→ 点「查看差异」`[data-testid="github-diff-toggle-0"]` → 等 `hunk-diff-block-0`（GitLab 同序列，iid=9）。
    - **认证弹窗**：`goto /repos/:id` → 顶栏「更多」→ 菜单「推送」→ 弹窗「确定」→（`POST …/push` 被脚本打桩成 401 AUTH_FAILED）→ 出现「需要认证」弹窗。
@@ -589,11 +593,20 @@
 
 #### ③ 证据（浏览器状态 + CLI 输出互证）
 
-**几何断言**（脚本输出，逐格 `scrollWidth`/`clientWidth`）：
+**几何断言**（脚本输出，逐格 `scrollWidth`/`clientWidth`）—— **按脚本版本分别记账**（这一节最容易读错的地方：同一个「384 格」在不同版本下含义不同）：
 
-- web-next：`384/384 格通过`，全部格 `scrollWidth == clientWidth`（360/480/768/1024/1440/1920 逐一相符），无任何 `>` 情形。
-- web-koa：`192/192 格通过`（同上，仅暗色）。
-- **修复前基线（同一脚本，改动前）**：`375/384`，9 格红——`stashes` 在 360/480 两档两主题 `scrollWidth 492 > clientWidth 360/480`（越界元素 = 该行 5 个操作按钮的 `<span>`/`<button>`），另有 4 格是**断言脚本自身的测量竞态**（主题首帧兜底、Monaco 拖动时滑块在视口外、EllipsisText 悬停目标不可见），已逐条修断言而非改产品。
+| 记录 | 脚本/树 | web-next 结果 | 关键事实 |
+|------|---------|---------------|----------|
+| 首轮提交版（`e55f138`） | 就绪门只有页面壳级 | `384/384` | 这是**加严前**的数字：当时 `ready` 只等页面壳，可能量到「数据还没到」的页面（空页永不溢出）。**不能**当作加严后的结果引用 |
+| 控制器复跑（Fix round 1 之后） | 内容级就绪门 + Monaco/阈值守卫 | `381/384` | 3 格红，**全部是断言脚本自身的缺陷、没有一格是溢出**：`dark/480` 与 `light/1024` 的 `diff` 撞 Playwright strict mode（`locator('.monaco-editor').nth(N).locator('.scrollbar.horizontal .slider')` resolved to 3 elements —— 拖动定位歧义，位置随 diff 布局落位而变）；`dark/768` 的 `state:ellipsis-tooltip-submodule` 是**就绪超时**（该页接口是全夹具最慢的一个），不是溢出 |
+| **Fix round 2 整轮实跑** | 定位歧义修复 + 重载后重跑就绪门 + 内容命中数下限 | **`377/384`** | 7 格红，同样**一格都不是溢出**（`scrollWidth` 与 `clientWidth` 逐格相等：360/1440 各例已列在下方）；7 格全是「这一格所在的页面在那一段窗口里根本没渲染出来」—— 见下一条 |
+
+- **`377/384` 这 7 格红的性质（必须连着读）**：本轮整轮跑期间，**同一工作区有另一个会话正在改 `packages/client/ui/src/domain/commit-graph.tsx`**（日志页与提交图所在模块），dev 服务按保存逐次重编译，于是运行中反复出现该模块的 `ReferenceError`：`laneAreaWidth is not defined`、`viewportWidth is not defined`、`rowMaxLaneOf is not defined`、`CHIP_GAP is not defined`、`LISTY_ROW_HEIGHT_THEME is not defined`（最后一条在整轮之后的独立探针里再次实测到）。这些异常一旦出现，页面**整页不渲染**：`data-theme` 为 `null`、任何 `data-testid` 都不出现。
+  逐格：`dark/360 state:auth-dialog`（`执行异常：page.evaluate: Execution context was destroyed, most likely because of a navigation`，同格 HTTP 异常为页面卸载导致的 `/log/stream`、`/events` ERR_ABORTED）、`dark/360 state:reset-dialog`（`page.goto: Timeout 25000ms exceeded`）、`dark/360 state:ellipsis-tooltip`（`reset-here` 就绪超时 26862ms + 主题未生效 `data-theme=null`）、`light/1024 state:reset-dialog`（`page.waitForSelector: Timeout 10000ms exceeded`）、`light/1024 state:ellipsis-tooltip`（`page.goto: Timeout 25000ms exceeded`）、`light/1440 stashes`（`stash-save-button` 就绪超时 31023ms + `data-theme=null`）、`light/1440 state:github-expanded-diff`（`github-pr-row-7` 就绪超时 25782ms + `data-theme=null`）。四条超时格由于页面没渲染，`scrollWidth`/`clientWidth` 记为 `null`（**没有测量结果，不是「测出 0 溢出」**）；另三格拿到了数字且 `scrollWidth == clientWidth`（360/360、1440/1440、1440/1440）。
+  **独立佐证（同一次会话内的对照）**：这些格在**同一轮的其他档位全部通过**（例如 `state:ellipsis-tooltip` 在 dark 的 480/768/1024/1440/1920 与 light 的 360/480/768/1440/1920 均通过）；定向复跑时 `state:reset-dialog`（与 `state:ellipsis-tooltip` **同一个 URL、同一条就绪门**）通过而后者失败；整轮跑完后单独探针实测 `?select=` 页的 `reset-here` 在 **9/9** 次导航里都出现（7.5–9.7s）。结论：这 7 格是**运行窗口内的环境中断**（并发编辑 + 其引发的整页不渲染），既不是溢出，也不是就绪门本身的缺陷；同窗口内另实测到页面加载被拖到 20–32s（`stashes` 一次 goto 10.6s / 就绪 20.7s），这也是 25s 预算在该窗口下没有余量的原因（该页不设例外，见下条）。
+- **`Canceled` 页面异常**（本轮起单独记账、不再污染异常清单）：Monaco 的 diff worker 取消。判据是 stack（`Canceled` → `monaco-editor` 的 `computeDiff`），不是消息文本。整轮 35 格命中，分布为 `diff × 12`、`state:github-expanded-diff × 11`、`state:gitlab-expanded-diff × 12`（即 3 个含 Monaco 的格子 × 6 档 × 2 主题，其中 github 少 1 格是因为 `light/1440` 那格整页没渲染）；同一次导航里 diff 完全正常（几何与拖动断言均通过）。
+- web-koa：`192/192 格通过`（暗色；加固后的脚本整轮，见 Fix round 1）。
+- **修复前基线（同一脚本，改动前）**：`375/384`，9 格红——`stashes` 在 360/480 两档两主题 `scrollWidth 492 > clientWidth 360/480`（越界元素 = 该行 5 个操作按钮的 `<span>`/`<button>`），另有 4 格是**断言脚本自身的测量竞态**（主题首帧兜底、Monaco 拖动时滑块在视口外、EllipsisText 悬停目标不可见），已逐条修断言而非改产品。**四次运行的共同点：`scrollWidth > clientWidth + 1` 的格子数始终为 0**（除首轮那次已修的产品缺陷外）。
 - **例外①实测**（browse）：360 → side/main 各占满容器（328/328，纵向堆叠）；768 → side 300 / main 424（左右并排）；1440 → side 300 / main 1096。log 页（侧栏在右）：768 → main 448 / side 320。
 - **例外②实测**（diff @360，文件 `src/app.ts` 含 115 字符长行）：Monaco 内容（`.view-lines`）694px > 编辑器 276px，编辑器宿主自身 `scrollWidth 276 == clientWidth 276`（不溢出），拖动横向滚动条后内容左移 195px，同时 `documentElement.scrollWidth 360 == clientWidth 360`。
 - **EllipsisText 浮层实测**：重置弹窗内 `短哈希 + 提交信息` 溢出（438 > 423）→ 悬停弹出浮层且文本 = 完整值 `1ccdf5b docs(smoke): sign-off 提交冒烟（F-055 amend 到历史提交后）`；submodules 页 URL 在 **360** 档溢出（196 > 81）、**480** 档同样溢出（196 > 158）也弹出，768 档起不溢出（768：230 ≤ 230）则**不弹**（antd 以真实溢出为准）。
@@ -626,6 +639,7 @@
 - **Monaco 在 1440/1920 档不产生内部横向滚动**（长行放得下）——这是正确行为而非缺口，若后续引入更长行，该档断言会自动转为「内部滚动」分支。
 - **交互态宽度**（抽屉/下拉/气泡在窄屏的边缘贴合）不在本轮口径内；本轮口径只有页面级横向溢出 + 两条例外。
 - 后续回归入口：`node scripts/check-fluid-layout.mjs --app=koa --themes=dark`（约 12 分钟）与不带参数的全量（约 25 分钟）；两者任一红即视为布局回归。
+- **跑验收前请确认「没有别的会话在改被测代码、也没有人在同一夹具仓库上切分支」**：本轮实测到两种会伪造红的并发活动 —— 另一会话改 `commit-graph.tsx` 期间日志页整页不渲染（页面 `ReferenceError` + `data-theme=null`），另一会话在夹具仓库里 `master ↔ sub-b` 来回 checkout（`git reflog` 可查）。出现「一批格子同时报就绪超时且 `data-theme=null`」时，先按这两条排查，再怀疑布局。
 
 ### 5.15 R17 缺陷登记（已修复 + 复验）
 

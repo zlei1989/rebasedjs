@@ -29,7 +29,12 @@
  * 注意：
  *   - 每格的就绪是**两段式**：`ready`（页面壳 / 工具行出现）+ `content`（数据级条目真的渲染出来）。
  *     只等 `ready` 会量到「数据还没到」的页面，而空页永远不会横向溢出 —— 那样的绿什么都没证明，
- *     所以带 `content` 的格子在该选择器一条都没命中时**直接判红**（而不是静静地绿过去）。
+ *     所以带 `content` 的格子在该选择器一条都没命中时**直接判红**（而不是静静地绿过去）；
+ *     命中数还有下限 `min`（部分加载的页面同样不算通过，见 routeCells 顶部注释）。
+ *   - 就绪门与主题门必须**串联**（`prepareCell`）：主题探针迟迟不落时会整页重载一次，
+ *     重载后必须重跑该格的就绪门再测量 —— 否则会量到「刚重载、数据还没到」的空页并判绿。
+ *   - 页面 JS 异常分两栏记录：真异常 + 已按判据过滤的良性噪声（Monaco 的 diff worker 被取消，
+ *     见 classifyPageError）。判据按 stack 而不是按消息文本，避免把真缺陷一起过滤掉。
  *   - 主题是**服务端持久化设置**（PUT /api/settings）：脚本先读原值、跑完恢复，不留痕。
  *   - GitHub/GitLab 面板需要真实令牌，本检出没有：用 page.route 打桩**宿主 API 数据**，
  *     断言落到的仍是真实组件（GitHubPanel/GitLabPanel/HunkDiffView/Monaco）与真实 DOM。
@@ -266,6 +271,31 @@ async function loadFixture(base, repoName) {
 
 const OVERFLOW_TOLERANCE = 1;
 
+/**
+ * 页面 JS 异常的分类判据。`benign` = 记录进产物但**不参与判定**、且从「异常」清单里剔除的噪声。
+ *
+ * 唯一的良性判据（实测证据，不是猜测）：**Monaco 的 diff worker 被取消**。
+ * 复现方式：直接打开 diff 页（不切主题、不重载、不做任何额外操作），3/3 次都抛出一条 `Canceled`，stack 为
+ *   Canceled: Canceled
+ *     at canceled (monaco-editor/esm/vs/base/common/errors.js)
+ *     at EditorWorkerClient.workerWithSyncedResources
+ *     at StandaloneEditorWorkerService.computeDiff
+ *     at async WorkerBasedDocumentDiffProvider.computeDiff
+ * 即：Monaco 走 worker 计算差异时，前一次未完成的请求被它自己 cancel 掉，该取消以未处理拒绝的形式
+ * 冒到 window 上。同一导航里 diff 完全正常（编辑器、`.view-lines`、横向滚动条的几何都对，例外② 的
+ * 拖动断言通过），所以它是**有意的取消**，不是页面缺陷，也不是「主题重载打断了 fetch」
+ * （重载不是必要条件：上述复现里根本没有重载）。
+ * 为什么按 stack 判而不是按消息文本判：`Canceled` 这三个字太泛，按消息过滤等于把「任何叫 Canceled
+ * 的异常」都放过去 —— 那条通道正是「用过滤掩盖真缺陷」的典型写法，本脚本不接受。
+ */
+const BENIGN_PAGE_ERROR_RULE = 'name === "Canceled" 且 stack 指向 monaco-editor 的 computeDiff（Monaco 的 diff worker 被取消）';
+
+function classifyPageError(error) {
+  const stack = typeof error.stack === 'string' ? error.stack : '';
+  if ((error.name ?? '') === 'Canceled' && /monaco-editor/.test(stack) && /computeDiff/.test(stack)) return 'benign';
+  return 'error';
+}
+
 /** 取文档滚动量 + 主题探针 + 越界元素（失败时用于定位，不只报「红了」） */
 function measureInPage() {
   const de = document.documentElement;
@@ -371,6 +401,46 @@ async function assertPanes(page, width, collapseBelow) {
 }
 
 /**
+ * 取「**被测量的那一个** Monaco 编辑器自己的横向滚动条滑块」的元素句柄。
+ *
+ * 为什么不用 `page.locator('.monaco-editor').nth(i).locator('.scrollbar.horizontal .slider')`：
+ * 那个 CSS 在真实 DOM 上**不保证唯一** —— 控制器那一轮就在 dark/480 与 light/1024 两格上撞到
+ * Playwright 的
+ *   strict mode violation: locator('.monaco-editor').nth(2).locator('.scrollbar.horizontal .slider')
+ *   resolved to 3 elements
+ * 即同一个 `.monaco-editor` 子树里匹配到 3 个滑块。实测该页 `.monaco-editor` 集合里还含一个
+ * `div.gutter monaco-editor`（diff 视图的分栏槽，clientWidth 0、无滚动条），而 diff 布局在窄档会
+ * 切换 side-by-side / 内联，下标与子树都可能随落位变化：按 CSS 二次解析，等于把「拖哪一个」交给
+ * 解析那一刻的 DOM，既会随宽度随机红，也可能拖到别人的滑块（那才是真正的假结论）。
+ *
+ * 改成在页面内**按元素引用**取，两个确定性来源：
+ *   1) 编辑器由 `read()` 记录的 `info.index` 唯一指定（`all.indexOf(el)`，即完整 `.monaco-editor`
+ *      NodeList 里的下标，与 `read()` 用的是同一份顺序）；
+ *   2) 滑块只在该编辑器的子树里用 `el.querySelector('.scrollbar.horizontal .slider')` 找 ——
+ *      取文档序第一个。编辑器自己的滚动条在 `.monaco-scrollable-element` 内、先于任何嵌套内容出现，
+ *      所以这一个就是「它自己的」滑块；`candidates` 记录该子树里到底有几个候选，歧义写进结论而不再
+ *      变成致命异常（若真出现多个，结论里会写明取了文档序第一个）。
+ * ElementHandle 直接持有该节点，拖动前不再做任何 CSS 重解析，因此与 strict mode、与下标漂移都无关；
+ * 而「拖不动就必须失败」这条判据一字未改（见下方 startX/endX 位移比较）。
+ */
+async function pickOwnHorizontalSlider(page, index) {
+  const diag = await page.evaluate((i) => {
+    const el = [...document.querySelectorAll('.monaco-editor')][i];
+    if (el === undefined) return null;
+    return {
+      bars: el.querySelectorAll('.scrollbar.horizontal').length,
+      candidates: el.querySelectorAll('.scrollbar.horizontal .slider').length,
+      className: String(el.className).slice(0, 60),
+    };
+  }, index);
+  const handle = await page.evaluateHandle((i) => {
+    const el = [...document.querySelectorAll('.monaco-editor')][i];
+    return el === undefined ? null : el.querySelector('.scrollbar.horizontal .slider');
+  }, index);
+  return { slider: handle.asElement(), diag };
+}
+
+/**
  * 例外 2：Monaco 内部横向滚动。
  * 先等 Monaco 完成首帧布局（`.view-lines` 出现时 style.width 可能还是视口宽，内容宽要晚一拍才落），
  * 再按两种真实情形断言：
@@ -469,19 +539,33 @@ async function assertMonacoInternalScroll(page) {
     };
   }
   // 拖动横向滚动条滑块：内容位移 > 0 即证明内部横向滚动可达（滚轮不产生 deltaX，不作为判据）。
-  // 用 locator + scrollIntoViewIfNeeded：768/1024 档编辑器底部会落在视口之外，
-  // 手算坐标的 mouse.move 落在视口外就拖不动（实测该两档因此失败）。
+  // 用 ElementHandle + scrollIntoViewIfNeeded：768/1024 档编辑器底部会落在视口之外，
+  // 手算坐标的 mouse.move 落在视口外就拖不动（实测该两档因此失败）；
+  // 而按 CSS 定位到「一个编辑器里的那一个滑块」会撞 strict mode（见 pickOwnHorizontalSlider 注释）。
+  // 每轮重新取一次句柄：Monaco 在布局落位时可能重建滑块节点，旧句柄会 detached。
   // 位移基准在**按下前一刻**重测（内容 x 会随布局落位变化，用早先的读数当基准会算出负位移）；
   // 仍未位移则重试一次（Monaco 首次拖动的滑块可能尚未与模型同步）。
-  const sliderLocator = page.locator('.monaco-editor').nth(info.index).locator('.scrollbar.horizontal .slider');
   let moved = 0;
   let startX = info.contentX;
   let endX = info.contentX;
   let sliderBox = null;
+  let sliderDiag = null;
+  let handleNote = '';
   for (let attempt = 0; attempt < 2 && moved <= 0; attempt += 1) {
-    await sliderLocator.scrollIntoViewIfNeeded();
+    const picked = await pickOwnHorizontalSlider(page, info.index);
+    sliderDiag = picked.diag;
+    if (picked.slider === null) {
+      return {
+        status: 'fail',
+        reason: `取不到第 ${info.index} 个 Monaco 编辑器自己的横向滑块（该编辑器 .scrollbar.horizontal=${sliderDiag?.bars ?? '—'} 个、滑块候选 ${sliderDiag?.candidates ?? '—'} 个，class=${sliderDiag?.className ?? '—'}）`,
+      };
+    }
+    if (sliderDiag !== null && sliderDiag.candidates > 1) {
+      handleNote = `（注意：该编辑器子树内 .scrollbar.horizontal .slider 有 ${sliderDiag.candidates} 个候选，按文档序取第一个 = 它自己的那一个）`;
+    }
+    await picked.slider.scrollIntoViewIfNeeded();
     await page.waitForTimeout(250);
-    sliderBox = await sliderLocator.boundingBox();
+    sliderBox = await picked.slider.boundingBox();
     if (sliderBox === null) return { status: 'fail', reason: '取不到 Monaco 横向滚动条滑块的几何' };
     startX = await page.evaluate(
       (index) => {
@@ -509,16 +593,27 @@ async function assertMonacoInternalScroll(page) {
   if (moved <= 0) {
     return {
       status: 'fail',
-      reason: `拖动 Monaco 横向滚动条后内容未位移：x ${startX} → ${endX}（滑块几何 ${JSON.stringify(sliderBox)}）`,
+      reason: `拖动 Monaco 横向滚动条后内容未位移：x ${startX} → ${endX}（滑块几何 ${JSON.stringify(sliderBox)}，取滑块方式：编辑器 #${info.index} 子树内文档序第一个 .slider，候选 ${sliderDiag?.candidates ?? '—'} 个）`,
     };
   }
   return {
     status: 'pass',
-    reason: `内部横向滚动可用：内容 ${info.contentWidth}px > 编辑器 ${info.hostClientWidth}px（宿主自身 scrollWidth ${info.hostScrollWidth}px 不溢出；编辑器滚动宿主 scrollWidth ${info.scrollHostScrollWidth} > clientWidth ${info.scrollHostClientWidth}，具备横向滚动区间），拖动滑块后内容左移 ${moved}px`,
+    reason: `内部横向滚动可用：内容 ${info.contentWidth}px > 编辑器 ${info.hostClientWidth}px（宿主自身 scrollWidth ${info.hostScrollWidth}px 不溢出；编辑器滚动宿主 scrollWidth ${info.scrollHostScrollWidth} > clientWidth ${info.scrollHostClientWidth}，具备横向滚动区间），拖动滑块后内容左移 ${moved}px${handleNote}`,
   };
 }
 
 // ---------------------------------------------------------------- 路由表
+
+/**
+ * **就绪预算的例外（只给实测慢的页面）**：本夹具下 `/api/repos/:id/submodules` 是全部接口里最慢的
+ * 一个（本轮实测 10 次：3.6–5.8s，avg 4.4s；更早一轮记录到最慢 17.1s），该页的就绪门因此常在 5–8s
+ * 才成立（本轮 768px 复跑 8/8 次都成立，最长 8.1s）。控制器那一轮唯一一次就绪超时正是这一格 ——
+ * 25s 预算在「接口 17s + goto 3s + 机器争用」下没有余量。
+ * 只给**同一个页面的两个格子**（`submodules` 与 `state:ellipsis-tooltip-submodule`）放宽到 60s，
+ * 并保留「超时就判红」：不放宽全表、也不把没出现的门当作通过 —— 预算变大只是给慢接口留余量，
+ * 门本身一条都不能少（就绪超时的原因里现在还会带上本格实测耗时与该格的 HTTP 异常，见 openCell）。
+ */
+const SLOW_GATE_TIMEOUT = 60000;
 
 /**
  * 路由表 = web-next 全部 24 个页面（/ 首页 + /repos/:id 日志页 + 22 个子页），
@@ -532,6 +627,24 @@ async function assertMonacoInternalScroll(page) {
  * 横向溢出**，该格于是成了白通过（不是失败，也不是跳过，是「什么都没证明的绿」）。
  * `content` 逐页核实过数据来源（组件源码里「数据到齐才渲染」的那一支），注释里给出依据；
  * 某页确实没有任何数据级内容时（对话-only 页 / 该夹具下必然为空），**在行内写明原因**而不是留白。
+ *
+ * `min`（内容级门的**命中数下限**）与 `gateTimeout`：
+ *   `content` 命中 1 条就通过，仍可能是「一页只渲染出 22 个树节点里的 1 个」这类部分加载 ——
+ *   故对**又大又与夹具无关**的列表给下限：browse 的树节点（实测 20）→ 10、console 的历史记录
+ *   （实测 100）→ 10、settings 的 git 配置行（实测 9，键集由代码里的 `CONFIG_KEYS` 决定，不随夹具变）→ 4。
+ *   实测命中数记在每格的 `readyItems` 里，跑完还会做一次跨档一致性检查（只告警不判红）。
+ *   其余是**单行级 / 跟着夹具走**的小列表（stashes / tags / patches / shelves / worktrees /
+ *   submodules / status 的变更行，各 2–7 行），下限一律 1：它们的行数会随夹具变化（drop 一个 stash、
+ *   提交掉未跟踪文件都会减少行数），把当下的行数抄成下限，等于让「夹具被改过」直接变成一屏红；
+ *   而 1 行已经足以否定「空页」这件事。夹具确实被清空时，命中 0 条仍然照判红（下限兜不住，也不该兜）。
+ *
+ * **夹具耦合（必须知道的一件事）**：下面这些内容级门要求**夹具里真的有那些内容**，而
+ * `rebased-smoke` 里的 stash / 未跟踪文件 / tag / patch / shelf / worktree / submodule 都是
+ * **可变状态**（用户随时可能 drop 一个 stash、提交掉未跟踪文件、删掉 tag）：
+ *   browse 的树节点、settings 的 git 配置、status 的变更行、stashes、tags、patches、shelves、
+ *   worktrees、submodules、console 的历史记录。
+ * 夹具一旦被改动，这些格子会**如实判红**（提示「内容级就绪选择器未出现」），而不是静默跳过 ——
+ * 这是有意的：那一格此时没有可量的数据，绿了才是错的。排查时先看夹具，不要先改门。
  */
 function routeCells(ctx) {
   const q = encodeURIComponent;
@@ -542,7 +655,7 @@ function routeCells(ctx) {
     { name: 'log-compare', path: `/repos/${ctx.repo.id}?compare=${ctx.branch}`, ready: '[data-testid="compare-title"]' },
     // browse：split-side-host 只在 entries 到齐且非空时渲染（browse-panel.tsx：!entries || length===0 → EmptyState），
     // 再要求文件树节点真的铺出来（nodes 由 entries 推导），把「树空了但宿主在」也挡住
-    { name: 'browse', path: `/repos/${ctx.repo.id}/browse?rev=${ctx.hash}`, ready: '[data-testid="split-side-host"]', content: '[data-testid="split-side-host"] .ant-tree-treenode' },
+    { name: 'browse', path: `/repos/${ctx.repo.id}/browse?rev=${ctx.hash}`, ready: '[data-testid="split-side-host"]', content: '[data-testid="split-side-host"] .ant-tree-treenode', min: 10 },
     { name: 'blame', path: `/repos/${ctx.repo.id}/blame?file=${q(ctx.file)}`, ready: '[data-testid="blame-file"]' },
     { name: 'branches', path: `/repos/${ctx.repo.id}/branches`, ready: '[data-testid^="row-local-"]' },
     { name: 'committed', path: `/repos/${ctx.repo.id}/committed`, ready: '[data-testid="committed-entry-0"]' },
@@ -555,7 +668,7 @@ function routeCells(ctx) {
     // `if (!conflictList) return null` 之前不渲染任何东西，标题出现即等价于冲突列表已到达。
     // 该夹具（rebased-smoke）`GET /conflicts` 返回 `{"conflicts":[]}`，所以**没有** `conflict-row-*`
     // 可等：这一格证明的是「数据到达后的空态页不溢出」，冲突行态的几何仍是未覆盖项（见 e2e 文档 §5.16④）。
-    { name: 'conflicts', path: `/repos/${ctx.repo.id}/conflicts`, ready: '[data-testid="continue-merge-wrap"]', content: 'text=冲突文件（' },
+    { name: 'conflicts', path: `/repos/${ctx.repo.id}/conflicts`, ready: '[data-testid="continue-merge-wrap"]', content: 'text=冲突文件（', min: 1 },
     {
       name: 'diff',
       path: `/repos/${ctx.repo.id}/diff?file=${q(ctx.file)}&from=${ctx.prevHash}&to=${ctx.hash}`,
@@ -565,16 +678,16 @@ function routeCells(ctx) {
     // settings：git-executable-card 是**静态** Card（SettingsPage 无条件渲染全部卡片，容器也没有提前 return），
     // 数据没到时它照样在 —— 这正是「量到未装数据的页面」的典型；改成等 git 配置行（9 个 CONFIG_KEYS 的
     // 输入行，`config-view` 的响应到达才渲染）真的出现
-    { name: 'settings', path: `/repos/${ctx.repo.id}/settings`, ready: '[data-testid="git-executable-card"]', content: '[data-testid^="config-input-"]' },
-    { name: 'stashes', path: `/repos/${ctx.repo.id}/stashes`, ready: '[data-testid="stash-save-button"]', content: '[data-testid^="row-stash-"]' },
+    { name: 'settings', path: `/repos/${ctx.repo.id}/settings`, ready: '[data-testid="git-executable-card"]', content: '[data-testid^="config-input-"]', min: 4 },
+    { name: 'stashes', path: `/repos/${ctx.repo.id}/stashes`, ready: '[data-testid="stash-save-button"]', content: '[data-testid^="row-stash-"]', min: 1 },
     // status：manage-changelists 是工具行按钮；内容级门等变更行（staged/unstaged/untracked 三组任一）
-    { name: 'status', path: `/repos/${ctx.repo.id}/status`, ready: '[data-testid="manage-changelists"]', content: '[data-testid^="row-staged-"], [data-testid^="row-unstaged-"], [data-testid^="row-untracked-"]' },
-    { name: 'tags', path: `/repos/${ctx.repo.id}/tags`, ready: '[data-testid="tag-create-button"]', content: '[data-testid^="tag-row-"]' },
-    { name: 'patches', path: `/repos/${ctx.repo.id}/patches`, ready: '[data-testid="patch-create-button"]', content: '[data-testid^="row-patch-"]' },
-    { name: 'shelves', path: `/repos/${ctx.repo.id}/shelves`, ready: '[data-testid="shelf-save-button"]', content: '[data-testid^="row-shelf-"]' },
+    { name: 'status', path: `/repos/${ctx.repo.id}/status`, ready: '[data-testid="manage-changelists"]', content: '[data-testid^="row-staged-"], [data-testid^="row-unstaged-"], [data-testid^="row-untracked-"]', min: 1 },
+    { name: 'tags', path: `/repos/${ctx.repo.id}/tags`, ready: '[data-testid="tag-create-button"]', content: '[data-testid^="tag-row-"]', min: 1 },
+    { name: 'patches', path: `/repos/${ctx.repo.id}/patches`, ready: '[data-testid="patch-create-button"]', content: '[data-testid^="row-patch-"]', min: 1 },
+    { name: 'shelves', path: `/repos/${ctx.repo.id}/shelves`, ready: '[data-testid="shelf-save-button"]', content: '[data-testid^="row-shelf-"]', min: 1 },
     // console：这一页**没有**提前 return（ConsolePanel 无条件渲染，entries 未到时只是空列表），
     // 故 console-refresh 是纯静态元素 —— 必须等内容行 `console-row-<id>`（服务端 exec 缓冲的记录）
-    { name: 'console', path: `/repos/${ctx.repo.id}/console`, ready: '[data-testid="console-refresh"]', content: '[data-testid^="console-row-"]' },
+    { name: 'console', path: `/repos/${ctx.repo.id}/console`, ready: '[data-testid="console-refresh"]', content: '[data-testid^="console-row-"]', min: 10 },
     // ignore：**对话-only 页**——页面主体只有「返回日志」+「编辑忽略规则」两个按钮，忽略规则正文只在 Modal 里，
     // 页面上不存在任何数据级内容可等。容器 `if (!contents) return null`（useIgnore 未返回前整页不渲染），
     // 故 `edit-ignore-button` 出现本身已蕴含 contents 到达；其后页面再无别的数据会晚到，不存在「量到空页」的窗口。
@@ -586,8 +699,8 @@ function routeCells(ctx) {
     // 装好数据后的列表形态由 `state:github-expanded-diff` / `state:gitlab-expanded-diff` 两格覆盖（打桩宿主 API）。
     { name: 'github', path: `/repos/${ctx.repo.id}/github`, ready: '[data-testid="github-status-card"]' },
     { name: 'gitlab', path: `/repos/${ctx.repo.id}/gitlab`, ready: '[data-testid="gitlab-status-card"]' },
-    { name: 'worktrees', path: `/repos/${ctx.repo.id}/worktrees`, ready: '[data-testid="worktree-refresh"]', content: '[data-testid^="worktree-row-"]' },
-    { name: 'submodules', path: `/repos/${ctx.repo.id}/submodules`, ready: '[data-testid="submodule-refresh"]', content: '[data-testid^="submodule-row-"]' },
+    { name: 'worktrees', path: `/repos/${ctx.repo.id}/worktrees`, ready: '[data-testid="worktree-refresh"]', content: '[data-testid^="worktree-row-"]', min: 1 },
+    { name: 'submodules', path: `/repos/${ctx.repo.id}/submodules`, ready: '[data-testid="submodule-refresh"]', content: '[data-testid^="submodule-row-"]', min: 1, gateTimeout: SLOW_GATE_TIMEOUT },
   ];
 }
 
@@ -857,9 +970,21 @@ function stateCells(ctx) {
     {
       // 第二个站点：submodules 页的远端 URL（EllipsisText maxWidth=220）。同一夹具的两个 EllipsisText
       // 站点在不同宽度上分别落于「溢出」与「不溢出」两侧，正反两半都被实测到。
+      //
+      // 就绪门（Fix round 2）：控制器那一轮这一格报过「就绪选择器未出现：[data-testid="submodule-refresh"]」。
+      // 实测结论是**预算不够**，不是选择器不可靠、也不是这一格的内容级门缺失：
+      //   - `submodule-refresh` 是**数据级**信号：容器 `if (!submodules) return null`（submodules/page.tsx:29），
+      //     卡头工具行与数据同一次 render 挂上；本页没有「壳在、数据没到」的窗口。
+      //   - 本轮 768px 复跑 8/8 次门都出现（最长 8.1s，见文件头 SLOW_GATE_TIMEOUT 的依据），
+      //     该页接口 `/api/repos/:id/submodules` 是本夹具最慢的一个（实测 avg 4.4s、更早一轮 17.1s）。
+      // 故：保留这一条 ready 门，另加**同一页 route 格用的那条数据级内容门**（远端 URL 就在这些行里，
+      // 悬停断言要量的是行内的 EllipsisText），并按实测给 60s 预算；门一条没放宽。
       name: 'state:ellipsis-tooltip-submodule',
       path: `/repos/${ctx.repo.id}/submodules`,
       ready: '[data-testid="submodule-refresh"]',
+      content: '[data-testid^="submodule-row-"]',
+      min: 1,
+      gateTimeout: SLOW_GATE_TIMEOUT,
       kind: 'state',
       verify: (page) => assertEllipsisTooltip(page),
     },
@@ -901,26 +1026,33 @@ function themeApplied(probe, theme) {
   return theme === 'dark' ? probe.isDark === true : probe.isDark === false;
 }
 
+/** 读一次主题探针（底色明度 + data-theme）；waitForTheme 与「重载后再判一次」都用它 */
+async function readThemeProbe(page) {
+  return page.evaluate(() => {
+    const background = getComputedStyle(document.body).backgroundColor;
+    const rgb = /(\d+),\s*(\d+),\s*(\d+)/.exec(background);
+    const luma = rgb === null ? null : (Number(rgb[1]) * 299 + Number(rgb[2]) * 587 + Number(rgb[3]) * 114) / 1000;
+    return { isDark: luma === null ? null : luma < 128, dataset: document.documentElement.dataset.theme ?? null, background };
+  });
+}
+
 /**
  * 等主题真的落到文档上。
  * 为什么需要：主题来自 GET /api/settings，首帧按暗色兜底、设置到达后才写 data-theme/底色；
  * 切换主题后的第一次加载可能量到兜底色（实测 light 档第一格读出 data-theme=dark），属测量竞态。
  * 判定用底色的明度，两个 app 都适用（web-koa 不写 data-theme，但它恒为暗色）。
+ *
+ * 返回值改成 `{ probe, reloaded }`：**是否发生过整页重载必须向上传递**（Fix round 2）——
+ * 重载会把页面打回「数据还没到」的状态，调用方必须据此重跑该格的就绪门，否则会量到一个空页并判绿。
  */
 async function waitForTheme(page, theme, timeout = 8000) {
   const deadline = Date.now() + timeout;
   let reloaded = false;
   for (;;) {
-    const probe = await page.evaluate(() => {
-      const background = getComputedStyle(document.body).backgroundColor;
-      const rgb = /(\d+),\s*(\d+),\s*(\d+)/.exec(background);
-      const luma = rgb === null ? null : (Number(rgb[1]) * 299 + Number(rgb[2]) * 587 + Number(rgb[3]) * 114) / 1000;
-      return { isDark: luma === null ? null : luma < 128, dataset: document.documentElement.dataset.theme ?? null, background };
-    });
-    const ok = theme === 'dark' ? probe.isDark === true : probe.isDark === false;
-    if (ok) return probe;
+    const probe = await readThemeProbe(page);
+    if (themeApplied(probe, theme)) return { probe, reloaded };
     if (Date.now() > deadline) {
-      if (reloaded) return probe;
+      if (reloaded) return { probe, reloaded };
       // 兜底：整页重载一次再等（设置接口在 dev 首访可能还没就绪）
       reloaded = true;
       await page.reload({ waitUntil: 'domcontentloaded' });
@@ -935,30 +1067,83 @@ async function waitForTheme(page, theme, timeout = 8000) {
  * 就绪选择器缺失或**内容级断言不成立**（cell.content 存在但一条都没命中）→ 返回失败原因：
  * 空页上的溢出断言没有意义，宁可把这一格判红，也不能让它以「没有内容可溢出」的方式绿掉。
  * 返回 `{ error, count }`：count 为内容级选择器的命中数（记进明细，作为「这一格确实量的是有数据的页面」的证据）。
+ *
+ * 预算：默认用 --timeout（25s）；`cell.gateTimeout` 只给**实测慢**的页面放宽（见 SLOW_GATE_TIMEOUT），
+ * 且失败原因里带上本格实测耗时 —— 「门到底等了多久」是区分「预算不够」与「页面真的没出来」的关键信息。
  */
 async function openCell(page, url, cell, timeout) {
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+  const budget = cell.gateTimeout ?? timeout;
+  const started = Date.now();
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: budget });
   try {
-    await page.waitForSelector(cell.ready, { timeout, state: 'attached' });
+    await page.waitForSelector(cell.ready, { timeout: budget, state: 'attached' });
   } catch {
-    return { error: `就绪选择器未出现：${cell.ready}`, count: null };
+    return { error: `就绪选择器未出现：${cell.ready}（本格已等 ${Date.now() - started}ms，预算 ${budget}ms）`, count: null };
   }
   let count = null;
   if (cell.content !== undefined) {
     const min = cell.min ?? 1;
+    let contentAt = Date.now();
     try {
-      await page.waitForSelector(cell.content, { timeout, state: 'attached' });
+      await page.waitForSelector(cell.content, { timeout: budget, state: 'attached' });
     } catch {
       return {
-        error: `内容级就绪选择器未出现：${cell.content}（只等 ${cell.ready} 会量到尚未装数据的页面，空页永不溢出 → 该格是白通过）`,
+        error: `内容级就绪选择器未出现：${cell.content}（只等 ${cell.ready} 会量到尚未装数据的页面，空页永不溢出 → 该格是白通过；本格已等 ${Date.now() - started}ms，预算 ${budget}ms）`,
         count: 0,
       };
     }
+    contentAt = Date.now() - contentAt;
     count = await page.locator(cell.content).count();
-    if (count < min) return { error: `内容级就绪断言不成立：${cell.content} 命中 ${count} 条 < ${min}`, count };
+    // 命中数下限：content 命中 1 条仍可能是「一页只渲染出 22 个树节点里的 1 个」这类部分加载，
+    // 故对列表给 min（大列表给实测量级之下的阈值，小列表给 1，理由见 routeCells 顶部注释）。
+    if (count < min) {
+      return { error: `内容级就绪断言不成立：${cell.content} 命中 ${count} 条 < 下限 ${min}（部分加载的页面不该算通过；内容门耗时 ${contentAt}ms）`, count };
+    }
   }
   await settle(page);
   return { error: null, count };
+}
+
+/**
+ * 就绪门与主题门的**结构性**串联（Fix round 2 的回归修复）。
+ *
+ * 流程：`openCell`（导航 + 两段式就绪门 + settle）→ 主题门；**只要这一轮里发生过整页重载，
+ * 就把整格从 openCell 起重跑一次**（最多 MAX_THEME_RELOAD_ROUNDS 轮）。
+ *
+ * 为什么必须结构性做、而不在每个调用点补一句：`waitForTheme` 在主题迟迟不落时会
+ * `page.reload()`（见上），重载后页面回到「数据还没到」的状态，而原来的代码紧接着就
+ * `assertNoPageOverflow` 并直接测量 —— 于是**刚重载、内容未到的页面**（scrollWidth == clientWidth
+ * 的空页）会被判绿。那正是本脚本存在的意义（堵「空页永不溢出」的假绿）被自己打开的一道后门：
+ * 在评审担心的「主题未生效连片失败」场景里，一次主题重载就足以把本该红的格子洗成绿的。
+ * 所以这里不按调用点打补丁，而是让所有格子都只经过 prepareCell 这一个入口：
+ * 「重载 ⇒ 重跑就绪门」是流程本身的性质，不是某一处的记忆。
+ */
+const MAX_THEME_RELOAD_ROUNDS = 3;
+
+async function prepareCell(page, url, cell, theme, timeout, base) {
+  for (let round = 0; round < MAX_THEME_RELOAD_ROUNDS; round += 1) {
+    const opened = await openCell(page, url, cell, timeout);
+    if (opened.error !== null) return { error: opened.error, count: opened.count, themeProbe: null };
+    // 主题是**服务端共享的可变设置**，不是本进程私有的：本机同时开着别的会话时（如有人在浏览器里
+    // 点设置页「保存」），那个会话会把 theme 一起写回去，脚本这一轮的主题就没了 —— 实测发生过
+    // （light 块跑到第 21 格起连片失败，全是「主题未生效」）。这里**只把测量前提重新立起来**：
+    // 发现不匹配就重发一次 PUT /api/settings 再等一次；最终仍以实测探针为准（判定没有被放宽），
+    // 确实不生效时该格照旧判红。
+    let attempt = await waitForTheme(page, theme);
+    if (!themeApplied(attempt.probe, theme)) {
+      await putJson(`${base}/api/settings`, { theme });
+      const retry = await waitForTheme(page, theme);
+      attempt = { probe: retry.probe, reloaded: attempt.reloaded || retry.reloaded };
+    }
+    // 没重载：这一格的就绪门与主题探针取自同一个页面状态，可以交给调用方测量。
+    if (!attempt.reloaded) return { error: null, count: opened.count, themeProbe: attempt.probe };
+    // 重载过：就绪门必须在**重载之后**的页面上重新成立，故整轮重来（下一轮从 openCell 起）。
+  }
+  // 连续 MAX 轮都在重载（主题始终落不下）：仍要在重载之后的页面上把门跑一次，
+  // 再按**这一刻**实测到的主题判定 —— 绝不允许用「重载前」的探针给重载后的页面发通行证。
+  const last = await openCell(page, url, cell, timeout);
+  if (last.error !== null) return { error: last.error, count: last.count, themeProbe: null };
+  return { error: null, count: last.count, themeProbe: await readThemeProbe(page) };
 }
 
 async function run(opts, pw, exe) {
@@ -983,24 +1168,34 @@ async function run(opts, pw, exe) {
         const context = await browser.newContext({ viewport: { width, height: 900 } });
         const page = await context.newPage();
         const pageErrors = [];
-        page.on('pageerror', (error) => pageErrors.push(String(error.message).slice(0, 140)));
+        const benignErrors = [];
+        page.on('pageerror', (error) => {
+          // 良性噪声（Monaco 的 diff worker 被取消，判据见 classifyPageError）单独记：
+          // 它每次都发生（本轮 3 个含 Monaco 的格子 × 6 档 × 2 主题 = 36 格），混在「页面 JS 异常」
+          // 清单里会把真正要看的东西淹掉；分开记既不丢证据，也不再污染日志。
+          if (classifyPageError(error) === 'benign') benignErrors.push(String(error.message).slice(0, 140));
+          else pageErrors.push(String(error.message).slice(0, 140));
+        });
+        // 本格的 HTTP 异常（4xx/5xx 与请求失败）：只在**判红时**用作诊断 ——
+        // 就绪超时要能区分「页面接口真的失败了（该红）」与「只是慢（预算不够）」，否则下次还是只能猜。
+        const httpIssues = [];
+        page.on('response', (response) => {
+          if (response.status() >= 400 && httpIssues.length < 5) httpIssues.push(`${response.status()} ${response.url().slice(0, 100)}`);
+        });
+        page.on('requestfailed', (request) => {
+          if (httpIssues.length < 5) httpIssues.push(`requestfailed ${request.failure()?.errorText ?? ''} ${request.url().slice(0, 100)}`);
+        });
         for (const cell of cells) {
           const record = { app: opts.label, theme, width, cell: cell.name, kind: cell.kind ?? 'route' };
+          httpIssues.length = 0;
           try {
             if (cell.setup !== undefined) await cell.setup(page);
-            const opened = await openCell(page, opts.base + cell.path, cell, opts.timeout);
-            const notReady = opened.error;
-            record.readyItems = opened.count;
-            let themeProbe = notReady === null ? await waitForTheme(page, theme) : null;
-            // 主题是**服务端共享的可变设置**，不是本进程私有的：本机同时开着别的会话时（如有人在浏览器里
-            // 点设置页「保存」），那个会话会把 theme 一起写回去，脚本这一轮的主题就没了 —— 实测发生过
-            // （light 块跑到第 21 格起连片失败，全是「主题未生效」）。这里**只把测量前提重新立起来**：
-            // 发现不匹配就重发一次 PUT /api/settings 再等一次；最终仍以实测探针为准（判定没有被放宽），
-            // 确实不生效时该格照旧判红。
-            if (themeProbe !== null && !themeApplied(themeProbe, theme)) {
-              await putJson(`${opts.base}/api/settings`, { theme });
-              themeProbe = await waitForTheme(page, theme);
-            }
+            // 就绪门 + 主题门**一起**做（prepareCell）：主题门里若发生整页重载，就绪门会被整套重跑，
+            // 避免量到「刚重载、数据还没到」的空页并判绿（Fix round 2 的回归修复）。
+            const prepared = await prepareCell(page, opts.base + cell.path, cell, theme, opts.timeout, opts.base);
+            const notReady = prepared.error;
+            const themeProbe = prepared.themeProbe;
+            record.readyItems = prepared.count;
             let extra = null;
             if (notReady === null && cell.interact !== undefined) await cell.interact(page);
             if (notReady === null && cell.verify !== undefined) extra = await cell.verify(page);
@@ -1028,7 +1223,13 @@ async function run(opts, pw, exe) {
             record.clientWidth = record.clientWidth ?? null;
             record.reason = `执行异常：${error instanceof Error ? error.message.split('\n')[0] : String(error)}`;
           }
+          // HTTP 异常只在判红时并入失败原因（判绿时它只是背景噪声，例如 favicon 404）
+          if (httpIssues.length > 0 && record.status === 'fail') {
+            record.httpIssues = [...httpIssues];
+            record.reason = `${record.reason ?? ''} | 本格 HTTP 异常：${record.httpIssues.slice(0, 3).join('、')}`.trim();
+          }
           if (pageErrors.length > 0) record.pageErrors = pageErrors.splice(0, pageErrors.length);
+          if (benignErrors.length > 0) record.pageErrorsBenign = benignErrors.splice(0, benignErrors.length);
           results.push(record);
         }
         await context.close();
@@ -1071,6 +1272,28 @@ function report(results, opts) {
     console.log(`\n页面 JS 异常（不参与判定，仅记录）: ${withErrors.length} 格`);
     const uniq = [...new Set(withErrors.flatMap((r) => r.pageErrors))];
     for (const message of uniq.slice(0, 8)) console.log(`  - ${message}`);
+  }
+  const benign = results.filter((r) => (r.pageErrorsBenign ?? []).length > 0);
+  if (benign.length > 0) {
+    const uniq = [...new Set(benign.flatMap((r) => r.pageErrorsBenign))];
+    console.log(`\n页面 JS 异常（良性噪声：已按判据过滤，不参与判定）: ${benign.length} 格`);
+    console.log(`  判据: ${BENIGN_PAGE_ERROR_RULE}`);
+    console.log(`  涉及格: ${[...new Set(benign.map((r) => r.cell))].map((n) => `${n}×${benign.filter((r) => r.cell === n).length}`).join('、')}`);
+    for (const message of uniq.slice(0, 8)) console.log(`  - ${message}`);
+  }
+  // 内容级就绪命中数的**跨档一致性**：命中数不止打印，还要被看一眼 —— 同一格在六档 × 两主题下
+  // 应当命中同样多的条目（各档反复测得的同一批夹具数据）；数字不同即说明某些档量到的是另一种页面状态。
+  // 只告警不判红：可见行数在虚拟化列表下可能随宽度变化，判红会把正常波动变成噪声。
+  const byCell = new Map();
+  for (const r of results) {
+    if (r.readyItems === null || r.readyItems === undefined) continue;
+    if (!byCell.has(r.cell)) byCell.set(r.cell, new Set());
+    byCell.get(r.cell).add(r.readyItems);
+  }
+  const unstable = [...byCell.entries()].filter(([, counts]) => counts.size > 1);
+  if (unstable.length > 0) {
+    console.log('\n内容级就绪命中数不一致（告警，不参与判定）:');
+    for (const [name, counts] of unstable) console.log(`  - ${name}: ${[...counts].sort((a, b) => a - b).join(' / ')}`);
   }
   if (opts.json !== null) {
     writeFileSync(resolve(ROOT, opts.json), JSON.stringify({ app: opts.label, widths: opts.widths, themes: opts.themes, results }, null, 2));
