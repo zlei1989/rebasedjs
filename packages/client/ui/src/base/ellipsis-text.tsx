@@ -10,7 +10,12 @@ import type { CSSProperties, ReactNode } from 'react';
 
 export interface EllipsisTextProps {
   children: string;
-  /** 完整值；存在时 hover 显示（antd 原生 ellipsis tooltip） */
+  /**
+   * 完整值；走 antd 原生 ellipsis tooltip。
+   * 注意：**仅当文本真的溢出时** antd 才启用并渲染 tooltip —— 短文本传了 title 不会出现浮层
+   * （antd 以布局溢出测量为准），空字符串还会被静默丢弃。故消费点（Task 11/12）不要
+   * 依赖「传了 title 就一定有 hover 提示」。
+   */
   title?: string;
   /** 等宽呈现（hash 用） */
   mono?: boolean;
