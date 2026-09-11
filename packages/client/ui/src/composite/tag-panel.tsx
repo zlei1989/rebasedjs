@@ -10,6 +10,7 @@ import { Button, Card, Flex, Input, Modal, Popconfirm, Tag, Tooltip, Typography 
 import { PlusOutlined } from '@ant-design/icons';
 import type { TagAction, TagEntry, TagList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { Toolbar } from '../base/toolbar';
 
 export interface TagPanelProps {
   tags: TagList;
@@ -161,7 +162,10 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
-      <Flex gap={8} align="center">
+      {/* 顶部工具条：新建标签 + 推送全部。
+          横向工具行改 Toolbar（gap 照抄原值 8；交叉轴 align 固定 center，与原 align="center" 等价），
+          统一 flexWrap + width:100% + minWidth:0；子项均为按钮，无需补 minWidth:0。 */}
+      <Toolbar gap={8}>
         <Tooltip title="创建一个新标签（打开名称 / 引用 / 附注信息弹窗）">
           <Button
             type="primary"
@@ -186,7 +190,7 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
             </Button>
           </Tooltip>
         </Popconfirm>
-      </Flex>
+      </Toolbar>
       <Card size="small" title={`标签列表（${tags.tags.length}）`}>
         {tags.tags.length === 0 ? (
           <EmptyState title="暂无标签" />

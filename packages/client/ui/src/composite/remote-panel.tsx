@@ -11,6 +11,7 @@ import { Button, Card, Flex, Input, Modal, Popconfirm, Select, Tag, Tooltip, Typ
 import { PlusOutlined } from '@ant-design/icons';
 import type { RemoteAction, RemoteInfo, RemoteList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { Toolbar } from '../base/toolbar';
 
 export interface RemotePanelProps {
   remotes: RemoteList;
@@ -249,8 +250,11 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
-      {/* 顶部工具条：添加远程 + fetch 全部（无参 onFetch 表示全部远程） */}
-      <Flex gap={8}>
+      {/* 顶部工具条：添加远程 + fetch 全部（无参 onFetch 表示全部远程）+ 定制 fetch。
+          横向工具行改 Toolbar（gap 照抄原值 8）；原 Flex 未写 align（交叉轴 normal=stretch），
+          Toolbar 固定为 center —— 三个子项同为默认高度按钮，两种对齐的观感一致。
+          子项均为按钮，无需补 minWidth:0。 */}
+      <Toolbar gap={8}>
         <Tooltip title="打开添加远程弹窗：填写名称与 URL 后写入仓库配置（git remote add）">
           <Button
             type="primary"
@@ -273,7 +277,7 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
             </Button>
           </Tooltip>
         )}
-      </Flex>
+      </Toolbar>
 
       <Card size="small" title={`远程列表（${remotes.remotes.length}）`}>
         {/* shallow 识别徽标 + 解除浅克隆：浅克隆仓库提示，解除走 fetch --unshallow（成功后徽标随之消失） */}

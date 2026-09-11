@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Radio, Tag, Tooltip, Typography } from 'antd';
 import type { WorktreeCreateBody, WorktreeEntry, WorktreeList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { Toolbar } from '../base/toolbar';
 
 export interface WorktreePanelProps {
   worktrees: WorktreeList;
@@ -216,7 +217,11 @@ export function WorktreePanel(props: WorktreePanelProps): React.ReactNode {
         size="small"
         title={`工作树（${worktrees.worktrees.length}）`}
         extra={
-          <Flex gap={8}>
+          /* 卡头工具行改 Toolbar（gap 照抄原值 8）：原 Flex 不换行，窄屏三个按钮会溢出卡头；
+             Toolbar 统一 flexWrap + width:100% + minWidth:0。宿主 `.ant-card-extra` 是 `flex: 0 1 auto`
+             的收缩项（宽度由内容决定），子项 100% 按它自己的内容盒解析，宽屏下与原来等价，窄屏下多出换行能力。
+             子项均为按钮，无需补 minWidth:0。 */
+          <Toolbar gap={8}>
             {onRefresh !== undefined ? (
               // 卡头三个按钮都在 acting 期间禁用：禁用按钮不派发 hover，统一在 Tooltip 内包 span 承接悬停
               <Tooltip title={acting ? '操作进行中：等当前操作结束后再刷新列表' : '重新拉取工作树列表（外部命令改动过工作树时用）'}>
@@ -249,7 +254,7 @@ export function WorktreePanel(props: WorktreePanelProps): React.ReactNode {
                 </span>
               </Tooltip>
             </Popconfirm>
-          </Flex>
+          </Toolbar>
         }
       >
         {worktrees.worktrees.length === 0 ? (

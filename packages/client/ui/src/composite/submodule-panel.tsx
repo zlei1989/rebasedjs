@@ -9,6 +9,8 @@ import { useState } from 'react';
 import { Button, Card, Checkbox, Flex, Tag, Tooltip, Typography } from 'antd';
 import type { SubmoduleEntry, SubmoduleList, SubmoduleUpdateBody } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { EllipsisText } from '../base/ellipsis-text';
+import { Toolbar } from '../base/toolbar';
 
 export interface SubmodulePanelProps {
   submodules: SubmoduleList;
@@ -49,9 +51,14 @@ function SubmoduleRow({
       <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
         {entry.path}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0, maxWidth: 220 }} ellipsis>
+      {/* 远端 URL 改 EllipsisText（brief Step 2 点名处）：自带 minWidth:0 + ellipsis + maxWidth，
+          长 URL 不再撑宽行；由原 inline 样式承担的三项随之交接：
+          ellipsis（内置）、maxWidth:220（改为 prop）、flexShrink:0（去掉——可收缩正是目的）；
+          fontSize:12 交紧凑密度（Ruling P4）。**随之丢弃 `type="secondary"`（EllipsisText 无 type prop，
+          见报告「自审/顾虑」），故此处文本由次要色变为默认色。** */}
+      <EllipsisText maxWidth={220} title={entry.url}>
         {entry.url}
-      </Typography.Text>
+      </EllipsisText>
       {entry.branch !== undefined ? (
         <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
           {entry.branch}
@@ -97,7 +104,11 @@ export function SubmodulePanel(props: SubmodulePanelProps): React.ReactNode {
         size="small"
         title={`子模块（${submodules.submodules.length}）`}
         extra={
-          <Flex gap={8} align="center">
+          /* 卡头工具行改 Toolbar（gap 照抄原值 8；交叉轴 align 固定 center，与原 align="center" 等价）：
+             原 Flex 不换行，窄屏「刷新/递归更新/更新全部」会溢出卡头；宿主 `.ant-card-extra` 是
+             `flex: 0 1 auto` 的收缩项，子项 100% 按它自己的内容盒解析，宽屏等价、窄屏获得换行能力。
+             子项均为按钮/勾选，无需补 minWidth:0。 */
+          <Toolbar gap={8}>
             {onRefresh !== undefined ? (
               /* 刷新：只重新读取状态，不改工作区；acting 禁用期间同样靠外层 span 承接提示 */
               <Tooltip
@@ -145,7 +156,7 @@ export function SubmodulePanel(props: SubmodulePanelProps): React.ReactNode {
                 </Button>
               </span>
             </Tooltip>
-          </Flex>
+          </Toolbar>
         }
       >
         {submodules.submodules.length === 0 ? (

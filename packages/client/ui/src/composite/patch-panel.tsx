@@ -15,6 +15,7 @@ import { Button, Card, Flex, Input, Modal, Popconfirm, Radio, Tooltip, Typograph
 import { PlusOutlined } from '@ant-design/icons';
 import type { PatchCreateBody, PatchEntry, PatchList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { Toolbar } from '../base/toolbar';
 import { formatCommitDate } from '../domain/format';
 
 export interface PatchPanelProps {
@@ -207,7 +208,9 @@ export function PatchPanel({ patches, onCreate, onApply, onImportShelf, onDelete
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
-      <Flex>
+      {/* 顶部工具行改 Toolbar：原 Flex 无 gap（照抄：不传 gap 即不落 style），
+          由原语统一 flexWrap + width:100% + minWidth:0；唯一子项是按钮，无需补 minWidth:0。 */}
+      <Toolbar>
         <Tooltip title="生成补丁文件存到仓库的补丁目录（打开命名与范围弹窗）">
           <Button
             type="primary"
@@ -219,7 +222,7 @@ export function PatchPanel({ patches, onCreate, onApply, onImportShelf, onDelete
             创建补丁
           </Button>
         </Tooltip>
-      </Flex>
+      </Toolbar>
       <Card size="small" title={`补丁列表（${patches.patches.length}）`}>
         {patches.patches.length === 0 ? (
           <EmptyState title="暂无补丁" />

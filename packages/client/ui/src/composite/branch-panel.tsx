@@ -27,6 +27,7 @@ import {
 } from 'antd';
 import { CheckOutlined, DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
 import type { BranchAction, BranchList, BranchRef, BranchWorkingDiff, CheckoutAction, TagEntry, TagList } from '@rebased/contracts';
+import { Toolbar } from '../base/toolbar';
 import { CommittedStatusTag } from '../domain/committed-status';
 
 export interface BranchPanelProps {
@@ -553,8 +554,12 @@ export function BranchPanel({
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
-      {/* 顶部工具条：新建分支 + 过滤/查找已合并 + 清理已合并 */}
-      <Flex align="center" gap={8} wrap="wrap">
+      {/* 顶部工具条：新建分支 + 过滤/查找已合并 + 清理已合并。
+          横向工具行改 Toolbar（gap 照抄原值 8；交叉轴 align 固定 center，与原 align="center" 等价），
+          由原语统一 flexWrap + width:100% + minWidth:0（D-12「标签被压成竖排」的成因）。
+          子项无需补 minWidth:0：过滤输入是固定 width:200（非弹性项，改 flex:1 会变动间距口径），
+          其余子项都是按钮/勾选（antd 自带可收缩性）。 */}
+      <Toolbar gap={8}>
         <Tooltip title="打开新建分支弹窗：可指定起始点，并选择创建后是否立即检出">
           <Button
             type="primary"
@@ -633,7 +638,7 @@ export function BranchPanel({
             </Button>
           </Tooltip>
         ) : null}
-      </Flex>
+      </Toolbar>
 
       {/* 最近检出组（GitBranchesPopup recent 组语义）：仅数据非空时渲染；行内「检出」→ 既有 branch 检出 */}
       {visibleRecent.length > 0 && (

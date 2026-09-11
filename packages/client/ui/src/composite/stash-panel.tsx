@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { Button, Card, Checkbox, Flex, Input, Modal, Popconfirm, Select, Spin, Tag, Tooltip, Typography } from 'antd';
 import type { BranchRef, StashAction, StashDiff, StashEntry, StashList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { Toolbar } from '../base/toolbar';
 
 export interface StashPanelProps {
   stashes: StashList;
@@ -65,14 +66,19 @@ function SaveForm({ acting, onAction }: { acting?: boolean; onAction: (action: S
 
   return (
     <Card size="small" title="保存贮藏">
-      <Flex gap={8} align="center" wrap>
+      {/* 保存工具行改 Toolbar：原 Flex 已 wrap（gap 照抄 8，交叉轴 align 与原 align="center" 等价），
+          原语只把 flexWrap + width:100% + minWidth:0 统一到一处（D-12 成因）。
+          说明输入框带 flex:1，故按「Toolbar 不克隆 children」的约定在调用点补 minWidth:0（见下）。 */}
+      <Toolbar gap={8}>
         <Tooltip title="贮藏说明：写入 stash message，留空则该贮藏以 WIP 命名">
           <Input
             data-testid="stash-message-input"
             placeholder="贮藏说明（可空）"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            style={{ flex: 1, minWidth: 200 }}
+            // minWidth 200 → 0：固定下限 200 与同行两个勾选 + 保存按钮在 360px 视口（内容盒约 313px）必然溢出；
+            // flex:1 保留（等分口径不变），改 0 后输入框可收缩（占位文案随之省略）——brief Step 1 点名的补法
+            style={{ flex: 1, minWidth: 0 }}
           />
         </Tooltip>
         <Tooltip title="勾选后把未跟踪的新文件一并存入贮藏（--include-untracked）">
@@ -103,7 +109,7 @@ function SaveForm({ acting, onAction }: { acting?: boolean; onAction: (action: S
             保存
           </Button>
         </Tooltip>
-      </Flex>
+      </Toolbar>
     </Card>
   );
 }

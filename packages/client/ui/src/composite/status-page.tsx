@@ -651,7 +651,10 @@ function CommitCard({
             <Tooltip title="按提交标题选择要改写的历史提交：选中后本次提交 amend 到该提交，并自动取消上面的 amend 开关">
               <Select
                 data-testid="amend-target-select"
-                style={{ minWidth: 220 }}
+                /* 固定下限 220 → 0（Ruling P14）：本行是横向 Flex + wrap，Select 的宽度由内容测量决定；
+                   下限 220 在 360px 视口（内容盒约 313~328px，含纵向滚动条更窄）与同行控件共享一行时会溢出。
+                   改 0 后 Select 作为 flex 项可收缩（长选项在控件内部截断），不再把行顶宽。 */
+                style={{ minWidth: 0 }}
                 placeholder="amend 到…（指定历史提交）"
                 allowClear
                 loading={amendTargets === undefined || amendTargets === null}
@@ -1015,9 +1018,14 @@ export function StatusPage({
           </Tooltip>
         )}
       </Flex>
-      {/* 左列三组变更列表 + 右列补丁预览（窄屏自然折行为上下布局） */}
+      {/* 左列三组变更列表 + 右列补丁预览（横向两栏，wrap 允许折行） */}
       <Flex gap={16} align="stretch" wrap="wrap">
-        <Flex vertical gap={16} style={{ flex: 1, minWidth: 320 }}>
+        {/* 固定下限 320 → 0（Ruling P14）：`min-width: 320` 的 flex 子项无法收缩到 320 以下，
+            而 360px 视口扣除 PageShell 的 padding={16} 后内容盒仅约 313~328px（含纵向滚动条更窄），
+            该下限自身即把页面推入横向滚动，直接违反「页面级横向滚动必须为 0」。
+            改 0 后子项仍保留 `flex: 1`（等分/平分剩余空间的口径不变），只获得收缩能力；
+            本层与右列的 wrap / align="stretch" 均未改动。 */}
+        <Flex vertical gap={16} style={{ flex: 1, minWidth: 0 }}>
           <ChangeGroup
             title="已暂存"
             group="staged"
@@ -1163,7 +1171,8 @@ export function StatusPage({
             )}
           />
         </Flex>
-        <Flex vertical style={{ flex: 1, minWidth: 320 }}>
+        {/* 右列（补丁预览）下限同样 320 → 0：理由与左列一致（Ruling P14），只去掉卡死的收缩下限 */}
+        <Flex vertical style={{ flex: 1, minWidth: 0 }}>
           <PatchCard
             patch={patch}
             patchLoading={patchLoading}

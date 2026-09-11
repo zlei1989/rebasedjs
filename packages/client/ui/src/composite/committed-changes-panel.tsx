@@ -10,6 +10,7 @@ import { Button, Card, Flex, Tooltip, Typography, theme } from 'antd';
 import { CaretDownOutlined, CaretRightOutlined, FolderOutlined } from '@ant-design/icons';
 import type { CommittedEntry, CommittedFileStatus, CommittedPage } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { EllipsisText } from '../base/ellipsis-text';
 import { CommittedStatusTag } from '../domain/committed-status';
 import { formatCommitDate } from '../domain/format';
 
@@ -103,9 +104,12 @@ function CommitRow({
         }}
         onClick={() => onSelectCommit?.(entry.hash)}
       >
-        <Typography.Text code style={{ flexShrink: 0 }}>
+        {/* 短哈希改 EllipsisText：`mono` 与原 `code` 等价（同走 Typography.Text 的 code 呈现），
+            `title` 给出完整哈希（antd 仅在文本溢出时才弹，短哈希一般不出浮层，故不新增可见行为）；
+            `flexShrink: 0` 去掉——可收缩（超窄时截断而非撑宽行）。 */}
+        <EllipsisText mono title={entry.hash}>
           {entry.shortHash}
-        </Typography.Text>
+        </EllipsisText>
         <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
           {entry.subject}
         </Typography.Text>
@@ -156,7 +160,10 @@ function TreeNodeRow({
           >
             {open ? <CaretDownOutlined style={{ fontSize: 10 }} /> : <CaretRightOutlined style={{ fontSize: 10 }} />}
             <FolderOutlined />
-            <Typography.Text>{node.name}</Typography.Text>
+            {/* 目录名改 EllipsisText：目录名是不可断行串，长名会把本行（Flex，无 wrap）顶宽；
+                EllipsisText 自带 minWidth:0 + ellipsis，截断取代撑宽；本处无 type/fontSize/strong 等
+                语义样式，转换不丢任何呈现属性（仅 ellipsis 由内置承担）。 */}
+            <EllipsisText title={node.name}>{node.name}</EllipsisText>
           </Flex>
         </Tooltip>
         {open
@@ -226,6 +233,10 @@ export function CommittedChangesPanel({
       {entries.length === 0 ? (
         <EmptyState title="暂无提交记录" />
       ) : (
+        /* 提交列表 + 变更文件两栏：本层是**横向** Flex（交叉轴为纵向），`align="flex-start"` 表示
+           「子项顶部对齐」，与横向沾满无关 —— 按 Ruling P15 予以**保留**（删掉会把顶对齐变成等高拉伸，
+           属未获授权的视觉变更）。本组件根是其上的纵向 Flex（panel 根），按 P15(b) 不迁 PageShell：
+           横向行容器改 PageShell 会由「行」变「列」，且面板布局与密度归 app 页面容器所有。 */
         <Flex gap={16} align="flex-start">
           <Card size="small" title={`提交列表（${entries.length}）`} style={{ flex: 1, minWidth: 0 }}>
             <Flex vertical>

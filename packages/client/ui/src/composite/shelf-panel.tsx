@@ -11,6 +11,7 @@ import { Button, Card, Flex, Input, Modal, Popconfirm, Tooltip, Typography } fro
 import { PlusOutlined } from '@ant-design/icons';
 import type { ShelfAction, ShelfEntry, ShelfList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { Toolbar } from '../base/toolbar';
 import { formatCommitDate } from '../domain/format';
 
 export interface ShelfPanelProps {
@@ -138,7 +139,9 @@ export function ShelfPanel({ shelves, onAction, acting }: ShelfPanelProps): Reac
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
-      <Flex>
+      {/* 顶部工具行改 Toolbar：原 Flex 无 gap（照抄：不传 gap 即不落 style），
+          由原语统一 flexWrap + width:100% + minWidth:0；唯一子项是按钮，无需补 minWidth:0。 */}
+      <Toolbar>
         <Tooltip title="把当前工作区改动存成一个搁置存档（打开搁置名弹窗）">
           <Button
             type="primary"
@@ -150,7 +153,7 @@ export function ShelfPanel({ shelves, onAction, acting }: ShelfPanelProps): Reac
             保存
           </Button>
         </Tooltip>
-      </Flex>
+      </Toolbar>
       <Card size="small" title={`搁置列表（${shelves.shelves.length}）`}>
         {shelves.shelves.length === 0 ? (
           <EmptyState title="暂无搁置" />
