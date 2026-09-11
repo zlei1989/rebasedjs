@@ -11,6 +11,7 @@
 import { Button, Flex, Modal, Spin, Tooltip, Typography } from 'antd';
 import type { BlameLine, CommittedEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { PageShell } from '../base/page-shell';
 import { CommittedStatusTag } from '../domain/committed-status';
 import { formatCommitDate } from '../domain/format';
 
@@ -231,8 +232,10 @@ export function BlameView({
   onCloseAffected,
   onOpenAffectedFile,
 }: BlameViewProps): React.ReactNode {
+  // 根容器：本组件被 blame 页嵌在宿主布局根内（apps 侧页面自带 flex 根），故传 density="default" 只豁免密度。
+  // gap/padding 照抄既有值 8/16（PageShell 默认不落 style，不传会静默丢掉内距与行距）。
   return (
-    <Flex vertical gap={8} style={{ padding: 16 }}>
+    <PageShell density="default" gap={8} padding={16}>
       <Typography.Text code data-testid="blame-file">
         {file}
       </Typography.Text>
@@ -269,6 +272,6 @@ export function BlameView({
           onOpenFile={onOpenAffectedFile}
         />
       ) : null}
-    </Flex>
+    </PageShell>
   );
 }

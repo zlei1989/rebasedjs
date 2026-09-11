@@ -6,6 +6,7 @@
  */
 import { Button, Card, Flex, Tooltip, Typography } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
+import { PageShell } from '../base/page-shell';
 import { formatCommitDate } from '../domain/format';
 
 export interface BranchCompareViewProps {
@@ -82,8 +83,10 @@ export function BranchCompareView({
   onSelectCommit,
   onExit,
 }: BranchCompareViewProps): React.ReactNode {
+  // 页面根：/repos/:repoId?compare=<branch> 直接渲染本组件（apps 侧返回的是 fragment 根，无外层布局根），
+  // 故由本组件持有密度（不传 density=compact）。gap/padding 照抄既有值 16（PageShell 默认不落 style）。
   return (
-    <Flex vertical gap={16} style={{ padding: 16 }}>
+    <PageShell gap={16} padding={16}>
       <Flex align="center" gap={12} wrap="wrap">
         <Typography.Text strong data-testid="compare-title">
           与分支 <Typography.Text code>{branch}</Typography.Text> 比较
@@ -96,7 +99,10 @@ export function BranchCompareView({
           </Tooltip>
         )}
       </Flex>
-      <Flex gap={16} align="flex-start" wrap="wrap">
+      {/* 两栏并排容器（非页面根——上面的 PageShell 才是页面根）：两栏各 flex:1 + minWidth:320，
+          窄屏交给 wrap 换行。刻意不写 align="flex-start"：本层是横向 Flex、交叉轴为纵向，
+          该属性只决定两栏是否等高拉伸，对「横向沾满」本就无影响（根因写法只存在于纵向 Flex 根）。 */}
+      <Flex gap={16} wrap="wrap">
         <Flex vertical gap={16} style={{ flex: 1, minWidth: 320 }}>
           <CompareCard
             title="分支独有"
@@ -114,6 +120,6 @@ export function BranchCompareView({
           />
         </Flex>
       </Flex>
-    </Flex>
+    </PageShell>
   );
 }

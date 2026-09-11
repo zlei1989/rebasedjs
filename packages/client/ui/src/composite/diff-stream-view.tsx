@@ -7,6 +7,7 @@
  */
 import { Typography } from 'antd';
 import { MonacoTextView, type MonacoTextViewProps } from '../base/monaco-text-view';
+import { PageShell } from '../base/page-shell';
 import type { MonacoLazyLoader } from '../base/monaco-lazy';
 
 export interface DiffStreamViewProps {
@@ -28,8 +29,10 @@ export function DiffStreamView({
   loader,
   textViewProps,
 }: DiffStreamViewProps): React.ReactNode {
+  // 页面根：/repos/:repoId/diff 的流式分支直接渲染本组件（无外层布局根），故由本组件持有密度（不传 density）。
+  // gap/padding 照抄既有值 8（PageShell 默认不落 style，不传会静默丢掉内距与行距）。
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%', padding: 8 }}>
+    <PageShell gap={8} padding={8}>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {error === undefined || error === null
           ? connected
@@ -52,6 +55,6 @@ export function DiffStreamView({
           loader={loader}
         />
       </div>
-    </div>
+    </PageShell>
   );
 }

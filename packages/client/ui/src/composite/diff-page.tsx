@@ -12,6 +12,7 @@
 import { useState } from 'react';
 import type { FileThreeVersions, FileVersions } from '@rebased/contracts';
 import { Button, Flex, Tooltip, Typography } from 'antd';
+import { PageShell } from '../base/page-shell';
 import { DiffViewer } from '../domain/diff-viewer';
 import { ThreeWayView } from './three-way-view';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
@@ -107,8 +108,10 @@ export function DiffPage({
 }: DiffPageProps): React.ReactNode {
   // 忽略空白默认关（UX 对齐 #4：对齐 Java TextDiffSettingsHolder 默认不忽略）
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+  // 页面根：/repos/:repoId/diff 直接渲染本组件（无外层布局根），故由本组件持有密度（不传 density=compact）。
+  // gap/padding 照抄既有值 8（PageShell 默认不落 style，不传会静默丢掉内距与行距）。
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%', padding: 8 }}>
+    <PageShell gap={8} padding={8}>
       <Flex align="center" gap={16}>
         <div style={{ fontWeight: 600 }}>{file}</div>
         <FileNavButtons files={files ?? []} file={file} onNavigateFile={onNavigateFile} />
@@ -142,6 +145,6 @@ export function DiffPage({
           />
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -11,6 +11,7 @@ import { Button, Flex, Tooltip, Typography } from 'antd';
 import type { ConflictContents } from '@rebased/contracts';
 import { MonacoDiffView } from '../base/monaco-diff-view';
 import type { MonacoEditorInnerProps, MonacoLazyLoader } from '../base/monaco-lazy';
+import { PageShell } from '../base/page-shell';
 
 /** 3-way 合并视图 props（见文件头说明） */
 export interface MergeViewProps {
@@ -54,8 +55,10 @@ export function MergeView({ contents, onSave, saving = false, loader = defaultLo
     setEdited(ours ?? base ?? theirs ?? '');
   }, [path, base, ours, theirs]);
 
+  // 根容器：本组件被 conflicts 页嵌在全屏 Modal 内（宿主自带布局根），故传 density="default" 只豁免密度、不施加紧凑主题。
+  // 原根只写了 gap 8 与 height:'100%'（后者由 PageShell 提供），无 padding，故不传 padding（免得凭空新增内距）。
   return (
-    <Flex vertical gap={8} style={{ height: '100%' }}>
+    <PageShell density="default" gap={8}>
       {/* 上排对照区：base→ours / base→theirs 只读 diff；base 缺失（双方新增）退化为两栏只读普通编辑器 */}
       <Flex gap={8} style={{ flex: 1, minHeight: 0 }}>
         {base !== null ? (
@@ -97,6 +100,6 @@ export function MergeView({ contents, onSave, saving = false, loader = defaultLo
           </span>
         </Tooltip>
       </Pane>
-    </Flex>
+    </PageShell>
   );
 }
