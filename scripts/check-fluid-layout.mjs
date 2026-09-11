@@ -368,26 +368,66 @@ async function assertPanes(page, width, collapseBelow) {
 async function assertMonacoInternalScroll(page) {
   const read = () =>
     page.evaluate(() => {
-      const editors = [...document.querySelectorAll('.monaco-editor')].filter((el) => el.clientWidth > 0);
+      const all = [...document.querySelectorAll('.monaco-editor')];
+      const editors = all.filter((el) => el.clientWidth > 0);
       if (editors.length === 0) return null;
-      // 取「内容相对自身最宽」的那一个：并排模式下两栏里总有一栏更能体现长行
       const measured = editors.map((el) => {
         const lines = el.querySelector('.view-lines');
         const scrollable = el.querySelector('.monaco-scrollable-element');
         const contentWidth = lines === null ? null : Math.round(lines.getBoundingClientRect().width);
         return {
+          // 在完整 NodeList 里的下标：拖动滑块时必须定位到**同一个**编辑器
+          // （此前用两套不同的排序分别「测量」与「取滑块」，实测选中了两个不同的栏 → 假红）
+          index: all.indexOf(el),
           hostScrollWidth: el.scrollWidth,
           hostClientWidth: el.clientWidth,
           contentWidth,
           contentX: lines === null ? null : Math.round(lines.getBoundingClientRect().x),
           hasHorizontalScrollbar: el.querySelector('.scrollbar.horizontal') !== null,
           scrollableOverflowX: scrollable === null ? null : getComputedStyle(scrollable).overflowX,
+          // Monaco 自己的滚动宿主（.monaco-scrollable-element 即类名里的 editor-scrollable）：
+          // 它的 scrollWidth 是 Monaco 的「大滚动」哨兵（实测 16777216），**不是长行的度量**，
+          // 故只用来断言「该容器确实持有可横向滚动的区间」；长行由 contentWidth 度量。
+          scrollHostScrollWidth: scrollable === null ? null : scrollable.scrollWidth,
+          scrollHostClientWidth: scrollable === null ? null : scrollable.clientWidth,
         };
       });
-      measured.sort((a, b) => (b.contentWidth ?? 0) - b.hostClientWidth - ((a.contentWidth ?? 0) - a.hostClientWidth));
+      // 选「最有代表性」的那个编辑器：优先内容真的溢出的，其次取可见宽度最大的那个
+      // （并排模式下 360 档左栏会被压到 38px：它的溢出量最大但证据最不典型，故不用溢出量排序）
+      measured.sort((a, b) => {
+        const overA = (a.contentWidth ?? 0) > a.hostClientWidth ? 1 : 0;
+        const overB = (b.contentWidth ?? 0) > b.hostClientWidth ? 1 : 0;
+        if (overA !== overB) return overB - overA;
+        return b.hostClientWidth - a.hostClientWidth;
+      });
       return { editors: editors.length, best: measured[0] };
     });
 
+  // 先等 Monaco 的几何稳定：DiffPage 的两栏编辑器是逐步落位的（clientWidth、内容宽、滚动条滑块宽度
+  // 都各自晚一拍才定），过早测量会拿到没定型的几何 —— 实测 480 档曾因此选中一个滑块宽 20px 的中间态，
+  // 拖动后内容位移为负（布局还在变）→ 假红。签名取「可见宽 + 内容宽 + 滑块宽/位」，连续两次一致才继续。
+  // 注意：**必须等稳定之后再 read()**，否则读到的是稳定前的下标与基准 x（实测 koa 768 档因此假红）。
+  let signature = '';
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const next = await page.evaluate(() =>
+      [...document.querySelectorAll('.monaco-editor')]
+        .filter((el) => el.clientWidth > 0)
+        .map((el) => {
+          const lines = el.querySelector('.view-lines');
+          const slider = el.querySelector('.scrollbar.horizontal .slider');
+          return [
+            el.clientWidth,
+            lines === null ? 0 : Math.round(lines.getBoundingClientRect().width),
+            slider === null ? 'n' : Math.round(slider.getBoundingClientRect().width),
+            slider === null ? 'n' : slider.style.left,
+          ].join(':');
+        })
+        .join(','),
+    );
+    if (next !== '' && next === signature) break;
+    signature = next;
+    await page.waitForTimeout(250);
+  }
   let before = await read();
   if (before === null) return { status: 'fail', reason: '页面上没有可见的 .monaco-editor' };
   for (let attempt = 0; attempt < 20 && before.best.contentWidth !== null && before.best.contentWidth <= before.best.hostClientWidth; attempt += 1) {
@@ -407,45 +447,62 @@ async function assertMonacoInternalScroll(page) {
   if (!info.hasHorizontalScrollbar) {
     return { status: 'fail', reason: 'Monaco 未渲染横向滚动条元素（.scrollbar.horizontal）' };
   }
+  // 编辑器**自己的**滚动宿主必须持有可横向滚动的区间（brief 的「Monaco host scrollWidth > clientWidth」）。
+  // 口径说明：`.monaco-scrollable-element` 的 scrollWidth 是 Monaco 的大滚动哨兵（实测 16777216），
+  // 这个不等式恒真、不能当作长行的证据；长行证据由上面的 contentWidth > hostClientWidth 承担。
+  if (info.scrollHostScrollWidth === null || info.scrollHostScrollWidth <= info.scrollHostClientWidth + OVERFLOW_TOLERANCE) {
+    return {
+      status: 'fail',
+      reason: `Monaco 滚动宿主无可横向滚动区间：scrollWidth ${info.scrollHostScrollWidth} <= clientWidth ${info.scrollHostClientWidth}`,
+    };
+  }
   // 拖动横向滚动条滑块：内容位移 > 0 即证明内部横向滚动可达（滚轮不产生 deltaX，不作为判据）。
   // 用 locator + scrollIntoViewIfNeeded：768/1024 档编辑器底部会落在视口之外，
   // 手算坐标的 mouse.move 落在视口外就拖不动（实测该两档因此失败）。
-  const measured = await page.evaluate(() => {
-    const editors = [...document.querySelectorAll('.monaco-editor')];
-    const visible = editors.filter((el) => el.clientWidth > 0);
-    let best = -1;
-    let bestOverflow = -Infinity;
-    visible.forEach((el) => {
-      const lines = el.querySelector('.view-lines');
-      const overflow = (lines === null ? 0 : lines.getBoundingClientRect().width) - el.clientWidth;
-      if (overflow > bestOverflow) {
-        bestOverflow = overflow;
-        best = editors.indexOf(el);
-      }
-    });
-    return best;
-  });
-  const sliderLocator = page.locator('.monaco-editor').nth(measured).locator('.scrollbar.horizontal .slider');
-  await sliderLocator.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(200);
-  const slider = await sliderLocator.boundingBox();
-  if (slider === null) return { status: 'fail', reason: '取不到 Monaco 横向滚动条滑块的几何' };
-  await page.mouse.move(slider.x + slider.width / 2, slider.y + slider.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(slider.x + slider.width / 2 + 120, slider.y + slider.height / 2, { steps: 12 });
-  await page.mouse.up();
-  await page.waitForTimeout(400);
-  const after = await read();
-  const moved = info.contentX === null || after?.best.contentX == null ? 0 : info.contentX - after.best.contentX;
+  // 位移基准在**按下前一刻**重测（内容 x 会随布局落位变化，用早先的读数当基准会算出负位移）；
+  // 仍未位移则重试一次（Monaco 首次拖动的滑块可能尚未与模型同步）。
+  const sliderLocator = page.locator('.monaco-editor').nth(info.index).locator('.scrollbar.horizontal .slider');
+  let moved = 0;
+  let startX = info.contentX;
+  let endX = info.contentX;
+  let sliderBox = null;
+  for (let attempt = 0; attempt < 2 && moved <= 0; attempt += 1) {
+    await sliderLocator.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(250);
+    sliderBox = await sliderLocator.boundingBox();
+    if (sliderBox === null) return { status: 'fail', reason: '取不到 Monaco 横向滚动条滑块的几何' };
+    startX = await page.evaluate(
+      (index) => {
+        const el = [...document.querySelectorAll('.monaco-editor')][index];
+        const lines = el.querySelector('.view-lines');
+        return lines === null ? null : Math.round(lines.getBoundingClientRect().x);
+      },
+      info.index,
+    );
+    await page.mouse.move(sliderBox.x + sliderBox.width / 2, sliderBox.y + sliderBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(sliderBox.x + sliderBox.width / 2 + 120, sliderBox.y + sliderBox.height / 2, { steps: 12 });
+    await page.mouse.up();
+    await page.waitForTimeout(450);
+    endX = await page.evaluate(
+      (index) => {
+        const el = [...document.querySelectorAll('.monaco-editor')][index];
+        const lines = el.querySelector('.view-lines');
+        return lines === null ? null : Math.round(lines.getBoundingClientRect().x);
+      },
+      info.index,
+    );
+    moved = startX !== null && endX !== null ? startX - endX : 0;
+  }
   if (moved <= 0) {
     return {
       status: 'fail',
-      reason: `拖动 Monaco 横向滚动条后内容未位移：x ${info.contentX} → ${after?.best.contentX}（滑块几何 ${JSON.stringify(slider)}）`,
+      reason: `拖动 Monaco 横向滚动条后内容未位移：x ${startX} → ${endX}（滑块几何 ${JSON.stringify(sliderBox)}）`,
     };
   }
   return {
     status: 'pass',
-    reason: `内部横向滚动可用：内容 ${info.contentWidth}px > 编辑器 ${info.hostClientWidth}px（宿主自身 scrollWidth ${info.hostScrollWidth}px 不溢出），拖动滑块后内容左移 ${moved}px`,
+    reason: `内部横向滚动可用：内容 ${info.contentWidth}px > 编辑器 ${info.hostClientWidth}px（宿主自身 scrollWidth ${info.hostScrollWidth}px 不溢出；编辑器滚动宿主 scrollWidth ${info.scrollHostScrollWidth} > clientWidth ${info.scrollHostClientWidth}，具备横向滚动区间），拖动滑块后内容左移 ${moved}px`,
   };
 }
 
