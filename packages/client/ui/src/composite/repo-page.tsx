@@ -13,6 +13,7 @@ import { Button, Flex, Input, Modal, Popconfirm, Spin, theme, Tooltip } from 'an
 import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SettingOutlined, SwitcherOutlined } from '@ant-design/icons';
 import type { RepoInfo } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { PageShell } from '../base/page-shell';
 import { relativeToHome } from './repo-page-utils';
 
 export interface RepoPageProps {
@@ -196,8 +197,10 @@ export function RepoPage({
     if (path) onOpen(path);
   };
 
+  // 页面根：PageShell 自带纵向 Flex + width:100% + minWidth:0 + height:100%（并施加紧凑密度）。
+  // 原 maxWidth:720 会人为收窄页面（不满足横向沾满）故移除；gap/padding 照抄既有值。
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16, maxWidth: 720 }}>
+    <PageShell gap={16} padding={16}>
       <Flex gap={8} align="center" wrap>
         <Tooltip title="仓库路径：支持 ~ 前缀，回车等同点「打开」">
           <Input
@@ -334,6 +337,6 @@ export function RepoPage({
       {onInit ? (
         <InitModal open={initOpen} acting={initializing} onInit={onInit} onClose={() => setInitOpen(false)} />
       ) : null}
-    </div>
+    </PageShell>
   );
 }

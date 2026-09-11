@@ -19,6 +19,7 @@ import type {
   SettingsPatch,
   SettingsState,
 } from '@rebased/contracts';
+import { PageShell } from '../base/page-shell';
 
 export interface SettingsPageProps {
   /** 应用设置；未就绪（undefined）时对应卡片显 Skeleton */
@@ -373,8 +374,10 @@ export function SettingsPage({
 }: SettingsPageProps): React.ReactNode {
   const [addOpen, setAddOpen] = useState(false);
   const [gpgOpen, setGpgOpen] = useState(false);
+  // 页面根：横向沾满（原 maxWidth:720 人为收窄，移除）；gap/padding 照抄既有值。
+  // 密度传 "default"：设置页按 spec D6 保持 antd 默认密度（其余页面由 PageShell 走紧凑密度）。
   return (
-    <Flex vertical gap={16} style={{ padding: 16, maxWidth: 720 }}>
+    <PageShell density="default" gap={16} padding={16}>
       <Card title="应用设置">
         {settings ? (
           <Flex vertical gap={12}>
@@ -521,6 +524,6 @@ export function SettingsPage({
           onClose={() => setGpgOpen(false)}
         />
       )}
-    </Flex>
+    </PageShell>
   );
 }
