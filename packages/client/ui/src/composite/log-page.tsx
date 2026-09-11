@@ -615,8 +615,11 @@ export function LogPage({
           sideWidth={320}
           side={
             /* 分隔线是侧栏自身的视觉分隔（SplitPane 只做布局、不画线），故保留在调用点；
-               宽度 320 / flexShrink:0 / 内部滚动均已由 SplitPane 的侧栏宿主承担，此处不再重复 */
-            <div data-testid="commit-details" style={{ borderLeft: `1px solid ${token.colorSplit}` }}>
+               宽度 320 / flexShrink:0 / 内部滚动均已由 SplitPane 的侧栏宿主承担，此处不再重复。
+               minHeight:100% 让这层盒子至少撑满侧栏宿主（分隔线因此对齐整栏高度，而不是只画到
+               提交信息的高度为止）；用 minHeight 而非 height：详情内容比一栏更高时盒子随之长高，
+               线仍覆盖全部内容，不会在滚动到底部后中断 */
+            <div data-testid="commit-details" style={{ minHeight: '100%', borderLeft: `1px solid ${token.colorSplit}` }}>
               <CommitDetailsPanel
                 commit={selectedCommit}
                 onResetHere={onResetHere}
