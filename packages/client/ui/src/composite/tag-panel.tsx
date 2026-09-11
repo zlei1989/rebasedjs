@@ -10,6 +10,7 @@ import { Button, Card, Flex, Input, Modal, Popconfirm, Tag, Tooltip, Typography 
 import { PlusOutlined } from '@ant-design/icons';
 import type { TagAction, TagEntry, TagList } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
+import { EllipsisText } from '../base/ellipsis-text';
 import { Toolbar } from '../base/toolbar';
 
 export interface TagPanelProps {
@@ -23,9 +24,14 @@ export interface TagPanelProps {
 function TagRow({ tag, onAction }: { tag: TagEntry; onAction: (action: TagAction) => void }): React.ReactNode {
   return (
     <Flex data-testid={`tag-row-${tag.name}`} align="center" gap={8} style={{ padding: '4px 0' }}>
-      <Typography.Text strong style={{ flexShrink: 0 }}>
+      {/* 标签名是不可断行串（分支/版本号风格的 ref 名），同行还有附注徽标 + flex:1 的 subject + 3 个按钮；
+          原写法 `strong` + `flexShrink: 0` 使它的自动最小尺寸等于整个标签名，与固定宽度的兄弟一起把行顶宽
+          （360px 内容盒约 313px，固定兄弟已占约 240px），`ellipsis` 因而不可能生效。
+          改用原语：`strong` 保留字重（Ruling P17(c)：为可截断加 `strong` 透传，不必牺牲原有呈现），
+          `flexShrink: 0` 去掉 —— 可被挤压正是截断生效的前提；`minWidth: 0` 由原语自带，故这里无需再写 style。 */}
+      <EllipsisText strong title={tag.name}>
         {tag.name}
-      </Typography.Text>
+      </EllipsisText>
       {/* 附注徽标：annotated=true 时展示（轻量标签不渲染） */}
       {tag.annotated ? <Tag color="gold">附注</Tag> : null}
       {tag.subject !== null ? (

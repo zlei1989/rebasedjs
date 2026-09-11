@@ -40,6 +40,7 @@ import type {
   PatchCreateBody,
   RepoStatus,
 } from '@rebased/contracts';
+import { EllipsisText } from '../base/ellipsis-text';
 import { PageShell } from '../base/page-shell';
 
 export interface StatusPageProps {
@@ -851,9 +852,16 @@ function PatchCard({
                     <Typography.Text code style={{ fontSize: 12 }}>
                       hunk {hunk.index + 1}
                     </Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+                    {/* hunk 头 `@@ -a,b +c,d @@ <定位串>` 的定位串是不可断行串（常常是整个函数签名），
+                        而本行是无 wrap 的横向 Flex；原 `Typography.Text` 既无 `flex: 1` 也无 `minWidth: 0`，
+                        其自动最小尺寸即整个签名宽度 —— `ellipsis` 形同虚设，行与页面都无法收缩
+                        （把外层两列的 `minWidth` 下限改 0 也因此收不到「360px 无横向滚动」的效果）。
+                        改用原语：自带 `minWidth: 0` 与 `ellipsis`，真正可被挤压、真正会截断；
+                        `title` 给完整定位串。原先的 `style={{ fontSize: 12 }}` 不再需要 —— 本页是紧凑密度页，
+                        `density.ts` 本就产出 12px（Ruling P4 的既有口径）。 */}
+                    <EllipsisText type="secondary" title={patchHunkHeading(hunk.header)}>
                       {patchHunkHeading(hunk.header)}
-                    </Typography.Text>
+                    </EllipsisText>
                   </Flex>
                 ),
                 children: (
