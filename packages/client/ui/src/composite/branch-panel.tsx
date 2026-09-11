@@ -78,13 +78,14 @@ function UpstreamInfo({ branch }: { branch: BranchRef }): React.ReactNode {
   // 上游名是**不可断行的 ref**（origin/<长分支名>）：原 `flexShrink: 0` 的次要色文本会把整个分支行顶宽，
   // 是不变量 ③ 点名的站点 → 换 EllipsisText（自带 minWidth:0 + ellipsis，可收缩并截断）。
   // 呈现口径：`type="secondary"` 转发保留次要色（Ruling P17 为 EllipsisText 补的 type），
-  // `mono` 按 Ruling P17 的「值是 hash/ref 用等宽」加在 ref 上，`title` 给完整值；
+  // `title` 给完整值；**不加 `mono`**：改前此处是裸 `Typography.Text`（无 `code`），
+  // 而 `mono` ⇒ antd `code` 会额外带上内联代码的底色与内距，属未获授权的视觉变更（Ruling P17(b)）。
   // 原 `fontSize: 12` 交紧凑密度（Ruling P4，与本批次其余站点同口径）；`flexShrink: 0` 去掉（可收缩正是目的）。
   const label = `${branch.upstream}${branch.ahead > 0 ? ` ↑${branch.ahead}` : ''}${
     branch.behind > 0 ? ` ↓${branch.behind}` : ''
   }`;
   return (
-    <EllipsisText type="secondary" mono title={label}>
+    <EllipsisText type="secondary" title={label}>
       {label}
     </EllipsisText>
   );

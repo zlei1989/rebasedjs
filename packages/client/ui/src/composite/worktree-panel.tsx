@@ -51,10 +51,11 @@ function WorktreeRow({
       </Typography.Text>
       {wt.branch !== null ? (
         // 分支名是不可断行的 ref（原 `flexShrink: 0` 的次要色文本会把行顶宽）→ EllipsisText 截断；
-        // 次要色由 `type="secondary"` 转发保留，`mono` 按 Ruling P17 的「值是 hash/ref 用等宽」，
-        // `title` 给完整分支名；`fontSize: 12` 交紧凑密度（Ruling P4），`flexShrink: 0` 去掉（可收缩正是目的）。
+        // 次要色由 `type="secondary"` 转发保留，`title` 给完整分支名；**不加 `mono`**：
+        // 改前此处是裸 `Typography.Text`（无 `code`），`mono` ⇒ `code` 会带上底色与内距（Ruling P17(b)）。
+        // `fontSize: 12` 交紧凑密度（Ruling P4），`flexShrink: 0` 去掉（可收缩正是目的）。
         // 位置不动：仍在 path 之后、「当前/分离」Tag 之前。
-        <EllipsisText type="secondary" mono title={wt.branch}>
+        <EllipsisText type="secondary" title={wt.branch}>
           {wt.branch}
         </EllipsisText>
       ) : null}

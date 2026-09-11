@@ -66,8 +66,9 @@ function SubmoduleRow({
       </EllipsisText>
       {entry.branch !== undefined ? (
         // 分支名是不可断行的 ref → 同口径转 EllipsisText；次要色转发保留，
-        // `mono` 按 Ruling P17 的 ref 口径，`title` 给完整分支名，`flexShrink: 0` 去掉（可收缩正是目的）。
-        <EllipsisText type="secondary" mono title={entry.branch}>
+        // `title` 给完整分支名，`flexShrink: 0` 去掉（可收缩正是目的）；**不加 `mono`**：
+        // 改前此处是裸 `Typography.Text`（无 `code`），`mono` ⇒ `code` 会带上底色与内距（Ruling P17(b)）。
+        <EllipsisText type="secondary" title={entry.branch}>
           {entry.branch}
         </EllipsisText>
       ) : null}
