@@ -384,8 +384,6 @@ export function RepoPage(): React.ReactNode {
         }
       });
   };
-  // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
-  if (!status) return null;
   // 容器态跨仓库复位（§2.5 createOpen 硬化）：仓库切换时清空选择/对话框/认证重试等容器持有的状态——
   // ui 层内嵌 Modal 已由 <LogPage key={repoId}> 重挂载复位，此处兜底容器自身状态（选中提交、push-up-to、打开对话框等）
   useEffect(() => {
@@ -400,7 +398,13 @@ export function RepoPage(): React.ReactNode {
     setAuthor('');
     setPath('');
     setLimit(50);
-  }, [repoId]);  // 分支对比视图（?compare=<branch>）：双 range 查询就绪前不渲染（compareA/B 为 null key 条件拉取）
+  }, [repoId]);
+  // 状态未就绪前不渲染主体（加载态壳层后续任务再补）。
+  // **必须放在上面这个 hook 之后**：本句是提前 return，若其上方还有 hook，首帧（status 未就绪）会少调一个 hook、
+  // 次帧 status 到达后又补上 → React「Rendered more hooks than during the previous render」直接崩页
+  // （web-koa 冷启动 `/repos/:id` 实测整页空白；web-next 同容器本就是 hook 在前、return 在后，此处对齐）。
+  if (!status) return null;
+  // 分支对比视图（?compare=<branch>）：双 range 查询就绪前不渲染（compareA/B 为 null key 条件拉取）
   if (compareBranch !== null) {
     if (compareA === undefined || compareB === undefined) return null;
     return (

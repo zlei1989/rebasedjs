@@ -128,8 +128,11 @@ function StashRow({
   onUnstashAs?: (stash: StashEntry) => void;
   onOpenDiff?: (stash: StashEntry) => void;
 }): React.ReactNode {
+  // wrap：本行是「标签 + 消息 + 日期 + 5 个操作按钮」的不换行横排，窄视口（360/480）下按钮组会顶穿
+  // 卡片把文档撑出横向滚动（T16 六档断言实测 scrollWidth 492 > clientWidth 360/480）。
+  // 加 wrap 只交出换行能力：宽视口一行放得下时视觉完全不变（同 Toolbar 的既有口径）。
   return (
-    <Flex data-testid={`row-stash-${stash.index}`} align="center" gap={8} style={{ padding: '4px 0' }}>
+    <Flex data-testid={`row-stash-${stash.index}`} align="center" gap={8} wrap style={{ padding: '4px 0' }}>
       <Tag>stash@{`{${stash.index}}`}</Tag>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {stash.message}

@@ -242,7 +242,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 
 | 层 | 组件 |
 |----|------|
-| base/ | `VirtualList`、`GraphCanvas`、`FileTree`、`MonacoDiffView`/`MonacoTextView`（`monaco-lazy` 懒加载 monaco-editor）、`EmptyState`、`OperationStatus` |
+| base/ | **布局原语：`PageShell`、`Toolbar`、`EllipsisText`、`SplitPane` + 密度模块 `density.ts`/`density-context.tsx`（口径见 §6）**、`VirtualList`、`GraphCanvas`、`FileTree`、`MonacoDiffView`/`MonacoTextView`（`monaco-lazy` 懒加载 monaco-editor）、`EmptyState`、`OperationStatus` |
 | domain/ | `CommitGraph`、`RepoStatusBar`、`CommitDetailsPanel`、`DiffViewer`（并排/行内 + staged/工作区切换 + 忽略空白开关）、`HunkDiffView`（PR/MR 行级 diff）、`DirectoryTree`、`CommittedStatus` |
 | composite/ | `RepoPage`、`LogPage`、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`BlameView`、`HistoryPanel`、`CommittedChangesPanel`、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BrowsePanel`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`SettingsPage` |
 | graph-layout/ | 自 vcs-log/graph 移植的布局算法（纯函数，不 import React；`fixtures/java/` 为 Java testData 转制的行为等价夹具） |
@@ -370,3 +370,77 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 | 两个下游应用路由重复 | 契约（schema/错误映射/SSE 序列化）集中放 contracts，apps 只留装配 |
 | GitHub/GitLab API 限流与鉴权复杂度 | `auth.ts` 集中 token 管理；`RATE_LIMITED` 统一错误 |
 | credential helper 依赖系统 git 配置 | 引擎层原样调用系统 git（helper 由 git 进程自身处理），`auth.ts` 只做兜底 HTTPS 认证 |
+
+---
+
+## 6. 布局与响应式
+
+> 终态口径（2026-09-11 全站流体布局重构收口）。记录**结论**而非过程：四个布局原语 + 密度模块的契约、横向沾满的实现机制、密度的生效与豁免、允许横向滚动的例外清单、以及可执行的验收方法。
+
+### 6.1 四个布局原语与密度模块
+
+| 原语 | 位置 | 契约 | 它取代了什么 |
+|------|------|------|--------------|
+| `PageShell` | `packages/client/ui/src/base/page-shell.tsx` | `density?: 'compact' \| 'default'`（默认 compact）、`padding?: number \| string`（不传不落 style）、`gap?: number`（不传不落 style）、`scroll?: 'page' \| 'inner' \| 'none'`（默认 page）、`children` | 每个页面各写一遍的根 `<Flex vertical …>`（落地：两个 app 各 20 个页面文件 + ui 层 11 个页面级 composite 使用 `PageShell`） |
+| `SplitPane` | `base/split-pane.tsx` | `side`、`children`（主区）、`sideWidth?: number`（默认 300）、`sidePosition?: 'start' \| 'end'`（browse 在左、log 在右）、`collapseBelow?: number`（默认 768）、`gap?: number`（不传不落 style） | 写死 `width:300/320 + flexShrink:0` 的侧栏（窄屏必然横向溢出的结构性成因） |
+| `Toolbar` | `base/toolbar.tsx` | `align?: 'start' \| 'center' \| 'end' \| 'between'`（映射**主轴** `justify`）、`gap?`、`wrap?: boolean`（默认 true）、`children`；容器带 `width:100%; minWidth:0` | 手写的 `flexWrap` 补丁（`flexWrap` 缺 `minWidth:0` 时子项仍会顶宽父级） |
+| `EllipsisText` | `base/ellipsis-text.tsx` | `children: string`、`title?`（存在则走 antd 原生 ellipsis tooltip）、`mono?`、`type?`、`strong?`、`maxWidth?: number \| string`；自身带 `minWidth: 0` | 不可断行的长 hash / 长路径 / 长分支名（它们把所在行顶宽，是溢出传播源） |
+| `compactTheme(mode)` + `DensityProvider` | `base/density.ts`、`base/density-context.tsx` | `compactTheme(mode: 'light' \| 'dark'): ThemeConfig`；`DensityProvider({ mode })` 只承载 `mode`，两个 app 各包一层（web-next 用 `useSettings().settings.theme`，web-koa 固定 `'dark'`） | 全站各页自行处理字号与明暗算法 |
+
+门禁不变式：**新原语不引入可交互元素**（`EllipsisText` 内部的 Tooltip 子树只有 `Typography.Text`），一个路由**只有一个** `PageShell` 拥有密度。
+
+### 6.2 「横向沾满」的实现机制
+
+页面根 = 纵向 Flex，`width:100%`、`minWidth:0`、`height:100%`，**刻意不设 `alignItems`**：
+
+1. `align-items` 的默认值（`normal` → 表现为 `stretch`）正是「子元素横向拉伸沾满」的来源。原先 44 处页面根写的是 `align="flex-start"`——在**纵向** Flex 上交叉轴是水平方向，它表示「子项不横向拉伸」，于是页面内容不沾满、且子项按内容宽溢出并把父级顶宽（意外横向滚动条）。**删掉它才是修好，加上它才是 bug**。
+2. `minWidth: 0` 阻止 flex 子项以「自动最小尺寸 = 内容宽」把父级顶宽；`scroll="inner"` 另需 `minHeight: 0`（纵向 Flex 的主轴是垂直方向，默认 `min-height: auto` 会让内容撑开容器而不产生内部滚动）。
+3. `padding` / `gap` 默认**不落 style**：既有页面的 16px 内边距由页面级 composite 自带，原语默认值一旦非 0，迁移会凭空新增间距并可能制造溢出。
+
+**`align="flex-start"` 的判定口径（极易误判）**：它只在**纵向** flex 容器上是宽度 bug；在**横向** flex 容器上交叉轴是垂直方向，它表示「子项顶部对齐」，**必须保留**（例如 `github-panel.tsx` / `gitlab-panel.tsx` 的「左列表卡 + 右详情卡」行、`branch-compare-view.tsx` 的内层横向容器）。全站迁移时逐处按容器方向判定，不是全局替换。
+
+**直接子项被拉伸的两面**：正因为根不设 `alignItems`，`Tooltip > Button type="link"` 这类**直接子项**会被拉成整行宽、文字居中（antd 按钮自带 `justify-content:center`）。这是原语的必然结果，不是原语缺陷：需要紧凑左对齐的调用点就地写 `style={{ alignSelf: 'flex-start' }}` 收回内容宽（两个 app 共 36 处，见 §6.5）；**不要去改 `PageShell` 的契约**（去掉「不设 alignItems」等于把 44 处宽度 bug 请回来）。
+
+### 6.3 密度口径
+
+```ts
+// density.ts：只给 fontSizeSM 一个种子，其余交给 compactAlgorithm 派生
+algorithm: [mode === 'light' ? theme.defaultAlgorithm : theme.darkAlgorithm, theme.compactAlgorithm]
+token: { fontSizeSM: 11 }   // 实效 fontSize / fontSizeSM / fontSizeLG = 12 / 11 / 14
+```
+
+- **为什么不能写 `fontSize`**：`compactAlgorithm` 会**覆盖**传入的 `fontSize`——它以基础算法派生出的 `fontSizeSM` 为新基准再推导整档字号。显式 `fontSize: 12` 会让基础算法先把 `fontSizeSM` 派生成 10，compact 再以 10 为基准 → **实效 fontSize = 10**（比目标 12 还小）。实测矩阵见 `density.ts` 文件头与 `density.test.ts` 的「实效 token」用例。
+- 间距与控件高度**交给 `compactAlgorithm`**，不重复手调 `padding*` / `controlHeight` 种子 token（会与算法叠加成过度压缩）；`lineHeight` 不动（缩小字号后行高比例已是流体的）。
+- **数值校准结论（T16 六档截图实测）**：12px 基准维持不变——它在 360 / 768 / 1440 三档、明暗两主题下均可读（`responsive-{360,768,1440}[-light]-{log,browse,status,console}.png`），且 12/11/14 正是 antd 自身 small 规格的量级。
+- **豁免**：设置页是唯一例外（`density="default"`，不包紧凑 `ConfigProvider`），实测同宽度下设置页 `fontSize` = 14 / 卡片标题 16，其余页面 = 12（`responsive-768-light-settings-fluid.png`）。
+
+**硬经验：嵌套 `ConfigProvider` 的 `algorithm` 是「替换」而不是「合并」。** 这正是 `compactTheme` 必须自带完整 `[baseAlgorithm, compactAlgorithm]` 数组的原因——`PageShell` 内层的 `ConfigProvider` 一旦只写 `theme.compactAlgorithm`，就会把外层 app 的明暗底色算法**整个换掉**（暗色主题下页面会变回亮色底，而且不会有任何报错）。若按「antd 会合并算法栈」的直觉去写，暗色模式会**静默**坏掉。
+
+### 6.4 允许横向滚动的例外清单
+
+页面级横向滚动必须为 0（§6.5）；**组件内部**的横向滚动是允许的，且只有两类：
+
+| 例外 | 位置 | 为什么必须允许 | 断言口径 |
+|------|------|----------------|----------|
+| Monaco 编辑器 | `MonacoDiffView` / `MonacoTextView` / `HunkDiffView`（`github-panel` / `gitlab-panel` 展开差异） | 代码行不换行是编辑器语义；长行必须靠编辑器自己的横向滚动条可达。编辑器宿主自身是裁剪容器（`scrollWidth == clientWidth`），溢出**不外泄**到文档 | 内容宽度（`.view-lines`）> 编辑器 `clientWidth`，宿主 `scrollWidth <= clientWidth + 1`，且拖动 Monaco 自己的横向滚动条滑块后内容真的位移 |
+| 长文本块 | `browse-panel` 的内容 `<pre>`、console / patch 预览等等宽文本块 | 等宽原文不折行，属于内容语义 | 这些块自身带 `overflow: auto`，滚动发生在块内 |
+
+**不允许**的横向滚动：任何页面级横向滚动条（= 上述断言失败），以及「长 hash / 长路径 / 长分支名」把所在行顶宽——后者用 `EllipsisText`（截断 + 溢出时 tooltip）收口，不是滚动。
+
+### 6.5 验收方法（可执行）
+
+`scripts/check-fluid-layout.mjs`（Playwright 驱动，`pnpm dev` 起真实服务后运行）：
+
+```bash
+node scripts/check-fluid-layout.mjs                              # web-next(:3030) 六档 × 明暗
+node scripts/check-fluid-layout.mjs --app=koa --themes=dark       # web-koa SPA(:5173) 六档 × 暗色
+node scripts/check-fluid-layout.mjs --shots-only --widths=360,768,1440
+```
+
+- **核心断言**：六档宽度 `360 / 480 / 768 / 1024 / 1440 / 1920` × 明暗两主题 × 每个路由与状态，逐格断言
+  `document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1`（+1 容亚像素）。
+- **覆盖**：两个 app 的全部 24 个页面（`/` 首页 + `/repos/:id` 日志页 + 22 个子页），另加静态加载不产生的状态：`?select=`（选中提交）、`?compare=`（分支对比）、GitHub/GitLab 面板**展开「查看差异」**（`hunk-diff-view`）、认证弹窗、重置弹窗、`EllipsisText` 悬停浮层。
+- **例外断言**（反向断言，防止后续把例外当缺陷改掉）：① `SplitPane` 在 `collapseBelow` 以上左右并排、以下纵向堆叠且各占满宽度（阈值从 `split-pane.tsx` 源码读取，不抄常量）；② Monaco 内部横向滚动可达而页面级仍为 0。
+- **`collapseBelow` 校准结论：维持 768**。实测 768px 下 browse 为「侧栏 300 + 主区 424」，可用；但日志页在同一阈值下主区只有 448px，提交信息已被截断到约 10 个字符。试降为 640 后实测（`collapsebelow-experiment-640-*.png`）日志页主区只剩 320px（比它旁边 320px 的详情栏还窄），提交信息与日期列被压到「ch…」「2026-09-11 …」，明显劣于堆叠，故不采用 640。
+- **主题切换**：主题是服务端持久化设置（`PUT /api/settings`），脚本先读原值、跑完恢复；每格测量前等到 `data-theme`/底色真的落到文档（避免量到首帧的暗色兜底）。
+

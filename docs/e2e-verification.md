@@ -1,4 +1,4 @@
-﻿# Rebased.js E2E 冒烟测试参照（MCP 模拟人工操作）
+# Rebased.js E2E 冒烟测试参照（MCP 模拟人工操作）
 
 - **日期**：2026-09-10（功能矩阵定稿；执行结果按轮次回填，R1 已回填）
 - **文档定位**：冒烟测试**参照文档**——先定义功能矩阵，执行后逐行回填结果，不得在本文件外另行扩展口径
@@ -540,6 +540,7 @@
 | R19 | 2026-09-11 | F-147~F-148（QuickActions 等效聚合 2 行：顶栏分支入口、顶栏+更多菜单+操作条聚合） | ✅ 2（QuickActions 2/2 收官） | 本轮无新缺陷；菜单项数随宿主检测（16/17 项，18 为含两种托管面板的上限）已在行内说明 |
 | R20 | 2026-09-11 | F-149~F-155（SettingsPage 7 行：应用设置读写 / git 配置 9 键 / 账户令牌 / config-store 重启持久化 / git 可执行文件 / GPG 配置 / 保护分支与联动拦截） | ✅ 7（SettingsPage 7/7 收官） | 本轮无新缺陷；F-152 真杀进程重启后复查，F-155 用「已推送提交 Reword」实测联动拦截 |
 | R21 | 2026-09-11 | F-156~F-159（BrowsePanel 4 行：文件树 / 只读查看与二进制 / 降级边界 / 入口与回边） | ✅ 4（BrowsePanel 4/4 收官） | 本轮无新缺陷；树与内容均与 `ls-tree -r` / `show <rev>:<file>` 互证，越界与绝对路径均被 `INVALID_QUERY` 拦下 |
+| R22 | 2026-09-11 | **全站流体布局与密度几何验收**（非 F-xx 功能行）：六档宽度 × 明暗 × 24 路由 + 6 个状态（含 GitHub/GitLab 展开差异、认证/重置弹窗、EllipsisText 浮层）+ 两条例外断言；web-koa 对等抽查 | ✅ 576/576 格（web-next 384 + web-koa 192） | 修复前基线 375/384：`stashes` 行在 360/480 顶宽（`scrollWidth 492 > clientWidth 360/480`）→ 该行加 `wrap`；另 4 格为断言测量竞态（已修断言）。见 §5.16 |
 
 **收官复核（R21 末）**
 
@@ -548,6 +549,80 @@
 - **截图账目**：`docs/shots/` 共 183 张，文档引用 175 个文件名**全部存在**；跨文件 SHA256 无重复；无未被引用的孤儿截图。
 
 **全量收官（R21 末）**：159 行 F-001~F-159 = ✅ 150 / 跳过 9（F-136~F-139、F-141~F-144 共 8 行缺真实托管仓库与 PAT；F-056 的 gpg 分支）；31 个页面全部走到收官状态。缺陷累计 D-01~D-34（全部修复并复验）+ 环境说明 E-01。
+
+### 5.16 R22 全站流体布局与密度六档验收（Task 16，2026-09-11）
+
+> 本轮不按 F-xx 功能行冒烟，而是对「全站流体布局与密度统一」重构做**几何验收**：六档宽度 × 明暗两主题 × 每个页面与状态，逐格断言页面级横向溢出为 0。入口：`scripts/check-fluid-layout.mjs`（Playwright 驱动，先 `pnpm dev` 起真实服务）。
+> 被测端：web-next `http://localhost:3030`（六档 × 明暗）、web-koa `http://localhost:5173`（其 SPA 固定暗色，故只跑暗色）；夹具：既有主冒烟仓 `rebased-smoke`（id `18726c5c-f4b2-499d-ac82-6eac8f46ec26`），**未**重建夹具。
+
+#### ① 范围清单（逐项 ✅/❌/跳过+理由）
+
+**核心断言**：`document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1`（+1 容亚像素）。
+
+| 覆盖项 | 档位 | 结果 |
+|--------|------|------|
+| 24 个页面：`/` 首页、`/repos/:id` 日志页、browse·blame·branches·committed·history·search·merge·remotes·conflicts·diff·settings·stashes·status·tags·patches·shelves·console·ignore·github·gitlab·worktrees·submodules | 360 / 480 / 768 / 1024 / 1440 / 1920 × 暗 + 明 | ✅ 384/384 格 |
+| 静态加载不产生的日志页状态：`?select=`（选中提交）、`?compare=`（分支对比） | 同上 | ✅ |
+| `/github`、`/gitlab` 两面板**展开「查看差异」**（渲染共享 `hunk-diff-view`，无别的路由覆盖它） | 同上 | ✅ |
+| 认证弹窗（推送被服务端 401 AUTH_FAILED → 容器开 AuthDialog） | 同上 | ✅ |
+| 重置弹窗（选中提交 → 「Reset 当前分支到此处」→ ResetDialog） | 同上 | ✅ |
+| `EllipsisText` 悬停浮层（溢出必弹 + 内容=完整值；两个站点各测，正反两半都被实测到） | 同上 | ✅ |
+| 例外①：browse / log 两栏在 `collapseBelow` 以下纵向堆叠且各占满宽度、以上左右并排 | 同上（双向断言） | ✅ |
+| 例外②：Monaco 内容宽于编辑器和宿主不溢出 + 拖动其横向滚动条内容真位移 + 页面级仍为 0 | 同上 | ✅ |
+| web-koa 对等抽查（全部 24 路由 + 6 个状态，暗色） | 360 / 480 / 768 / 1024 / 1440 / 1920 | ✅ 192/192 格 |
+| **跳过**：conflicts 页的「冲突行」状态 | — | 跳过：需仓库停在冲突态；本轮不动共享夹具（用户可能正在使用），空态已断言。后续用 `rebased-smoke-conflict` 现造冲突态补测 |
+| **跳过**：Monaco 在 1440/1920 档的「内部横向滚动」 | — | 非跳过而是否定式通过：该两档长行放得下（内容 889px ≤ 编辑器 937px），断言按分支记 pass（本档无需内部滚动） |
+
+#### ② 操作路径（点击/输入序列）
+
+1. `pnpm dev`（web-next :3030 / web-koa API :3031）+ `pnpm --filter @rebased/web-koa dev:web`（SPA :5173）；三个端口启动前均为空闲，无需 kill。
+2. 断言脚本自动驱动：`PUT /api/settings {theme}` 切主题（跑完还原）→ 逐格 `goto(<路由>)` → 等该路由的 `data-testid` 就绪 → 等布局静止（滚动量/高度/节点数连续两次采样一致）→ 读 `scrollWidth`/`clientWidth`。
+3. 状态格的真实点击序列：
+   - **GitHub 展开差异**：`goto /repos/:id/github` → 点 PR 行 `[data-testid="github-pr-row-7"]` → 点 Tab「文件」→ 点「查看差异」`[data-testid="github-diff-toggle-0"]` → 等 `hunk-diff-block-0`（GitLab 同序列，iid=9）。
+   - **认证弹窗**：`goto /repos/:id` → 顶栏「更多」→ 菜单「推送」→ 弹窗「确定」→（`POST …/push` 被脚本打桩成 401 AUTH_FAILED）→ 出现「需要认证」弹窗。
+   - **重置弹窗**：`goto /repos/:id?select=<最长 subject 的提交>` → 提交详情面板点「Reset 当前分支到此处」（`[data-testid="reset-here"]`）→ 出现「重置到」弹窗。
+   - **EllipsisText 浮层**：同上开弹窗后，hover 弹窗内溢出量最大的 `span.ant-typography-ellipsis`（`scrollIntoViewIfNeeded` 后 hover），读 `ant-tooltip-open` 与浮层文本。
+   - **Monaco**：`goto /repos/:id/diff?file=src/app.ts&from=<prev>&to=<head>` → 拖动该编辑器**自己的**横向滚动条滑块（`.scrollbar.horizontal .slider`）+120px → 读 `.view-lines` 的 x 位移。
+4. 打桩说明：GitHub/GitLab 面板需真实令牌（本机没有），脚本只打桩**宿主 API 数据**（status/prs/detail/timeline/files/review-comments），布局断言落到的仍是真实组件与真实 DOM；推送接口打桩为 401，**没有真的 push，夹具仓库未被改动**。
+
+#### ③ 证据（浏览器状态 + CLI 输出互证）
+
+**几何断言**（脚本输出，逐格 `scrollWidth`/`clientWidth`）：
+
+- web-next：`384/384 格通过`，全部格 `scrollWidth == clientWidth`（360/480/768/1024/1440/1920 逐一相符），无任何 `>` 情形。
+- web-koa：`192/192 格通过`（同上，仅暗色）。
+- **修复前基线（同一脚本，改动前）**：`375/384`，9 格红——`stashes` 在 360/480 两档两主题 `scrollWidth 492 > clientWidth 360/480`（越界元素 = 该行 5 个操作按钮的 `<span>`/`<button>`），另有 4 格是**断言脚本自身的测量竞态**（主题首帧兜底、Monaco 拖动时滑块在视口外、EllipsisText 悬停目标不可见），已逐条修断言而非改产品。
+- **例外①实测**（browse）：360 → side/main 各占满容器（328/328，纵向堆叠）；768 → side 300 / main 424（左右并排）；1440 → side 300 / main 1096。log 页（侧栏在右）：768 → main 448 / side 320。
+- **例外②实测**（diff @360，文件 `src/app.ts` 含 115 字符长行）：Monaco 内容（`.view-lines`）694px > 编辑器 276px，编辑器宿主自身 `scrollWidth 276 == clientWidth 276`（不溢出），拖动横向滚动条后内容左移 195px，同时 `documentElement.scrollWidth 360 == clientWidth 360`。
+- **EllipsisText 浮层实测**：重置弹窗内 `短哈希 + 提交信息` 溢出（438 > 423）→ 悬停弹出浮层且文本 = 完整值 `1ccdf5b docs(smoke): sign-off 提交冒烟（F-055 amend 到历史提交后）`；submodules 页 URL 在 480 档溢出（107 > 81）同样弹出，在 1440 档不溢出（196 ≤ 220）则**不弹**（antd 以真实溢出为准）。
+
+**浏览器 ↔ CLI 互证**（页面数字与仓库事实一致；CLI 在 `D:\zhanglei1120\Github\rebased-smoke`）：
+
+| 页面 | 页面显示 | CLI 复核 |
+|------|----------|----------|
+| 日志页 `/repos/:id` | 分支 `sub-b`；提交行 23 行 | `git branch --show-current` = `sub-b`；`git log --oneline \| wc -l` = 23 |
+| 贮藏页 | 贮藏列表（2）；`stash@{0} On master: smoke-f084-unstash-as`、`stash@{1} …smoke-f085-diff` | `git stash list` 同样 2 条、文本逐字一致 |
+| 子模块页 | 子模块（2）：`vendor/sub-module` **提交漂移** `8a740f7` → `smoke-sub`；`vendor/dir.with.dots` **已检出** → `smoke-sub2` | `git submodule status`：`+8a740f7… vendor/sub-module`（`+` = 检出提交与索引不一致 → 页面「提交漂移」）、` 1a70317… vendor/dir.with.dots`（无 `+` → 「已检出」） |
+| 工作树页 | 工作树（2）：`rebased-smoke [sub-b] 4f27441 当前`、`rebased-smoke-wt [wt-branch] 79e9129` | `git worktree list` 两行路径/分支/短哈希逐字一致 |
+| 标签页 | 标签列表（2）：`v1.0`、`v9.9.9-smoke`（附注） | `git tag` = `v1.0`、`v9.9.9-smoke` |
+| 远程页 | 远程列表（1）：`origin → D:\zhanglei1120\Github\smoke-remote` | `git remote -v` 同 URL |
+| 状态页 | 工作区（2）= `.gitignore (M)`、`vendor/sub-module (M)`；未跟踪（5） | `git status --porcelain`：`^ M` = 2 条；`^??` = 5 条（crlf.txt / scratch/ / stash-untracked-probe.txt / vendor/conflict-sub/ / vendor/ok-sub/） |
+| 分支页 | 本地行 10、远程行 8、`清理已合并（3）` | `git branch` = 10、`git branch -r` = 8、`git branch --merged HEAD` = 5 → 减去当前分支 `sub-b` 与 worktree 占用的 `wt-branch` 恰为 3（D-20 的排除逻辑） |
+
+#### 缺陷登记（本轮新增，均已修复 + 复验）
+
+| 编号 | 现象 | 根因 | 修复 | 复验 |
+|------|------|------|------|------|
+| D-35 | **web-koa 冷启动 `/repos/:id` 整页空白**（`document.body.innerText` 为空、无任何 `data-testid`），React 控制台报「Rendered more hooks than during the previous render」；web-next 同页正常。该缺陷让本轮 6 个 koa 断言格（日志页及其派生的 `?select=`/`?compare=`/三处弹窗状态）无法渲染 | `apps/web-koa/src/pages/repo.tsx` 里「跨仓库复位」`useEffect` 被放在 `if (!status) return null;` **之后**：首帧 `status` 未就绪走提前 return（少调一个 hook），次帧 status 到达后补上该 hook → hook 数不等即崩。文件内注释本就写着「必须注册在下方任何提前 return 之前」，说明是位置被写反了；web-next 的同构容器是 hook 在前、return 在后 | 把 `if (!status) return null;` 移到该 `useEffect` **之后**（与 web-next 容器对齐），并就地补注释说明为何不能再挪回去。该 hook 的复位值与首帧初值逐一相同（`select ?? null` / `null` / `false` / `''` / `50`），故首帧多跑一次无行为变化 | 复跑 koa 六档全量：`192/192` 通过，日志页与三处弹窗状态均正常渲染；web-next 侧六档日志页本就通过（`384/384`） |
+| D-36 | 贮藏页在 360/480 两档、明暗两主题下出现**页面级横向滚动**：实测 `scrollWidth 492 > clientWidth 360 / 480`，越界元素是该行 5 个操作按钮（`Unstash As…` / `查看差异` / `删除` 等） | `stash-panel.tsx` 的行是「Tag + 消息(flex:1) + 日期 + 5 个按钮」的**不换行**横排：按钮组不可收缩，窄视口下整行内容超出卡片宽度并外泄为文档级横向滚动 | 行容器 `Flex` 加 `wrap`（只交出换行能力，宽视口一行放得下时视觉不变，与 `Toolbar` 同一口径） | 复跑六档 × 明暗：`stashes` 六档全部 `scrollWidth == clientWidth`（360/480 由 492 降为 360/480）；`wrap` 只在放不下时生效，故 768 及以上各档（修复前本就通过）行为不变 |
+| D-37 | **视觉回归**（重构引入）：`Tooltip > Button type="link"` 作为 `PageShell` 直接子项时被拉伸到**整行宽**、文字居中（实测 1440 档按钮宽 1440px、`justify-content:center`），悬停/下划线区域横贯整行；原先是紧凑的左对齐链接 | `PageShell` 刻意不设 `alignItems`（这正是「横向沾满」的修法），纵向 Flex 的交叉轴是水平方向，未显式声明 `alignSelf` 的子项即被拉伸 | 在两个 app 共 **36 处**调用点就地写 `style={{ alignSelf: 'flex-start' }}`（web-next 18 + web-koa 18，两侧对称；github/gitlab 页里那两对按钮在 `<Flex gap={8}>` 内，不受影响、保持原样），**不改 `PageShell` 契约** | 截图 `link-stretch-1440-console-before.png`（拉伸态、文字居中）↔ `responsive-1440-console.png`（修复后紧凑左对齐），并复跑全量断言确认无横向溢出 |
+
+#### ④ 未覆盖项与后续计划
+- **conflicts 页的冲突行态**未覆盖（本轮只断言了「无冲突」空态），理由见 ①；后续在 `rebased-smoke-conflict` 上现造 merge/rebase 冲突后补一轮。
+- **GitHub/GitLab 的真实远端数据**未覆盖（无 PAT）：本轮只覆盖「展开差异」这一最易溢出的渲染形态；真实 PR/MR 列表、时间线、行级评论的几何未测，与 R17 的跳过项同源。
+- **Monaco 在 1440/1920 档不产生内部横向滚动**（长行放得下）——这是正确行为而非缺口，若后续引入更长行，该档断言会自动转为「内部滚动」分支。
+- **交互态宽度**（抽屉/下拉/气泡在窄屏的边缘贴合）不在本轮口径内；本轮口径只有页面级横向溢出 + 两条例外。
+- 后续回归入口：`node scripts/check-fluid-layout.mjs --app=koa --themes=dark`（约 12 分钟）与不带参数的全量（约 25 分钟）；两者任一红即视为布局回归。
 
 ### 5.15 R17 缺陷登记（已修复 + 复验）
 

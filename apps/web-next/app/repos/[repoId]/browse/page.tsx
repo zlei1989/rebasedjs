@@ -47,8 +47,9 @@ export default function Page({
     <PageShell gap={8}>
       {/* 返回日志页 */}
       {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
+      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
       <Tooltip title="返回该仓库的提交日志页">
-        <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
+        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
           返回日志
         </Button>
       </Tooltip>
