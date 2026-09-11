@@ -83,7 +83,6 @@ function ConfigRow({
         <span>
           <Button
             data-testid={`config-save-${entry.key}`}
-            size="small"
             disabled={!dirty}
             onClick={() => onSetConfig(entry.key, value)}
           >
@@ -122,7 +121,7 @@ function AccountRow({
       >
         {/* Tooltip 放最内层（Popconfirm > Tooltip > Button）：保持 Popconfirm 的触发链完整 */}
         <Tooltip title="删除该账户保存的本地凭据：只清本机记录，不影响远端服务器上的账号">
-          <Button size="small" danger data-testid={`delete-account-${entry.host}-${entry.account}`}>
+          <Button danger data-testid={`delete-account-${entry.host}-${entry.account}`}>
             删除
           </Button>
         </Tooltip>
@@ -344,7 +343,6 @@ function ProtectedBranchCard({
           >
             <span>
               <Button
-                size="small"
                 data-testid="protected-patterns-save"
                 disabled={!dirty || invalid !== undefined}
                 onClick={() => onSave(lines)}
@@ -460,7 +458,7 @@ export function SettingsPage({
           data-testid="gpg-card"
           extra={
             <Tooltip title="打开 GPG 签名配置弹窗：开关提交签名并选择签名密钥">
-              <Button size="small" data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
+              <Button data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
                 配置…
               </Button>
             </Tooltip>
@@ -494,7 +492,7 @@ export function SettingsPage({
           title="账户"
           extra={
             <Tooltip title="打开添加账户弹窗：填写主机、账户名与访问令牌后保存到本地凭据">
-              <Button size="small" type="primary" data-testid="add-account-button" onClick={() => setAddOpen(true)}>
+              <Button type="primary" data-testid="add-account-button" onClick={() => setAddOpen(true)}>
                 添加账户
               </Button>
             </Tooltip>
