@@ -10,6 +10,9 @@
  *     大仓会把 DOM 撑到几万节点）；viewBox = 本行带 × 本行图列宽度，不做「按行裁切拼接」；
  *   - 本行图列宽度 = 本行带内所有线条与本行圆点的 x 上界（`RowGeometry.maxX`）→
  *     跨到更右 lane 的斜线不会再被裁断（旧口径按「本行圆点所在 lane」定宽，实测断线 8px / 66px）；
+ *   - **车道号先经显示层压实**（graph-layout/lane-compaction）：Java 车道是 fragment 发现顺序、永不复用，
+ *     侧支因此常被放到靠右的列、中间留空列；压实后「同时并存的线」连续编号，缩进深度才等于结构深度
+ *     （主仓实测最大缩进 3 档 → 1 档；车道本就稠密的仓库是恒等变换）。颜色/parity 仍走 Java lane。
  *   - 说明文字的缩进 = 本行图列预留的 lane 列数 × LANE_WIDTH，**随线条缩进**
  *     （线条画到更右的车道，本行文字就跟着让位；没画到右边的行，缩进与旧口径逐像素一致）。
  *
@@ -23,7 +26,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ConfigProvider, Flex, Listy, Tag, theme, Typography } from 'antd';
 import type { ThemeConfig } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
-import { buildLayout, type LayoutCommit } from '../graph-layout';
+import { buildLayout, compactLanes, type LayoutCommit } from '../graph-layout';
 import { colorForRef } from '../graph-layout/color';
 import { GraphCanvas, laneCenterX } from '../base/graph-canvas';
 import { buildRowGeometry, laneCoveringX } from './commit-graph-segments';
@@ -190,7 +193,7 @@ export function CommitGraph({
     () => commits.map((c) => ({ hash: c.hash, parents: c.parents, refs: c.refs })),
     [commits],
   );
-  const rows = useMemo(() => buildLayout(layoutCommits), [layoutCommits]);
+  const rows = useMemo(() => compactLanes(buildLayout(layoutCommits)), [layoutCommits]);
   // 每行要画的线段切片 + 本行图列必须覆盖的 x 上界（跨行长边由编译层按行边界切分，
   // 见 domain/commit-graph-segments：旧实现按「本行圆点所在 lane」定宽，跨 lane 的斜线会被视口裁断）
   const rowGeometry = useMemo(() => buildRowGeometry(rows, ROW_HEIGHT, LANE_WIDTH), [rows]);

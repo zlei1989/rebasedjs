@@ -352,4 +352,29 @@ describe('CommitGraph', () => {
     // 旧实现下每行都会画全图所有切片（行数 × 全图切片数），这里按行求和不会超过全图切片数
     expect(allShapes.length).toBeLessThanOrEqual(mergeCommits.length * 6);
   });
+
+  /**
+   * 显示车道压实（graph-layout/lane-compaction）必须挂在渲染链路上：
+   * Java 车道按 fragment 发现顺序发号且永不复用，侧支因此常被放到靠右的列（本 fixture 里是车道 2），
+   * 压实后应回到「并存线数 − 1」档 —— 主仓 rebased-smoke 的最大缩进由此从 3 档降到 1 档。
+   */
+  it('稀疏车道被压实到结构深度：全表列宽不超过 1 档（不出现 74px/92px 的空档行）', () => {
+    /** 复刻主仓形态：两条侧支时间上错开（s1 跨度 [2,2]、s2 跨度 [6,7]），Java 侧支车道分别是 2 与 1 */
+    const sparseLaneCommits: CommitInfo[] = [
+      makeCommit({ hash: 'm1', parents: ['p1', 's1'], message: '合并侧支' }),
+      makeCommit({ hash: 'p1', parents: ['p2'] }),
+      makeCommit({ hash: 's1', parents: ['p2'], message: '侧支一' }),
+      makeCommit({ hash: 'p2', parents: ['p3'] }),
+      makeCommit({ hash: 'p3', parents: ['p4', 's2'], message: '合并第二条侧支' }),
+      makeCommit({ hash: 'p4', parents: ['p5'] }),
+      makeCommit({ hash: 'p5', parents: ['p6'] }),
+      makeCommit({ hash: 's2', parents: ['p6'], message: '侧支二' }),
+      makeCommit({ hash: 'p6', parents: [] }),
+    ];
+    render(<CommitGraph commits={sparseLaneCommits} />);
+    const rows = screen.getAllByTestId('commit-graph-row');
+    const widths = rows.map((row) => within(row).getByTestId('commit-graph-lane').style.width);
+    // 未压实：s1 所在行的圆点在车道 2 → 74px；压实后至多 1 档 → 38px / 56px
+    expect([...new Set(widths)].sort()).toEqual(['38px', '56px']);
+  });
 });

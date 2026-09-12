@@ -2,3 +2,5 @@
 export * from './types';
 export * from './build-layout';
 export * from './rows-mapping';
+/** 渲染层补充（非 Java 移植）：把稀疏的 Java 车道压成稠密显示车道，见 lane-compaction 文件头 */
+export * from './lane-compaction';
