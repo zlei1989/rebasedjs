@@ -24,7 +24,7 @@
 | 键盘 | `browser_press_key` | Enter / Esc 等 |
 | 等待 | `browser_wait_for` | 等文案出现/消失（SSE 实时更新行必等，不可仅 sleep） |
 | 断言 / 读状态 | `browser_evaluate` | 校验 DOM 文本、行数、class 等 |
-| 截图 | `browser_take_screenshot` | `filename` 直接落到 `docs/shots/<页面slug>-<NN>.png` |
+| 截图 | `browser_take_screenshot` | **注意落盘根**：Playwright MCP 的 `filename` 只允许写在它的输出根内（本机为 `D:\zhanglei1120\Github\deepseek-harness\.playwright-mcp\`），传 `docs/shots/<名>.png` 或绝对路径会被拒（`File access denied: … outside allowed roots`）。可用的两步法：① `filename` 传 `.playwright-mcp/shots/<页面slug>-<NN>.png`；② 收尾用 pwsh 复制进仓：`Copy-Item 'D:\zhanglei1120\Github\deepseek-harness\.playwright-mcp\shots\<名>.png' 'D:\zhanglei1120\Github\rebasedjs\docs\shots\' -Force`（R23 起每完成一节即复制，避免中途中断丢进度） |
 | 控制台 / 网络核证 | `browser_console_messages` / `browser_network_requests` | 报错与 API 载荷核证 |
 | CLI 互证 | pwsh → `git -C <冒烟仓> status/log/branch/stash/tag/worktree/remote` | 页面展示与仓库事实互证 |
 
@@ -34,6 +34,10 @@
 - **❌**：任一不满足——记根因与复现路径到 §五 执行记录（缺陷登记）
 - **跳过 + 理由**：环境不具备（外部依赖：GitHub/GitLab 真实远端+令牌、gpg、Windows CRLF 等），必须在结果列写理由
 - **每行一张最终正确效果图**：截图时机 = 该行全部操作步骤完成后的最终状态；过程态用 `<NN>b.png` 附加
+- **过程图配额**：每行**最多 1 张** `<NN>b.png` 过程图；多产出的 `<NN>c`/`<NN>d` 默认不计入引用账目、收尾时删除——**除非**行内显式把它引用为「补证过程图」（R23 实例：`search-01c.png` 作为 pickaxe 单条结果的补证被引用保留，同批多产的 `shelf-02c/-02d` 则在收尾删除）
+- **toast / Popconfirm 类证据的时序**（R23 实测口径）：antd toast 约 3 秒消失，故「动作 → 截图」之间不要插入多余调用（别在中间再跑一次断言或 hover），否则会拍到已经消失提示的空画面；Popup/Modal 类不消失，可从容取证
+- **同一行内工具提示会压住按钮**（如行内「移除」的 Tooltip 盖住 Popconfirm 的「确定」）：点击前先把指针移到空白处（`hover body`）令 Tooltip 消失，再做点击
+- **截图不得重复**：收尾用 `Get-FileHash` 全量自检，跨文件 SHA256 必须各不相同——两行的天然同画面（如同为默认列表页）必须换一个有意义的状态（换选中行 / 展开态 / hover 态 / 应用了某开关后的态）
 
 ### 1.3 冒烟仓构造与复位（一次性准备，每轮冒烟前复位）
 
@@ -48,6 +52,8 @@
 
 **复位**：写操作行有副作用（提交/变基/合并/检出/删除等）。执行顺序按矩阵编号（先读后写）；每轮冒烟开始前用 CLI 复位主仓（`git reset --hard origin/master` + 清 stash/tag/worktree/子模块，或整体重建脚本）。冲突仓每次重新构造。
 
+> **R23 起**：`scripts/smoke-setup.ps1` 已扩写为一键产出「§1.3 基线 + 扩展夹具」（分叉分支 `diverge-test`、大仓 `hunks.txt` 双 hunk 与 `big.txt` 常驻大 diff、冲突仓四路冲突干净态），详见 §5.17；脚本为 UTF-8 **带 BOM**，编辑后务必保留。
+
 ### 1.4 执行流程（单轮冒烟）
 
 1. `pnpm dev` 起服务（web-next :3030 / web-koa :3031），浏览器打开 `http://localhost:3030/`；
@@ -60,17 +66,17 @@
 
 ## 二、功能矩阵总览（31 页面）
 
-> 行数 = 测试行（含跳过候补）；排除行见 §三。所有状态初始为「待测」。
+> 行数 = 测试行（含跳过候补）；排除行见 §三。**状态列 = 最近一轮（R23，2026-09-12 起全量重跑）的实测结果**：未重跑到的页面仍保留 R1~R22 的收官状态，重跑完成后逐页改写。
 
 | # | 页面 | 阶段 | 路由/承载 | 模拟入口（一步到达） | 测试行 | 截图前缀 | 状态 |
 |---|------|------|-----------|----------------------|--------|----------|------|
 | 1 | RepoPage | P1 | `/` | 浏览器打开 :3030 首页 | F-001~F-008（8） | repo-page | ✅ 8/8 |
-| 2 | LogPage | P1 | `/repos/:id` | RepoPage 打开冒烟仓 | F-009~F-028（20） | log-page | ✅ 20/20 |
+| 2 | LogPage | P1 | `/repos/:id` | RepoPage 打开冒烟仓 | F-009~F-028（20） | log-page | ⚠️ 19/20（F-020 ❌ 见 D-39） |
 | 3 | DiffPage | P1 | `/repos/:id/diff` | StatusPage 双击变更文件 | F-029~F-038（10） | diff-page | ✅ 10/10 |
 | 4 | StatusPage | P2 | `/repos/:id/status` | 顶栏「状态」 | F-039~F-051（13） | status-page | ✅ 13/13 |
 | 5 | CommitDialog（等效内嵌提交框） | P2 | StatusPage 内 | StatusPage 提交框 | F-052~F-058（7） | commit | ✅ 7/7（F-056 的 gpg 分支跳过） |
 | 6 | ResetDialog（内嵌模态） | P2 | LogPage 内 | 详情面板「Reset 到此处」 | F-059~F-061（3） | reset | ✅ 3/3 |
-| 7 | BranchPanel | P2 | `/repos/:id/branches` | 顶栏「分支」 | F-062~F-072（11） | branch | ✅ 11/11 |
+| 7 | BranchPanel | P2 | `/repos/:id/branches` | 顶栏「分支」 | F-062~F-072（11） | branch | ⚠️ 10/11（F-066 ❌ 见 D-40） |
 | 8 | MergeDialog（页面化） | P2 | `/repos/:id/merge` | 顶栏「合并」 | F-073~F-075（3） | merge | ✅ 3/3 |
 | 9 | RebaseDialog（内嵌模态） | P3 | LogPage 内 | 更多「变基」 | F-076~F-080（5） | rebase | ✅ 5/5 |
 | 10 | StashPanel | P2 | `/repos/:id/stashes` | 顶栏「贮藏」 | F-081~F-085（5） | stash | ✅ 5/5 |
@@ -130,14 +136,14 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-001 | 打开路径表单（校验→验证→注册→跳日志页） | 输入非 git 目录路径 → 点「打开」→ 观察 toast；再输入 `D:\zhanglei1120\Github\rebased-smoke` → 「打开」 | 坏路径 → 红 toast「不是 git 仓库：…」；好路径 → 跳 `/repos/:id` 日志页 | ✅ | repo-page-01.png（坏路径 toast）、repo-page-01b.png（成功跳日志页） |
-| F-002 | 最近列表（打开即注册/同路径复用/最近优先） | 首页看列表 → 移除冒烟仓 → 重新打开 → 回首页 → 再次打开同路径 | 列表出现冒烟仓且置顶；同路径再次打开不新增重复行（id 复用）（CLI） | ✅ | repo-page-02.png |
-| F-003 | 显示名（定案单级） | 注册时观察列表项显示名 | 显示名为目录名 `rebased-smoke`（单级，非三级回退） | ✅ | repo-page-03.png |
-| F-004 | 路径副文本 `~/` 相对化 | 观察列表项副文本 | 副文本显示 `~/Github/rebased-smoke`（homeDir 注入） | ✅ | repo-page-04.png |
-| F-005 | 列表上限 50 | 列表正常渲染；上限逻辑引服务端 `RECENT_LIMIT=50` 单测证据（不构造 50+ 仓） | 列表渲染正常、无报错；上限口径 = 50 | ✅ | repo-page-05.png |
-| F-006 | 移除动作 + Popconfirm | 行内移除按钮 → Popconfirm 确认 | 行从列表消失、无报错；再次打开可重新注册（CLI） | ✅ | repo-page-06.png |
-| F-007 | 克隆对话框（URL + Directory） | 「克隆」→ Modal → 输入裸仓路径作 URL + 目标目录 → 克隆 | Modal 字段最小集；成功 → 列表新增该仓 + 跳日志页（CLI 目标目录为 git 仓） | ✅ | repo-page-07.png（modal 填写过程图 repo-page-07b.png） |
-| F-008 | 初始化仓库入口 | 「初始化」→ Modal → 输入新目录 → 初始化 | 成功 → 跳日志页（空仓 unborn HEAD；CLI `git status` 互证） | ✅ | repo-page-08.png |
+| F-001 | 打开路径表单（校验→验证→注册→跳日志页） | 输入非 git 目录路径 → 点「打开」→ 观察 toast；再输入 `D:\zhanglei1120\Github\rebased-smoke` → 「打开」 | 坏路径 → 红 toast「不是 git 仓库：…」；好路径 → 跳 `/repos/:id` 日志页 | ✅ | repo-page-01.png（红 toast「不是 git 仓库：D:\zhanglei1120\Github\rebased-smoke-nongit」）、repo-page-01b.png（成功跳日志页：`/repos/f761a9f6-…` 渲染 8 行提交） |
+| F-002 | 最近列表（打开即注册/同路径复用/最近优先） | 首页看列表 → 移除冒烟仓 → 重新打开 → 回首页 → 再次打开同路径 | 列表出现冒烟仓且置顶；同路径再次打开不新增重复行（id 复用）（CLI） | ✅ | repo-page-02.png（移除后重开 → 列表 10 条、`rebased-smoke` 置顶；**同路径再次打开复用同一 id** `f761a9f6-5c91-4115-9261-69715687e875`，`config.json` 内该路径仅 1 条）。CLI 口径修正：**移除会删掉该 id**，移除后再打开是「新注册」（本轮实测新 id `a8129849-…`），故「id 复用」仅指未移除时的重复打开 |
+| F-003 | 显示名（定案单级） | 注册时观察列表项显示名 | 显示名为目录名 `rebased-smoke`（单级，非三级回退） | ✅ | repo-page-03.png（列表项主文本 = 目录名 `rebased-smoke`，单级非三级回退；含行 hover 态） |
+| F-004 | 路径副文本 `~/` 相对化 | 观察列表项副文本 | 副文本显示 `~/Github/rebased-smoke`（homeDir 注入） | ✅ | repo-page-04.png（同屏两形态：经 home 下目录联接注册 → `~/Github/rebased-smoke`；经 `D:\…` 注册 → 原样绝对路径；8.3 短名路径 `C:\Users\ZHANGL~1\…` 不作相对化） |
+| F-005 | 列表上限 50 | 列表正常渲染；上限逻辑引服务端 `RECENT_LIMIT=50` 单测证据（不构造 50+ 仓） | 列表渲染正常、无报错；上限口径 = 50 | ✅ | repo-page-05.png（11 条渲染正常、无控制台报错）；口径证据：`packages/server/api/src/repo.ts:11` `RECENT_LIMIT = 50` + `repo.test.ts`「配置直写 60 条 → 返回 50 条」 |
+| F-006 | 移除动作 + Popconfirm | 行内移除按钮 → Popconfirm 确认 | 行从列表消失、无报错；再次打开可重新注册（CLI） | ✅ | repo-page-06.png（Popconfirm「移除该仓库？」确认后行消失、列表 11→10、`GET /api/repos` 与 `config.json` 同步少一行；同路径重新打开可再次注册成功）。过程注记：移除按钮的工具提示会压住 Popconfirm 的「确定」，需先移开指针 |
+| F-007 | 克隆对话框（URL + Directory） | 「克隆」→ Modal → 输入裸仓路径作 URL + 目标目录 → 克隆 | Modal 字段最小集；成功 → 列表新增该仓 + 跳日志页（CLI 目标目录为 git 仓） | ✅ | repo-page-07.png（克隆成功跳 `/repos/9b0168bb-…`；CLI：`D:\zhanglei1120\Github\rebased-smoke-clone` 为 git 仓、7 提交、`origin` 指向 `smoke-remote`）、repo-page-07b.png（Moda 填写态：URL=裸仓路径、目标目录） |
+| F-008 | 初始化仓库入口 | 「初始化」→ Modal → 输入新目录 → 初始化 | 成功 → 跳日志页（空仓 unborn HEAD；CLI `git status` 互证） | ✅ | repo-page-08.png（初始化成功跳 `/repos/9918c699-…`，页面「暂无提交 / 该仓库还没有任何提交…」；CLI `## No commits yet on master`，`GET …/log` → `{"commits":[],"hasMore":false}`） |
 
 ### 4.2 LogPage（slug `log-page`；P1，仓库枢纽页）
 
@@ -146,26 +152,26 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-009 | 提交图真图渲染（lane/边路由） | 打开主仓日志页 → 观察 8 提交含合并 | 图列在合并处正确岔开/合拢，无重叠错位 | ✅ | log-page-01.png |
-| F-010 | 分支着色（ref 名 hash → HSB 色板） | 观察 ref chips 颜色 | chips 颜色按分支名稳定着色（与测试断言口径一致） | ✅ | log-page-02.png（分支 chip 底色 = colorForRef(分支名)，与图车道同源；R1 修复项 D-06） |
-| F-011 | 虚拟滚动（固定行高窗口渲染） | 打开 `rebased-smoke-big` → 连续滚动 | 滚动流畅、行高 24 一致、无整页白屏 | ✅ | log-page-03.png |
-| F-012 | 首屏快照 + SSE 增量渲染 + hash 去重 | 打开日志页 → pwsh 在主仓追加 1 提交 → 等待 | 新提交行自动出现在顶部，无需刷新（CLI 互证新 hash） | ✅ | log-page-04.png |
-| F-013 | 取消链路（断开即杀 git 进程） | 打开 `rebased-smoke-big` → 加载中立即导航离开 → pwsh 查进程 | 离开后无残留 `git log` 进程（CLI） | ✅ | log-page-05.png（离开后页面态） |
-| F-014 | 行默认列 Subject + Author + Date | 观察行内容 | 三列可见（Hash 列省） | ✅ | log-page-06.png |
-| F-015 | refs chips（分支默认开/tag 默认关） | 观察默认态 → 打开 tag 显示开关 | 默认只显分支 chips；开 tag 后 v1.0 出现 | ✅ | log-page-07.png（「标签」开关为 R1 新增，修复项 D-07） |
-| F-016 | 行点击 → 提交详情面板 | 点击合并提交行 | 面板完整：短 hash+复制、作者行、subject、双组 chips、父提交链接 | ✅ | log-page-08.png |
-| F-017 | 详情面板操作按钮 | 观察面板按钮区 | 「浏览快照 / Reset 到此处 / 摘樱桃 / 还原」四按钮齐全可点 | ✅ | log-page-09.png |
-| F-018 | 顶栏状态条（分支名 + 徽标） | 观察顶栏 | 分支名 `master` + outgoing 绿徽标（本地领先 1） | ✅ | log-page-10.png |
-| F-019 | 状态变更自动刷新（事件驱动） | pwsh 检出 `feature` → 等待 | 状态条分支名自动变 `feature`，无需刷新 | ✅ | log-page-11.png |
-| F-020 | `refs.changed` 订阅 | pwsh 新建分支 `tmp-refs` → 等待 | ref chips 自动出现 `tmp-refs`（CLI） | ✅ | log-page-12.png |
-| F-021 | `?select=<hash>` 深链 | navigate `/repos/:id?select=<某hash>` | 该行选中态 + 详情面板自动展开 | ✅ | log-page-13.png（行选中底色 + 详情面板同时到位；选中行高亮为 R1 修复项 D-08） |
-| F-022 | 顶栏入口 5 按钮 | 观察顶栏按钮区 | 「状态/分支/合并/贮藏/设置」五按钮存在 | ✅ | log-page-14.png（顶栏 5 入口按钮实测 aria-label：变更/分支/合并/贮藏/设置——「变更」即状态页入口，另含撤销与「更多」） |
-| F-023 | 「更多」菜单 18 项 | 展开「更多」下拉 | 18 项齐全（拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块） | ✅ | log-page-15.png（本仓渲染 16 项；GitHub/GitLab 两项受检测门约束，见 F-134/F-140） |
-| F-024 | OperationStatus 操作条（kind + 中止） | 进入 rebase 冲突（见 F-076 前置）→ 观察操作条 → 点「中止」 | 操作条显示进行中操作 + 中止按钮；中止后恢复干净态（CLI） | ✅ | log-page-16.png |
-| F-025 | 远程操作认证重试回路 | 向需认证的 HTTP 远端 push（依赖外部凭据服务；不具备 → 跳过） | 401 → AuthDialog 弹出（host 自 context、不含 token）→ 录入后 retry 重放 | ✅ | remote-04.png（补测：本地起恒 401 的 git smart-http 服务 `http://127.0.0.1:9418` 作为远程，日志页「拉取」触发 → 401 `AUTH_FAILED` → 「需要认证」对话框（主机自 `context.host` 预填 127.0.0.1、界面不含 token）→ 填账户/令牌 →「保存并重试」；401 服务日志显示重放请求携 `Authorization: Bearer …`，凭据落盘 `config.json` → `auth.accounts`。与 F-092 同一次实测） |
-| F-026 | 按需加载更早提交（页大小 ≤500 + skip 游标） | 打开 `rebased-smoke-big` → 滚到列表底部（或点「加载更多」手动兜底） | 首屏 50 行 → 触底自动追加（页大小 50→100→200→400→500，skip 逐页累加），一路到服务端 `hasMore=false`：最早一条（`chore: bulk commit 1`）可见、按钮转「已到最早的提交」且禁用 | ✅ | log-page-18.png；2026-09-12 复验（超出旧 500 上限的场景）：临时建 620 提交仓 `rebased-smoke-huge`，滚 4 步把 620 条全部加载、最后一行 = 根提交「初始提交（最早的一条）」、按钮转禁用；分页档位只有 4 个（`limit/skip` = 50/0、100/50、200/150、400/350，第 4 页 270 条 < 400 → `hasMore=false`）；超高视口（1600 高）下无滚动也自动补了一页（50 行填不满 1539px 列表区） |
-| F-027 | 过滤（author / path） | 输入作者名 → Enter；清空恢复 | 列表只剩该作者提交；清空后全量恢复 | ✅ | log-page-19.png |
-| F-028 | 行右键菜单形态 | 右键提交行 | 菜单项齐全：检出（游离 HEAD）/从此处新建分支/从此处新建标签/在浏览器中打开/Push up to Commit/Fixup/Squash/Reword/Drop/Squash/Fixup Commit | ✅ | log-page-20.png |
+| F-009 | 提交图真图渲染（lane/边路由） | 打开主仓日志页 → 观察 8 提交含合并 | 图列在合并处正确岔开/合拢，无重叠错位 | ✅ | log-page-01.png（8 行；逐行读 SVG：主道 x=9、feature 道 x=27，feature 两行行宽 56（双车道）→ 第 5 行合拢回 x=9，合并行含分叉 polyline，无重叠错位） |
+| F-010 | 分支着色（ref 名 hash → HSB 色板） | 观察 ref chips 颜色 | chips 颜色按分支名稳定着色（与测试断言口径一致） | ✅ | log-page-02.png（chip 底色实测 = `colorForRef(名)`：master `#81a663`、feature `#9763a6`、origin/master `#a68e63`、wt-branch `#a67163`、merged-branch `#63a692`、origin/feature `#63a663`；tag chip 保持橙色预设） |
+| F-011 | 虚拟滚动（固定行高窗口渲染） | 打开 `rebased-smoke-big` → 连续滚动 | 滚动流畅、行高 24 一致、无整页白屏 | ✅ | log-page-03.png（大仓：列表内容高 7680 = 320 行 × 24，而 DOM 常驻仅 35~36 行（虚拟窗口）；四段滚动逐次采样行高恒 = 24，首个可见行为 `chore: bulk commit 204`，无白屏） |
+| F-012 | 首屏快照 + SSE 增量渲染 + hash 去重 | 打开日志页 → pwsh 在主仓追加 1 提交 → 等待 | 新提交行自动出现在顶部，无需刷新（CLI 互证新 hash） | ✅ | log-page-04.png（`git commit -m '…（F-012）' -- sse-probe.txt` 落 `8d65417`（作者 Other Dev）→ 页面**未刷新**自动出现该行置顶、行数 8→9；P-04 口径沿用：带 pathspec 提交，夹具暂存区 R/A/M 未被吞） |
+| F-013 | 取消链路（断开即杀 git 进程） | 打开 `rebased-smoke-big` → 加载中立即导航离开 → pwsh 查进程 | 离开后无残留 `git log` 进程（CLI） | ✅ | log-page-05.png（离开后首页态）。CLI：导航离开后 `Get-Process git` 计数 = 0，无残留。**边界**：20ms 采样在打开→离开窗口内未捕获到 `git log` 进程（大仓 `git log` 进程窗口仅 ~140ms，短于一次导航往返），故「正在跑的进程被 kill」这一正向路径本轮未能实机触发；杀进程实现见 `core/src/exec.ts` 的 `killTree`（Windows `taskkill /T /F`）+ `exec.test.ts`「进行中 abort：以 130 拒绝」（用长命 `upload-pack` 触发） |
+| F-014 | 行默认列 Subject + Author + Date | 观察行内容 | 三列可见（Hash 列省） | ✅ | log-page-06.png（行内容 = subject + ref chips + 作者 + 日期，无 Hash 列，符合口径） |
+| F-015 | refs chips（分支默认开/tag 默认关） | 观察默认态 → 打开 tag 显示开关 | 默认只显分支 chips；开 tag 后 v1.0 出现 | ✅ | log-page-07.png（默认 6 个分支 chip、无 `v1.0`；开「标签」开关后 merge 行 refs 区变 `origin/master merged-branch v1.0`。注：tag chip 无 `data-testid`，断言口径为 refs 容器文本） |
+| F-016 | 行点击 → 提交详情面板 | 点击合并提交行 | 面板完整：短 hash+复制、作者行、subject、双组 chips、父提交链接 | ✅ | log-page-08.png（点合并行：面板 `761961d` + 复制按钮、`Smoke Tester on 2026-09-12 at 17:42`、subject `Merge branch 'feature'`、分支 chips `origin/master merged-branch` + tag chip `v1.0`、父提交链接 `a49e2ff`/`e03962c`；CLI `git log -1 761961d` 的 parents 与其逐字一致；选中行 `data-selected=true`） |
+| F-017 | 详情面板操作按钮 | 观察面板按钮区 | 「浏览快照 / Reset 到此处 / 摘樱桃 / 还原」四按钮齐全可点 | ✅ | log-page-09.png（实测按钮集：`copy-hash`、浏览快照、查看变更集、摘樱桃、还原、`Reset 当前分支到此处`——四行要求项齐全且均可用，另含「查看变更集」） |
+| F-018 | 顶栏状态条（分支名 + 徽标） | 观察顶栏 | 分支名 `master` + outgoing 绿徽标（本地领先 1） | ✅ | log-page-10.png（顶栏 `首页 \| rebased-smoke \| master`；`[data-testid=outgoing]` 存在、`incoming` 不存在；CLI `rev-list --left-right --count origin/master...master` = `0 1`） |
+| F-019 | 状态变更自动刷新（事件驱动） | pwsh 检出 `feature` → 等待 | 状态条分支名自动变 `feature`，无需刷新 | ✅ | log-page-11.png（夹具工作区脏，直接 `checkout feature` 会被 git 拒——沿 R1 的 P-03 处置改为 `git checkout -b f019-probe`（同内容分支）→ **未刷新**页面状态条自动变 `f019-probe`、outgoing 徽标随上游缺失消失、chips 自动多出 `f019-probe`） |
+| F-020 | `refs.changed` 订阅 | pwsh 新建分支 `tmp-refs` → 等待 | ref chips 自动出现 `tmp-refs`（CLI） | ❌ **D-39** | log-page-12.png（**失败态**：`git branch tmp-refs` 后等待 15s+，顶部行的 refs 仍为 `f019-probe master`，无 `tmp-refs`）。服务端正常：`curl -N …/events` 实收 `{"type":"refs.changed","payload":{"refs":["refs/heads/tmp-refs"]}}`，`GET …/log` 该行 refs 也含 `tmp-refs`。根因：容器 `onRefs` 只 `mutateLog()` 重验证 REST 快照，而渲染列表取自 `mergeLogCommits(pageCommits, streamCommits, connected)`——**同 hash 以流侧为准**，流侧那一行是建分支前发出的、refs 旧值。log-page-12b.png（整页重载后 chips 立即出现 `tmp-refs`/`tmp-refs2`，证明数据链路无问题，仅实时刷新缺失） |
+| F-021 | `?select=<hash>` 深链 | navigate `/repos/:id?select=<某hash>` | 该行选中态 + 详情面板自动展开 | ✅ | log-page-13.png（`?select=761961d81ca2801637bea2ef42c7a3ca7211e670`：目标行 `data-selected=true` 带选中底色、详情面板同时展开为该提交） |
+| F-022 | 顶栏入口 5 按钮 | 观察顶栏按钮区 | 「状态/分支/合并/贮藏/设置」五按钮存在 | ✅ | log-page-14.png（顶栏实测 `aria-label`：撤销最近提交 / 变更 / 分支 / 合并 / 贮藏 / 设置 / 更多 + 首页链接——「变更」即状态页入口，五个要求入口齐备；截图含「合并」按钮悬停提示） |
+| F-023 | 「更多」菜单 18 项 | 展开「更多」下拉 | 18 项齐全（拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块） | ✅ | log-page-15.png（本仓（本地 file 远程）**渲染 16 项**：溯源/历史/已提交/搜索/变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略/工作树/子模块；GitHub/GitLab 两项受检测门约束，见 F-134/F-140——18 为含两种托管面板的全集上限） |
+| F-024 | OperationStatus 操作条（kind + 中止） | 进入 rebase 冲突（见 F-076 前置）→ 观察操作条 → 点「中止」 | 操作条显示进行中操作 + 中止按钮；中止后恢复干净态（CLI） | ✅ | log-page-16.png（冲突仓检出 `feature` → 界面「更多→变基」onto=master → 冲突自动跳 `/conflicts`（4 路冲突、提示「变基进行中…」）→ 返回日志页顶栏显示 `(detached) \| 变基中（第 1/1 步）` + 红「中 止」；点中止 → 确认框「确定中止当前操作？工作区将回到操作前状态」→ CLI：`.git/rebase-merge` 清除、分支回 `feature`、`shared.txt` 回 feature 版、工作区干净） |
+| F-025 | 远程操作认证重试回路 | 向需认证的 HTTP 远端 push（依赖外部凭据服务；不具备 → 跳过） | 401 → AuthDialog 弹出（host 自 context、不含 token）→ 录入后 retry 重放 | ✅ | remote-04.png（本机起恒 401 的 git smart-HTTP 服务 `http://127.0.0.1:9418`，加远程 `auth-probe` → 日志页「拉取」触发 → 401 `AUTH_FAILED` → 「需要认证」对话框（主机自 `context.host` 预填 `127.0.0.1`、表单内不含 token）→ 填 `smoke-tester` / `smoke-token-f092` →「保存并重试」；服务端请求日志两次请求对比：`auth:null`（首请）→ `auth:"Bearer smoke-token-f092"`（重放），`config.json` → `auth.accounts` 落盘 `{host:127.0.0.1, account:smoke-tester, token:smoke-token-f092}`。边界同 R8：服务恒 401，「重放成功」以「重放确实发生且携带新凭据」为证。冒烟后已删除临时账户与 `auth-probe` 远程） |
+| F-026 | 按需加载更早提交（页大小 ≤500 + skip 游标） | 打开 `rebased-smoke-big` → 滚到列表底部（或点「加载更多」手动兜底） | 首屏 50 行 → 触底自动追加（页大小 50→100→200→400→500，skip 逐页累加），一路到服务端 `hasMore=false`：最早一条（`chore: bulk commit 1`）可见、按钮转「已到最早的提交」且禁用 | ✅ | log-page-18.png（大仓 320 提交实测：首屏 50 行 → 触底自动追加 → 列表内容高 1200→3600→7680（= 50→150→320 行）；网络实测档位 `limit=50&skip=0` → `limit=100&skip=50` → `limit=200&skip=150`，末页返回 170 条 < 200 → `hasMore=false`；滚到底后最早一行 `feat: 新增 big.txt 与 hunks.txt 初版` 可见、按钮转「已到最早的提交」且 `disabled`） |
+| F-027 | 过滤（author / path） | 输入作者名 → Enter；清空恢复 | 列表只剩该作者提交；清空后全量恢复 | ✅ | log-page-19.png（作者过滤 `Other` → 仅 1 行 `chore(smoke): SSE 增量提交（F-012）`，与 CLI `git log --author=Other` 一致；路径过滤 `src/util.ts` → 1 行 `feat(core): 新增应用入口与工具函数`，与 `git log -- src/util.ts` 一致；两项清空后 9 行全量恢复） |
+| F-028 | 行右键菜单形态 | 右键提交行 | 菜单项齐全：检出（游离 HEAD）/从此处新建分支/从此处新建标签/在浏览器中打开/Push up to Commit/Fixup/Squash/Reword/Drop/Squash/Fixup Commit | ✅ | log-page-20.png（右键实测 14 项 + 3 条分隔线：检出此提交（游离 HEAD）/从此处新建分支…/从此处新建标签…/摘樱桃/还原/Reset 当前分支到此处/浏览快照/Fixup Commit/Squash Commit/Push up to Commit/Reword Commit/Drop Commit/Squash Commit（并入父提交）/Fixup Commit（并入父提交）；**无「在浏览器中打开」**——本仓为本地 file 远程，符合 D-09 的注入契约） |
 
 ### 4.3 DiffPage（slug `diff-page`；P1）
 
@@ -174,16 +180,16 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-029 | Monaco DiffEditor（懒加载/行号/高亮/只读） | StatusPage 双击修改文件 → diff 页 | Monaco 渲染满高、行号+语法高亮、只读、vs-dark 暗色与应用一致 | ✅ | diff-page-01.png |
-| F-030 | 并排/行内切换 + 忽略空白 | 依次切换「行内」「忽略空白」开关 | 默认并排；行内切换生效；忽略空白后空白差异消失 | ✅ | diff-page-02.png |
-| F-031 | staged / 工作区切换（三态映射） | 切换 staged 开关 | staged 开 = HEAD vs 暂存区；关 = HEAD vs 工作区（CLI diff 互证） | ✅ | diff-page-03.png（入口 staged 透传为 R1 修复项 D-10） |
-| F-032 | 任意两版本对比（from/to 成对） | CommittedChangesPanel 点文件 → `/diff?file&from=<hash>~1&to=<hash>` | 两侧正确 = 该提交 vs 其父提交 | ✅ | diff-page-04.png（from=父提交 9f0af92、to=提交 79e9129；两侧内容与 `git show` 逐行一致） | |
-| F-033 | 新增/删除/重命名两侧渲染 | 打开 A/D/R 文件 diff | A 侧/D 侧缺失正确；R 显示 renameFrom | ✅ | diff-page-05.png（A：.gitignore 左侧空/右侧全文；D：docs/gone.md 左侧全文/右侧空——修复项 D-14；R：renameFrom 提示行） | |
-| F-034 | unified diff 文本视图 | StatusPage 选中文件 → 行内补丁预览（`/diff/patch` 通道） | unified 文本正确渲染（`@@` 头 + +/- 行） | ✅ | diff-page-06.png（hunk 展开后 unified 文本含 `@@ -4,4 +4,9 @@` 头、空格上下文行、+ 行与 `\ No newline at end of file`） | |
-| F-035 | 大 diff 分块流渲染（DiffStreamView） | 打开 `rebased-smoke-big` 大文件 diff → 等待全文 | 先语言 diff 只读渐进累积分块 → 全文到达切换标准视图 | ✅ | diff-page-07.png（620 行改动大文件；流侧 2 个 diff.chunk 共 80KB 渐进到达，全文到达后切标准视图） | |
-| F-036 | word diff/同步滚动/折叠/上下文行数 | 逐一切换「空白字符/仅变更区」开关并滚动 | 词级高亮内建；双侧联动滚动；仅变更区 + 5 行上下文 | ✅ | diff-page-08.png（左栏滚轮 2400px 后双侧同显第 162 行＝联动滚动；上下文 2 行/折叠 开关注入生效） | |
-| F-037 | 三版本对比（本地/暂存/HEAD） | StatusPage 行「三版本」→ `/diff?three=1` | 两段对比（HEAD→暂存、暂存→工作区）；单维差异另段「无差异」 | ✅ | diff-page-09.png（HEAD→暂存标「无差异」为 R1 修复项 D-16；暂存→工作区 5 处新增） | |
-| F-038 | 与分支比较（hunk 应用/回退经 StatusPage 通道） | BranchPanel 行「比较」→ 日志页对比视图 | 双 range 双向提交差异视图正确（hunk 应用/回退通道见 F-042） | ✅ | diff-page-10.png（构造 diverge-test 分叉分支：分支独有 1 / 当前独有 1，与 CLI `rev-list --left-right --count` 的 `1 1` 一致） | |
+| F-029 | Monaco DiffEditor（懒加载/行号/高亮/只读） | StatusPage 双击修改文件 → diff 页 | Monaco 渲染满高、行号+语法高亮、只读、vs-dark 暗色与应用一致 | ✅ | diff-page-01.png（状态页双击 `src/app.ts` → `/diff?file=src%2Fapp.ts`；`.monaco-diff-editor` 1424×818 满高、两侧编辑器均 `monaco-editor vs-dark`、body `#141414` 与应用暗色一致；decorations 5 插入 = CLI `git diff --stat` 的 `1 file changed, 5 insertions(+)`；只读口径见 `monaco-lazy.tsx:75` `readOnly:true` 与 `diff-viewer.tsx:142`） |
+| F-030 | 并排/行内切换 + 忽略空白 | 依次切换「行内」「忽略空白」开关 | 默认并排；行内切换生效；忽略空白后空白差异消失 | ✅ | diff-page-02.png（默认「并排」；为验证忽略空白，临时给 `src/app.ts` 第 2 行加 3 个行尾空格 → `git diff --stat` 变 6 插入/1 删除，页面 decorations 同步 `ins=6 del=1`；开「忽略空白」后变 `ins=5 del=0`（空白差异消失），切「行内」后单栏成对显示。取证后已把空格还原、`git diff --stat` 回到 5 insertions） |
+| F-031 | staged / 工作区切换（三态映射） | 切换 staged 开关 | staged 开 = HEAD vs 暂存区；关 = HEAD vs 工作区（CLI diff 互证） | ✅ | diff-page-03.png（状态页**双击「已暂存」组的 `src/util.ts`** → `/diff?file=src%2Futil.ts&staged=1`，右侧分段选中「已暂存」、4 处插入 = CLI `git diff --cached --stat`；同一文件切「工作区」→ 仍 4 处（HEAD vs 工作区，二者内容相同）；反向用 `src/app.ts` 实测：工作区模式 5 插入 = `git diff`，切「已暂存」→ 0 处 = `git diff --cached` 为空） |
+| F-032 | 任意两版本对比（from/to 成对） | CommittedChangesPanel 点文件 → `/diff?file&from=<hash>~1&to=<hash>` | 两侧正确 = 该提交 vs 其父提交 | ✅ | diff-page-04.png（已提交页选 `77e62c4` → 点 `src/app.ts` → `?file=src%2Fapp.ts&from=761961d…&to=77e62c4…`；左栏 6 行（= `git show 761961d:src/app.ts`）、右栏 7 行且含 `APP_VERSION`（= `git show 77e62c4:src/app.ts`），2 处插入；from/to 模式下「工作区/已暂存」分段按契约隐藏） | |
+| F-033 | 新增/删除/重命名两侧渲染 | 打开 A/D/R 文件 diff | A 侧/D 侧缺失正确；R 显示 renameFrom | ✅ | diff-page-05.png（**D**：`docs/gone.md` 工作区删除 → 左栏 4 行全文/右栏空，4 删除装饰，页面无报错，API `{before: 4 行, after: ""}`——D-14 未见回归；**A**：`src/new-file.ts`（已暂存新增）→ 左栏空/右栏全文（API `before:""`）；**R**：已提交页点 `R docs/old-name.md → new-name.md` → `?renameFrom=docs%2Fold-name.md`，页面显示提示行「该变更涉及重命名：docs/old-name.md → docs/new-name.md（改名前的历史请到「历史」页查看）」且**不做伪 diff**（两侧 0 行）） | |
+| F-034 | unified diff 文本视图 | StatusPage 选中文件 → 行内补丁预览（`/diff/patch` 通道） | unified 文本正确渲染（`@@` 头 + +/- 行） | ✅ | diff-page-06.png（状态页选中 `src/app.ts` → 展开 hunk：正文为 `@@ -4,4 +4,9 @@ export const APP_VERSION = '1.0.0';` + 空格上下文行 + 5 个 `+` 行 + `\ No newline at end of file`，与 CLI `git diff` 逐行一致；通道实测 `GET …/diff/patch?file=src%2Fapp.ts&staged=false` → 200） | |
+| F-035 | 大 diff 分块流渲染（DiffStreamView） | 打开 `rebased-smoke-big` 大文件 diff → 等待全文 | 先语言 diff 只读渐进累积分块 → 全文到达切换标准视图 | ✅ | diff-page-07.png（大仓 `big.txt`：网络实测同时走 `…/diff?file=big.txt&staged=false` 与 `…/diff/stream?file=big.txt&staged=false`；流侧实收 **2 个 `diff.chunk` 帧**（16724 + 53320 字符，wire 75020 B）渐进累积，全文到达后切标准 Monaco diff 视图（620 行改写：左 `rewritten for large diff streaming` / 右 `working tree rewrite（大 diff 常驻）`）） | |
+| F-036 | word diff/同步滚动/折叠/上下文行数 | 逐一切换「空白字符/仅变更区」开关并滚动 | 词级高亮内建；双侧联动滚动；仅变更区 + 5 行上下文 | ✅ | diff-page-08.png（大仓 `big.txt`：词级高亮内建（44 `char-insert` + 44 `char-delete` 与行级装饰并存）；左栏滚到 2400px 后**两侧同显第 127~170 行**（联动滚动）；`hunks.txt` 上实测「折叠」默认开 + 「上下文 5 行」→ 可见行 1-10/30-41（11-29 收缩），切「上下文 2 行」→ 可见行 3-7/33-37（仅变更区 ±2）；「空白字符」切「空白显示」后可见空白符号） | |
+| F-037 | 三版本对比（本地/暂存/HEAD） | StatusPage 行「三版本」→ `/diff?three=1` | 两段对比（HEAD→暂存、暂存→工作区）；单维差异另段「无差异」 | ✅ | diff-page-09.png（`src/app.ts` 行「三版本」→ `?file=src%2Fapp.ts&three=1`：`three-way-head-staged` 段标「无差异」（该文件无暂存改动）、`three-way-staged-working` 段 5 处插入（= 工作区改动）；与 CLI（`git diff --cached` 空 / `git diff` 5 插入）一致） | |
+| F-038 | 与分支比较（hunk 应用/回退经 StatusPage 通道） | BranchPanel 行「比较」→ 日志页对比视图 | 双 range 双向提交差异视图正确（hunk 应用/回退通道见 F-042） | ✅ | diff-page-10.png（分支页 `diverge-test` 行「比较」→ `?compare=diverge-test`：视图标题「与分支 diverge-test 比较」，分区「分支独有」1 条 `3b0244b`、「当前独有」2 条 `8d65417`/`77e62c4`；与 CLI `rev-list --left-right --count master...diverge-test` = `2 1` 完全一致；当前分支 `master` 行「比较」按钮 `disabled`） | |
 
 ### 4.4 StatusPage（slug `status-page`；P2）
 
@@ -192,19 +198,19 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-039 | 变更分组列表（已暂存/工作区/未跟踪） | 打开状态页观察分组 | 三组按 XY 码正确分组；已忽略文件不展示（CLI status 互证） | ✅ | status-page-01.png（三组 3/3/3 与 CLI XY 码逐条一致；ignored.log 未展示，CLI 为 `!!`） | |
-| F-040 | 变更列表子分组与管理 | 新建变更列表 → 行「移动到列表」→ 观察子标题分组 → 重命名/删除 | 非默认列表子标题分组；默认列表平铺；操作后 CLI 互证 | ✅ | status-page-02.png（新建「冒烟列表」→ 移动 src/app.ts → 子标题分组「冒烟列表-改名（1）」；重命名/删除经 API 复核，删除后 assignments 清空并回平铺） | |
-| F-041 | 文件级暂存/取消暂存/放弃修改 | 逐一点行内三按钮（暂存/取消/放弃） | 条目按状态分派 restore/clean；CLI status 每步互证 | ✅ | status-page-03.png（暂存 README→`M `；取消暂存 util→` M`；放弃 gone.md→文件恢复；删除 scratch/→clean；四步 CLI 逐条互证） | |
-| F-042 | hunk 级暂存（行内 hunk 选择） | 补丁预览按 hunk 勾选 → 暂存选中 | 仅选中 hunk 进暂存区（CLI `git diff --cached` 互证） | ✅ | status-page-04.png（大仓 hunks.txt 两 hunk：勾 hunk1 暂存 → `git diff --cached` 仅含第 5 行改动，工作区余第 35 行；status=`MM`） | |
-| F-043 | 行内补丁预览 | 选中文件 → 观察预览；变更文件后重选 | unified patch 渲染正确；staging/commit 后失效重取 | ✅ | status-page-05.png（hunk 展开显示 `@@ -32,7 +32,7 @@` 头 + 上下文 + -/+ 行；暂存后预览自动重取只剩 1 个 hunk） | |
-| F-044 | 提交框（message + amend/signOff/noVerify） | 填 message → 点提交 | 提交成功 → 框清空（key remount）；CLI log 出现新提交 | ✅ | status-page-06.png（提交 bc1f451 落盘：`git log -1` 与三文件明细一致；提交框已清空；暂存组归零） | |
-| F-045 | 跳 DiffPage | 点文件「差异」/双击 | 跳 `/diff?file=` 且两侧正确 | ✅ | status-page-07.png（双击文件名 → `/diff?file=src%2Fapp.ts`，右侧 17 行新增与 CLI 一致） | |
-| F-046 | 未跟踪行「忽略」一键入口 | 未跟踪行「忽略」→ Modal.confirm | `.gitignore` 追加该路径；行消失；重复操作幂等（CLI） | ✅ | status-page-08.png（Modal.confirm「忽略文件? 将给 .gitignore 追加 /untracked.txt」；落盘后行消失并新增 `M .gitignore`；同路径二次调用端点幂等） | |
-| F-047 | 三版本对比入口 | 行「三版本」按钮 | 跳 `/diff?file=&three=1` 三版本视图 | ✅ | status-page-09.png（行「三版本」→ `/diff?file=src%2Fapp.ts&three=1`，两段与「无差异」标注到位） | |
-| F-048 | Create Patch from changes | 勾选 ≥1 文件 → 组级「创建补丁」→ Modal 输入名 | 成功跳 `/patches` 且列表含新补丁（CLI） | ✅ | status-page-10.png（勾 2 文件 → 创建补丁 smoke-changes.patch → 跳 /patches 且列表含 1 项；存储于 `~/.rebasedjs/patches/<repoId>/`，1.3KB） | |
-| F-049 | Shelve Changes | 页头「搁置」→ Modal 输入名 | 成功跳 `/shelves` 且列表含新搁置（CLI） | ✅ | status-page-11.png（页头「搁置」→ smoke-shelf-1 → 跳 /shelves；存储含 patch.diff 1513B + 未跟踪文件 crlf.txt/todo.md） | |
-| F-050 | Stash Files | 页头「存入贮藏」→ Modal 填可选信息 | 成功跳 `/stashes` 且列表含新 stash（CLI `stash list`） | ✅ | status-page-12.png（页头「存入贮藏」→ 跳 /stashes；`git stash list` 出现 `stash@{0}: smoke stash from status page`，工作区已清空） | |
-| F-051 | Annotate / Show History 入口 | 行「注解」→ 返回后行「历史」 | 「注解」→ `/blame?file=`；「历史」→ `/history?file=` | ✅ | status-page-13.png（「注解」→ `/blame?file=src%2Fapp.ts`（修复 D-18 后正常）；「历史」→ `/history?file=src%2Fapp.ts` 列出 2 条） | |
+| F-039 | 变更分组列表（已暂存/工作区/未跟踪） | 打开状态页观察分组 | 三组按 XY 码正确分组；已忽略文件不展示（CLI status 互证） | ✅ | status-page-01.png（三组 3/2/3：已暂存 `R src/feature-renamed.ts` / `A src/new-file.ts` / `M src/util.ts`；工作区 `D docs/gone.md` / `M src/app.ts`；未跟踪 `? crlf.txt` / `? scratch/` / `? untracked.txt`——与 `git status --porcelain=v1` 逐条一致；`ignored.log`（CLI `!!`，`check-ignore` 命中 `.gitignore:1:*.log`）**未展示**） | |
+| F-040 | 变更列表子分组与管理 | 新建变更列表 → 行「移动到列表」→ 观察子标题分组 → 重命名/删除 | 非默认列表子标题分组；默认列表平铺；操作后 CLI 互证 | ✅ | status-page-02.png（「管理列表→新建列表」建「冒烟列表」→ `src/app.ts` 行「移动到列表」→ 工作区组出现子标题「冒烟列表（1）」，默认列表项 `docs/gone.md` 仍平铺；重命名对话框（`cl-rename-input`，标题「重命名列表」）改为「冒烟列表-改名」→ 子标题同步；删除该列表后**行回平铺**，CLI `config.json` 该仓 `changelists` 只剩 `default`（名「默认」）且 `assignments` 为空） | |
+| F-041 | 文件级暂存/取消暂存/放弃修改 | 逐一点行内三按钮（暂存/取消/放弃） | 条目按状态分派 restore/clean；CLI status 每步互证 | ✅ | status-page-03.png（四步逐条 CLI 互证：① 工作区勾 `README.md` → 组级「暂 存」→ `M  README.md`；② 已暂存勾 `src/util.ts` → 「取消暂存」→ ` M src/util.ts`；③ 勾 `docs/gone.md` → 「放 弃」+ 确认框「放弃选中修改？不可恢复」→ 文件恢复（`docs/gone.md` 重新出现、D 态消失）；④ 勾未跟踪 `scratch/` → 「删除」+ 确认 → 目录被删、未跟踪 3→2。取证后已用 CLI 复位夹具（重删 `docs/gone.md`、重建 `scratch/todo.md`）） | |
+| F-042 | hunk 级暂存（行内 hunk 选择） | 补丁预览按 hunk 勾选 → 暂存选中 | 仅选中 hunk 进暂存区（CLI `git diff --cached` 互证） | ✅ | status-page-04.png（大仓 `hunks.txt`（两 hunk）勾 hunk 1 → 「暂 存」→ CLI：`git diff --cached` **仅含第 5 行改动**（`-hunk line 5` / `+hunk line 5 CHANGED (hunk 1)`），工作区余第 35 行 hunk，`status` = `MM hunks.txt`；已暂存组 0→1、补丁预览自动重取为 1 个 hunk） | |
+| F-043 | 行内补丁预览 | 选中文件 → 观察预览；变更文件后重选 | unified patch 渲染正确；staging/commit 后失效重取 | ✅ | status-page-05.png（hunk 展开后 unified 正文 `@@ -32,7 +32,7 @@ hunk line 31` + 3 行上下文 + `-hunk line 35` / `+hunk line 35 CHANGED (hunk 2)` + 3 行上下文；**失效重取**由 F-042 同一次实测覆盖：暂存 hunk1 后预览由 2 hunk 自动变为 1 hunk） | |
+| F-044 | 提交框（message + amend/signOff/noVerify） | 填 message → 点提交 | 提交成功 → 框清空（key remount）；CLI log 出现新提交 | ✅ | status-page-06.png（提交信息「feat(smoke): 状态页提交冒烟（F-044）」→ 落盘 `4e875bb`，`git show --name-status` = `M README.md` / `R100 src/feature.ts→src/feature-renamed.ts` / `A src/new-file.ts`（与提交前暂存组三行一一对应）；提交框 value 清空、已暂存组 3→0） | |
+| F-045 | 跳 DiffPage | 点文件「差异」/双击 | 跳 `/diff?file=` 且两侧正确 | ✅ | status-page-07.png（双击工作区 `src/util.ts` 文件名 → `/diff?file=src%2Futil.ts`（默认「工作区」模式）、4 处插入 = CLI `git diff --stat -- src/util.ts` 的 `4 insertions(+)`） | |
+| F-046 | 未跟踪行「忽略」一键入口 | 未跟踪行「忽略」→ Modal.confirm | `.gitignore` 追加该路径；行消失；重复操作幂等（CLI） | ✅ | status-page-08.png（未跟踪 `untracked.txt` 行「忽略」→ 确认框「忽略文件? 将给 .gitignore 追加 /untracked.txt 行」→ 确定：CLI `.gitignore` 末尾出现 `+/untracked.txt`、`M .gitignore` 进入工作区组（2→4 行）、该文件从未跟踪列表消失；**幂等**：再 `POST …/ignore/add {path}` 两次均 200 且 `/untracked.txt` 行计数仍为 1） | |
+| F-047 | 三版本对比入口 | 行「三版本」按钮 | 跳 `/diff?file=&three=1` 三版本视图 | ✅ | status-page-09.png（工作区 `src/util.ts` 行「三版本」→ `/diff?file=src%2Futil.ts&three=1`；`three-way-head-staged` 段标「无差异」、`three-way-staged-working` 段 4 处插入，与 CLI（`git diff --cached` 空、`git diff` 4 插入）一致） | |
+| F-048 | Create Patch from changes | 勾选 ≥1 文件 → 组级「创建补丁」→ Modal 输入名 | 成功跳 `/patches` 且列表含新补丁（CLI） | ✅ | status-page-10.png（勾 `src/app.ts` + `src/util.ts` → 组级「创建补丁」→ Modal「对勾选的 2 个文件创建补丁（工作区 diff）」输入 `smoke-changes` → 跳 `/patches` 且列表 1 项「smoke-changes 764 B」；CLI：`~/.rebasedjs/patches/f761a9f6-…/smoke-changes.patch` 764 B，首行 `diff --git a/src/app.ts b/src/app.ts`） | |
+| F-049 | Shelve Changes | 页头「搁置」→ Modal 输入名 | 成功跳 `/shelves` 且列表含新搁置（CLI） | ✅ | status-page-11.png（页头「搁置」→ 名称 `smoke-shelf-1` → 跳 `/shelves`，列表 1 项「smoke-shelf-1 \| 2 个未跟踪」；CLI：`~/.rebasedjs/shelves/f761a9f6-…/smoke-shelf-1/` 含 `patch.diff` 1129 B + `untracked/crlf.txt` + `untracked/scratch/todo.md`；搁置为**快照复制**——保存后 `git status` 工作区逐条不变） | |
+| F-050 | Stash Files | 页头「存入贮藏」→ Modal 填可选信息 | 成功跳 `/stashes` 且列表含新 stash（CLI `stash list`） | ✅ | status-page-12.png（页头「存入贮藏」→ 信息 `smoke stash from status page` → 跳 `/stashes`，列表 3 条；CLI：`stash@{0}: On master: smoke stash from status page` 置顶，工作区已跟踪改动全部清空（仅余未跟踪），`.gitignore` 的忽略行随之回到未忽略态） | |
+| F-051 | Annotate / Show History 入口 | 行「注解」→ 返回后行「历史」 | 「注解」→ `/blame?file=`；「历史」→ `/history?file=` | ✅ | status-page-13.png（工作区 `src/app.ts` 行「注解」→ `/blame?file=src%2Fapp.ts`；返回后行「历史」→ `/history?file=src%2Fapp.ts` 列出 2 条 `77e62c4` / `f55c880`，与 CLI `git log --oneline -- src/app.ts` 逐条一致） | |
 
 ### 4.5 CommitDialog（等效内嵌提交框；slug `commit`；P2）
 
@@ -213,13 +219,13 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-052 | 提交（信息必填/身份预检） | 未配身份仓提交 → 观察引导；主仓填 message 提交 | 未配身份 → 引导去设置页提示；正常提交成功（CLI） | ✅ | commit-01.png（未配身份仓提交 → 红提示「未配置 user.name 或 user.email，请先在设置页配置」；主仓随后提交 c7b9f6d 成功） | |
-| F-053 | amend（改上次提交） | 勾选 amend + 新 message → 提交 | 上次提交 message 被替换、无新提交（CLI log 互证） | ✅ | commit-02.png（勾 amend + 新信息 → `git log -1` 信息被替换、提交数不变、新暂存内容并入该提交） | |
-| F-054 | sign-off / 跳过 hooks | 勾选 sign-off 提交 | log 见 Signed-off-by；noVerify 经 hook 仓验证（可跳过+理由） | ✅ | commit-03.png（勾 signOff → 提交体含 `Signed-off-by: Smoke Tester <smoke@example.com>`；noVerify：装 pre-commit hook 后无勾选被拒（退出码 1 + hook stderr），勾选后提交成功） | |
-| F-055 | amend 历史提交（amend 到…） | 提交框「amend 到…」下拉选目标 → 提交 | 目标提交信息重写、中间提交重放（CLI log 互证） | ✅ | commit-04.png（「amend 到…」候选＝未发布提交；选最老候选提交 → 目标信息重写、其间 3 个提交重放为新 hash、staged 改动并入目标提交） | |
-| F-056 | GPG 签名 / commit template | 设置页配 `commit.template` 等白名单键 → 提交 | 提交链路正常不受扰（CLI config 互证；gpg 签名依赖本机密钥，否则跳过） | ⏭ 跳过（gpg 部分）｜✅（template 部分） | 本机无 gpg（`gpg --version` 不存在）→ 签名提交跳过；已完成：设置页写 `commit.template = .gitmessage`（CLI `git config --local` 互证）后提交链路正常（e034fd3） | |
-| F-057 | CRLF 提示（三选 Modal） | Windows 下暂存 CRLF 文件 → 点提交 | 内联警告 + 三选 Modal（修复并提交/原样提交/取消）；非 Windows 跳过+理由 | ✅ | commit-06.png（Windows 下暂存 CRLF 文件点提交 → 三选 Modal「检测到 CRLF 行尾符」；选「原样提交」后提交落盘） | |
-| F-058 | commit & push（提交并推送） | 提交框「提交并推送」 | commit 先落盘 → push 当前分支上游；pushed/up-to-date/rejected 三态提示正确（CLI 远端互证） | ✅ | commit-07.png（「提交并推送」→ 本地 800cf2a 与裸远端 HEAD 同 hash，`rev-list --left-right --count` = 0/0，提示「已提交并推送」） | |
+| F-052 | 提交（信息必填/身份预检） | 未配身份仓提交 → 观察引导；主仓填 message 提交 | 未配身份 → 引导去设置页提示；正常提交成功（CLI） | ✅ | commit-01.png（在 `rebased-smoke-noident`（未配 user.name/email、暂存 `A a.txt`）填信息提交 → 红 toast「未配置 user.name 或 user.email，请先在设置页配置」，仓库无新提交；同端点直调亦 400 `INVALID_QUERY` 同文案）→ 主仓提交 `660e7c7` 成功（`git log -1` 作者 Smoke Tester） | |
+| F-053 | amend（改上次提交） | 勾选 amend + 新 message → 提交 | 上次提交 message 被替换、无新提交（CLI log 互证） | ✅ | commit-02.png（先暂存 `src/util.ts` 探针改动 → 勾 amend + 新信息「feat(smoke): amend 后的新信息（F-053）」→ 提交：`rev-list --count` 11→11（无新提交）、`git log -1` = `5887f10` 信息被替换、`git show --name-only HEAD` = `src/app.ts` + `src/util.ts`（新暂存内容并入该提交）；提交框清空、amend 复选框随重挂载复位） | |
+| F-054 | sign-off / 跳过 hooks | 勾选 sign-off 提交 | log 见 Signed-off-by；noVerify 经 hook 仓验证（可跳过+理由） | ✅ | commit-03.png（① 勾 signOff 提交 → `git log -1 --format=%B` 含 `Signed-off-by: Smoke Tester <smoke@example.com>`（`5e203ea`）；② 装 `.git/hooks/pre-commit`（打印「F-054 pre-commit hook: 拒绝提交」并 `exit 1`）→ 不勾 noVerify 提交：toast「git 命令失败：git commit -m … 退出码 1：F-054 pre-commit hook: 拒绝提交」且 `rev-list --count` 不变（被拒）；勾 noVerify 后同一提交成功 `719b984`；取证后已删除该 hook） | |
+| F-055 | amend 历史提交（amend 到…） | 提交框「amend 到…」下拉选目标 → 提交 | 目标提交信息重写、中间提交重放（CLI log 互证） | ✅ | commit-04.png（「amend 到…」候选 = **未发布提交** `origin/master..HEAD` 五笔；选最老候选 `fix(core): 合并后修正启动横幅` → 目标被重写为 `5b64383`（信息替换为「…（F-055 amend 到历史提交后）」且并入 `A f055-folded.txt` + `M src/app.ts`），其后 5 笔中间提交（SSE/F-044/F-053/F-054×2）全部重放为新 hash，提交总数 13 不变、无 `.git/rebase-merge` 残留。**过程与边界**：首次以 `src/app.ts` 为载荷时因该文件被中间提交改过而 rebase 冲突 → 自动跳 `/conflicts`（属正确行为）；中止后仓库停在「新提交已落在 tip」的中间态（见 §5.17 P-12），改用新增文件为载荷后一次通过） | |
+| F-056 | GPG 签名 / commit template | 设置页配 `commit.template` 等白名单键 → 提交 | 提交链路正常不受扰（CLI config 互证；gpg 签名依赖本机密钥，否则跳过） | ⏭ 跳过（gpg 部分）｜✅（template 部分） | 本机无 gpg（`Get-Command gpg` 不存在）→ 签名提交跳过；已完成：设置页 `commit.template` 行填入 `.gitmessage` → 保存 → CLI `git config --local --get commit.template` = `.gitmessage`，随后提交链路正常（`53047d3`） | |
+| F-057 | CRLF 提示（三选 Modal） | Windows 下暂存 CRLF 文件 → 点提交 | 内联警告 + 三选 Modal（修复并提交/原样提交/取消）；非 Windows 跳过+理由 | ✅ | commit-06.png（暂存夹具的 CRLF 文件 `crlf.txt` 后点提交 → Modal「检测到 CRLF 行尾符」：说明文案 + 三选「修复并提交 / 原样提交 / 取消」→ 选「原样提交」后提交落盘 `996030d`、`git show --name-only HEAD` = `crlf.txt`） | |
+| F-058 | commit & push（提交并推送） | 提交框「提交并推送」 | commit 先落盘 → push 当前分支上游；pushed/up-to-date/rejected 三态提示正确（CLI 远端互证） | ✅ | commit-07.png（「提交并推送」→ 本地 `d5ab22d` 与裸远端 `smoke-remote` 的 HEAD **同 hash**、`rev-list --left-right --count origin/master...master` = `0 0`、`status -sb` 显示 `## master...origin/master` 无进出；再以「回执探针」复跑一次同样 0/0（`20fd3f7`）以截取成功回执） | |
 
 ### 4.6 ResetDialog（slug `reset`；P2）
 
@@ -227,9 +233,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-059 | Reset soft / mixed / hard | 详情面板「Reset 到此处」→ 依次三模式执行 | 各模式行为正确（soft 留暂存/mixed 留工作区/hard 全清；CLI 互证） | ✅ | reset-01.png（soft/mixed/hard 三模式依次执行：soft 后 `M  README.md`、mixed 后 ` M README.md`、hard 后工作区干净且 README 回 HEAD 版本；hard 前有「我了解 hard 将丢弃未提交改动」勾选门） | |
-| F-060 | Reset Current Branch to Here（等价入口） | 详情面板按钮 → 内嵌模态弹出 | 模态正常弹出（右键菜单形态未做，面板按钮为等价入口） | ✅ | reset-02.png（详情面板「Reset 当前分支到此处」→ 内嵌模态：目标短 hash+主题 + 三模式单选） | |
-| F-061 | Undo Commit | 顶栏 Popconfirm → 确认 | soft reset HEAD~1，改动回暂存区（CLI） | ✅ | reset-03.png（顶栏 Popconfirm「将撤销最近提交并保留改动到暂存区」→ HEAD 回退且 .gitmessage 回到暂存区 `A `） | |
+| F-059 | Reset soft / mixed / hard | 详情面板「Reset 到此处」→ 依次三模式执行 | 各模式行为正确（soft 留暂存/mixed 留工作区/hard 全清；CLI 互证） | ✅ | reset-01.png（对 `HEAD~1`（`d5ab22d`）依次三模式：**soft** → `M  README.md`（暂存保留）；**mixed** → ` M README.md`（工作区保留、暂存清空）；**hard** → 工作区干净且 `README.md` 回 HEAD 版本（F-058 探针行被丢弃）；hard 模式弹窗内出现「我了解 hard 将丢弃未提交改动」勾选门，未勾选时「确 定」为 disabled） | |
+| F-060 | Reset Current Branch to Here（等价入口） | 详情面板按钮 → 内嵌模态弹出 | 模态正常弹出（右键菜单形态未做，面板按钮为等价入口） | ✅ | reset-02.png（详情面板「Reset 当前分支到此处」→ 内嵌模态「重置到」：目标短 hash + 主题 `d5ab22d docs(smoke): 提交并推送冒烟（F-058）` + 三模式单选（mixed 为默认）） | |
+| F-061 | Undo Commit | 顶栏 Popconfirm → 确认 | soft reset HEAD~1，改动回暂存区（CLI） | ✅ | reset-03.png（顶栏「撤销最近提交」→ Popconfirm「将撤销最近提交并保留改动到暂存区」→ 确定：`git log -1` 由 `d5ab22d` 回退到 `996030d`，被撤销提交的改动以 `M  docs/new-name.md` 回到暂存区——soft reset 语义） | |
 
 ### 4.7 BranchPanel（slug `branch`；P2）
 
@@ -238,17 +244,17 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-062 | 分组（本地/远程/最近检出/标签）与过滤 | 观察四组 → 文本过滤 → 「仅看已合并」开关 | 四组正确；过滤与已合并开关生效 | ✅ | branch-01.png（四组：最近检出 3 / 本地 7 / 远程 2 / 标签 1；文本过滤 feat → 1/3、1/7、1/2；仅看已合并 → 本地 6/7、远程 2/2（远程过滤为 R3 修复项 D-19）） | |
-| F-063 | 行内信息（current/上游徽标/已合并图标） | 观察各分支行 | current 标记、ahead/behind 徽标、已合并绿勾正确 | ✅ | branch-02.png（当前标记 master/当前；上游徽标 origin/master ↑4；已合并绿勾覆盖 6 个本地 + 2 个远程，未合并 diverge-test 无勾） | |
-| F-064 | 创建/删除/重命名/设上游 | 新建 Modal（起始点 + 检出开关）→ 删除（未合并 Popconfirm force 提示）→ 重命名 → 设上游 | 各操作 CLI `branch` 互证 | ✅ | branch-03.png（创建 smoke-created@diverge-test → 重命名 smoke-renamed → 设上游 feature→origin/feature → 删除：未合并分支 Popconfirm「该分支未合并，删除将使用强制删除」，四步 CLI 互证） | |
-| F-065 | 检出三态（既有/新建并检出/detached） | 检出既有分支 → 新建并检出 → 标签行「检出」（detached） | 三态切换正确（CLI HEAD 互证） | ✅ | branch-04.png（三态检出：既有 diverge-test → HEAD=diverge-test；新建并检出 smoke-new-checkout 入最近检出；标签 v1.0 检出 → `## HEAD (no branch)` 且指向 9f0af92） | |
-| F-066 | 查找已合并 / 清理已合并与过时分支 | 开「仅看已合并」→ 「清理已合并（N）」批量删除 | 批量删除非当前已合并分支（CLI 互证） | ✅ | branch-05.png（清理已合并（5）→ 批量删除 5 个；master（当前）与 wt-branch（worktree 占用）保留；修复 D-20 后计数排除 worktree 占用分支，按钮归零禁用） | |
-| F-067 | 与当前分支比较 | 行「比较」→ 日志页对比视图 | 双 range 双向提交差异；「当前」分支禁用 | ✅ | branch-06.png（非当前分支「比较」→ `?compare=diverge-test` 双向视图：分支独有 1 / 当前独有 8，与 CLI `rev-list --left-right --count` 8/1 一致；当前分支行「比较」禁用） | |
-| F-068 | 与工作树差异 | 行菜单「与工作树差异」→ 差异 Modal → 文件行 | 清单含未提交变更、R/C 带 renameFrom；文件行 → `/diff?from=<分支>` | ✅ | branch-07.png（行菜单「与工作树差异」→ 模态清单含 M/A/R 与 renameFrom；点文件行 → `/diff?file=src/app.ts&from=wt-branch`，17 处新增与 CLI 一致（左侧取分支而非 HEAD 为 R3 修复项 D-21）） | |
-| F-069 | 弹窗 Fetch | 页头「Fetch」 | fetch 全部远程 → refs.changed → 列表刷新（CLI 远端互证） | ✅ | branch-08.png（页头 Fetch → toast「已拉取远程引用」；远程组 2→3 出现 origin/fetch-probe，与 CLI `for-each-ref refs/remotes` 一致） | |
-| F-070 | force-push 后修复 | 构造远端分叉 → 行内「force-push 修复」 | fetch → 本地重置到上游 → 本地独有提交 cherry-pick 重放（CLI 互证） | ✅ | branch-09.png（构造远端分叉：本地 ahead 4/behind 1 → 行内「force-push 修复」确认框说明重置+重放 → toast「已重置并重放 4 个本地提交」；CLI：远端提交成基、0/4、无残留 sequencer。首轮失败暴露 D-22） | |
-| F-071 | 检出并变基到当前 | 远程行下拉「检出并变基到当前」（本地名 Modal） | 检出（远程 → 新本地分支）→ rebase onto 原当前分支（CLI） | ✅ | branch-10.png（远程行菜单「检出并变基到当前」→ 本地名 Modal → 新分支 fetch-probe-local 检出；CLI：HEAD 为新分支且原 master 为其祖先，远端提交重放其上） | |
-| F-072 | 检出并更新 | 本地行菜单「检出并更新」 | 检出 → fetch 跟踪分支 + 策略更新；up-to-date →「已是最新」（CLI） | ✅ | branch-11.png（本地行菜单「检出并更新」→ 检出 master + fetch 跟踪分支；已同步 → toast「已检出 master（已是最新）」，CLI `## master...origin/master` 无进出） | |
+| F-062 | 分组（本地/远程/最近检出/标签）与过滤 | 观察四组 → 文本过滤 → 「仅看已合并」开关 | 四组正确；过滤与已合并开关生效 | ✅ | branch-01.png（四组：最近检出 3 / 本地 8 / 远程 2 / 标签 1；文本过滤 `feat` → 1/3、1/8、1/2；仅看已合并 → 本地 3/8、远程 1/2，与 CLI `git branch --merged HEAD`（feature/master/merged-branch = 3）与 `git branch -r --merged HEAD`（origin/feature = 1）逐项一致，D-19 的远程侧未回归） | |
+| F-063 | 行内信息（current/上游徽标/已合并图标） | 观察各分支行 | current 标记、ahead/behind 徽标、已合并绿勾正确 | ✅ | branch-02.png（`master`「当前」+ 上游徽标 `origin/master ↓2` + 已合并绿勾；绿勾集合与 CLI `--merged` 完全一致；未合并的 `diverge-test` 无勾） | |
+| F-064 | 创建/删除/重命名/设上游 | 新建 Modal（起始点 + 检出开关）→ 删除（未合并 Popconfirm force 提示）→ 重命名 → 设上游 | 各操作 CLI `branch` 互证 | ✅ | branch-03.png（建 `smoke-created@diverge-test`（`3b0244b`）→ 改名 `smoke-renamed`（旧名 `show-ref` 失败）→ 设上游 `origin/master`（`config branch.*.merge=refs/heads/master` 落盘）→ 未合并分支删除 Popconfirm「该分支未合并，删除将使用强制删除」→ 确认后分支消失；四步 CLI 互证） | |
+| F-065 | 检出三态（既有/新建并检出/detached） | 检出既有分支 → 新建并检出 → 标签行「检出」（detached） | 三态切换正确（CLI HEAD 互证） | ✅ | branch-04.png（三态：检出既有 `diverge-test` → `HEAD=3b0244b`；「新建并检出」`smoke-new-checkout` 入最近检出；标签 `v1.0` 检出 → CLI `## HEAD (no branch)` 指向 `761961d`，界面该行无「当前」标记） | |
+| F-066 | 查找已合并 / 清理已合并与过时分支 | 开「仅看已合并」→ 「清理已合并（N）」批量删除 | 批量删除非当前已合并分支（CLI 互证） | ❌ **D-40** | branch-05.png（**部分通过 + 新缺陷**：按钮与确认框称「清理已合并（2）」「清理 2 个已合并分支？不可恢复」，实际删除集合比计数多一个——前两个候选 `feature`/`merged-branch` 如预期删除，随后对 worktree 占用的 `wt-merged-probe` 执行 `git branch -d` 失败 → 红 toast「git 命令失败：git branch -d wt-merged-probe 退出码 1：error: cannot delete branch 'wt-merged-probe' used by worktree at '…'」，且成功回执「已清理 N 个已合并分支」因整条 promise 抛错而从未出现。根因与修法见 §5.17 D-40：**面板计数已排除 `checkedOutInWorktree`（D-20），容器执行集没有**。探针 worktree/分支已删、夹具已复原） | |
+| F-067 | 与当前分支比较 | 行「比较」→ 日志页对比视图 | 双 range 双向提交差异；「当前」分支禁用 | ✅ | branch-06.png（非当前分支「比较」→ `?compare=diverge-test`：分支独有 1 / 当前独有 8，与 CLI `rev-list --left-right --count master...diverge-test` 的 `8 1` 完全一致；当前分支 `master` 行「比较」为 disabled） | |
+| F-068 | 与工作树差异 | 行菜单「与工作树差异」→ 差异 Modal → 文件行 | 清单含未提交变更、R/C 带 renameFrom；文件行 → `/diff?from=<分支>` | ✅ | branch-07.png（行菜单「与工作树差异」（`wt-branch`）→ 模态清单 9 个文件，含 `R100 src/feature.ts → src/feature-renamed.ts` 的 renameFrom 呈现，与 CLI 逐一一致；点 `src/app.ts` → `/diff?file=src%2Fapp.ts&from=wt-branch`，左 7 行/右 13 行 = CLI `--numstat` 的 6 增 1 删。**数字口径**：本轮工作区已干净，故是 6 增 1 删而非旧记录的 17 增——D-21 的语义（左侧取分支而非 HEAD）仍被区分：未修复时会显示 0 差异） | |
+| F-069 | 弹窗 Fetch | 页头「Fetch」 | fetch 全部远程 → refs.changed → 列表刷新（CLI 远端互证） | ✅ | branch-08.png（先在裸远端推入 `fetch-probe`（`aadeb37`）→ 页头 Fetch → 远程组 2→3 出现 `origin/fetch-probe`；CLI `refs/remotes/origin/fetch-probe` = `aadeb37`，与远端同 SHA） | |
+| F-070 | force-push 后修复 | 构造远端分叉 → 行内「force-push 修复」 | fetch → 本地重置到上游 → 本地独有提交 cherry-pick 重放（CLI 互证） | ✅ | branch-09.png（构造分叉：远端 `master` 强推改写为 `a91ade7` + 本地 3 笔（`7d4190a`/`7a4bc30`/`56eadea`）→ 行内「force-push 修复」→ 确认框说明「重置到上游 + 重放本地独有提交」→ toast「已重置并重放 3 个本地提交」；CLI：`master` = `a91ade7` + 3 笔、`rev-list --left-right --count` = `3 0`、无 `.git/sequencer` 残留、工作区干净） | |
+| F-071 | 检出并变基到当前 | 远程行下拉「检出并变基到当前」（本地名 Modal） | 检出（远程 → 新本地分支）→ rebase onto 原当前分支（CLI） | ✅ | branch-10.png（**夹具纠偏**：旧夹具的 `origin/fetch-probe` 与本仓 `master` 无共同祖先（CLI `master...origin/fetch-probe: no merge base`），照原样跑必然整段重放并与子模块路径冲突，故先 `git rebase --abort` 复原，再另造干净远端分支 `origin/rebase-probe`（= origin/master + 1 提交 `9743264`）→ 远程行菜单「检出并变基到当前」→ 本地名 Modal → 新分支 `rebase-probe-local` 检出；CLI：HEAD 为该新分支、原 `master` 是其祖先、远端提交重放其上（`25131f7` 的父 = `56eadea`）） | |
+| F-072 | 检出并更新 | 本地行菜单「检出并更新」 | 检出 → fetch 跟踪分支 + 策略更新；up-to-date →「已是最新」（CLI） | ✅ | branch-11.png（`master` 行菜单「检出并更新」→ 检出 master + fetch 跟踪分支；已同步 → toast「已检出 master（已是最新）」；CLI `## master...origin/master [ahead 3]`（`3 0`，无 behind）） | |
 
 ### 4.8 MergeDialog（slug `merge`；P2，页面化）
 
@@ -256,9 +262,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-073 | 合并方向选择 | 打开合并页观察两组列表 | 本地分支（排除当前）+ 远程分支（origin/xxx）两组齐全 | ✅ | merge-01.png（合并页分支选择器两组：本地分支 diverge-test/fetch-probe-local/smoke-new-checkout/wt-branch（当前分支 master 已排除）+ 远程分支 origin/feature、origin/fetch-probe、origin/master） | |
-| F-074 | merge 策略 / commit 选项 | 选目标分支 → 勾 no-ff/squash/no-commit → 填信息 → 执行 | 成功返回日志页；CLI 互证合并结果与选项效果 | ✅ | merge-02.png（选 diverge-test + 勾 no-ff + 自填提交信息 → 执行成功回日志页；CLI：合并提交 c76050f 有 2 个父（f47f36d + a122dd1），diverge-test 成为 HEAD 祖先） | |
-| F-075 | 进行中状态联动（中止/冲突跳转） | 用 `rebased-smoke-conflict` 合并 feature → 观察跳转 | 冲突 → 自动跳 `/conflicts`；进行中操作条提示 + 中止入口 | ✅ | merge-03.png（冲突仓合并 master→feature → 自动跳 `/conflicts`：进行中提示 + 冲突清单「根目录（1）conflict.txt 双方修改」+ 用我们的/用他们的/手动合并/完成合并；过程图 merge-03b.png 为日志页操作条「合并中 + 中止 + 去解决冲突」） | |
+| F-073 | 合并方向选择 | 打开合并页观察两组列表 | 本地分支（排除当前）+ 远程分支（origin/xxx）两组齐全 | ✅ | merge-01.png（选择器两组：本地 7 个（当前分支 `master` 已排除：diverge-test、f019-probe、rebase-probe-local、smoke-new-checkout、stash-branch-f083、tmp-refs、tmp-refs2 等）+ 远程 4 个（origin/feature、origin/master、origin/rebase-probe、origin/fetch-probe）） | |
+| F-074 | merge 策略 / commit 选项 | 选目标分支 → 勾 no-ff/squash/no-commit → 填信息 → 执行 | 成功返回日志页；CLI 互证合并结果与选项效果 | ✅ | merge-02.png（选 `diverge-test` + 勾 no-ff + 自填提交信息 → 执行成功回日志页；CLI：合并提交 `fb9833f` 有 **2 个父**（`56eadea` + `3b0244b`），`diverge-test` 成为 HEAD 祖先——no-ff 生效） | |
+| F-075 | 进行中状态联动（中止/冲突跳转） | 用 `rebased-smoke-conflict` 合并 feature → 观察跳转 | 冲突 → 自动跳 `/conflicts`；进行中操作条提示 + 中止入口 | ✅ | merge-03.png（冲突仓在 master 上合并 `feature` → **自动跳 `/conflicts`**：四路冲突 AA `both-added.txt` / UD `deleted-by-them.txt` / UU `manual-merge.txt` / UU `shared.txt` + 各行的用我们的/用他们的/手动合并/完成合并 + 页内提示「合并进行中…」；CLI `MERGE_HEAD` = `5271e87`）；merge-03b.png（日志页操作条「合并中 + 中 止 + 去解决冲突」） | |
 
 ### 4.9 RebaseDialog（slug `rebase`；P3，内嵌 LogPage 模态）
 
@@ -267,11 +273,11 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-076 | rebase onto（目标基选择） | 更多「变基」→ 输入 onto → 开始 | 变基完成，log 图重排正确（CLI） | ✅ | rebase-01.png（更多「变基」→ 简单模式 onto=master → 「开始」；CLI：topic 两笔重放到 master 之上（ab40292/f9260b2），master 成为 HEAD 祖先） | |
-| F-077 | 交互式列表（pick/reword/squash/fixup/drop + 上移/下移） | base 输入 → 观察 todo 列表 → 改动作 → 上移/下移 | 列表正确；首行禁上移、末行禁下移；无效 base 显式报错 | ✅ | rebase-02.png（交互模式 base=HEAD~2 → todo 两行；首行「上移」禁用/末行「下移」禁用；上移后顺序互换；动作下拉 pick/reword/squash/fixup/drop；非法 base → 弹窗内显式报错） | |
-| F-078 | continue / abort / 冲突联动 | 冲突仓交互变基 → 解决 → 「完成合并」；另测 abort/skip | continue 泛化成功回日志页；abort 经操作条；skip 丢弃当前继续（CLI） | ✅ | rebase-03.png（冲突仓变基冲突：页内「变基进行中…继续变基」+「跳过」；跳过 → 冲突提交被丢弃、rebase 结束；再冲突「用他们的」→ 继续变基 → feature 重放到 master 之上且工作区干净；中止经操作条（同 F-024）） | |
-| F-079 | auto-squash / fixup、squash by subject | 暂存内容 → 行右键「Fixup Commit」→ 折入 | `fixup!/squash!` 提交折入目标、信息=目标原文（CLI） | ✅ | rebase-04.png（暂存内容 → 行右键 Fixup Commit → 确认框 → 折入目标提交：目标含 topic.txt + fixup-probe.txt，信息仍为目标原文，其后提交重放为新 hash） | |
-| F-080 | 单提交编辑直通（reword/drop/squash/fixup） | 行右键逐一执行（reword 经 Modal 收集新信息） | 各动作落盘正确（根提交无父 → INVALID_QUERY 提示）（CLI） | ✅ | rebase-05.png（单提交编辑四动作逐一落盘：reword（Modal 预填目标信息）、drop（linear-Y 移除且 ly.txt 消失）、squash（Z 并入 X，信息合并、提交数 -1）、fixup（并入父提交保留父信息）；根提交 squash → INVALID_QUERY「须有父提交」） | |
+| F-076 | rebase onto（目标基选择） | 更多「变基」→ 输入 onto → 开始 | 变基完成，log 图重排正确（CLI） | ✅ | rebase-01.png（更多「变基」→ 简单模式 onto=`master` → 「开 始」；CLI：`rebase-topic` 的两笔重放到 `master` 之上（`1e4a222`/`e4ac279`），`master` 成为 HEAD 祖先） | |
+| F-077 | 交互式列表（pick/reword/squash/fixup/drop + 上移/下移） | base 输入 → 观察 todo 列表 → 改动作 → 上移/下移 | 列表正确；首行禁上移、末行禁下移；无效 base 显式报错 | ✅ | rebase-02.png（交互模式 base=`HEAD~2` → todo 两行；**首行「上移」禁用、末行「下移」禁用**，下移后顺序互换且禁用态随位置迁移；动作下拉 5 项 pick/reword/squash/fixup/drop；非法 base → 弹窗内 `rebase-todo-error` 显式报错（文案为 git stderr：`fatal: ambiguous argument 'no-such-ref-f077..HEAD'`）） | |
+| F-078 | continue / abort / 冲突联动 | 冲突仓交互变基 → 解决 → 「完成合并」；另测 abort/skip | continue 泛化成功回日志页；abort 经操作条；skip 丢弃当前继续（CLI） | ✅ | rebase-03.png（冲突仓变基冲突 → 页内「变基进行中…继续变基」+「跳 过」；**跳过**：Popconfirm「跳过当前提交（其变更将被丢弃）？」→ rebase 结束、该提交被丢弃（分支停在 master tip）；再造冲突后用「用他们的/用我们的」解决 4 个文件 → 「继续变基」→ `88d2bd3` 重放于 `f5fdef8` 之上、工作区干净；**中止**经日志页操作条 Popconfirm → 回到 `5271e87`、无 rebase 残留） | |
+| F-079 | auto-squash / fixup、squash by subject | 暂存内容 → 行右键「Fixup Commit」→ 折入 | `fixup!/squash!` 提交折入目标、信息=目标原文（CLI） | ✅ | rebase-04.png（暂存内容 → 行右键「Fixup Commit」→ 确认框 → 折入目标 `0be02ce`：目标现含 `f079-fixup.txt`、**信息仍为目标原文**，其后提交重放为新 hash） | |
+| F-080 | 单提交编辑直通（reword/drop/squash/fixup） | 行右键逐一执行（reword 经 Modal 收集新信息） | 各动作落盘正确（根提交无父 → INVALID_QUERY 提示）（CLI） | ✅ | rebase-05.png（四动作逐一落盘：**drop**（C4 移除且其文件消失）、**reword**（Modal 预填目标信息 → 写新信息）、**squash**（C5 并入父：两文件合一、信息合并、提交数 -1）、**fixup**（C6 并入父：保留父信息）；根提交 squash → 400 `INVALID_QUERY`「squash/fixup 目标须有父提交（当前分支历史内）」且仓库分毫未动） | |
 
 ### 4.10 StashPanel（slug `stash`；P2）
 
@@ -279,11 +285,11 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-081 | stash save（message/-u/--keep-index） | 页内保存 Modal → 填 message → 勾 includeUntracked/keepIndex | stash 入列，选项生效（CLI `stash list`/`stash show` 互证） | ✅ | stash-01.png（说明填 `smoke-stash-f081`；勾「包含未跟踪文件」+「保持暂存区」；CLI：`stash@{0}: On rebase-topic: smoke-stash-f081`、`show --stat` 含未跟踪文件、暂存区 `M  lx.txt` 保持不动） |
-| F-082 | pop / apply / drop | 行内 pop → 再 apply → drop（Popconfirm） | 行为正确（pop 移除、apply 保留、drop 删除；CLI 互证） | ✅ | stash-02.png（apply 后列表仍 3 条；pop 弹确认「确定弹出 stash@{0}？弹出后将移除该贮藏」→ 3→2 且工作区落盘；drop 直接删除不入工作区，CLI 逐次互证） |
-| F-083 | stash as branch | 行「转分支」Modal → 执行 | 新分支出现且 stash 消费（CLI `branch` 互证） | ✅ | stash-03.png（分支名 `stash-branch-f083`；CLI：`* stash-branch-f083` 已检出、`stash list` 清空（贮藏被消费）、工作区出现贮藏内容） |
-| F-084 | Unstash As 对话框 | 行「Unstash As…」→ 选目标本地分支 → 执行 | 检出目标分支 + apply，不 drop（CLI） | ✅ | stash-04.png（选 `unstash-target` → 顶部绿条「已检出 unstash-target 并应用贮藏」；CLI：HEAD=`unstash-target`、README.md `+unstash-as-probe-line`、`stash list` 仍 2 条（未 drop）；stash-04b.png 为对话框选分支过程；注：目标分支与贮藏基点不一致时走 409 冲突提示且贮藏保留，见 §5.9 D-25 备注） |
-| F-085 | 查看差异 | 行「查看差异」Modal | `git stash show -p` unified 补丁正确展示 | ✅ | stash-05.png（「贮藏差异：stash@{1}」Modal 全文补丁；与 CLI `git stash show -p stash@{1}` 逐行一致：`index 4143312..536c2d6`、hunk `@@ -3,3 +3,4 @@`、`+stash-diff-probe-line`；修复 D-25 前此处正文恒空白） |
+| F-081 | stash save（message/-u/--keep-index） | 页内保存 Modal → 填 message → 勾 includeUntracked/keepIndex | stash 入列，选项生效（CLI `stash list`/`stash show` 互证） | ✅ | stash-01.png（说明 `smoke-stash-f081` + 勾「包含未跟踪文件」+「保持暂存区」；CLI：`stash@{0}: On …: smoke-stash-f081`、`git stash show -u --stat stash@{0}` = `README.md` + `.gitmessage` + `scratch/todo.md` + `untracked.txt`（未跟踪确实随档）；且 `git status` 仍为 `M  README.md`——keep-index 生效、暂存区保持不动） |
+| F-082 | pop / apply / drop | 行内 pop → 再 apply → drop（Popconfirm） | 行为正确（pop 移除、apply 保留、drop 删除；CLI 互证） | ✅ | stash-02.png（① apply：条数不变且内容落盘；② pop：Popconfirm「确定弹出 stash@{0}？弹出后将移除该贮藏」→ 6→5 且落盘；③ drop：Popconfirm「确定删除 stash@{0}？」→ 5→4 且内容**不**入工作区；三次 CLI 逐次互证） |
+| F-083 | stash as branch | 行「转分支」Modal → 执行 | 新分支出现且 stash 消费（CLI `branch` 互证） | ✅ | stash-03.png（分支名 `stash-branch-f083`；CLI：`HEAD` = `stash-branch-f083`（已检出）、该贮藏被消费（`stash list` 少一条）、工作区出现贮藏内容） |
+| F-084 | Unstash As 对话框 | 行「Unstash As…」→ 选目标本地分支 → 执行 | 检出目标分支 + apply，不 drop（CLI） | ✅ | stash-04.png（选目标本地分支 → 顶部绿条「已检出 `unstash-target-2` 并应用贮藏」；CLI：HEAD = `unstash-target-2`、贮藏内容落盘、**贮藏未 drop**（条数不变））；stash-04b.png（对话框选分支过程）。注：目标分支与贮藏基点不一致时走 409 冲突提示且贮藏保留（见 §5.9 D-25 备注） |
+| F-085 | 查看差异 | 行「查看差异」Modal | `git stash show -p` unified 补丁正确展示 | ✅ | stash-05.png（「贮藏差异：stash@{1}」Modal 全文补丁，与 CLI `git stash show -p stash@{1}` 逐行一致：`index 085be41..d38fe37`、hunk `@@ -9,3 +9,4 @@`、`+F-081 keep-index probe line`；修复 D-25 前此处正文恒空白） |
 
 ### 4.11 TagPanel（slug `tag`；P3）
 
@@ -291,9 +297,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-086 | 创建标签（含附注） | 创建 Modal → name + ref（默认 HEAD）→ message 非空即附注 | 列表出现新标签；附注/轻量区分正确（CLI `tag` 互证） | ✅ | tag-01.png（建附注标签 `v9.9.9-smoke`（附注行带「附注」徽标 + 附注全文）与轻量标签 `v9.9.9-light`（ref 填 `HEAD~2`）；CLI：`for-each-ref` 显示前者 `tag`→143857d（=HEAD）、后者 `commit`→c76050f（=HEAD~2），`tag -l -n` 附注正文一致；tag-01b.png 为创建对话框填写态） |
-| F-087 | 删除标签（本地/远程） | 行内 Popconfirm 删除本地 → 再测「删除远程」 | 本地删除成功；删除远程 = push 空 ref（CLI 远端互证） | ✅ | tag-02.png（本地删 `v9.9.9-light` → 列表 3→2、CLI `tag -l` 同步；「删除远程」确认框「确定从远程删除标签 v9.9.9-smoke？」→ toast「已删除远程标签 v9.9.9-smoke」、`ls-remote --tags origin` 清空而本地标签保留。注：首轮此处 500（D-26），修复后复验通过） |
-| F-088 | 推送标签（单个/全部） | 行内推送单个 → 页头「推送全部」（Popconfirm） | 远端出现标签（CLI `ls-remote` 互证）；认证回路正常 | ✅ | tag-03.png（单推 `v9.9.9-smoke` → toast「标签推送完成：v9.9.9-smoke」、远端仅该标签；「推送全部标签到远程仓库？」→ toast「全部标签推送完成」、`ls-remote --tags origin` = v1.0 + v9.9.9-smoke。注：首轮单推 500（D-27），修复后复验通过；本机为 file:// 裸远端，认证回路（token 注入）由 F-092 同级通道与 api 单测覆盖） |
+| F-086 | 创建标签（含附注） | 创建 Modal → name + ref（默认 HEAD）→ message 非空即附注 | 列表出现新标签；附注/轻量区分正确（CLI `tag` 互证） | ✅ | tag-01.png（建附注标签 `v9.9.9-smoke`（列表带「附注」徽标 + 附注全文）与轻量标签 `v9.9.9-light`（ref 填 `HEAD~2`）；CLI `for-each-ref`：前者 `objecttype=tag`→`fb9833f`（=当时 HEAD），后者 `objecttype=commit`→`7a4bc30`（=HEAD~2），`tag -l -n1` 附注正文一致）；tag-01b.png（创建对话框填写态） |
+| F-087 | 删除标签（本地/远程） | 行内 Popconfirm 删除本地 → 再测「删除远程」 | 本地删除成功；删除远程 = push 空 ref（CLI 远端互证） | ✅ | tag-02.png（本地删 `v9.9.9-light` → 列表 3→2、CLI `tag -l` 同步；「删除远程」确认框「确定从远程删除标签 v9.9.9-smoke？」→ toast「已删除远程标签 v9.9.9-smoke」、`ls-remote --tags origin` 不再含该标签而**本地标签保留**。注：D-26 未见回归） |
+| F-088 | 推送标签（单个/全部） | 行内推送单个 → 页头「推送全部」（Popconfirm） | 远端出现标签（CLI `ls-remote` 互证）；认证回路正常 | ✅ | tag-03.png（单推 `v9.9.9-smoke` → 远端仅该 ref（含 `^{}` 解引用行）；「推送全部标签到远程仓库？」→ 远端 = `v1.0` + `v9.9.9-light` + `v9.9.9-smoke`。注：D-27 未见回归；本机为 file:// 裸远端，认证回路（token 注入）由 F-092 同级通道与 api 单测覆盖） |
 
 ### 4.12 RemotePanel（slug `remote`；P3）
 
@@ -301,10 +307,10 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-089 | 远程添加/删除/编辑 | 添加新远程 → 编辑 setUrl（同写 fetch/push）→ 删除（Popconfirm） | 各操作正确（CLI `remote -v` 互证） | ✅ | remote-01.png（添加 `smoke-aux` → `file://…/smoke-remote-aux`，编辑改为 `…-aux2`；CLI 逐步互证：`remote -v` 出现双行（fetch/push 同改写）、删除确认「确定删除远程 smoke-aux？」后仅剩 origin） |
-| F-090 | fetch（spec/全远程/单远程） | 顶部 fetch 全部 → 行内单远程 → 定制 spec | updatedRefs 展示 + `refs.changed` 推送列表刷新（CLI） | ✅ | remote-02.png（「Fetch 全部」→ toast「fetch 完成，更新 1 个引用」，CLI：`origin/fetch-probe-r8` 与远端 SHA 一致（d97318b）；行内单远程 → 「更新 0 个引用」；「定制 Fetch…」refspec `+refs/pull/9/head:refs/remotes/origin/pr-9` → CLI 建立 `origin/pr-9` 且与远端 `refs/pull/9/head` 同 SHA；分支页已显示新远端分支，remote-02b.png 为定制 Modal）。注：定制 spec 入口为本轮新增（审计声称「既有」但契约/UI 实缺，见 §5.11 D-28） |
-| F-091 | shallow 识别 / unshallow | 打开 `rebased-smoke-shallow` 远程页 → 观察徽标 → unshallow | 顶部「浅克隆（历史截断）」徽标；unshallow 后消失（CLI） | ✅ | remote-03b.png（浅克隆态：橙色「浅克隆（历史截断）」徽标 + 「解除浅克隆」按钮）→ remote-03.png（点击后 toast「已解除浅克隆（历史已补全）」、徽标即时消失）；CLI：`rev-parse --is-shallow-repository` true→false、`rev-list --count` 1→17。注：徽标消失依赖 fetch 响应 shallow 回写缓存（本轮修复，见 §5.11 D-29） |
-| F-092 | HTTPS 认证对话框 / token 存储 | 向需认证远端操作触发 401（依赖外部凭据服务；否则跳过） | AuthDialog 弹出 → token 写回账户存储 → retry 重放成功 | ✅ | remote-04.png（本地 401 服务 `http://127.0.0.1:9418/auth.git`：拉取该远程 → 401 → 「需要认证」对话框（主机预填 `127.0.0.1`）→ 填账户/令牌 → 「保存并重试」；CLI：`config.json` 的 `auth.accounts` 落盘 `{host:127.0.0.1, account:smoke-tester, token:…}`；401 服务日志显示重放请求携 `Authorization: Bearer smoke-token-f092`（token 注入端到端证据））。边界：服务恒 401，故「重放成功」以「重放确实发生且携带新凭据」为证，端到端成功需真实可认证 git 服务（与 F-025 同一边界）；冒烟后已删除该临时账户与远程 |
+| F-089 | 远程添加/删除/编辑 | 添加新远程 → 编辑 setUrl（同写 fetch/push）→ 删除（Popconfirm） | 各操作正确（CLI `remote -v` 互证） | ✅ | remote-01.png（添加 `smoke-aux` → `file:///…/smoke-remote-aux`，编辑改为 `…-aux2`；CLI 逐步互证：`remote -v` 的双行（fetch/push）**同步改写**、删除确认「确定删除远程 smoke-aux？」后仅剩 `origin`） |
+| F-090 | fetch（spec/全远程/单远程） | 顶部 fetch 全部 → 行内单远程 → 定制 spec | updatedRefs 展示 + `refs.changed` 推送列表刷新（CLI） | ✅ | remote-02.png（「Fetch 全部」→ 回执列出 updatedRefs（`origin/fetch-probe-r8`、`refs/tags/v9.9.9-light`）；行内单远程 → updatedRefs 为空；「定制 Fetch…」refspec `+refs/pull/9/head:refs/remotes/origin/pr-9` → CLI 建立 `origin/pr-9` = `5eb67ac`，与远端 `refs/pull/9/head` 同 SHA）；remote-02b.png（定制 spec Modal）。注：定制入口为 D-28 新增能力，本轮未见回归 | |
+| F-091 | shallow 识别 / unshallow | 打开 `rebased-smoke-shallow` 远程页 → 观察徽标 → unshallow | 顶部「浅克隆（历史截断）」徽标；unshallow 后消失（CLI） | ✅ | remote-03b.png（浅克隆态：橙色「浅克隆（历史截断）」徽标 + 「解除浅克隆」按钮）→ remote-03.png（点击后徽标**即时**消失、按钮随条件卸载）；CLI：`rev-parse --is-shallow-repository` true→false、`rev-list --count` 1→7。注：徽标即时消失依赖响应 shallow 回写缓存（D-29）——本轮未见回归 |
+| F-092 | HTTPS 认证对话框 / token 存储 | 向需认证远端操作触发 401（依赖外部凭据服务；否则跳过） | AuthDialog 弹出 → token 写回账户存储 → retry 重放成功 | ✅ | remote-04.png（**与 F-025 同一次实测、本轮复用未重拍**：本地恒 401 的 git smart-HTTP 服务 `http://127.0.0.1:9418/auth.git`，加远程 `auth-probe` 后日志页「更多→拉取」→ 401 `AUTH_FAILED` → AuthDialog「需要认证」（主机 `127.0.0.1`、账户/令牌输入框为空、界面不含 token）→ 填 `smoke-tester`/`smoke-token-f092` → 「保存并重试」；401 服务请求日志：首次 `auth=null` → 重放 `"auth":"Bearer smoke-token-f092"`（token 注入端到端证据）；`config.json` → `auth.accounts` 落盘该条目）。边界：服务恒 401，故以「重放确实发生且携带新凭据」为证；冒烟后已清理（远程与账户均删除并复验 `auth.accounts` 为 0 条） |
 
 ### 4.13 PushDialog（slug `push`；P3，内嵌模态）
 
@@ -312,9 +318,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-093 | push（远程/分支选择、setUpstream/forceWithLease） | 推送 Modal → 选远程 + 分支输入 → 默认勾 setUpstream → 推送 | 推送成功 + 上游设置落盘（CLI 远端互证） | ✅ | push-01.png（Modal 选 origin、分支预填 `rebase-topic`、`set-upstream` 默认勾选；CLI：远端新建 `rebase-topic`=143857d 与本地 HEAD 同 SHA、`branch.rebase-topic.remote=origin` + `merge=refs/heads/rebase-topic` 落盘、`status -sb` 显示 `## rebase-topic...origin/rebase-topic`；push-01b.png 为 Modal 态） |
-| F-094 | rejected push → 自动 Update 联动 | 分叉场景推送 → 观察自动弹 Update（merge/rebase）→ 选 merge | 更新成功自动续推原推送体；conflicts 引导解决（CLI） | ✅ | push-02.png（远端侧/本地侧各一笔后推送 → 弹「推送被拒 — 更新项目」（merge 默认 / rebase 可选 / Reset to tracked）→ 选 merge → toast「更新并推送完成」；CLI：本地 HEAD = 远端 = 6266d7e、生成合并提交 `Merge branch 'rebase-topic' of …`、两侧文件均在、与上游同步；push-02b.png 为被拒弹窗态）。冲突引导见 F-114~F-119 |
-| F-095 | push tags / force-push 后修复（通道验证） | 验证两通道可达：TagPanel 推送全部、BranchPanel force-push 修复 | 两通道各自完成（证据同 tag-03/branch-09；本行截等效通道完成态） | ✅ | push-03.png（本行真跑 force-with-lease：amend 合并提交改写历史后勾「force-with-lease：安全强推」推送 → toast「推送完成」、CLI 远端 `rebase-topic` 由 6266d7e 改为 8021511 与本地一致；push-03b.png 为勾选态）。标签通道证据 tag-03.png（F-088）、分支面板强推修复通道证据 branch-09.png（F-070） |
+| F-093 | push（远程/分支选择、setUpstream/forceWithLease） | 推送 Modal → 选远程 + 分支输入 → 默认勾 setUpstream → 推送 | 推送成功 + 上游设置落盘（CLI 远端互证） | ✅ | push-01.png（Modal：远程 `origin`、分支预填 `rebase-topic`、`set-upstream` **默认勾选**；CLI：远端新建 `rebase-topic`=`80b63f4` **与本地 HEAD 同 SHA**、`branch.rebase-topic.remote=origin` 与 `merge=refs/heads/rebase-topic` 落盘、`status -sb` = `## rebase-topic...origin/rebase-topic`）；push-01b.png（Modal 态） |
+| F-094 | rejected push → 自动 Update 联动 | 分叉场景推送 → 观察自动弹 Update（merge/rebase）→ 选 merge | 更新成功自动续推原推送体；conflicts 引导解决（CLI） | ✅ | push-02.png（造分叉（远端 `d91794f` / 本地 `21efcbb`）后推送 → **自动弹**「推送被拒 — 更新项目」（merge 默认选中 / rebase 可选 / Reset to tracked）→ 选 merge → toast「更新并推送完成」；CLI：本地 = 远端 = `ed52e8f`，合并提交**双父** `21efcbb` + `d91794f`、两侧文件均在）；push-02b.png（被拒弹窗态）。冲突引导见 F-114~F-119 |
+| F-095 | push tags / force-push 后修复（通道验证） | 验证两通道可达：TagPanel 推送全部、BranchPanel force-push 修复 | 两通道各自完成（证据同 tag-03/branch-09；本行截等效通道完成态） | ✅ | push-03.png（本行真跑 force-with-lease：amend 改写合并提交后本地 `5c7c07a` vs 远端 `ed52e8f` → 勾「force-with-lease：安全强推」→ toast「推送完成」、远端 `rebase-topic` 由 `ed52e8f` 改为 `5c7c07a` 与本地一致）；push-03b.png（勾选态）。标签通道证据 tag-03.png（F-088）、分支面板强推修复通道证据 branch-09.png（F-070） |
 
 ### 4.14 PullDialog（slug `pull`；P3，内嵌模态）
 
@@ -322,8 +328,8 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-096 | pull（远程/分支选择、rebase 选项） | 拉取 Modal → 选远程/分支 → 勾 rebase → 拉取 | 拉取成功合入；rebase 模式生效（CLI 互证） | ✅ | pull-01.png（origin + 勾「使用 rebase 而非 merge」→ 拉取；CLI：历史变线性——本地提交被重写为 `a061385` 并置于远端提交 `993fb81` 之上、未新增合并提交、`status` 仅剩 ahead 1；pull-01b.png 为 Modal 勾选态） |
-| F-097 | fetch 全远程 / fetch spec 定制（通道验证） | 验证承载通道：RemotePanel 顶部 fetch 全部 + spec 定制 | 通道完成（同 remote-02 证据；本行截 RemotePanel fetch 成功态） | ✅ | pull-02.png（本行截 RemotePanel「Fetch 全部」成功态：toast「fetch 完成，更新 1 个引用」；CLI：UI fetch 建立 `origin/fetch-probe-r10` 且与远端同 SHA 3baf7cb）。定制 spec 通道证据 remote-02.png/remote-02b.png（F-090） |
+| F-096 | pull（远程/分支选择、rebase 选项） | 拉取 Modal → 选远程/分支 → 勾 rebase → 拉取 | 拉取成功合入；rebase 模式生效（CLI 互证） | ✅ | pull-01.png（造分叉（本地 `d9e20e4` ahead 1 / 远端 `f1698e5` behind 1）→ 勾「使用 rebase 而非 merge」→ toast「拉取完成」；CLI：历史变**线性**——本地提交被重写为 `5f1f717` 并直接落在远端提交 `f1698e5` 之上、`rev-list --parents` 只有一个父、**未新增合并提交**）；pull-01b.png（Modal 勾选态）。**口径更正（实测）**：该 Modal **只有远端 Select**（`pull-remote-select`）+ rebase 勾选，**没有分支选择器**——分支取自当前分支的上游跟踪，行文「选远程/分支」应读作「选远程（分支随上游）」 |
+| F-097 | fetch 全远程 / fetch spec 定制（通道验证） | 验证承载通道：RemotePanel 顶部 fetch 全部 + spec 定制 | 通道完成（同 remote-02 证据；本行截 RemotePanel fetch 成功态） | ✅ | pull-02.png（RemotePanel「Fetch 全部」成功态：toast「fetch 完成，更新 1 个引用」；CLI：UI fetch 建立 `origin/fetch-probe-r11` = `f1698e5`，与远端 `refs/heads/fetch-probe-r11` 同 SHA）。定制 spec 通道证据 remote-02.png / remote-02b.png（F-090） |
 
 ### 4.15 UpdateProjectDialog（slug `update`；P3，内嵌模态）
 
@@ -331,9 +337,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-098 | merge/rebase 策略选择 | 打开更新对话框 → 观察策略选项 | 二选一、默认 merge | ✅ | update-01.png（「更新项目」对话框：merge 默认选中、rebase 可选，附说明「fetch 全部远程后合入当前分支」与「Reset to tracked：rebase-topic → origin/rebase-topic」） |
-| F-099 | 更新会话（进度/结果汇总） | 执行更新 → 观察结果面板 | fetched 引用数 + pull 状态（updated 已合入/up-to-date 已最新）汇总；footer 变「关闭」 | ✅ | update-02.png（「更新结果」面板：`fetch 更新 1 个远程引用：refs/remotes/origin/rebase-topic` + 「已合入当前分支」，footer 变「关 闭」；CLI：生成合并提交 fbb9c83、远端提交 e7c67a8 成为本地祖先）。up-to-date 变体亦实测：「fetch 更新 0 个远程引用（无远程更新）」+「已是最新」 |
-| F-100 | Reset to tracked | 左下「Reset to tracked」→ Modal.confirm（danger） | reset --hard upstream、丢弃工作区/暂存（CLI）；无上游不渲染 | ✅ | update-03.png（危险确认框「Reset 到上游分支？将丢弃 rebase-topic 的工作区/暂存变更，硬重置到 origin/rebase-topic；此操作不可恢复」→ 确定；CLI：HEAD=e7c67a8=上游、README 探针行消失、`local-side.txt` 回到提交版、`status` 仅剩未跟踪）。无上游不渲染：`rebased-smoke-big`（master 无 upstream）打开同一对话框时按钮与说明均缺失（实测） |
+| F-098 | merge/rebase 策略选择 | 打开更新对话框 → 观察策略选项 | 二选一、默认 merge | ✅ | update-01.png（「更新项目」对话框：说明「更新方式（fetch 全部远程后合入当前分支）」，**merge 默认选中**、rebase 可选，并附「Reset to tracked：`rebase-topic` → `origin/rebase-topic`」说明） |
+| F-099 | 更新会话（进度/结果汇总） | 执行更新 → 观察结果面板 | fetched 引用数 + pull 状态（updated 已合入/up-to-date 已最新）汇总；footer 变「关闭」 | ✅ | update-02.png（「更新结果」面板：`fetch 更新 1 个远程引用：refs/remotes/origin/rebase-topic` + 绿条「已合入当前分支」，footer 变「关 闭」；CLI：生成合并提交 `ca1efbc`（双父 `5f1f717` + `ab55a1b`），远端提交成为本地祖先）。P3 观察：结果渲染完成前有极短窗口 footer 同时存在「关 闭」与「确 定」，稳定后只剩「关 闭」，属渲染瞬时态、不计缺陷 |
+| F-100 | Reset to tracked | 左下「Reset to tracked」→ Modal.confirm（danger） | reset --hard upstream、丢弃工作区/暂存（CLI）；无上游不渲染 | ✅ | update-03.png（危险确认框「Reset 到上游分支？」+「将丢弃 `rebase-topic` 的工作区/暂存变更，硬重置到 `origin/rebase-topic`；此操作不可恢复」（primary=danger）→ 确定；CLI：HEAD = `ab55a1b` = 上游、README 探针行消失、`f100-staged-probe.txt` 消失、`status` 仅剩 3 个未跟踪）。**无上游不渲染**：`rebased-smoke-big`（master 无 upstream、无远程）打开同一对话框时 `reset-to-tracked` 查无、说明也缺失 |
 
 ### 4.16 BlameView（slug `blame`；P3）
 
@@ -341,10 +347,10 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-101 | 注解展示（等效行列表形态） | 打开某文件溯源 | 行列表：行号/作者/日期/内容 + hash 短名徽标 | ✅ | blame-01.png（`src/util.ts` 12 行逐行展示：行号 + hash 短名徽标（8851aec/9279497/5ef1039/1ccdf5b）+ 作者 + 日期 + 内容；与 CLI `git blame -L 1,12 src/util.ts` **逐行一致**（含行 4-7 归 Other Dev、行 8-11 归 5ef1039）） |
-| F-102 | 注解点击联动 | hash 徽标 → 回看后行「差异」→ 回看后行「历史」 | 徽标 → 日志 `?select=`；「差异」→ DiffPage from/to（根提交 `root=1`）；「历史」→ `/history?file=` | ✅ | blame-02.png（三条联动实测：① 行 4 hash 徽标 → `/repos/:id?select=92794979…` 且目标行 `data-selected=true`（列表可见选中，blame-02.png 即该态）；② 行 4「差异」→ `/diff?file=src%2Futil.ts&from=79e9129…&to=9279497…`；根提交行（README.md 行 2，hash 3236538 无父）→ `/diff?file=README.md&root=1`；③ 行 4「历史」→ `/history?file=src%2Futil.ts`） |
-| F-103 | Show All Affected（受影响文件） | 行「受影响」→ Modal → 点文件 | 提交全量变更文件 Modal；文件点击 → 该文件 diff | ✅ | blame-03.png（「受影响文件（9279497）」Modal：提交信息 + 4 个文件 —— `R src/feature.ts → src/feature-renamed.ts`、`A src/new-file.ts`、`M src/util.ts`、`A sse-check.txt`，与 CLI `git show --name-status 9279497`（R100/A/M/A）完全一致；点 `src/util.ts` → `/diff?file=src%2Futil.ts&from=79e9129…&to=9279497…`） |
-| F-104 | previousLineno 边界 | 抽查重命名/边界行注解 | 注解近似正确（orig 近似边界口径，抽查即可） | ✅ | blame-04.png（重命名文件 `src/feature-renamed.ts`（原 `src/feature.ts`，9279497 R100）溯源：4 行归因 5769c08/5239f7f 与原文件同源，与 CLI `git blame --line-porcelain`（`filename src/feature.ts`、`previous 5239f7f…`）一致；API 侧 `previousLineno` 对改动行给出 1、3，未改动行为 null——近似边界口径，抽查通过） |
+| F-101 | 注解展示（等效行列表形态） | 打开某文件溯源 | 行列表：行号/作者/日期/内容 + hash 短名徽标 | ✅ | blame-01.png（`src/util.ts` **5 行**逐行展示：行号 + hash 短名徽标 + 作者 + 日期 + 内容；与 CLI `git blame --line-porcelain src/util.ts` **逐行一致**：行 1-3 归 `f55c880`、行 4-5 归 `86962c0`。注：本会话重写历史后 util.ts 为 5 行，旧记录的 12 行/其他 hash 已作废） |
+| F-102 | 注解点击联动 | hash 徽标 → 回看后行「差异」→ 回看后行「历史」 | 徽标 → 日志 `?select=`；「差异」→ DiffPage from/to（根提交 `root=1`）；「历史」→ `/history?file=` | ✅ | blame-02.png（三条联动实测：① 行 4 hash 徽标 → `/repos/:id?select=86962c0…` 且目标行 `data-selected=true`（该图即此态）；② 行 4「差异」→ `/diff?file=src%2Futil.ts&from=199ecaf…&to=86962c0…`（from 恰为 `86962c0^`）；**根提交行**（`README.md` 行 1，`56f751a` 无父）→ `/diff?file=README.md&root=1`；③ 行 4「历史」→ `/history?file=src%2Futil.ts`） |
+| F-103 | Show All Affected（受影响文件） | 行「受影响」→ Modal → 点文件 | 提交全量变更文件 Modal；文件点击 → 该文件 diff | ✅ | blame-03.png（「受影响文件（`199ecaf`）」Modal：`M README.md`、`R src/feature.ts → src/feature-renamed.ts`（renameFrom 呈现）、`A src/new-file.ts`，与 CLI `git show --name-status 199ecaf`（M/R100/A）**完全一致**；点 R 行 → `/diff?file=src%2Ffeature-renamed.ts&from=5f64516…&to=199ecaf…`） |
+| F-104 | previousLineno 边界 | 抽查重命名/边界行注解 | 注解近似正确（orig 近似边界口径，抽查即可） | ✅ | blame-04.png（重命名文件 `src/feature-renamed.ts`（原 `src/feature.ts`，改名提交 `199ecaf`）溯源：4 行归因 `e03962c`（行 1、3）/`fc459ff`（行 2、4），CLI 侧 `git blame --line-porcelain` 给出 `filename src/feature.ts` 与 `previous fc459ff…`，同源；API 侧 `previousLineno` 对改动行给 1、3，未改动行为 null——近似边界口径，抽查通过） |
 
 ### 4.17 HistoryPanel（slug `history`；P3）
 
@@ -352,9 +358,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-105 | 文件历史列表 | 打开某文件历史 | 条目：短哈希 + subject + 作者 + 日期 | ✅ | history-01.png（`src/util.ts` 文件历史（4）：1ccdf5b/5ef1039/9279497/8851aec 各带 subject + 作者 + 日期；与 CLI `git log --format='%h | %s | %an | %ad' -- src/util.ts` 四条**逐条一致**（含 9279497 归 Other Dev）） |
-| F-106 | 重命名跟随（`--follow`） | 打开被重命名文件的历史 | 改名前的提交同样列出 | ✅ | history-02.png（`src/feature-renamed.ts` 历史（3）：9279497（改名本身）+ 5769c08 + 5239f7f（原 `src/feature.ts` 的提交）；与 CLI `git log --follow` 一致，而 `git log`（不跟随）只有 1 条——跟随生效） |
-| F-107 | 版本 diff 联动 | 条目点击 → 双击 → 行内「Annotate Revision」 | 点击 → 日志 `?select=`；双击 → DiffPage from/to；Annotate → `/blame?rev=` | ✅ | history-03.png（三条联动实测：① 单击条目 → `/repos/:id?select=92794979…`；② 双击 → `/diff?file=src%2Futil.ts&from=79e9129…&to=9279497…`；③ 「Annotate」→ `/blame?file=src%2Futil.ts&rev=92794979…` 且**该修订版本被真正加载**：显示 8 行（9279497 时的内容），而非 HEAD 的 12 行——history-03.png 即此态） |
+| F-105 | 文件历史列表 | 打开某文件历史 | 条目：短哈希 + subject + 作者 + 日期 | ✅ | history-01.png（`src/util.ts` 文件历史（2）：`86962c0` / `f55c880` 各带 subject + 作者 + 日期，与 CLI `git log --format='%h \| %s \| %an \| %ad' -- src/util.ts` **逐条一致**） |
+| F-106 | 重命名跟随（`--follow`） | 打开被重命名文件的历史 | 改名前的提交同样列出 | ✅ | history-02.png（`src/feature-renamed.ts` → 文件历史（3）：`199ecaf`（改名本身）+ `e03962c` + `fc459ff`（原 `src/feature.ts` 的提交），与 CLI `git log --follow` 一致；而**不跟随**的 `git log -- <path>` 只有 1 条（`199ecaf`）——跟随生效） |
+| F-107 | 版本 diff 联动 | 条目点击 → 双击 → 行内「Annotate Revision」 | 点击 → 日志 `?select=`；双击 → DiffPage from/to；Annotate → `/blame?rev=` | ✅ | history-03.png（三条联动实测：① 单击条目 → `/repos/:id?select=86962c0…`；② 双击 → `/diff?file=src%2Futil.ts&from=199ecaf…&to=86962c0…`；③ 条目「Annotate」→ `/blame?file=src%2Futil.ts&rev=f55c880…` 且**真正加载该修订版本**：显示 **4 行**（= `git show f55c880:src/util.ts`），而非 HEAD 的 5 行——该图即此态） |
 
 ### 4.18 CommittedChangesPanel（slug `committed`；P3）
 
@@ -362,9 +368,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-108 | 按提交浏览已提交变更 | 打开页面 → 观察左栏 → 分页「加载更多」 | 提交列表左栏 + 分页正确 | ✅ | committed-01.png（左栏提交列表：短哈希 + subject + 作者 + 日期；主仓 26 条一次列全，与 CLI `rev-list --count HEAD` = 26 一致；分页在 321 提交的大仓 `rebased-smoke-big` 实测：「提交列表（50）」→ 点「加载更多」→「提交列表（100）」且行数 50→100） |
-| F-109 | 目录树组织变更文件 | 观察右栏目录树 | 目录节点 + A/M/D/R 徽标 + renameFrom；目录缺省展开可折叠 | ✅ | committed-02.png（选 9279497 → 「变更文件（4）」：目录节点 `src` 缺省展开，内含 `R src/feature.ts → feature-renamed.ts`（renameFrom 呈现）、`A new-file.ts`、`M util.ts`；根级 `A sse-check.txt`；与 CLI `git show --name-status` 一致。折叠实测：点 `src` 节点 → 子项收起（文件行 3→1），再点恢复展开） |
-| F-110 | 与 diff 查看器联动 | 点目录树文件 | 跳 `/diff?file&from=<hash>~1&to=<hash>` 两侧正确 | ✅ | committed-03.png（点 `src/util.ts` → `/diff?file=src%2Futil.ts&from=79e9129…&to=9279497…&files=[…]`；两侧正确性互证：API `before` 4 行 / `after` 8 行，与 CLI `git show 79e9129:src/util.ts` 4 行、`git show 9279497:src/util.ts` 8 行一致） |
+| F-108 | 按提交浏览已提交变更 | 打开页面 → 观察左栏 → 分页「加载更多」 | 提交列表左栏 + 分页正确 | ✅ | committed-01.png（**图为大仓翻页后态**：`rebased-smoke-big` 的「提交列表（50）」→ 点「加载更多」→「提交列表（100）」，行数 50→100（该仓 320 提交）——分页无法用 CLI 互证，故选它做截图；主仓侧以 DOM+CLI 互证：左栏「提交列表（30）」30 条短哈希+subject+作者+日期，与 `git rev-list --count HEAD` = 30 一致，首条 `ab55a1b`、末条根提交 `56f751a`） |
+| F-109 | 目录树组织变更文件 | 观察右栏目录树 | 目录节点 + A/M/D/R 徽标 + renameFrom；目录缺省展开可折叠 | ✅ | committed-02.png（选 `199ecaf` → 「变更文件（3）」：目录节点 `src` **缺省展开**，内含 `R src/feature.ts → feature-renamed.ts`（renameFrom 呈现）、`A new-file.ts`；根级 `M README.md`，与 CLI `git show --name-status` 一致。折叠实测：点 `src` 节点 → 文件行 3→1，再点恢复 3） |
+| F-110 | 与 diff 查看器联动 | 点目录树文件 | 跳 `/diff?file&from=<hash>~1&to=<hash>` 两侧正确 | ✅ | committed-03.png（点 `README.md` → `/diff?file=README.md&from=5f6451617…&to=199ecaf…&files=["README.md","src/feature-renamed.ts","src/new-file.ts"]`；两侧互证：`git show 5f64516:README.md` **3 行** vs `git show 199ecaf:README.md` **5 行**（新增 `F-041 文件级暂存探针行`），页面左右两侧行数与内容一致） |
 
 ### 4.19 SearchPanel（slug `search`；P3）
 
@@ -372,9 +378,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-111 | 提交搜索（grep / pickaxe） | 双模式 Segmented 各搜一次；输入非法正则 | 结果列表正确；非法正则 → 400 提示 | ✅ | search-01.png（「信息 grep」搜 `smoke` → 9 条，与 CLI `git log --grep=smoke` 的 9 条**逐条一致**；切「内容 pickaxe」搜 `staged-only` → 1 条 `5ef1039`，与 CLI `git log -S'staged-only'` 一致；非法正则 `[unclosed` → 面板红字「搜索表达式不是合法的正则表达式：[unclosed」（search-01b.png）。注：该提示为首轮修复项 D-30，修复前抛的是 `git log --grep=[ … 退出码 128` 内部命令行原文） |
-| F-112 | 结果 → 日志页 | 点结果行 | 跳 `?select=<hash>` 且该行选中 | ✅ | search-02.png（点 `143857d chore(smoke): linear-X（F-080）` → `/repos/:id?select=143857dbbb94fd6291184f8e28875592a54329c9`，目标行 `data-selected=true` 且详情可见） |
-| F-113 | 分支快速搜索 | 输入即滤本地分支 → 点行 | 检出并回日志页（quickswitch）；当前分支仅导航（CLI） | ✅ | search-03.png（输 `fetch` → 列表即时滤为 `fetch-probe-local` 一项；点击 → 回日志页且 CLI `rev-parse --abbrev-ref HEAD` = `fetch-probe-local`（已检出）、状态条显示 `## fetch-probe-local...origin/fetch-probe [ahead 6, behind 1]`；再点当前分支项 → 仅导航无副作用（HEAD 不变、无报错）。冒烟后已切回 `rebase-topic`） |
+| F-111 | 提交搜索（grep / pickaxe） | 双模式 Segmented 各搜一次；输入非法正则 | 结果列表正确；非法正则 → 400 提示 | ✅ | search-01.png（「信息 grep」搜 `smoke` → **18 条**，与 CLI `git log --grep=smoke` 的 18 条**逐条一致**；切「内容 pickaxe」搜 `staged new file` → 1 条 = `199ecaf`，与 `git log -S'staged new file'` 一致；非法正则 `[unclosed` → 面板红字「搜索表达式不是合法的正则表达式：[unclosed」）。**口径更新**：旧记录的 9 条与 pickaxe 词 `staged-only` 均系历史重写前的结果，现历史下分别为 18 条与 0 命中；search-01b.png（非法正则红字态）、search-01c.png（pickaxe 单条结果态，补证） |
+| F-112 | 结果 → 日志页 | 点结果行 | 跳 `?select=<hash>` 且该行选中 | ✅ | search-02.png（点结果行 → `/repos/:id?select=21efcbbbcae4380b17f644d1152b6aeb859e1b6f`，目标行 `data-selected=true` 且详情面板可见） |
+| F-113 | 分支快速搜索 | 输入即滤本地分支 → 点行 | 检出并回日志页（quickswitch）；当前分支仅导航（CLI） | ✅ | search-03.png（输 `diverge` → 列表即时滤为 `diverge-test` 一项 → 点击 → 回日志页且 CLI `rev-parse --abbrev-ref HEAD` = `diverge-test`（HEAD=`3b0244b`）；再点当前分支项 → 仅导航无副作用（HEAD 不变、无报错）。**夹具口径**：旧记录的 `fetch-probe-local` 在现夹具中已不存在（本地 12 分支无 `fetch-*`），故改用 `diverge-test`；冒烟后已切回 `rebase-topic`）；search-03b.png（quickswitch 落地后的日志页态，补证） |
 
 ### 4.20 ConflictsPanel（slug `conflicts`；P2）
 
@@ -383,12 +389,12 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-114 | 冲突文件列表 + 类型徽标 + 目录分组 | 观察列表 | stages 组合类型徽标正确；按目录子标题分组（带计数） | ✅ | conflicts-01.png（夹具四类冲突一次呈现：「冲突文件（4）」按「根目录（4）」分组；徽标与 `git status` 完全对应——`双方修改`=UU shared.txt/manual-merge.txt、`对方删除/我方修改`=UD deleted-by-them.txt、`双方新增`=AA both-added.txt；UD 行的「用他们的」禁用并额外提供「删除该文件」） |
-| F-115 | 整侧解决（ours/theirs/delete） | 行内 ours → 另文件 theirs → 另文件 delete | 对应侧禁用逻辑正确；解决后 CLI 互证 | ✅ | conflicts-02.png（shared.txt「用我们的」→ CLI 落盘 `master side`、脱离未合并；both-added.txt「用他们的」→ `feature version`；deleted-by-them.txt「删除该文件」（Popconfirm「确认以删除解决该冲突？」）→ 文件删除且暂存为 `D`；列表 4→1，`git diff --name-only --diff-filter=U` 同步收缩） |
-| F-116 | 3-way 手动合并（MergeView） | 「手动合并」→ 全屏 Modal | 左 ours/右 theirs/底部结果编辑；保存 manual 策略（CLI） | ✅ | conflicts-03.png（「手动合并：manual-merge.txt」全屏 Modal：左「当前分支」ours=line1~3 master、右「合并来源」theirs=line1~3 feature、底部「合并结果」可编辑（Monaco）；编辑为 `line1 master / line2 feature / line3 resolved-by-hand` 后「保存」→ CLI 落盘逐行一致且该路径脱离未合并） |
-| F-117 | 完成合并（continue 泛化） | 全部解决 → 「完成合并」 | merge/rebase/cherry-pick/revert 共用 continue → 回日志页（CLI） | ✅ | conflicts-04.png（冲突清零后「完成合并」可点 → 自动回日志页；CLI：生成合并提交 `05a16f7 Merge branch 'feature'`、`.git/MERGE_HEAD` 清除、`status` 干净、四项解决结果全部保留（shared=master side / both-added=feature version / manual=手动合并内容 / deleted-by-them 仍不存在）） |
-| F-118 | 跳过（skip） | rebase 冲突 → 底部「跳过」（Popconfirm） | 丢弃当前变更继续后续（CLI）；merge 无 skip 按钮 | ✅ | conflicts-05.png（变基冲突时面板底部为「跳 过」+「继续变基」；点「跳过」→ 确认框「跳过当前提交（其变更将被丢弃）？」→ CLI：`.git/rebase-merge` 清除、feature 落到 master 提交 f98ecc6、被跳过提交（`feat(feature): 后续改动（rebase 将冲突）`）已从历史消失、shared.txt 为 master 版本、工作区干净）。对照：F-114~F-117 的 merge 冲突态**无**「跳过」按钮（仅「完成合并」） |
-| F-119 | 合并状态联动 | 观察进行中提示与操作条 | 进行中提示页内可见；中止入口在 LogPage 操作条 | ✅ | conflicts-06.png（LogPage 顶栏：橙色状态片「变基中（第 1/1 步）」+ 红色「中 止」按钮；点中止 → 确认框「确定中止当前操作？工作区将回到操作前状态」→ CLI：rebase 状态清除、分支回到 feature、shared.txt 恢复 `feature again`、工作区干净。冲突页内的提示随操作类型变化：「合并进行中：解决全部冲突后点击「完成合并」；中止请返回日志页操作条。」/「变基进行中：解决全部冲突后点击「继续变基」；…」（conflicts-01.png / conflicts-05.png）） |
+| F-114 | 冲突文件列表 + 类型徽标 + 目录分组 | 观察列表 | stages 组合类型徽标正确；按目录子标题分组（带计数） | ✅ | conflicts-01.png（夹具四类冲突一次呈现：「冲突文件（4）」按「根目录（4）」分组；徽标与 `git status` 完全对应——`双方修改`=UU shared.txt/manual-merge.txt、`对方删除/我方修改`=UD deleted-by-them.txt、`双方新增`=AA both-added.txt；UD 行的「用他们的」禁用并额外提供「删除该文件」）**（R23 复跑：同一夹具四路冲突同屏，徽标与 CLI 逐条一致）** |
+| F-115 | 整侧解决（ours/theirs/delete） | 行内 ours → 另文件 theirs → 另文件 delete | 对应侧禁用逻辑正确；解决后 CLI 互证 | ✅ | conflicts-02.png（shared.txt「用我们的」→ CLI 落盘 `master side`、脱离未合并；both-added.txt「用他们的」→ `feature version`；deleted-by-them.txt「删除该文件」（Popconfirm「确认以删除解决该冲突？」）→ 文件删除且暂存为 `D`；列表 4→1，`git diff --name-only --diff-filter=U` 同步收缩）**（R23 复跑：三侧解决路径均 CLI 互证，处理顺序 ours→theirs→delete）** |
+| F-116 | 3-way 手动合并（MergeView） | 「手动合并」→ 全屏 Modal | 左 ours/右 theirs/底部结果编辑；保存 manual 策略（CLI） | ✅ | conflicts-03.png（「手动合并：manual-merge.txt」全屏 Modal：左「当前分支」ours=line1~3 master、右「合并来源」theirs=line1~3 feature、底部「合并结果」可编辑（Monaco）；编辑为 `line1 master / line2 feature / line3 resolved-by-hand` 后「保存」→ CLI 落盘逐行一致且该路径脱离未合并）**（R23 复跑：Modal 三栏（ours/theirs/结果）与保存落盘逐行一致）** |
+| F-117 | 完成合并（continue 泛化） | 全部解决 → 「完成合并」 | merge/rebase/cherry-pick/revert 共用 continue → 回日志页（CLI） | ✅ | conflicts-04.png（冲突清零后「完成合并」可点 → 自动回日志页；CLI：生成合并提交 **`ec1320f Merge branch 'feature'`**（旧记录的 `05a16f7` 系历史重写前结果）、`.git/MERGE_HEAD` 清除、`status` 干净、四项解决结果全部保留（shared=master side / both-added=feature version / manual=手动合并内容 / deleted-by-them 仍不存在））；conflicts-04b.png（完成合并后的日志页态，补证） |
+| F-118 | 跳过（skip） | rebase 冲突 → 底部「跳过」（Popconfirm） | 丢弃当前变更继续后续（CLI）；merge 无 skip 按钮 | ✅ | conflicts-05.png（变基冲突时面板底部为「跳 过」+「继续变基」；点「跳过」→ 确认框「跳过当前提交（其变更将被丢弃）？」→ CLI：`.git/rebase-merge` 清除、`feature` 落到 master 提交 `f5fdef8`、**被跳过的提交 `5271e87` 已不在历史**（`merge-base --is-ancestor 5271e87 HEAD` exit=1）、`shared.txt` 为 master 版本、工作区干净）；conflicts-05b.png（跳过确认框）。对照：F-114~F-117 的 merge 冲突态**无**「跳过」按钮（仅「完成合并」） |
+| F-119 | 合并状态联动 | 观察进行中提示与操作条 | 进行中提示页内可见；中止入口在 LogPage 操作条 | ✅ | conflicts-06.png（LogPage 顶栏：橙色状态片「变基中（第 1/1 步）」+ 红色「中 止」按钮；点中止 → 确认框「确定中止当前操作？工作区将回到操作前状态」→ CLI：rebase 状态清除、分支回到 `feature`（`5271e87`）、`shared.txt` = `line3 feature`、工作区干净）；conflicts-06b.png（中止确认框）。冲突页内的提示随操作类型变化：「合并进行中：解决全部冲突后点击「完成合并」；中止请返回日志页操作条。」/「变基进行中：解决全部冲突后点击「继续变基」；…」（conflicts-01.png / conflicts-05.png） |
 
 ### 4.21 PatchPanel（slug `patch`；P3）
 
@@ -396,10 +402,10 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-120 | 创建补丁（unified diff 三态导出） | 创建 Modal → 依次工作区/暂存/提交区间三态 | 列表出现补丁；三态内容正确（CLI 文件互证） | ✅ | patch-01.png（三态各建一枚：`f120-worktree` 424 B = CLI `git diff HEAD`「2 files changed, 2 insertions(+), 1 deletion(-)」；`f120-staged` 180 B 只含 `local-side.txt`（=`git diff --cached`）；`f120-range` 334 B = `git diff HEAD~2 HEAD`（`remote-side2.txt` 新增 + `local-side2.txt`）；Modal 内「工作区/暂存/提交区间」三选一，提交区间展开起点/终点输入） |
-| F-121 | 应用补丁（check 先行） | 应用已有补丁 → 再测空补丁 | `git apply --check` 先行；应用成功；空补丁 no-op；失败诚实报错 | ✅ | patch-02.png（重置工作区后应用 `f120-worktree` → 两文件改动完整回写（stat 与建补丁时同值）；**二次应用** → 400 `INVALID_QUERY`「补丁无法应用：error: patch failed: README.md:3」且工作区零变更（check 先行）；空补丁 `f121-empty`（0 B）→ 应用 200 no-op、状态不变） |
-| F-122 | 补丁列表管理 | 观察列表 → 删除（Popconfirm）→ 重名创建 | 名/大小/时间齐全；删除成功；重名 → INVALID_QUERY 提示 | ✅ | patch-03.png（列表四项均带名称/大小/时间；「确定删除补丁 f121-empty？」→ 文件消失；重名建 `f120-worktree` → toast「补丁已存在：f120-worktree」且原补丁字节数不变。注：首轮重名**静默覆盖**把既有补丁截成 0 字节，为本轮修复项 D-31） |
-| F-123 | 导入补丁到搁置 | 行内「导入搁置」 | 成功跳 `/shelves`，同名搁置存补丁全文（CLI） | ✅ | patch-04.png（点 `f120-worktree`「导入搁置」→ 提示「已导入搁置：f120-worktree」并跳 `/repos/:id/shelves`；CLI：`shelves/<repoId>/f120-worktree/patch.diff` 424 B 与补丁同字节数、首行 `diff --git a/README.md`，列表显示「0 个未跟踪」） |
+| F-120 | 创建补丁（unified diff 三态导出） | 创建 Modal → 依次工作区/暂存/提交区间三态 | 列表出现补丁；三态内容正确（CLI 文件互证） | ✅ | patch-01.png（三态各建一枚且与 CLI **逐字节相同**：`f120-worktree` 381 B = `git diff HEAD`；`f120-staged` 166 B = `git diff --cached`（只含 `f120-staged.txt`）；`f120-range` 356 B = `git diff HEAD~2 HEAD`（`remote-side-f096`/`f099` 两个新文件）；Modal 内「工作区/暂存/提交区间」三选一，提交区间展开起点/终点输入）；patch-01b.png（创建 Modal 态） |
+| F-121 | 应用补丁（check 先行） | 应用已有补丁 → 再测空补丁 | `git apply --check` 先行；应用成功；空补丁 no-op；失败诚实报错 | ✅ | patch-02.png（重置工作区后应用 `f120-worktree` → README 改动回写 + `f120-staged.txt` 复原（内容一致）；**二次应用** → toast「补丁无法应用：error: patch failed: README.md:9」且 `--numstat` 保持 1/0（check 先行、零变更）；空补丁 `f121-empty`（0 B）→ API 200 no-op、状态不变）；patch-02b.png（应用过程态） |
+| F-122 | 补丁列表管理 | 观察列表 → 删除（Popconfirm）→ 重名创建 | 名/大小/时间齐全；删除成功；重名 → INVALID_QUERY 提示 | ✅ | patch-03.png（列表 5 项均带名称/大小/时间；重名建 `f120-worktree` → toast「补丁已存在：f120-worktree」且**原补丁仍 381 B**（未被截断，D-31 未回归）；「确定删除补丁 f121-empty？」→ 文件消失）；patch-03b.png（重名提示态） |
+| F-123 | 导入补丁到搁置 | 行内「导入搁置」 | 成功跳 `/shelves`，同名搁置存补丁全文（CLI） | ✅ | patch-04.png（点 `f120-worktree`「导入搁置」→ toast「已导入搁置：f120-worktree」并跳 `/shelves`；CLI：`shelves/<repoId>/f120-worktree/patch.diff` 381 B，与补丁 **SHA256 相同**、首行 `diff --git a/README.md b/README.md`） |
 
 ### 4.22 ShelfPanel（slug `shelf`；P3）
 
@@ -407,9 +413,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-124 | 搁置保存（工作区+暂存+未跟踪随档） | 保存 Modal 输入名 | 列表出现搁置；内容含工作区+暂存 diff + 未跟踪文件（CLI） | ✅ | shelf-01.png（保存 Modal 输入 `f124-shelf` → 列表新增「4 个未跟踪」；CLI：存档 `shelves/<repoId>/f124-shelf/` 含 `patch.diff`（424 B，含工作区 README 改动 + 暂存 local-side 改动，与 `git diff HEAD --stat` 同值）与 `untracked/`（crlf.txt、shelf-untracked-new.txt、stash-untracked-probe.txt、scratch/todo.md 四份原件）；搁置语义为**快照复制**（保存后工作区保持不动，与 IntelliJ 搁置一致）） |
-| F-125 | 恢复 / 删除 | 行内 restore → 再 drop（Popconfirm） | 恢复回写工作区；同名冲突不覆盖；删除成功（CLI） | ✅ | shelf-02.png（`确定恢复搁置 f124-shelf？` 确认框态见 shelf-02b.png；CLI：README/local-side 改动回写；**同名不覆盖**两重实测：① 工作区已有同样改动时 → 400「补丁无法应用：error: patch failed: README.md:3」（check 先行，零变更）；② 未跟踪同名文件（crlf.txt 已被我改成 `MODIFIED AFTER SHELF`）→ 恢复后内容保持我的修改、未被存档覆盖；「确定删除搁置 f124-shelf？」→ 目录移除，列表 3→2） |
-| F-126 | Unshelve 联动 | restore 后回 StatusPage | 工作区变更自动进入状态页（events 刷新） | ✅ | shelf-03.png（双标签实测事件刷新：标签 1 停在 `/status`（显示「已暂存（0）/未跟踪（4）」，无 README 条目）→ 标签 0 在 `/shelves` 执行恢复 → **未刷新**标签 1 即出现 `README.md`、`local-side.txt` 两条变更——SSE `status.changed` 推送生效） |
+| F-124 | 搁置保存（工作区+暂存+未跟踪随档） | 保存 Modal 输入名 | 列表出现搁置；内容含工作区+暂存 diff + 未跟踪文件（CLI） | ✅ | shelf-01.png（保存 Modal 输入 `f124-shelf`；CLI：`shelves/<repoId>/f124-shelf/patch.diff` 381 B 与 `git diff HEAD` **逐字节相同**，`untracked/` 含 3 份原件（`.gitmessage` 52 B、`untracked.txt` 27 B、`scratch/todo.md` 45 B）；搁置语义为**快照复制**——保存后工作区保持不动）；shelf-01b.png（保存 Modal 态） |
+| F-125 | 恢复 / 删除 | 行内 restore → 再 drop（Popconfirm） | 恢复回写工作区；同名冲突不覆盖；删除成功（CLI） | ✅ | shelf-02.png（**同名不覆盖两重实测**：① 工作区已有同样改动时 → 400「补丁无法应用：error: patch failed: README.md:9」（check 先行、零变更）；② 未跟踪同名文件（`untracked.txt` 被改成 `MODIFIED AFTER SHELF`）→ 恢复后**保持用户版本**、未被存档覆盖；缺失的 `scratch/todo.md` 被回拷；reset 后再恢复 → README + `f120-staged.txt` 完整回写；「确定删除搁置 f124-shelf？」→ 目录移除、列表 3→2）；shelf-02b.png（恢复确认框态） |
+| F-126 | Unshelve 联动 | restore 后回 StatusPage | 工作区变更自动进入状态页（events 刷新） | ✅ | shelf-03.png（双标签实测事件刷新：标签 1 停在 `/status`（已暂存 0 / 工作区 0 / 未跟踪 3）→ 标签 0 在 `/shelves` 执行恢复 → **未刷新**标签 1 即变为 工作区（1）`README.md M` + 未跟踪（4）`f120-staged.txt`；同页 `performance.now()` ≈ 18.7 s 证明未整页重载——SSE `status.changed` 推送生效） |
 
 ### 4.23 WorktreePanel（slug `worktree`；P4）
 
@@ -417,9 +423,9 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-127 | 工作树列表 | 观察列表 | path/branch/detached 徽标 +「当前」标记（CLI `worktree list` 互证） | ✅ | worktree-01.png（三行与 CLI `git worktree list` 逐项一致：主工作树「当前」绿标 + `rebase-topic` + e7c67a8；`rebased-smoke-wt` + `wt-branch` + 79e9129；另建分离头工作树 → 「分离」橙标 + 3e9cca6（CLI 显示 `(detached HEAD)`）） |
-| F-128 | 工作树创建 | 创建 Modal → 互斥 Radio（关联已有/新分支） | 创建成功；仓库内/嵌套路径被阻止（CLI） | ✅ | worktree-02.png（Modal 态见 worktree-02b.png：路径输入 + 「关联已有分支/创建新分支」互斥 Radio（切换后分支输入 testid 随之变为 `worktree-create-new-branch`）；新建 `rebased-smoke-wt-new` + 新分支 `wt-new-branch` → toast「工作树已创建」、列表 3→4；CLI：`worktree list` 出现 `[wt-new-branch]`、`git branch` 出现该分支、目录已填充；**仓库内嵌套路径**（`…\rebased-smoke\nested-wt`）→ 「路径无效：…」被拒） |
-| F-129 | 移除 / 清理 | 行内移除（`--force` 支持）→ prune | 移除与清理正确（CLI） | ✅ | worktree-03.png（脏工作树（README 有未提交改动）移除：不带 force → 「移除工作树失败：fatal: … contains modified or untracked files, use --force to delete it」；在确认框勾选「强制移除（--force）」（worktree-03b.png 为确认框态）→ toast「工作树已移除」、CLI `worktree list` 少一行且目录已删；「确定清理失效工作树？」→ 手工删目录造成的 prunable 条目被清掉（CLI 复核）、列表回到 2 行。注：force 勾选框为本轮补的 UI 入口，见 §5.14 D-32） |
+| F-127 | 工作树列表 | 观察列表 | path/branch/detached 徽标 +「当前」标记（CLI `worktree list` 互证） | ✅ | worktree-01.png（三行与 CLI `git worktree list` 逐项一致：主工作树「当前」绿标 + `rebase-topic` + `ab55a1b`；`rebased-smoke-wt` + `wt-branch` + `77e62c4`；另建分离头工作树 → 「分离」橙标 + `5c7c07a`）。P3 观感：主工作树路径显示为反斜杠 `D:\…`（来自 repo 路径），其余来自 `git worktree list` 的为正斜杠 `D:/…`，同一列表两种风格 |
+| F-128 | 工作树创建 | 创建 Modal → 互斥 Radio（关联已有/新分支） | 创建成功；仓库内/嵌套路径被阻止（CLI） | ✅ | worktree-02.png（Modal：「关联已有分支 / 创建新分支」互斥 Radio（切到后者后分支输入 testid 变为 `worktree-create-new-branch`）；新建 `rebased-smoke-wt-new` + 新分支 `wt-new-branch` → toast「工作树已创建」、列表 3→4，CLI `worktree list` 与 `git branch` 均出现且目录已填充；**仓库内嵌套路径**（`…\rebased-smoke\nested-wt`）→ toast「路径无效：…」被拒且无副作用）；worktree-02b.png（Modal 态） |
+| F-129 | 移除 / 清理 | 行内移除（`--force` 支持）→ prune | 移除与清理正确（CLI） | ✅ | worktree-03.png（脏工作树（README 有未提交改动）移除：不带 force → 「移除工作树失败：fatal: … contains modified or untracked files, use --force to delete it」；在确认框勾选「强制移除（--force）」→ toast「工作树已移除」、CLI `worktree list` 少一行且目录已删；手工删目录造成 prunable 条目 → 「确定清理失效工作树？」→ toast「已清理失效工作树」、`worktree list` 回到 2 行）；worktree-03b.png（确认框勾选态）。注：force 勾选框为 D-32 补的 UI 入口 |
 
 ### 4.24 SubmodulePanel（slug `submodule`；P4）
 
@@ -428,8 +434,8 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-130 | 子模块状态列表（四态徽标） | 观察列表（含空格/点号路径） | 未初始化/已检出/提交漂移/冲突四态徽标正确（CLI `.gitmodules` 互证） | ✅ | submodule-01.png（四态**同屏**实测：`vendor/sub-module`「提交漂移」、`vendor/dir.with.dots`「未初始化」（点号路径）、`vendor/ok-sub`「已检出」、`vendor/conflict-sub`「冲突」；与 `git submodule status` 前缀 `+ / - / 空格 / U` 逐一对应，URL 与短哈希同值。夹具：新增 ok-sub（`protocol.file.allow=always` 越过 file 传输策略）、conflict-sub 用两侧分叉 gitlink 合并产生 U；API 侧返回 `different-commit/uninitialized/checked-out/conflict` 四值） |
-| F-131 | 子模块更新（init/update） | 行内更新 → 全量（recursive Checkbox） | init/recursive 生效（CLI 互证） | ✅ | submodule-02.png（顶部「递归更新」Checkbox 勾选 + 「更新全部」；行内「更 新」作用于 `vendor/dir.with.dots`（未初始化）→ CLI：`submodule status` 由 `-1a70317` 转为 ` 1a70317 (heads/master)`、目录出现 `.git` 与 index.js、`git config` 写入 `submodule.vendor/dir.with.dots.url`；全量更新 → `vendor/sub-module` 由漂移提交 12a7624 归位到 index 记录 8a740f7（`+`→空格），列表同步刷新为「已检出」；已冲突的 `conflict-sub` 保持 U（gitlink 冲突非 update 可解），submodule-02b.png 为勾选态） |
+| F-130 | 子模块状态列表（四态徽标） | 观察列表（含空格/点号路径） | 未初始化/已检出/提交漂移/冲突四态徽标正确（CLI `.gitmodules` 互证） | ✅ | submodule-01.png（四态**同屏**：`vendor/sub-module`「提交漂移」`0da2ac2`、`vendor/dir.with.dots`「未初始化」`17512d9`（点号路径）、`vendor/ok-sub`「已检出」`150e186`、`vendor/conflict-sub`「冲突」`00000000`；与 `git submodule status` 前缀 `+ / - / 空格 / U` 逐一对应；API 侧返回 `different-commit/uninitialized/checked-out/conflict` 四值）。**夹具为可复现构造**：`git -c protocol.file.allow=always submodule add D:\zhanglei1120\Github\smoke-sub3 vendor/ok-sub` 造「已检出」；`conflict-sub` 用两条同 base 分叉的临时分支各推一格 gitlink 后 merge 得 U（`smoke-sub3`/`smoke-sub4` 为裸仓且各 1 提交，漂移/分叉需在子模块克隆内 `commit --allow-empty` 造第二提交）。跑完已移除四态夹具并复原 `.gitmodules`/`.git/config`，`submodule status` 回到基线两行 |
+| F-131 | 子模块更新（init/update） | 行内更新 → 全量（recursive Checkbox） | init/recursive 生效（CLI 互证） | ✅ | submodule-02.png（顶部「递归更新」Checkbox + 「更新全部」；行内「更 新」作用于未初始化的 `vendor/dir.with.dots` → CLI：`submodule status` 由 `-17512d9` 转为 ` 17512d9 (heads/master)`、目录出现 `.git` 与 `index.js`、`git config` 写入 `submodule.vendor/dir.with.dots.url`；勾「递归更新」+「更新全部」→ `vendor/sub-module` 由漂移 `0da2ac2` 归位 `008f798`（`+`→空格）、列表刷新为「已检出」；已冲突的 `conflict-sub` 保持 U（gitlink 冲突非 update 可解）；toast「子模块已更新」）；submodule-02b.png（勾选态）。P3 观察：「更新全部」**非乐观刷新**——服务端 4 个子模块 `git submodule update` 耗时 >3 s，期间列表仍显示旧值（POST 返回后即正确，按钮有 acting 禁用态），取证须等 POST 落地 |
 
 ### 4.25 IgnoreDialog（slug `ignore`；P3）
 
@@ -541,6 +547,7 @@
 | R20 | 2026-09-11 | F-149~F-155（SettingsPage 7 行：应用设置读写 / git 配置 9 键 / 账户令牌 / config-store 重启持久化 / git 可执行文件 / GPG 配置 / 保护分支与联动拦截） | ✅ 7（SettingsPage 7/7 收官） | 本轮无新缺陷；F-152 真杀进程重启后复查，F-155 用「已推送提交 Reword」实测联动拦截 |
 | R21 | 2026-09-11 | F-156~F-159（BrowsePanel 4 行：文件树 / 只读查看与二进制 / 降级边界 / 入口与回边） | ✅ 4（BrowsePanel 4/4 收官） | 本轮无新缺陷；树与内容均与 `ls-tree -r` / `show <rev>:<file>` 互证，越界与绝对路径均被 `INVALID_QUERY` 拦下 |
 | R22 | 2026-09-11 | **全站流体布局与密度几何验收**（非 F-xx 功能行）：六档宽度 × 明暗 × 24 路由 + 6 个状态（含 GitHub/GitLab 展开差异、认证/重置弹窗、EllipsisText 浮层）+ 两条例外断言；web-koa 对等抽查 | ✅ 576/576 格（web-next 384 + web-koa 192） | 修复前基线 375/384：`stashes` 行在 360/480 顶宽（`scrollWidth 492 > clientWidth 360/480`）→ 该行加 `wrap`；另 4 格为断言测量竞态（已修断言）。见 §5.16 |
+| **R23** | **2026-09-12** | **全量重跑**：按 §1.3 用 `scripts/smoke-setup.ps1` 复位重建全部冒烟仓后，从 F-001 起按矩阵顺序重跑；本轮已完成 **F-001~F-131**（截至 §4.24：RepoPage 8 / LogPage 20 / DiffPage 10 / StatusPage 13 / CommitDialog 7 / ResetDialog 3 / BranchPanel 11 / MergeDialog 3 / RebaseDialog 5 / StashPanel 5 / TagPanel 3 / RemotePanel 4 / PushDialog 3 / PullDialog 2 / UpdateProjectDialog 3 / BlameView 4 / HistoryPanel 3 / CommittedChangesPanel 3 / SearchPanel 3 / ConflictsPanel 6 / PatchPanel 4 / ShelfPanel 3 / WorktreePanel 3 / SubmodulePanel 2），截图全量重拍 | ✅ 128 / ❌ 2（F-020、F-066）/ ⏭ 1（F-056 的 gpg 分支，template 部分 ✅） | **D-39**（`refs.changed` 后 chips 不刷新）、**D-40**（「清理已合并（N）」计数与执行集不一致）、**D-41**（并发下 `.git/index.lock` raw 报错透出，P3）、**D-42**（配置 BOM 化 → 全站 400 且文案误导，P2）为本轮新登记缺陷（均未修复，转交）；另记流程/夹具纠偏 **P-12~P-24**（见 §5.17） |
 
 **收官复核（R21 末）**
 
@@ -664,6 +671,41 @@
 - **交互态宽度**（抽屉/下拉/气泡在窄屏的边缘贴合）不在本轮口径内；本轮口径只有页面级横向溢出 + 两条例外。
 - 后续回归入口：`node scripts/check-fluid-layout.mjs --app=koa --themes=dark`（约 12 分钟）与不带参数的全量（约 25 分钟）；两者任一红即视为布局回归。
 - **跑验收前请确认「没有别的会话在改被测代码、也没有人在同一夹具仓库上切分支」**：本轮实测到两种会伪造红的并发活动 —— 另一会话改 `commit-graph.tsx` 期间日志页整页不渲染（页面 `ReferenceError` + `data-theme=null`），另一会话在夹具仓库里 `master ↔ sub-b` 来回 checkout（`git reflog` 可查）。出现「一批格子同时报就绪超时且 `data-theme=null`」时，先按这两条排查，再怀疑布局。
+
+### 5.17 R23 缺陷登记与纠偏（2026-09-12）
+
+#### 缺陷
+
+| 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
+|------|----------------|------|------|------|
+| D-39 | **`refs.changed` 事件到达后，提交行的 ref chips 不刷新**——F-020：`git branch tmp-refs` 后等待 15s+，顶部行 chips 仍为 `f019-probe master`，`tmp-refs` 始终不出现；整页重载后立刻出现（log-page-12b.png）。用户新建/删除分支、拉取产生新远程分支时，日志页的 chips 会一直停在旧值，直到手动刷新 | 服务端正常：`curl -N /api/repos/:id/events` 实收 `{"type":"refs.changed","payload":{"refs":["refs/heads/tmp-refs"]}}`，`GET …/log` 的该行 `refs` 也含 `tmp-refs`。问题在容器：`apps/web-next/app/repos/[repoId]/page.tsx` 的 `onRefs` 只做 `mutateLog()`（重验证 REST 快照键）+ 全局重验证 branches 键；而实际渲染的列表来自 `mergeLogCommits(pageCommits, streamCommits, streamConnected)`（`apps/web-next/src/log-merge.ts`）——**「先流后快照按 hash 合并，同 hash 取流」**，即已由 log/stream 送达的那一行永远以流侧旧 `refs` 为准，快照重验证拿不回这一行。只有 `onStatus`（HEAD 变化）会 `setRefreshKey` 重订阅流，才顺带把 refs 刷新 | **本轮未修复**（属他人正在演进的分页/流式链路，冒烟轮次不动产品代码）：建议修法二选一——① `onRefs` 也 `setRefreshKey(k=>k+1)` 重订阅 log/stream；② `mergeLogCommits` 在「快照侧存在同 hash 行且其 refs 与流侧不同」时以快照侧 refs 覆盖流侧（快照是新取的，流侧是旧的） | 复现路径：日志页 → `git branch tmp-refs` → 观察 15s（chips 不变）→ 整页刷新（chips 立刻含 `tmp-refs`）。已用 `curl` 服务端帧 + `GET /log` 载荷交叉确认非服务端问题；`log-page-12.png` 为失败态、`log-page-12b.png` 为重载后正确态 |
+| D-40 | **「清理已合并（N）」的 N 与真正删除的集合不一致：承诺 2 个、实删 3 个，且整条操作以 raw git 报错收场、成功回执从不出现**——F-066：存在「已合并 + 被 worktree 检出」的本地分支时，按钮与确认框说「清理已合并（2）」「清理 2 个已合并分支？不可恢复」，确定后先删掉 2 个候选，再对 worktree 占用分支执行 `git branch -d` → 红色 toast「git 命令失败：git branch -d wt-merged-probe 退出码 1：error: cannot delete branch 'wt-merged-probe' used by worktree at '…'」；因整条 promise 抛错，「已清理 N 个已合并分支」的回执**从未出现**，用户看到「删了 2 个却只收到一条 raw git 报错」，无法判断剩余候选是否还会被删 | **D-20 只修了面板计数、没修容器执行集**，两处口径分叉：`packages/client/ui/src/composite/branch-panel.tsx:521` 的计数含 `b.checkedOutInWorktree !== true`；而 `apps/web-next/app/repos/[repoId]/branches/page.tsx:121` 与 `apps/web-koa/src/pages/branches.tsx:119` 的 `targets = branches.branches.filter((b) => !b.remote && b.mergedIntoHead && !b.current)` **没有该条件** | **本轮未修复**（冒烟轮次不动产品代码）。建议：两个容器的 `targets` 过滤器补上 `&& b.checkedOutInWorktree !== true`（与 ui 计数同源），或把候选计算上移到 ui 层由回调传出唯一集合，避免「计数与执行各算一遍」 | 复现：`git worktree add <tmp> -b wt-merged-probe 761961d`（761961d 已合并入 master）→ 分支页「清理已合并（2）」→ 确定 → 见上述报错；CLI `git branch --merged HEAD` 当时为 feature/master/merged-branch/wt-merged-probe。证据 `branch-05.png`。探针 worktree 与分支已删除、夹具已复原 |
+| D-41 | **并发写入时把 git 的 `index.lock` 原始报错直接抛给用户**（P3，偶发）：应用自身的 watcher/状态轮询与界面触发的 git 写操作并发时，接口返回 500，前端 toast 显示 `Unable to create '<repo>/.git/index.lock': File exists.`——用户既看不懂也不知道该重试 | 写操作为「读-改-写」式独占索引操作，与后台轮询/事件监听里的 git 调用争抢 `.git/index.lock`；错误按未知错误原样透出（无重试、无中文映射） | **本轮未修复**（P3）：建议对写操作加短退避重试（如 50ms×3）或把该错误映射为可读提示（「仓库正忙，请重试」） | 本轮命中 1 次（F-071 首次「检出并变基到当前」的初次触发），**重试即成功**；同一会话内其余写操作未复现 |
+| D-42 | **配置文件被写入 BOM 后，全站 `/api/*` 一律 400「请求体不是合法 JSON」、页面只剩空白 + dev 覆盖层**（本轮实测事故：18:49:22 的 `config.json` 被外部写成 UTF-8 带 BOM，18:53 起 web-next 全线不可用，直到剥离 BOM 才恢复）。错误文案把**服务端内部**的 JSON 解析失败说成**客户端请求体**问题，用户与排障者都会被引偏；且页面没有任何降级提示 | 两处叠加：① `packages/server/api/src/lib/config-store.ts:50` 的 `JSON.parse(readFileSync(file, 'utf8'))` **不剥离 BOM**——Node 以 utf8 读出的首字符是 `U+FEFF`，`JSON.parse` 直接抛 `SyntaxError: Unexpected token '\uFEFF'`（该文件自己写盘用的是 `writeFileSync(..., 'utf8')`，**不产 BOM**，故只有外部工具写坏才触发）；② `apps/web-next/src/server-context.ts:18` 与 `apps/web-koa/src/server-context.ts:18` 把**任何** `SyntaxError` 一律映射为 400 `INVALID_QUERY`「请求体不是合法 JSON」，内部异常被伪装成客户端问题，所有依赖配置的端点共用该出口 → 全站 400 | **本轮未修复**（P2）：建议 ① `loadConfig` 读入后先 `text.replace(/^\uFEFF/, '')`（容错外部编辑），② 把 400 映射限定在「解析请求体」这一处（例如把 `req.json()` 的失败包成显式的 RequestBodyError 再映射），其余 `SyntaxError` 不再吞成 400 而按 500 + 可读提示处理 | 复现：给 `config.json` 加 3 字节 BOM（PowerShell 5.1 的 `Set-Content`/`Out-File`/`ConvertTo-Json \| Set-Content` 默认带 BOM）→ 访问任意页面或 `/api/settings` → 400 同文案、页面空白。**取证方法警示**：PowerShell 的 `ConvertFrom-Json` **容忍 BOM**，用 PS 自检会误判「JSON 正常」，须用 `node -e "JSON.parse(require('fs').readFileSync(p,'utf8'))"` 或直接查首字节。事故副本保留为 `~/.rebasedjs/config.bom-broken-20260912.json`（8359 B = 正常 8356 B + 3 B BOM），剥离 BOM 后原样写回即恢复 |
+
+#### 流程与夹具纠偏
+
+| 编号 | 现象 | 处置 |
+|------|------|------|
+| P-12 | **「amend 到…（指定历史提交）」在 rebase 冲突后中止，会在分支 tip 留下一笔重复提交**——F-055 首轮：以 `src/app.ts` 为载荷 amend 到最老候选 `fix(core)` 时，该文件已被中间提交（F-044/F-052/F-053 探针提交）改过 → rebase 冲突 → 自动跳 `/conflicts`（行为正确）；此时**中止**，`reflog` 显示操作次序为「先 `commit`（把载荷以目标信息提交到 tip）→ 再 `rebase` 到目标父提交」，故 abort 回到的是「已含该新提交」的 `refs/heads/master`，tip 多出一笔与目标信息同名的提交（本轮实测 `5cd5385`，随后用 `git reset --soft HEAD~1` 回退） | 非产品缺陷登记，属**观察项**（语义可解释：载荷提交是 rebase 的输入）。后续轮次若要复现 F-055，**载荷应选不会被中间提交触碰的文件**（本轮改以新增文件 `f055-folded.txt` 为载荷后一次通过）；若已陷入该态，用 `git reset --soft HEAD~1` 回退后重试 |
+| P-13 | 界面上「工具提示压住确认按钮」会让自动化点击落空：`移除`（首页行）、`hunk-check-N`（补丁预览）等控件的 Tooltip 会覆盖相邻的 Popconfirm/批量按钮，Playwright 报 `… intercepts pointer events` | 自动化处置：点击前先把指针移到空白处（`hover body`）令 Tooltip 消失；属 antd Tooltip 的既有行为（真人移动鼠标即消失），**不计产品缺陷**，仅记录以免后续轮次重复踩坑 |
+| P-14 | 两条与环境/夹具有关的边界（行内已写明）：① **F-013** 大仓 `git log` 进程窗口仅 ~140ms，短于一次导航往返，20ms 采样在「打开→立即离开」窗口内未捕获到进程，故只能证「离开后无残留」（`Get-Process git` = 0），杀进程正向路径由 `core/src/exec.ts` 的 `killTree` + `exec.test.ts`「进行中 abort：以 130 拒绝」覆盖；② **F-041** 会真实删除 `docs/gone.md` 的 D 态与未跟踪目录 `scratch/`，取证后已用 CLI 复位夹具（重删 `docs/gone.md`、重建 `scratch/todo.md`） | 均已按上处置，夹具状态在行内注明 |
+| P-15 | **F-061（撤销最近提交）留给夹具的暂存态会阻塞后续检出/合并/变基**：该行按 soft reset 语义把被撤销提交的改动放回暂存区（本轮是 `M docs/new-name.md`），而 §4.7 起的行大量需要 `git checkout`——UI 检出会如实报 `Your local changes to the following files would be overwritten by checkout: docs/new-name.md`（**夹具态与 git 语义的必然冲突，非产品缺陷**） | 处置：先 `git stash push --staged -m "<守卫名>"` 把暂存态移出工作区/索引（`--staged` 只动暂存部分，工作区其余不受影响），跑到需要该态时再 `git stash apply --index` 还原。**注意**：这条守卫 stash 在 F-082（pop/apply/drop）、F-083（转分支）、F-084（Unstash As）等行里绝不能被消费掉，须每步 `git stash list` 复核 |
+| P-16 | **F-071「检出并变基到当前」在旧夹具上必然跑成整段重放 + 子模块冲突**：F-069 造的 `origin/fetch-probe` 是从远端裸仓直接推入的**无共同祖先**分支，CLI `master...origin/fetch-probe` 报 `no merge base`——界面照原样执行会把本仓整段历史重放到该分支上，并停在 `vendor/dir.with.dots`、`vendor/sub-module` 的冲突上（**夹具选型问题，非产品缺陷**；该行要验的是「远程 → 新本地分支 + rebase onto 原当前分支」，需要一个与当前分支同源的远端分支） | 处置：`git rebase --abort` 复原后另造干净远端分支 `origin/rebase-probe`（= `origin/master` + 1 提交）重跑该行，一次通过。**后续轮次建议**：F-069 的 probe 分支改从 `origin/master` 派生（同源 ahead 1），F-070 的分叉与 F-071 的检出可共用它，避免再出现无共同祖先的夹具 |
+| P-17 | **F-066 的清理会真删夹具分支**：本轮它删掉了本地 `feature` 与 `merged-branch`（`wt-branch` 因 worktree 占用被排除、`master` 是当前分支），后续行（如 F-073 合并页的本地分支列表、F-088 推送标签）与旧轮次记录的分支清单会随之变化 | 按需还原：`git branch feature origin/feature`、`git branch merged-branch 761961d`；本轮行内已按实际清单记录（见 F-073 等行） |
+| P-18 | **F-061 留下的「暂存区 M docs/new-name.md」在 §4.7~§4.12 收尾时已无法按原样还原**：守卫 stash（对象 `a0b53a2`）的内容（`docs/new-name.md` 的 `+F-058 提交并推送探针行`）在 F-055「amend 到历史提交」重写历史后**已进入 master 历史**，故 `git stash apply --index a0b53a2` 报 `patch does not apply`（等价于已应用）；确认内容确在 HEAD 后已 drop 该守卫（对象仍在库内，需要时 `git stash apply a0b53a2` 可取回） | 不视为缺陷（夹具时序的自然结果）。后续轮次若需要「暂存区有改动」，随意 `git add` 一个改动即可；若需要「§1.3 原始暂存三态（R/A/M）」，跑 `scripts/smoke-setup.ps1` 重建主仓最省事 |
+| P-19 | **§4.7~§4.12 的探针产物留在夹具里**（有意保留，便于回溯各行截图背后的仓库状态）：本地分支新增 `rebase-topic`（F-076/079/080）、`rebase-probe-local`（F-071）、`stash-branch-f083`（F-083）、`unstash-target`/`unstash-target-2`（F-084）、`smoke-new-checkout`（F-065）等；标签新增 `v9.9.9-smoke`/`v9.9.9-light`（F-086）；stash 多出 `smoke-stash-f081`（F-081）；远程 refs 多出 `origin/rebase-probe`、`origin/fetch-probe-r8`、`origin/pr-9` 等；**浅克隆仓已按 F-091 解除浅克隆**（rev-list 1→7），如需复现前置态须重新 `git clone --depth 1` | 后续行按实际状态取证并如实记录；需要干净基线时跑 `scripts/smoke-setup.ps1` |
+| P-20 | **写 `%USERPROFILE%\.rebasedjs\config.json` 必须用「无 BOM 的 UTF-8」**——本轮 18:49 用 PowerShell 的 `Set-Content`/`Out-File`（PS 5.1 默认带 BOM）写该文件，3 字节 BOM 让全站 400（见 D-42），排查与恢复花了数分钟 | 统一写法：`[System.IO.File]::WriteAllText($p, $json, (New-Object System.Text.UTF8Encoding($false)))`；**自检也要用 Node**（`node -e "JSON.parse(require('fs').readFileSync(p,'utf8'))"`）而非 `ConvertFrom-Json`（后者容忍 BOM，会给出假绿）。同一条规则适用于 `scripts/smoke-setup.ps1`（该脚本为 PS 5.1 + 中文注释，**必须**保留 UTF-8 BOM——两处规则相反，别混用） |
+| P-21 | **行文与实测不符（口径更正，非缺陷）**：两条 Modal 的描述比实现更宽——① §4.14 F-096 写「拉取 Modal → 选远程/**分支**」，实测 `pull-remote-select` 只有**远端**下拉 + 「使用 rebase 而非 merge」勾选，**没有分支选择器**（分支随当前分支的上游跟踪）；② §4.15 F-100 的 `Reset to tracked` 在「无上游」时**整块不渲染**（已按实测记录）。 | 行文已就地改为「选远程（分支随上游）」；后续新增行请照实测描述，不要沿用 Java 版的措辞 |
+| P-22 | **`Copy-Item` 偶发「静默未生效」**：把 MCP 输出根的截图复制进 `docs/shots` 时，出现过一次命令成功但目标仍是**上一轮的旧图**（源文件时间戳与目标相同导致 Copy-Item 跳过） | 收尾必须逐张 `Get-FileHash` 比对源/目标，或改用 `Copy-Item -Force` 后**重新哈希校验**；本轮两批收官均做了 22~35 张的全量哈希核对（第二批即因此发现并重拷了 push-03/push-03b） |
+| P-23 | **代码注释过期（仅注释，非运行时问题）**：`packages/client/ui/src/composite/worktree-panel.tsx` 文件头仍写「不携带 force——force 仅终端使用」，而 D-32 之后该面板已有「强制移除（--force）」勾选框（`data-testid=worktree-force-<path>`） | 建议随手把该注释改成「确认框可选 `--force`（D-32）」；本轮按观察登记，不改代码 |
+| P-24 | **「更新全部」非乐观刷新**（设计内，取证需注意）：服务端 4 个子模块 `git submodule update` 耗时 >3 s，期间列表仍显示旧状态（如「提交漂移」），POST 返回后才更新；按钮有 acting 禁用态。第一次取证抓到的就是过期画面 | 截图前等 POST 落地（或等列表文案变化）再拍；已在 F-131 行内注明 |
+
+#### 本段夹具与断点（R23，2026-09-12）
+
+- **主冒烟仓（重建后新 id）**：`rebased-smoke` → repoId `f761a9f6-5c91-4115-9261-69715687e875`（`D:\zhanglei1120\Github\rebased-smoke`；R23 起 id 与旧轮次不同：F-002 的「移除→重开」会重新分配 id，旧 `18726c5c-…` 已作废）。
+- 其余 id（重建后仍按路径复用）：`rebased-smoke-conflict` `82168d54-…`、`rebased-smoke-big` `7649bb35-…`、`rebased-smoke-shallow` `450e90ca-…`、`rebased-smoke-noident` `b908870c-…`、`rebased-smoke-init` `9918c699-…`、`rebased-smoke-clone` `9b0168bb-…`、`rebased-smoke-wt` `aa675a60-…`、`rebased-smoke-huge` `f40d0c37-…`。
+- `scripts/smoke-setup.ps1` 本轮已扩写（供后续轮次一键复现 §1.3 + 扩展夹具）：新增 ① 分叉分支 `diverge-test`（commit-tree 造，`master...diverge-test` = `1 1`）；② 冲突仓改为「四路冲突夹具、交付干净态」（合并 `feature` 到 `master` 即得 AA/UD/UU/UU，供 F-075/F-114~F-117）；③ 大仓 `hunks.txt`（40 行，改第 5/35 行 → 2 hunk 常驻工作区）与 `big.txt` 工作区改写（620 行大 diff 常驻，修掉 P-06/P-10 两处缺口）。**注意**：该脚本为 UTF-8 **带 BOM**（PowerShell 5.1 读中文必需），改动后务必保留 BOM。
 
 ### 5.15 R17 缺陷登记（已修复 + 复验）
 

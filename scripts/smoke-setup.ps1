@@ -141,6 +141,12 @@ Invoke-Git $Main @('tag', 'v1.0') | Out-Null
 # 已合并分支（供「清理已合并分支」用例）
 Invoke-Git $Main @('branch', 'merged-branch') | Out-Null
 
+# 分叉分支 diverge-test：与 master 各有一笔独有提交（供「与分支比较」用例）
+# 用 commit-tree 造提交而不动工作区/index：基点取当前 HEAD（合并提交）
+$mergeTree = (Invoke-Git $Main @('rev-parse', 'HEAD^{tree}') | Select-Object -First 1)
+$divergeCommit = (Invoke-Git $Main @('commit-tree', $mergeTree, '-p', 'HEAD', '-m', 'chore(fixture): diverge-test 独有提交') | Select-Object -First 1)
+Invoke-Git $Main @('branch', 'diverge-test', $divergeCommit) | Out-Null
+
 # ---------- 4. origin 推送（master/feature 推到合并提交；标签与「领先 1 提交」不推） ----------
 Step 'push master/feature to origin'
 Invoke-Git $Main @('remote', 'add', 'origin', $Remote) | Out-Null
@@ -215,33 +221,54 @@ $crlf = "line one`r`nline two`r`nline three`r`n"
 [System.IO.File]::WriteAllText((Join-Path $Main 'crlf.txt'), $crlf, (New-Object System.Text.UTF8Encoding($false)))
 
 # ---------- 9. 冲突仓 ----------
-Step 'build rebased-smoke-conflict (merge in progress)'
+# 四路冲突夹具（AA/UD/UU/UU），交付态保持干净：冲突由冒烟时在界面上「合并 feature」触发，
+# 这样 F-075（进行中联动）与 F-114~F-117（冲突清单/整侧解决/手合并/完成合并）走同一条真实路径。
+Step 'build rebased-smoke-conflict (四路冲突夹具，交付干净态)'
 New-Repo $Conflict
-Write-File $Conflict 'conflict.txt' "alpha`nbeta`nshared line`ngamma`ndelta`n"
+Write-File $Conflict 'shared.txt' "line1`nline2`nline3 base`n"
+Write-File $Conflict 'manual-merge.txt' "line1`nline2`nline3 base`n"
+Write-File $Conflict 'deleted-by-them.txt' "keep me`n"
 Write-File $Conflict 'README.md' "# conflict repo`n"
 Commit $Conflict 'chore: 初始化冲突仓'
 Invoke-Git $Conflict @('checkout', '-q', '-b', 'feature') | Out-Null
-Write-File $Conflict 'conflict.txt' "alpha`nbeta`nshared line changed on feature`ngamma`ndelta`n"
-Write-File $Conflict 'feature-only.txt' "feature side addition`n"
-Commit $Conflict 'feat: feature 分支改动同一区域'
+Write-File $Conflict 'shared.txt' "line1`nline2`nline3 feature`n"
+Write-File $Conflict 'manual-merge.txt' "line1`nline2`nline3 feature`n"
+Remove-Item -Force (Join-Path $Conflict 'deleted-by-them.txt')
+Write-File $Conflict 'both-added.txt' "feature version`n"
+Commit $Conflict 'feat(feature): 同区域改动 + 删文件 + 新增（UU/UD/AA 前置）'
 Invoke-Git $Conflict @('checkout', '-q', 'master') | Out-Null
-Write-File $Conflict 'conflict.txt' "alpha`nbeta`nshared line changed on master`ngamma`ndelta`n"
-Write-File $Conflict 'master-only.txt' "master side addition`n"
-Commit $Conflict 'feat: master 分支改动同一区域'
-& git -C $Conflict merge feature 2>&1 | Out-Null
+Write-File $Conflict 'shared.txt' "line1`nline2`nline3 master`n"
+Write-File $Conflict 'manual-merge.txt' "line1`nline2`nline3 master`n"
+Write-File $Conflict 'deleted-by-them.txt' "keep me`n`nmodified on master`n"
+Write-File $Conflict 'both-added.txt' "master version`n"
+Commit $Conflict 'feat(master): 同区域改动 + 改文件 + 新增（UU/UD/AA 前置）'
 
 # ---------- 10. 大仓 ----------
-Step 'build rebased-smoke-big (320 commits + big diff)'
+Step 'build rebased-smoke-big (320 commits + 大 diff/hunks 常驻工作区)'
 New-Repo $Big
 $bigLines = (1..40 | ForEach-Object { "big file line $_" }) -join "`n"
 Write-File $Big 'big.txt' ($bigLines + "`n")
-Commit $Big 'feat: 新增 big.txt 初版'
+$hunkLines = (1..40 | ForEach-Object { "hunk line $_" }) -join "`n"
+Write-File $Big 'hunks.txt' ($hunkLines + "`n")
+Commit $Big 'feat: 新增 big.txt 与 hunks.txt 初版'
 for ($i = 1; $i -le 318; $i++) {
   Invoke-Git $Big @('commit', '-q', '--allow-empty', '-m', "chore: bulk commit $i") | Out-Null
 }
 $bigLines2 = (1..620 | ForEach-Object { "big file line $_ - rewritten for large diff streaming" }) -join "`n"
 Write-File $Big 'big.txt' ($bigLines2 + "`n")
 Commit $Big 'feat: 重写 big.txt 制造大 diff'
+
+# 交付态 1：big.txt 在**工作区**再改一遍（620 行改写）——大 diff 流式渲染需要「工作区 vs HEAD」有内容
+$bigLines3 = (1..620 | ForEach-Object { "big file line $_ - working tree rewrite（大 diff 常驻）" }) -join "`n"
+Write-File $Big 'big.txt' ($bigLines3 + "`n")
+# 交付态 2：hunks.txt 只改第 5 行与第 35 行 → git 切成 2 个 hunk（hunk 级暂存用例）
+$hunkLines2 = @()
+for ($i = 1; $i -le 40; $i++) {
+  if ($i -eq 5) { $hunkLines2 += 'hunk line 5 CHANGED (hunk 1)' }
+  elseif ($i -eq 35) { $hunkLines2 += 'hunk line 35 CHANGED (hunk 2)' }
+  else { $hunkLines2 += "hunk line $i" }
+}
+Write-File $Big 'hunks.txt' (($hunkLines2 -join "`n") + "`n")
 
 # ---------- 11. 浅克隆仓 ----------
 Step 'build rebased-smoke-shallow (depth 1)'
