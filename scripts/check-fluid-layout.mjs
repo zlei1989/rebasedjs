@@ -400,18 +400,34 @@ function measureDensityInPage() {
  *   - pass：期望档的计数严格多于另一档；
  *   - fail：另一档更多，或两档计数相同（无法判定主导 ⇒ 判红，不掷硬币）；
  *     失败原因里带上两档计数、取样数与直方图，读者不必再跑一次才知道差在哪。
- *   - no-sample：`.monaco-editor` 之外**一个文本节点都没有**（理论上不该出现）。这种情况不判红
- *     （没有密度可言），但会被**逐格列进汇总**，不允许静默跳过。
+ *   - no-sample：`.monaco-editor` 之外**一个 12px/14px 文本节点都没有**（有界重采之后仍是如此）。
+ *     这种情况不判红（没有密度可言），但会被**逐格列进汇总**，不允许静默跳过。
  */
+
+/** no-sample 之前的有界重采上限（只在「一个 12px/14px 文本节点都没有」时才会用满） */
+const DENSITY_SAMPLE_WAIT = 5000;
+
 async function assertDensity(page, cell, expected) {
-  const m = await page.evaluate(measureDensityInPage);
-  const detail = `12px 节点 ${m.count12} 个 / 14px 节点 ${m.count14} 个，取样 ${m.sampled} 个文本节点（跳过 Monaco 子树 ${m.monacoSkipped} 个），直方图 ${m.hist.join(' ')}`;
-  const base = { expected, ...m };
+  let m = await page.evaluate(measureDensityInPage);
+  // **有界重采（只在这一种情形下等）**：实测见过 3 格（`dark/768 blame`、`dark/1440 search`、
+  // `light/1024 blame`）在一个 **antd 样式尚未注入**的瞬间被采样 —— 直方图全是浏览器默认的
+  // `16px` / `13.3333px`，一个 12/14 节点都没有。那不是「该路由没有文本可测」，而是「还没上样式」，
+  // 直接记 no-sample 等于把一次真实的密度断言让给运气。故：**只在两档计数都为 0 时**有界轮询
+  // （有样本时零等待，不拖慢正常格），等到出现 12/14 节点就重采一次；等满仍未出现才记 no-sample。
+  const started = Date.now();
+  while (m.count12 === 0 && m.count14 === 0 && Date.now() - started < DENSITY_SAMPLE_WAIT) {
+    await page.waitForTimeout(250);
+    m = await page.evaluate(measureDensityInPage);
+  }
+  const waited = Date.now() - started;
+  const waitNote = waited > 0 ? `，等样式落地 ${waited}ms 后重采` : '';
+  const detail = `12px 节点 ${m.count12} 个 / 14px 节点 ${m.count14} 个，取样 ${m.sampled} 个文本节点（跳过 Monaco 子树 ${m.monacoSkipped} 个）${waitNote}，直方图 ${m.hist.join(' ')}`;
+  const base = { expected, waited, ...m };
   if (m.count12 === 0 && m.count14 === 0) {
     return {
       ...base,
       status: 'no-sample',
-      reason: `本格在 .monaco-editor 之外没有任何可见文本节点，密度未被断言（${detail}）`,
+      reason: `本格在 .monaco-editor 之外没有任何 12px/14px 的可见文本节点，密度未被断言（${detail}）`,
     };
   }
   const own = expected === 14 ? m.count14 : m.count12;
@@ -1573,7 +1589,7 @@ function report(results, opts) {
     }
     const noSample = densityRows.filter((r) => r.density.status === 'no-sample');
     if (noSample.length > 0) {
-      console.log(`\n密度未被断言（.monaco-editor 之外无可见文本节点；逐格列出，不判红也不静默跳过）: ${noSample.length} 格`);
+      console.log(`\n密度未被断言（.monaco-editor 之外没有 12px/14px 文本节点，有界重采后仍无；逐格列出，不判红也不静默跳过）: ${noSample.length} 格`);
       for (const r of noSample.slice(0, 12)) console.log(`  - ${r.theme}/${r.width}px ${r.cell}`);
     }
   }
