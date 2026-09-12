@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+﻿import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CommittedEntry, CommittedPage } from '@rebased/contracts';
 import { buildFileTree, CommittedChangesPanel } from './committed-changes-panel';
@@ -9,7 +9,7 @@ function makeEntry(partial: Partial<CommittedEntry> & { hash: string }): Committ
     shortHash: partial.hash.slice(0, 7),
     subject: `subject ${partial.hash}`,
     author: `author ${partial.hash}`,
-    dateIso: '2026-01-02T03:04:00Z',
+    dateIso: '2026-01-02T03:04:00+00:00',
     parents: [],
     files: [],
     ...partial,

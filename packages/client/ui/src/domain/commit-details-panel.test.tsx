@@ -55,6 +55,18 @@ describe('CommitDetailsPanel', () => {
     expect(screen.queryByTestId('parent-link')).not.toBeInTheDocument();
   });
 
+  it('传入 onSelectCommit 时点击父链接回调携带父提交 hash（未传时退化为 #hash 锚点）', () => {
+    const { unmount } = render(<CommitDetailsPanel commit={commit} />);
+    expect(screen.getAllByTestId('parent-link')[0]).toHaveAttribute('href', '#parent0000001');
+    unmount();
+
+    const onSelectCommit = vi.fn();
+    render(<CommitDetailsPanel commit={commit} onSelectCommit={onSelectCommit} />);
+    fireEvent.click(screen.getAllByTestId('parent-link')[1]);
+    expect(onSelectCommit).toHaveBeenCalledTimes(1);
+    expect(onSelectCommit).toHaveBeenCalledWith('parent0000002');
+  });
+
   it('未传 onResetHere 时不渲染 Reset 按钮', () => {
     render(<CommitDetailsPanel commit={commit} />);
     expect(screen.queryByTestId('reset-here')).not.toBeInTheDocument();

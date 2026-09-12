@@ -117,6 +117,22 @@ describe('LogPage', () => {
     expect(screen.getByText('c9selec')).toBeInTheDocument();
   });
 
+  it('详情面板父提交链接透传 onSelectCommit（点击选中父提交）', () => {
+    const selected = makeCommit({ hash: 'c9selected0001', parents: ['c1'], message: '被选中的提交' });
+    const onSelectCommit = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        selectedCommit={selected}
+        onSelectCommit={onSelectCommit}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('parent-link'));
+    expect(onSelectCommit).toHaveBeenCalledWith('c1');
+  });
+
   it('传入 onGoHome 时顶栏渲染「首页」链接，点击回调', () => {
     const onGoHome = vi.fn();
     render(<LogPage repoName="alpha" status={status} commits={commits} onGoHome={onGoHome} />);

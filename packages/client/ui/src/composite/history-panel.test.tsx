@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+﻿import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { FileHistoryEntry } from '@rebased/contracts';
 import { HistoryPanel } from './history-panel';
@@ -9,7 +9,7 @@ function makeEntry(partial: Partial<FileHistoryEntry> & { hash: string }): FileH
     shortHash: partial.hash.slice(0, 7),
     subject: `subject ${partial.hash}`,
     author: `author ${partial.hash}`,
-    dateIso: '2026-01-02T03:04:00Z',
+    dateIso: '2026-01-02T03:04:00+00:00',
     parents: [],
     ...partial,
   };

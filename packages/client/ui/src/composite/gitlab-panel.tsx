@@ -440,11 +440,11 @@ function MrDetailBlock({
     setComment('');
   };
 
-  /** Request changes：同一输入框内容作 review body（空则省略 body），并清空输入 */
+  /** Request changes：review body 随调用传出（服务端当前只提交 state，不落 body——故输入框内容保留不清空，
+   *  用户可改用「评论」发送；文案已同步说明这一点） */
   const requestChanges = (): void => {
     const body = comment.trim() === '' ? undefined : comment;
     onReview('REQUEST_CHANGES', body);
-    setComment('');
   };
 
   return (
@@ -543,7 +543,7 @@ function MrDetailBlock({
             </Tooltip>
           </Popconfirm>
           <Popconfirm
-            title="要求修改该 MR？将附带上方的评论/说明内容"
+            title="要求修改该 MR？仅提交「要求修改」结论"
             okText="确定"
             cancelText="取消"
             onConfirm={requestChanges}
@@ -553,7 +553,7 @@ function MrDetailBlock({
               title={
                 acting
                   ? '上一个操作进行中：完成后才能要求修改'
-                  : '要求修改该 MR：确认后把上方输入的内容作为 review 说明一并提交'
+                  : '要求修改该 MR：确认后在 GitLab 上记录一次 REQUEST_CHANGES；输入框内容不会随附，要带说明请先发评论'
               }
             >
               <span style={{ display: 'inline-flex' }}>

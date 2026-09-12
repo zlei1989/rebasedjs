@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+﻿import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { BlameLine, CommittedEntry } from '@rebased/contracts';
 import { BlameView } from './blame-view';
@@ -10,7 +10,7 @@ function makeBlameLine(partial: Partial<BlameLine> & { lineno: number }): BlameL
     shortHash: `abc${partial.lineno}`,
     author: `author ${partial.lineno}`,
     authorEmail: `a${partial.lineno}@example.com`,
-    dateIso: '2026-01-01T00:00:00Z',
+    dateIso: '2026-01-01T00:00:00+00:00',
     content: `content ${partial.lineno}`,
     previousLineno: null,
     parents: [],
@@ -24,7 +24,7 @@ function makeEntry(partial: Partial<CommittedEntry> & { hash: string }): Committ
     shortHash: partial.hash.slice(0, 7),
     subject: 'a commit',
     author: 'Sam',
-    dateIso: '2026-01-02T00:00:00Z',
+    dateIso: '2026-01-02T00:00:00+00:00',
     parents: [],
     files: [{ path: 'src/app.ts', status: 'M' }],
     ...partial,

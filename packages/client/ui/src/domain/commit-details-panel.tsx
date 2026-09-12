@@ -24,6 +24,9 @@ export interface CommitDetailsPanelProps {
   onBrowse?: (hash: string) => void;
   /** 「查看变更集」回调（#13 LogPage → DiffPage 直达：打开该提交全量变更文件 Modal）；缺省不渲染该按钮 */
   onOpenChanges?: (hash: string) => void;
+  /** 父提交链接回调（携带父提交 hash）：注入后父提交短名渲染为可点链接并在提交图中选中它；
+   *  缺省退化为 `#hash` 锚点（宿主未接选中链路时的兜底，不承诺跳转） */
+  onSelectCommit?: (hash: string) => void;
 }
 
 export function CommitDetailsPanel({
@@ -33,6 +36,7 @@ export function CommitDetailsPanel({
   onRevert,
   onBrowse,
   onOpenChanges,
+  onSelectCommit,
 }: CommitDetailsPanelProps): React.ReactNode {
   const { branches, tags } = classifyRefs(commit.refs);
   const subject = commit.message.split('\n')[0];
@@ -73,14 +77,29 @@ export function CommitDetailsPanel({
       {commit.parents.length > 0 ? (
         <Flex align="center" gap={8}>
           <span>父提交：</span>
-          {commit.parents.map((p) => (
-            // 父提交链接：地址栏 hash 变化即由容器解析 ?select=<hash> 深链并切换选中提交
-            <Tooltip key={p} title="跳转到该父提交：按提交号重新定位提交图并选中它">
-              <a data-testid="parent-link" href={`#${p}`}>
-                {p.slice(0, 7)}
-              </a>
-            </Tooltip>
-          ))}
+          {commit.parents.map((p) =>
+            // 父提交链接：注入 onSelectCommit 时点击即在提交图中选中该父提交（未加载到列表里的父提交不产生选中态）；
+            // 未注入时退化为 `#hash` 锚点——不承诺跳转，仅保留既有形态
+            onSelectCommit ? (
+              <Tooltip key={p} title="跳转到该父提交：在提交图中选中它（若它已在当前加载的提交里）">
+                <Button
+                  data-testid="parent-link"
+                  type="link"
+                  size="small"
+                  style={{ padding: 0 }}
+                  onClick={() => onSelectCommit(p)}
+                >
+                  {p.slice(0, 7)}
+                </Button>
+              </Tooltip>
+            ) : (
+              <Tooltip key={p} title="跳转到该父提交：按提交号重新定位提交图并选中它">
+                <a data-testid="parent-link" href={`#${p}`}>
+                  {p.slice(0, 7)}
+                </a>
+              </Tooltip>
+            ),
+          )}
         </Flex>
       ) : null}
       {/* 操作区：浏览快照/查看变更集/摘樱桃/还原/Reset 当前分支到此处——逐个按回调注入渲染（仅调用方注入回调时出现；确认弹窗与 hook 调用由容器持有） */}

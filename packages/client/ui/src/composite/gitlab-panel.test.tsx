@@ -381,7 +381,7 @@ describe('GitLabPanel 评论与审查', () => {
     expect(callbacks.onReview).toHaveBeenCalledWith('APPROVE');
   });
 
-  it('「Request changes」确认后以输入框内容调 onReview("REQUEST_CHANGES", body)；空输入时 body 省略', async () => {
+  it('「Request changes」确认后以输入框内容调 onReview("REQUEST_CHANGES", body)；输入保留不清空', async () => {
     const { callbacks, props, view } = renderPanel();
     fireEvent.change(screen.getByTestId('gitlab-comment-input'), { target: { value: '这里要改' } });
     fireEvent.click(screen.getByTestId('gitlab-request-changes'));
@@ -389,11 +389,12 @@ describe('GitLabPanel 评论与审查', () => {
     expect(callbacks.onReview).toHaveBeenCalledTimes(1);
     expect(callbacks.onReview).toHaveBeenCalledWith('REQUEST_CHANGES', '这里要改');
 
-    // 首次确认后输入框已清空：再次 Request changes 不携带 body
+    // 服务端只提交 state、不落 body：输入内容保留（供用户改用「评论」发送），再次 Request changes 仍携带同内容
     view.rerender(<GitLabPanel {...props} />);
+    expect(screen.getByTestId('gitlab-comment-input')).toHaveValue('这里要改');
     fireEvent.click(screen.getByTestId('gitlab-request-changes'));
     fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
-    expect(callbacks.onReview).toHaveBeenLastCalledWith('REQUEST_CHANGES', undefined);
+    expect(callbacks.onReview).toHaveBeenLastCalledWith('REQUEST_CHANGES', '这里要改');
   });
 });
 

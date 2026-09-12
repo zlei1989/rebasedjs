@@ -276,7 +276,7 @@ export function LogPage({
     // 菜单项 label 用 Tooltip > span 包裹：菜单项是数据对象而非 JSX，antd 的 MenuItemType.title 在 Dropdown 下不弹；
     // span 让 antd 的菜单项样式（行高/省略/禁用色）照旧生效，Tooltip 只负责悬停说明
     if (onCheckoutRevision !== undefined) items.push({ key: 'checkout-revision', label: <Tooltip title="检出该提交：工作区换成它的快照，HEAD 进入游离状态（不移动任何分支）"><span>检出此提交（游离 HEAD）</span></Tooltip> });
-    if (onCheckoutNewBranch !== undefined) items.push({ key: 'new-branch', label: <Tooltip title="以该提交为起点新建分支：随后弹出对话框填写分支名，创建后不自动检出"><span>从此处新建分支…</span></Tooltip> });
+    if (onCheckoutNewBranch !== undefined) items.push({ key: 'new-branch', label: <Tooltip title="以该提交为起点新建分支：随后弹出对话框填写分支名，确定后自动检出该分支"><span>从此处新建分支…</span></Tooltip> });
     if (onCreateTag !== undefined) items.push({ key: 'new-tag', label: <Tooltip title="以该提交为起点新建标签：随后弹出对话框填写标签名与说明"><span>从此处新建标签…</span></Tooltip> });
     if (onOpenInBrowser !== undefined) items.push({ key: 'open-in-browser', label: <Tooltip title="在系统浏览器中打开该提交对应的远程网页（需已配置远程仓库）"><span>在浏览器中打开</span></Tooltip> });
     if (items.length > 0) items.push({ type: 'divider' });
@@ -338,7 +338,7 @@ export function LogPage({
   const moreItems = [
     ...(onOpenBlame ? [{ key: 'blame', label: <Tooltip title="打开逐行溯源视图：查看每一行的最后修改者与提交"><span>溯源</span></Tooltip> }] : []),
     ...(onOpenHistory ? [{ key: 'history', label: <Tooltip title="打开该文件的提交历史：只看改动过它的记录"><span>历史</span></Tooltip> }] : []),
-    ...(onOpenCommitted ? [{ key: 'committed', label: <Tooltip title="查看当前分支上已提交但尚未推送的提交清单"><span>已提交</span></Tooltip> }] : []),
+    ...(onOpenCommitted ? [{ key: 'committed', label: <Tooltip title="按提交逐条浏览已提交的变更：左侧提交列表，右侧该提交的文件目录树"><span>已提交</span></Tooltip> }] : []),
     ...(onOpenSearch ? [{ key: 'search', label: <Tooltip title="在整个仓库历史中按提交信息、作者或文件内容检索"><span>搜索</span></Tooltip> }] : []),
     ...(onOpenRebase ? [{ key: 'rebase', label: <Tooltip title="打开变基对话框：把当前分支的提交重新应用到指定基底（会重写提交哈希）"><span>变基</span></Tooltip> }] : []),
     ...(onOpenTags ? [{ key: 'tags', label: <Tooltip title="打开标签管理页：查看、创建或删除仓库标签"><span>标签</span></Tooltip> }] : []),
@@ -656,6 +656,7 @@ export function LogPage({
                 onRevert={onRevert}
                 onBrowse={onBrowse}
                 onOpenChanges={onOpenChanges}
+                onSelectCommit={onSelectCommit}
               />
             </div>
           }
