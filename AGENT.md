@@ -41,8 +41,8 @@ rebasedjs/
 
 | 命令 | 说明 |
 |------|------|
-| `pnpm dev` | 并行起所有包的 dev 脚本：web-next (localhost:3030) + web-koa 服务端 (localhost:3031) |
-| `pnpm --filter @rebased/web-koa dev:web` | web-koa 的 SPA 前端 Vite 开发服务器 (localhost:5173，代理 /api → 3031) |
+| `pnpm dev` | 并行起所有包的 dev 脚本：web-next (localhost:3081) + web-koa 服务端 (localhost:3082) |
+| `pnpm --filter @rebased/web-koa dev:web` | web-koa 的 SPA 前端 Vite 开发服务器 (localhost:5173，代理 /api → 3082) |
 | `pnpm build` | 生产构建 |
 | `pnpm format` | 统一 ESLint `--fix` 自动修复（共享格式规则见根 `eslint.shared.ts`） |
 | `pnpm typecheck` | TypeScript 类型检查 |
@@ -73,7 +73,7 @@ rebasedjs/
 
 ## 冒烟测试
 
-- **流程**：启动真实服务（web-next :3030 / web-koa :3031），用 mcp 在浏览器中按真实用户路径逐项操作（表单输入、按钮、弹窗、导航），并用 CLI 复核实际 git 状态，页面展示与仓库事实互证。
+- **流程**：启动真实服务（web-next :3081 / web-koa :3082），用 mcp 在浏览器中按真实用户路径逐项操作（表单输入、按钮、弹窗、导航），并用 CLI 复核实际 git 状态，页面展示与仓库事实互证。
 - **记录**：每次冒烟后在对应计划/关账记录的「冒烟」小节写入：① 范围清单（逐项 ✅/❌/跳过+理由）；② 操作路径（点击/输入序列）；③ 证据（浏览器状态 + CLI 输出互证）；④ 未覆盖项与后续计划（如有）。
 
 ## MCP 浏览器（截图与元素读取）

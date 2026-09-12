@@ -5,7 +5,8 @@
 - **范围**：`docs/pages-and-api-audit.md` §二/§四 全量（31 页面 / 36 功能域 → 功能点矩阵 **159 个测试行 + 11 个排除行**；terminal、local-history 2 个全域不做项无对应页面）
 - **基准**：功能对齐 Java 版 Rebased（`D:\zhanglei1120\Github\rebased`）；终态口径以 `docs/pages-and-api-audit.md`（2026-09-21 终核版）为准
 - **方式**：用 MCP（Playwright MCP 工具集）**模拟人工操作**在真实浏览器中按真实用户路径逐项冒烟——打开页面、点击、输入、弹窗、导航全走 UI；页面展示与仓库事实用 `git` CLI 互证（AGENT.md §冒烟测试口径）
-- **应用**：web-next（http://localhost:3030）为默认被测端；web-koa（API :3031 + SPA :5173）按需对等抽查
+- **应用**：web-next（http://localhost:3081）为默认被测端；web-koa（API :3082 + SPA :5173）按需对等抽查
+- **端口变更**：2026-09-13 起两端口由 `:3030`（web-next）/`:3031`（web-koa）统一改为 `:3081`/`:3082`，本文档已同步；此前的历史截图地址栏与轮次记录仍显示旧端口（截图不重拍）
 - **截图**：每功能点至少 1 张**最终正确效果图**，保存至 `docs/shots/`，命名 `<页面slug>-<NN>.png`（过程图 `<页面slug>-<NN>b.png`）；排除行不截图；主题/响应式抽查另存 `theme-*.png`、`responsive-*.png`
 - **互证**：写操作（提交/变基/合并/检出/推送等）必须用 pwsh 执行 `git` CLI 复核仓库事实后才可判 ✅
 
@@ -58,7 +59,7 @@
 
 ### 1.4 执行流程（单轮冒烟）
 
-1. `pnpm dev` 起服务（web-next :3030 / web-koa :3031），浏览器打开 `http://localhost:3030/`；
+1. `pnpm dev` 起服务（web-next :3081 / web-koa :3082），浏览器打开 `http://localhost:3081/`；
 2. CLI 复位/构造冒烟仓；
 3. 按矩阵逐行执行：入口 → 模拟人工步骤 → 等待 → 截图（最终正确效果）→ CLI 互证；
 4. 每行回填「结果」列（✅/❌/跳过+理由）；❌ 行登记 §五 执行记录；
@@ -72,7 +73,7 @@
 
 | # | 页面 | 阶段 | 路由/承载 | 模拟入口（一步到达） | 测试行 | 截图前缀 | 状态 |
 |---|------|------|-----------|----------------------|--------|----------|------|
-| 1 | RepoPage | P1 | `/` | 浏览器打开 :3030 首页 | F-001~F-008（8） | repo-page | ✅ 8/8 |
+| 1 | RepoPage | P1 | `/` | 浏览器打开 :3081 首页 | F-001~F-008（8） | repo-page | ✅ 8/8 |
 | 2 | LogPage | P1 | `/repos/:id` | RepoPage 打开冒烟仓 | F-009~F-028（20） | log-page | ⚠️ 19/20（F-020 ❌ 见 D-39） |
 | 3 | DiffPage | P1 | `/repos/:id/diff` | StatusPage 双击变更文件 | F-029~F-038（10） | diff-page | ✅ 10/10 |
 | 4 | StatusPage | P2 | `/repos/:id/status` | 顶栏「状态」 | F-039~F-051（13） | status-page | ✅ 13/13 |
@@ -133,7 +134,7 @@
 
 ### 4.1 RepoPage（slug `repo-page`；P1）
 
-- **入口**：`browser_navigate` → `http://localhost:3030/`（web-koa 对等抽查用 :5173）。
+- **入口**：`browser_navigate` → `http://localhost:3081/`（web-koa 对等抽查用 :5173）。
 - **前置**：冒烟仓 `rebased-smoke` 已注册；另备一个非 git 目录（坏路径）、一个空目录、裸仓 `smoke-remote` 本地路径。
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
@@ -511,7 +512,7 @@
 | F-149 | 应用设置读写 | 切 logInEditor 开关 → 刷新后仍保持；观察 recentRepoIds 生效 | 应用设置持久化正确 | ✅ | settings-01.png（「在编辑器中查看提交日志」true→false → 刷新页面后 `aria-checked=false` 仍保持；CLI：`config.json` → `settings.logInEditor=false`；同卡片「界面主题」Segmented（**自动/明亮/暗色**，三选项为 §5.22 变更② 后的新 UI）在位；recentRepoIds 由其消费方「首页最近仓库列表」印证——页面 10 行与 config 的 10 条**逐项一致**）。**口径更正**：旧记录写「8 条」，现为 **10 条** |
 | F-150 | git 配置白名单 9 键读写 | ConfigRow 逐行：生效值 + local 覆盖输入 + 保存 | 保存写仓库配置成功（CLI `git config` 互证）；含 gpgsign/signingkey/commit.template | ✅ | settings-02.png（「Git 配置（仓库级）」9 行：user.name / user.email / core.autocrlf / pull.rebase / commit.gpgsign / user.signingkey / commit.template / fetch.prune / init.defaultBranch，每行显示生效值 + 覆盖输入 + 保存；初值未变化时 **9/9 保存按钮均为禁用**）；写入实测：`core.autocrlf` 填 `input` → 保存成功 → CLI `git config --local --get core.autocrlf` = `input`，行内「生效值」同步显示 `input`；跑完已复位 `false` |
 | F-151 | 账户/令牌管理 | 添加/覆盖 host+account+token → Popconfirm 删除 | 列表正确；token 仅掩码不下行；配置文件 0600（CLI 文件互证） | ✅ | settings-03.png（添加 `example.com` + 令牌 → 行显示 `toke***`（**仅掩码，token 不下行**）；同名再存 → 仍只 1 条（覆盖为 `NEWT***`）；Popconfirm「确定删除账户 smoke-f151（example.com）？」→ 删除后「暂无账户」、`config.json` 的 `auth.accounts` 归零）。权限：`config-store` 每次写盘 `chmodSync(file, 0o600)`（POSIX）；Windows 下 ACL 仅 SYSTEM/Administrators/当前用户（无 Everyone），等价收敛；文件无 BOM |
-| F-152 | 集中存储（config-store） | 修改任一应用设置 → 重启服务 → 复查 | 配置集中于 config-store 持久化（口径由单测锁定，页面验证持久化即可） | ✅ | settings-04.png（**真重启**实测：切主题为「明亮」→ `data-theme=light`、body `rgb(255,255,255)` → `taskkill /PID <dev 树> /T /F` 杀掉 `pnpm -r dev`（:3030/:3031 全停，端口实测无监听）→ 重启新进程（**4 s 就绪**、`/api/settings` 200）→ 重开设置页**仍为亮色**、Segmented 停在「明亮」；CLI 复查 `config.json`：`settings.theme=light` / `logInEditor=true` / `recentRepoIds=10` / `patterns=[]`。重启后 `settings/gpg-config`、`commit/amend-targets`、`browse/content` 全部 200、dev 日志 **0 条 404**（与 D-43「偶发、未复现」的定性一致）。**冒烟后已切回「自动」**并复验 `data-theme-preference=auto`、`GET /api/settings` → `"theme":"auto"`）。**重启注意事项见 D-43**：硬杀后 `.next` 缓存可能不一致导致二级嵌套 API 404 |
+| F-152 | 集中存储（config-store） | 修改任一应用设置 → 重启服务 → 复查 | 配置集中于 config-store 持久化（口径由单测锁定，页面验证持久化即可） | ✅ | settings-04.png（**真重启**实测：切主题为「明亮」→ `data-theme=light`、body `rgb(255,255,255)` → `taskkill /PID <dev 树> /T /F` 杀掉 `pnpm -r dev`（:3081/:3082 全停，端口实测无监听）→ 重启新进程（**4 s 就绪**、`/api/settings` 200）→ 重开设置页**仍为亮色**、Segmented 停在「明亮」；CLI 复查 `config.json`：`settings.theme=light` / `logInEditor=true` / `recentRepoIds=10` / `patterns=[]`。重启后 `settings/gpg-config`、`commit/amend-targets`、`browse/content` 全部 200、dev 日志 **0 条 404**（与 D-43「偶发、未复现」的定性一致）。**冒烟后已切回「自动」**并复验 `data-theme-preference=auto`、`GET /api/settings` → `"theme":"auto"`）。**重启注意事项见 D-43**：硬杀后 `.next` 缓存可能不一致导致二级嵌套 API 404 |
 | F-153 | git 可执行文件检测/引导 | 观察「Git 可执行文件」卡片 | PATH 查找 `git` + 版本输出 + 已检测徽标 | ✅ | settings-05.png（卡片：`已检测` 徽标 + `git（PATH 查找）` + `git version 2.47.0.windows.2`）；API `{"exec":"git","version":"git version 2.47.0.windows.2","ok":true}` 与 CLI 同值；未检测态引导文案由 `resolveGitExecutableInfo` ok=false 分支承载（api 单测覆盖） |
 | F-154 | GPG 专属配置对话框 | 「GPG 提交签名」卡片 → 「配置…」Modal → 勾选 + 密钥下拉 | 状态行正确；密钥下拉列 secret keys；无密钥 → Alert 禁启用；取消勾选仅写 false 不清 key（CLI config 互证） | ✅ | settings-06.png（卡片状态行「未启用 / commit.gpgsign 为 false/未设置」；Modal：启用勾选框 + 密钥下拉 + 说明「配置与 git config 同步（commit.gpgsign / user.signingkey）」；本机无 gpg CLI → API `keys:[]` → Alert「未找到可用的 gpg 密钥…」且**勾选框与密钥下拉均禁用**（Modal 内按钮实测 24px，与设置页全 small 口径一致；「确 定」仍可点——「取消勾选 → 只写 false 不清 key」本身是合法操作）。CLI 实测「取消勾选仅写 false 不清 key」：先设 `commit.gpgsign=true` + `user.signingkey=DEADBEEF1234` → `PUT settings/gpg-config {enabled:false}` → 200 `{enabled:false, key:'DEADBEEF1234', keys:[]}`，CLI 复核 `commit.gpgsign=false` 而 `user.signingkey` **保留**；冒烟后已清掉该临时 key） |
 | F-155 | 保护分支设置 | 卡片输入正则列表（含一个非法正则）→ 保存 | 非法标红禁保存；合法保存成功；联动：已发布到匹配远程分支的提交编辑 → 「不可重写」拦截提示 | ✅ | settings-07.png（**页面级取景**：① 输入 `main` + `[unclosed` → 卡片内红字「非法正则：[unclosed」且「保 存」禁用）；settings-07b.png（**保护分支卡片特写**：同为非法态，红字与禁用的「保 存」清晰可辨；内容区是 antd `Input.TextArea`，非 Monaco）；② 改为 `main`+`master` → 保存成功，CLI `config.json` → `protectedBranchPatterns=["main","master"]`；③ **联动实测**：对**已推送到 `origin/master`** 的提交 `761961d`（Merge branch 'feature'）右键 → Reword Commit → `POST commit-edit {"hash":"761961d…","action":"reword","message":"f155-reword-probe-should-be-blocked"}` → **400 `INVALID_QUERY`「目标提交已推送到受保护分支，不可重写」** + 同文案 toast，CLI 复核该提交哈希/subject/committer 时间**分毫未变**、`rebase-topic` tip 仍 `ab55a1b`；settings-07c.png（右键菜单态）。冒烟后规则已清空。**夹具注**：本批实测 `origin/master` = `a91ade7`（F-070 强推改写后），`761961d` 仍是其祖先——旧记录直接写 `origin/master` 指向 `761961d` 已不准确 |
@@ -570,7 +571,7 @@
 ### 5.16 R22 全站流体布局与密度六档验收（Task 16，2026-09-11）
 
 > 本轮不按 F-xx 功能行冒烟，而是对「全站流体布局与密度统一」重构做**几何验收**：六档宽度 × 明暗两主题 × 每个页面与状态，逐格断言页面级横向溢出为 0。入口：`scripts/check-fluid-layout.mjs`（Playwright 驱动，先 `pnpm dev` 起真实服务）。
-> 被测端：web-next `http://localhost:3030`（六档 × 明暗）、web-koa `http://localhost:5173`（其 SPA 固定暗色，故只跑暗色）；夹具：既有主冒烟仓 `rebased-smoke`（id `18726c5c-f4b2-499d-ac82-6eac8f46ec26`，`sub-b @ 4f27441`，23 提交、2 stash、2 tag、2 shelf、2 worktree、2 submodule），**未**重建夹具。
+> 被测端：web-next `http://localhost:3081`（六档 × 明暗）、web-koa `http://localhost:5173`（其 SPA 固定暗色，故只跑暗色）；夹具：既有主冒烟仓 `rebased-smoke`（id `18726c5c-f4b2-499d-ac82-6eac8f46ec26`，`sub-b @ 4f27441`，23 提交、2 stash、2 tag、2 shelf、2 worktree、2 submodule），**未**重建夹具。
 >
 > **夹具耦合（跑之前先看这条）**：内容级就绪门要求夹具里**真的有那些内容** —— browse 的树节点、settings 的 git 配置行（键集由代码里的 `CONFIG_KEYS` 决定，与夹具无关）、status 的变更行、stashes、tags、patches、shelves、worktrees、submodules、console 的历史记录。其中 stash / 未跟踪文件 / tag / patch / shelf / worktree / submodule 都是**可变状态**：一旦有人 drop 掉一个 stash、把未跟踪文件提交掉或删掉 tag，对应的格子会**如实判红**（提示「内容级就绪选择器未出现」）而不是静默跳过 —— 那一格此时没有可量的数据，绿了才是错的。排查顺序是先看夹具（`git stash list` / `git status --porcelain` / `git tag` …），不要先动门。另注：本轮期间实测到**另一个会话在同一夹具仓库上来回 checkout 分支**（`git reflog`：`master ↔ sub-b`），那会让日志页/对比页的内容中途换一批；跑验收前请确认没有别的会话在使用该夹具。
 
@@ -597,7 +598,7 @@
 
 #### ② 操作路径（点击/输入序列）
 
-1. `pnpm dev`（web-next :3030 / web-koa API :3031）+ `pnpm --filter @rebased/web-koa dev:web`（SPA :5173）；三个端口启动前均为空闲，无需 kill。
+1. `pnpm dev`（web-next :3081 / web-koa API :3082）+ `pnpm --filter @rebased/web-koa dev:web`（SPA :5173）；三个端口启动前均为空闲，无需 kill。
 2. 断言脚本自动驱动：`PUT /api/settings {theme}` 切主题（跑完还原）→ 逐格 `goto(<路由>)` → **两段式就绪门**（先等该路由的页面壳 `data-testid`，再等**内容级**条目选择器如 `row-stash-*`/`tag-row-*`/`config-input-*` 真的命中，命中数记进明细、大列表另有命中数下限）→ 等布局静止（滚动量/高度/节点数连续两次采样一致）→ 读 `scrollWidth`/`clientWidth`。只等页面壳会量到数据未到的页面，而空页永远不溢出（该格的绿等于没证明任何东西），故内容级选择器一条未命中（或低于下限）即判该格红。
    - **就绪门与主题门串联（Fix round 2 补）**：主题探针迟迟不落时脚本会兜底整页重载一次；重载会把页面打回「数据还没到」的状态，所以「导航 + 就绪门 + 等静止」与主题门由同一个入口串联，**只要这一轮发生过整页重载，就绪门就整套重跑**才允许测量。绕过这条规则的后果是实测过的：在「重载后直接测量」的旧流程下，`settings` 格在内容 **0 条**的空页上被判**通过**（`scrollWidth == clientWidth`）—— 正是内容级就绪门要堵的那种假绿。
    - **环境中断可整格重跑一次（判定类失败不重试）**：dev 服务按需编译、或别的会话重启 dev 服务 / 改被测代码时，页面会**整页不渲染**（本轮实测到 `ERR_CONNECTION_REFUSED`（dev 服务正在重启）与 github/gitlab 系列接口 404 这类瞬时现象）。脚本对**中断类**失败（就绪选择器未出现、`page.goto` / `page.waitForSelector` 超时、执行上下文被导航打断、主题没落地）把整格重跑一次 —— 重新导航 + 完整两段式就绪门 + 全部断言与测量，**每格最多重试一次**。其中「就绪选择器未出现」**包含内容级门的 0 命中**（`内容级就绪选择器未出现`，命中数 0；实测见过 `dark/1920 console` 首轮 `ready=0`、重跑后通过）：它与「整页没渲染」在本环境里常常是同一件事，而重试**同样**要过完整的两段式就绪门，**不可能凭重试拿到一个空洞的绿**。**已测量且溢出、例外断言失败、命中数低于下限（命中了但 < `min`）都是结论，判红即定、永不重试**；每次尝试的预算一字未改，两次都没过照样判红。尝试次数与**首轮**失败原因写进明细 JSON（`attempts` / `firstAttemptReason`），并在汇总里**逐格列出**「重试后通过 / 两次均失败」、在**每档进度行**与**矩阵**（`✅↻` 记号）里也露出，避免把重试后的绿读成一次通过。
@@ -710,7 +711,7 @@
 | P-25 | **本轮被实测推翻的文档括注（已在各行就地改写）**：① F-132 的忽略内容区是 antd `Input.TextArea`（rows=10），**不是**带行号的 Monaco；② F-156 现为 **18 个文件 / 2 个 gitlink（dir.with.dots、sub-module）/ 根提交 `56f751ab`**（旧记录 17 / 4 / `3236538` 系四态夹具与旧历史下的结果）；③ F-149 的 `recentRepoIds` 现为 **10** 条（旧记录 8）；④ F-155 的目标提交在 `origin/master` 上，而 `origin/master` 经 F-070 强推后已是 `a91ade7`（`761961d` 仍是其祖先）；⑤ F-111 的 grep 词现命中 **18** 条、pickaxe 词改为 `staged new file`（`staged-only` 0 命中）；⑥ F-113 的 `fetch-probe-local` 分支已不存在（改用 `diverge-test`）；⑦ F-117 合并提交为 `ec1320f` | 后续轮次请以**当场 CLI 实测**为准，不要沿用本文档任何历史 hash/计数——本会话对主仓历史做过多次改写（F-055 amend 到历史、F-059 hard reset、F-070 强推修复、F-066 删分支、§4.24 后移除四态子模块夹具） |
 | P-26 | **运行环境的两次外部变化**：① **有并行会话在同一 `rebasedjs` 仓提交**（`b41ccaa chore: 收纳并行会话的在途改动（截图重拍/documents/冒烟脚本）`，19:45:32，把本轮当时已产出的截图一并入库；另有 `8af62ff`/`aa3e24f` 改 UI 控件尺寸）→ 本轮截图与文档改动会陆续进入仓库历史，工作区里可能残留未提交的图；② **dev 服务在 F-152 后被以分离进程重启**（cmd PID 11852，父进程已退；日志 `%TEMP%\rebased-dev-restart[2].log`）——重启会清空 exec 环形缓冲（F-145 的控制台证据必须在重启前取），且硬杀易触发 D-43 | 收尾账目以工作区实际文件为准（不依赖 git 状态）；若后续轮次需要干净基线，先确认无并行会话在写同一仓 |
 | P-27 | **两条截图自动化的实测坑（收尾批踩到，写进口径免得重复踩）**：① **`browser_hover('body')` 不能用来「把指针移开」**——body 中心可能正好压在 antd 帮助图标上，会把 Tooltip 拍进画面（`responsive-768-light-settings.png` 首次即中招并重拍）；可靠做法是 `page.mouse.move(1434, 892)`（右下角空白）并等 ~700ms。② **antd 是 v6.6.3：toast 根节点是 `.ant-message.ant-message-list.ant-message-top`，不存在 v5 的 `.ant-message-notice-content`**；按 v5 类名轮询会「10s 未命中但操作其实已成功」。可靠做法是**文本轮询 `document.body.innerText` 命中目标文案后立即截图**——实测「提交并推送」的 toast 在**点击后约 2.8 s** 才出现、停留约 3 s，窗口很窄 | 两条已并入 §1.2 的截图口径；后续批次一律「文本轮询 → 立即截图」+「鼠标移到右下角」 |
-| P-29 | **Turbopack 错误代码框的多字节 panic 会把整个 dev 服务带走**（2026-09-12 实测连续 4 次；即旧记录里的「E-01」）。链路：① 被编辑文件处于**瞬时错误态**（本次是 `apps/web-next/app/repos/[repoId]/settings/page.tsx` 作为 Server Component 却 import `useRouter`/客户端 hooks，缺 `'use client'`）；② Turbopack 为该诊断渲染代码框时命中 `next-code-frame` 的 Rust panic——`end byte index 93 is not a char boundary; it is inside '一' (bytes 91..94) of \`/** 树节点：title 为展示名… */\``；③ 进程以 `0xC0000409`（fail-fast）退出，`pnpm -r dev` 随即连带中止 web-koa（:3031）→ 用户侧表现为**整站突然打不开**。**取证特征**：日志里前面的请求全是 200，紧接着一条 `thread '<unnamed>' panicked at crates\next-code-frame\src\highlight.rs`，最后 `Exit status 3221226505`（**panic 会把真正的编译错误盖掉**，看不到错误正文） | ① **先拿到真实错误**：用 webpack 跑一次（`pnpm --filter @rebased/web-next dev -- --webpack`），错误正文照常打印（本次即据此定位到缺 `'use client'`）；② 修掉诊断本身（给该页补 `'use client'` 或把 hooks 下移到客户端子组件）后，Turbopack 不再产生该诊断、dev 稳定；③ 重启前若曾用 webpack 跑过，**必须删 `apps/web-next/.next` 再回到 Turbopack**，否则 webpack 与 Turbopack 的缓存混用会出现 `Cannot find module '../chunks/ssr/[turbopack]_runtime.js'`（各页 500）；④ 多会话共用一台机时先确认 :3030/:3031 归属再起（本次有一次重启因端口被另一会话的 dev 占用而 `EADDRINUSE` 失败）。**与 D-43 区分**：D-43 是 `.next` 缓存不一致导致的偶发嵌套 404（一级 200 + 二级 404），本条是「编译诊断 + 中文代码框」触发的**确定性**崩溃（全站不可达） |
+| P-29 | **Turbopack 错误代码框的多字节 panic 会把整个 dev 服务带走**（2026-09-12 实测连续 4 次；即旧记录里的「E-01」）。链路：① 被编辑文件处于**瞬时错误态**（本次是 `apps/web-next/app/repos/[repoId]/settings/page.tsx` 作为 Server Component 却 import `useRouter`/客户端 hooks，缺 `'use client'`）；② Turbopack 为该诊断渲染代码框时命中 `next-code-frame` 的 Rust panic——`end byte index 93 is not a char boundary; it is inside '一' (bytes 91..94) of \`/** 树节点：title 为展示名… */\``；③ 进程以 `0xC0000409`（fail-fast）退出，`pnpm -r dev` 随即连带中止 web-koa（:3082）→ 用户侧表现为**整站突然打不开**。**取证特征**：日志里前面的请求全是 200，紧接着一条 `thread '<unnamed>' panicked at crates\next-code-frame\src\highlight.rs`，最后 `Exit status 3221226505`（**panic 会把真正的编译错误盖掉**，看不到错误正文） | ① **先拿到真实错误**：用 webpack 跑一次（`pnpm --filter @rebased/web-next dev -- --webpack`），错误正文照常打印（本次即据此定位到缺 `'use client'`）；② 修掉诊断本身（给该页补 `'use client'` 或把 hooks 下移到客户端子组件）后，Turbopack 不再产生该诊断、dev 稳定；③ 重启前若曾用 webpack 跑过，**必须删 `apps/web-next/.next` 再回到 Turbopack**，否则 webpack 与 Turbopack 的缓存混用会出现 `Cannot find module '../chunks/ssr/[turbopack]_runtime.js'`（各页 500）；④ 多会话共用一台机时先确认 :3081/:3082 归属再起（本次有一次重启因端口被另一会话的 dev 占用而 `EADDRINUSE` 失败）。**与 D-43 区分**：D-43 是 `.next` 缓存不一致导致的偶发嵌套 404（一级 200 + 二级 404），本条是「编译诊断 + 中文代码框」触发的**确定性**崩溃（全站不可达） |
 
 #### R1 夹具与流程纠偏（P-01~P-05；非产品缺陷，记入以免后续轮次重复踩坑）
 
@@ -929,14 +930,14 @@
 - 互跳：应用设置页顶部「仓库设置」（无最近仓库时**禁用**并在 Tooltip 说明原因——取最近列表第一条作落点）、仓库设置页顶部「应用设置」；返回按钮分别为「返回首页」/「返回日志」。**导航条形态**：antd `Space` + `Divider orientation="vertical"`（两个 link 按钮同一行、中间一条竖线；antd 6 口径用 `Space.separator` / `Divider.orientation`，`split`/`type` 已废弃），`Space size={0}`（项间距交给 Divider 自身 8px 左右外边距，实测两链接各距竖线 8px），按钮 `size="small"` 逐个显式声明（实测高 24px、两页几何一致）。
 - 回归守卫：`repo-page.test.tsx` 的设置入口两例（无参回调；无仓库仍可点）、两页互跳各一例（调 `onBack` / `onOpenOtherSettings`，并断言导航条存在 `.ant-divider-vertical`）。
 - 巡检脚本：`scripts/check-fluid-layout.mjs` 路由表新增 `app-settings`（`/settings`，density `default`，ready `app-settings-card` + 内容门 `theme-segmented`），仓库设置页 ready 由静态 `git-executable-card`（已随拆分移走）改为数据级 `repo-config-card`；截图页清单同步新增 `app-settings`。
-- 修复后实测（:3030，MCP 逐步点）：首页「设置」→ `/settings`（应用级卡片俱全：应用设置 / 保护分支 / Git 可执行文件 / 账户）→ 点「仓库设置」→ `/repos/f761a9f6…/settings`（只有「Git 配置（仓库级）」「GPG 提交签名」两张卡，DOM 断言 `app-settings-card`/`protected-branches-card`/`accounts-card` 均不存在）→ 点「应用设置」→ 回 `/settings`；日志页顶栏设置图标 → `/repos/9918c699…/settings`。主题在导航间保持（`data-theme=light` 跨页仍在），冒烟后已切回「自动」（`GET /api/settings` → `"theme":"auto"`）。
-- **dev 环境注意（本轮踩坑，非新缺陷）**：本节改动期间 `next dev`（Turbopack）两次因「模块有编译错误 + 错误行上方注释含中文」而 panic 退出并**吞掉真实错误**——即 §5.17 已登记的 **P-29**（`next-code-frame` 的 `highlight.rs` 按字节下标切片，切点落在中文注释的字符中间）；本轮按 P-29 的既定处置用 `next dev --webpack` 拿到真实错误（`app/repos/[repoId]/settings/page.tsx` 漏了首行 `'use client'`，已修），并复核了 P-29 的另两条口径：改用 webpack 后回 Turbopack **必须删 `apps/web-next/.next`**，以及重启前先确认 :3030/:3031 归属（本轮遇到一次 `EADDRINUSE`，确认是上一轮 dev 子进程仍占端口，kill 后重启即恢复）。
+- 修复后实测（:3081，MCP 逐步点）：首页「设置」→ `/settings`（应用级卡片俱全：应用设置 / 保护分支 / Git 可执行文件 / 账户）→ 点「仓库设置」→ `/repos/f761a9f6…/settings`（只有「Git 配置（仓库级）」「GPG 提交签名」两张卡，DOM 断言 `app-settings-card`/`protected-branches-card`/`accounts-card` 均不存在）→ 点「应用设置」→ 回 `/settings`；日志页顶栏设置图标 → `/repos/9918c699…/settings`。主题在导航间保持（`data-theme=light` 跨页仍在），冒烟后已切回「自动」（`GET /api/settings` → `"theme":"auto"`）。
+- **dev 环境注意（本轮踩坑，非新缺陷）**：本节改动期间 `next dev`（Turbopack）两次因「模块有编译错误 + 错误行上方注释含中文」而 panic 退出并**吞掉真实错误**——即 §5.17 已登记的 **P-29**（`next-code-frame` 的 `highlight.rs` 按字节下标切片，切点落在中文注释的字符中间）；本轮按 P-29 的既定处置用 `next dev --webpack` 拿到真实错误（`app/repos/[repoId]/settings/page.tsx` 漏了首行 `'use client'`，已修），并复核了 P-29 的另两条口径：改用 webpack 后回 Turbopack **必须删 `apps/web-next/.next`**，以及重启前先确认 :3081/:3082 归属（本轮遇到一次 `EADDRINUSE`，确认是上一轮 dev 子进程仍占端口，kill 后重启即恢复）。
 - **未覆盖与后续**：① `apps/web-next/app/settings/page.tsx` 的 Next.js 服务端/客户端边界只靠 `next build --webpack` 与实际渲染验证，本轮未跑 `check-fluid-layout.mjs` 全量矩阵（该脚本的 `app-settings` 格为新增，尚未实测）；② web-koa 侧「无最近仓库」时互跳禁用的 UI 分支未在 :5173 实测（单测覆盖）；③ 本轮未重拍设置页截图（`settings-0*.png` 仍反映拆分前的单页形态，重拍时需按新两页命名）。
 
 **冒烟（2026-09-13，本节改动的逐项实测；截图已入库 `docs/shots/`）**
 
 - **范围清单**：① 首页「设置」→ 应用设置页（全局）✅；② 应用设置页卡片组成（应用设置/保护分支/Git 可执行文件/账户）✅；③ 应用设置页 →「仓库设置」互跳 ✅；④ 仓库设置页卡片组成（仅 Git 配置（仓库级）/GPG 提交签名）✅；⑤ 仓库设置页 →「应用设置」互跳 ✅；⑥ 主题切换（暗色→明亮）即时生效、跨页保持 ✅；⑦ GitHub 面板「设置」→ 应用设置页 ✅；⑧ web-koa SPA（:5173）主题随应用设置生效 ✅；⑨ 导航条形态（Space size=0 + 竖直 Divider；按钮 small 24px）两页一致 ✅；⑩ 冒烟后主题复位为 `auto`（`GET /api/settings` → `"theme":"auto"`）✅。
-- **操作路径**：`:3030/settings`（暗色取证）→ 点「仓库设置」→ `:3030/repos/f761a9f6…/settings`（暗色取证）→ 点「应用设置」→ 切「明亮」→ 应用设置页（明亮取证）→ 点「仓库设置」（明亮取证）→ `:3030/repos/9918c699…/github`（入口取证）→ 点「设置」→ 落在 `/settings` → `:5173/settings`（koa 明亮取证）→ 回 `:3030/settings` 切「自动」复位。
+- **操作路径**：`:3081/settings`（暗色取证）→ 点「仓库设置」→ `:3081/repos/f761a9f6…/settings`（暗色取证）→ 点「应用设置」→ 切「明亮」→ 应用设置页（明亮取证）→ 点「仓库设置」（明亮取证）→ `:3081/repos/9918c699…/github`（入口取证）→ 点「设置」→ 落在 `/settings` → `:5173/settings`（koa 明亮取证）→ 回 `:3081/settings` 切「自动」复位。
 - **证据（截图 6 张，全为绝对路径入库 `docs/shots/`）**：
 
 | 截图 | 取景与判定 |
@@ -948,7 +949,7 @@
 | `github-settings-entry-light.png` | GitHub 面板顶部「设置」入口（明亮态）：Tooltip 语义为「打开应用设置：GitHub 令牌配在「账户」卡片」 |
 | `koa-app-settings-light.png` | **web-koa SPA（:5173）应用设置页**：`data-theme=light`、body `rgb(255,255,255)`、`--app-bg=#ffffff` —— 即「主题在 koa 侧不生效」缺口的修复证据 |
 
-- **DOM 互证（与截图同轮）**：`:3030` 应用设置页导航条 `返回首页 x=16 w=72` → 竖线 `x=96 w=1 h=13`（`.ant-divider-vertical`）→ `仓库设置 x=104 w=72`，两侧各 8px（`Space size={0}` 后仅剩 Divider 自带外边距）；两按钮 `ant-btn-sm` 高 24px。`:5173` 同页同几何（`ant-btn-sm` 24px + `.ant-divider-vertical` 存在）。`:3030` 仓库设置页 DOM 断言 `app-settings-card`/`protected-branches-card`/`accounts-card` 均不存在，只剩 `repo-config-card` + `gpg-card`；应用设置页反之。
+- **DOM 互证（与截图同轮）**：`:3081` 应用设置页导航条 `返回首页 x=16 w=72` → 竖线 `x=96 w=1 h=13`（`.ant-divider-vertical`）→ `仓库设置 x=104 w=72`，两侧各 8px（`Space size={0}` 后仅剩 Divider 自带外边距）；两按钮 `ant-btn-sm` 高 24px。`:5173` 同页同几何（`ant-btn-sm` 24px + `.ant-divider-vertical` 存在）。`:3081` 仓库设置页 DOM 断言 `app-settings-card`/`protected-branches-card`/`accounts-card` 均不存在，只剩 `repo-config-card` + `gpg-card`；应用设置页反之。
 - **CLI 互证**：`git config --global --list` → `user.name/user.email/core.autocrlf` 仍来自全局（页面上「生效值」列即这些值），仓库 `.git/config` 内这 9 键仍为空 → 印证「应用设置页不含仓库级项、仓库设置页写 local」的作用域切分与页面呈现一致；冒烟结束 `GET /api/settings` → `theme: auto`。
 - **截图账目**：本轮新增 **6** 张，`docs/shots/` 计 **206** 张；全量 SHA256 自检 **0 重复组**（含新增 6 张两两不同）。`settings-0*.png`（8 张）为拆分前单页形态，**未删除**（其功能点证据仍有效），后续按新两页命名重拍时再归档。
 

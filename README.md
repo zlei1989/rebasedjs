@@ -59,14 +59,14 @@ rebased.js 以 TypeScript 全栈重写 Rebased 的**操作页面、功能域、�
 
 ```bash
 pnpm install      # 仅允许 pnpm（preinstall 强制）
-pnpm dev          # 并行启动：web-next http://localhost:3030 + web-koa http://localhost:3031
+pnpm dev          # 并行启动：web-next http://localhost:3081 + web-koa http://localhost:3082
 pnpm build        # 生产构建
 pnpm test         # vitest 全量测试（预算 ~6 分钟）
 pnpm typecheck    # 全链类型检查
 pnpm format       # ESLint --fix 统一格式
 ```
 
-单应用开发：`pnpm --filter @rebased/web-koa dev:web`（Vite SPA，http://localhost:5173，`/api` 代理到 3031）。
+单应用开发：`pnpm --filter @rebased/web-koa dev:web`（Vite SPA，http://localhost:5173，`/api` 代理到 3082）。
 
 目录结构（职责与依赖方向详见 `AGENT.md` 与 `docs/architecture-design.md`）：
 

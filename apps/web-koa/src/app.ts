@@ -1,6 +1,6 @@
 /**
  * Koa 应用：中间件装配（错误 → bodyparser → 路由 → 静态托管）。
- * 直接运行（tsx src/app.ts，即 dev 脚本）时监听 3031 并打启动日志；
+ * 直接运行（tsx src/app.ts，即 dev 脚本）时监听 3082 并打启动日志；
  * 作为模块导入（测试用 app.callback()）不监听。
  */
 import { bodyParser } from '@koa/bodyparser';
@@ -35,7 +35,7 @@ if (existsSync('public')) app.use(serve('public'));
 // 主模块判定：tsx（含 watch）直接运行时 argv[1] 即本文件；测试/被导入时 argv[1] 为 vitest 等入口
 const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
-  const port = 3031;
+  const port = 3082;
   app.listen(port, () => {
     console.log(`[web-koa] listening on http://localhost:${port}`);
   });

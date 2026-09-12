@@ -264,7 +264,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 - `src/middleware/`：错误处理、body 解析、SSE 流、静态资源；
 - `public/`：**同一套 ui + client 的 Vite SPA 构建产物**（react-router，页面路径与 web-next 一致）。
 
-**运行形态**：两个应用均本地运行（localhost，本地优先访问仓库）。`web-next`：`next dev` → http://localhost:3030。`web-koa`：Koa API 服务 → http://localhost:3031；dev 下 Vite dev server（localhost:5173）承载 SPA 页面并把 `/api` 代理到 3031；生产 `vite build` → `koa-static` 在 3031 直接托管 `public/` + API。根 `pnpm dev` 并行起两个，端口被占用先杀占用进程（AGENT.md 约定）。
+**运行形态**：两个应用均本地运行（localhost，本地优先访问仓库）。`web-next`：`next dev` → http://localhost:3081。`web-koa`：Koa API 服务 → http://localhost:3082；dev 下 Vite dev server（localhost:5173）承载 SPA 页面并把 `/api` 代理到 3082；生产 `vite build` → `koa-static` 在 3082 直接托管 `public/` + API。根 `pnpm dev` 并行起两个，端口被占用先杀占用进程（AGENT.md 约定）。
 
 ---
 
@@ -435,7 +435,7 @@ token: { fontSizeSM: 11 }   // 实效 fontSize / fontSizeSM / fontSizeLG = 12 / 
 `scripts/check-fluid-layout.mjs`（Playwright 驱动，`pnpm dev` 起真实服务后运行）：
 
 ```bash
-node scripts/check-fluid-layout.mjs                              # web-next(:3030) 六档 × 明暗
+node scripts/check-fluid-layout.mjs                              # web-next(:3081) 六档 × 明暗
 node scripts/check-fluid-layout.mjs --app=koa --themes=dark       # web-koa SPA(:5173) 六档 × 暗色
 node scripts/check-fluid-layout.mjs --shots-only --widths=360,768,1440
 ```

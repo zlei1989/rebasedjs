@@ -15,14 +15,14 @@
  *        而页面级断言仍为 0 —— 这条把「组件内允许横向滚动」变成可执行断言而非注释。
  *
  * 怎么用：
- *   node scripts/check-fluid-layout.mjs                        # 默认 web-next(3030)、六档 × 明暗
+ *   node scripts/check-fluid-layout.mjs                        # 默认 web-next(3081)、六档 × 明暗
  *   node scripts/check-fluid-layout.mjs --app=koa --widths=360,768
  *   node scripts/check-fluid-layout.mjs --shots                # 断言后另出截图到 docs/shots/
  *   node scripts/check-fluid-layout.mjs --shots-only
  *   node scripts/check-fluid-layout.mjs --json=out.json --matrix=out.md
  *
  * 前置条件（本脚本不自起服务）：
- *   pnpm dev                                  → web-next :3030 / web-koa API :3031
+ *   pnpm dev                                  → web-next :3081 / web-koa API :3082
  *   pnpm --filter @rebased/web-koa dev:web     → web-koa SPA :5173
  *   另需一个已注册的真实夹具仓库（默认 rebased-smoke，用 --repo 改）。
  *
@@ -60,7 +60,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** 应用配置：两个 app 路由形状一致，只有端口与主题能力不同 */
 const APPS = {
-  next: { base: 'http://localhost:3030', themes: ['dark', 'light'], label: 'web-next' },
+  next: { base: 'http://localhost:3081', themes: ['dark', 'light'], label: 'web-next' },
   // web-koa SPA 固定暗色（main.tsx: DensityProvider mode="dark"），故只有一档主题
   koa: { base: 'http://localhost:5173', themes: ['dark'], label: 'web-koa' },
 };
