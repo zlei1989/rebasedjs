@@ -289,7 +289,7 @@ export function RebaseDialog(props: RebaseDialogProps): React.ReactNode {
               </Flex>
             )}
             {/* squash/fixup 语义提示（不强制约束：「squash 会并入上一非 drop 行」——对照 Java 交互提示） */}
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary">
               提示：squash 会并入上一非 drop 行（提交信息保留）；fixup 会并入上一非 drop 行并丢弃提交信息；
               drop 将移除该提交。
             </Typography.Text>

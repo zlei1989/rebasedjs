@@ -41,7 +41,7 @@ function SubmoduleRow({
 }): React.ReactNode {
   const meta = STATUS_META[entry.status];
   return (
-    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 行内边距不再手调：由 Listy 行容器的 antd 默认内边距提供——行容器由组件负责，
     // 本组件只渲染行内容；`gap={8}` 等行内间距仍留在本行，视觉不变。
     <Flex data-testid={`submodule-row-${entry.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
@@ -75,7 +75,7 @@ function SubmoduleRow({
         </EllipsisText>
       ) : null}
       {entry.commitSha !== undefined ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
           {entry.commitSha.slice(0, 7)}
         </Typography.Text>
       ) : null}
@@ -178,8 +178,7 @@ export function SubmodulePanel(props: SubmodulePanelProps): React.ReactNode {
             items={submodules.submodules}
             rowKey={(entry) => entry.name}
             itemRender={(entry) => <SubmoduleRow entry={entry} acting={acting} onUpdate={onUpdate} />}
-            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
-            styles={{ item: { padding: '4px 0' } }}
+            // 行内边距走 antd 默认（不再手调）；下边框与悬停底色走组件默认样式
           />
         )}
       </Card>

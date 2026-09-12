@@ -48,11 +48,11 @@ export function foldArgs(args: string[]): string {
 function ConsoleRow({ entry }: { entry: ConsoleEntry }): React.ReactNode {
   const ok = entry.exitCode === 0;
   return (
-    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 行内边距不再手调：由 Listy 行容器的 antd 默认内边距提供——行容器由组件负责，
     // 本组件只渲染行内容；`vertical` 与 data-testid 保持原样。
     <Flex vertical data-testid={`console-row-${entry.id}`}>
       <Flex align="center" gap={8}>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
           {formatCommitDate(entry.atIso)}
         </Typography.Text>
         <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
@@ -61,12 +61,12 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }): React.ReactNode {
         <Tag color={ok ? 'success' : 'error'} data-testid={`console-exit-${entry.id}`}>
           {entry.exitCode}
         </Tag>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }} data-testid={`console-duration-${entry.id}`}>
+        <Typography.Text type="secondary" style={{ flexShrink: 0 }} data-testid={`console-duration-${entry.id}`}>
           {formatDuration(entry.durationMs)}
         </Typography.Text>
       </Flex>
       {entry.stderrTail !== '' ? (
-        <Typography.Text type="danger" style={{ fontSize: 12 }} data-testid={`console-stderr-${entry.id}`}>
+        <Typography.Text type="danger" data-testid={`console-stderr-${entry.id}`}>
           {entry.stderrTail}
         </Typography.Text>
       ) : null}
@@ -101,8 +101,7 @@ export function ConsolePanel({ entries, loading, onRefresh }: ConsolePanelProps)
           items={entries}
           rowKey={(entry) => entry.id}
           itemRender={(entry) => <ConsoleRow entry={entry} />}
-          // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
-          styles={{ item: { padding: '4px 0' } }}
+          // 行内边距走 antd 默认（不再手调）；下边框与悬停底色走组件默认样式
         />
       )}
     </Card>

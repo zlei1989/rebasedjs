@@ -143,7 +143,7 @@ function StashRow({
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {stash.message}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary">
         {formatStashDate(stash.dateIso)}
       </Typography.Text>
       <Tooltip title="把该贮藏的变更应用到当前工作区，贮藏条目保留在列表里">
@@ -274,7 +274,7 @@ export function StashPanel({
           <EmptyState title="暂无贮藏" />
         ) : (
           // 行列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：行容器/悬停底色由组件负责，
-          // 调用方只给数据与行内容；行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。
+          // 调用方只给数据与行内容；行内边距走 antd 默认（不再手调）。
           // rowKey 沿用改造前的 stash.hash（index 会随 pop/drop 整体前移，不能作稳定键）。
           <Listy
             items={stashes.stashes}
@@ -288,7 +288,6 @@ export function StashPanel({
                 onOpenDiff={onOpenDiff === undefined ? undefined : (stash) => onOpenDiff(stash.index)}
               />
             )}
-            styles={{ item: { padding: '4px 0' } }}
           />
         )}
       </Card>
@@ -315,7 +314,7 @@ export function StashPanel({
         onCancel={() => setUnstashTarget(null)}
       >
         <Flex vertical gap={8}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary">
             将检出目标分支并应用该贮藏（贮藏保留，不弹出）
           </Typography.Text>
           <Tooltip title="目标本地分支：仅列本地分支，远程分支不会出现在选项里">
@@ -352,7 +351,6 @@ export function StashPanel({
               maxHeight: 480,
               overflow: 'auto',
               fontFamily: 'monospace',
-              fontSize: 12,
               whiteSpace: 'pre',
             }}
           >

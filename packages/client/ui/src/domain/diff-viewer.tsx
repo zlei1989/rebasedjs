@@ -60,7 +60,7 @@ export function DiffViewer({
       : { hideUnchangedRegions: { enabled: true as const, contextLineCount: Number(contextLines) } }),
   };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
+    <Flex vertical gap={8} style={{ height: '100%' }}>
       <Flex align="center" gap={12} wrap="wrap">
         <Tooltip title="差异呈现方式：左右两栏逐行对照，或单栏里成对显示增删行">
           <Segmented
@@ -125,7 +125,7 @@ export function DiffViewer({
             onChange={setContextLines}
           />
         </Tooltip>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary">
           word diff / 同步滚动为 Monaco 内建
         </Typography.Text>
       </Flex>
@@ -147,6 +147,6 @@ export function DiffViewer({
           loader={loader}
         />
       </div>
-    </div>
+    </Flex>
   );
 }

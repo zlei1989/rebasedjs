@@ -16,7 +16,7 @@
  *   （`gap="middle"` = 主题 `padding` token；全站默认紧凑密度下恰为 8px，见下方说明区注释与测试锚点）。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ConfigProvider, Flex, Listy, Space, Tag, theme } from 'antd';
+import { ConfigProvider, Flex, Listy, Space, Tag, theme, Typography } from 'antd';
 import type { ThemeConfig } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
 import { buildLayout, edgesInRow, type LayoutCommit } from '../graph-layout';
@@ -305,8 +305,13 @@ export function CommitGraph({
                   <RefChips refs={commit.refs} showTags={showTags} />
                 </span>
               </Flex>
-              <span style={{ width: 160, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author}</span>
-              <span style={{ width: 140, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: token.colorTextSecondary }}>{formatCommitDate(commit.dateIso)}</span>
+              <span style={{ width: 144, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author}</span>
+              <Typography.Text
+                type="secondary"
+                style={{ width: 128, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {formatCommitDate(commit.dateIso)}
+              </Typography.Text>
             </div>
           );
         }}

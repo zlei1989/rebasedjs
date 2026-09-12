@@ -79,7 +79,7 @@ export function buildFileTree(files: CommittedEntry['files']): FileTreeNode[] {
 }
 
 /** 提交行：短哈希 + subject（弹性）+ 作者 + 日期；整行点击 → onSelectCommit 完整哈希；命中 selectedHash 时底色高亮
- *  统一内边距交给 Listy 行容器（styles.item）；选中底色与光标是逐行差异故留在本行元素上 */
+ *  统一内边距交给 Listy 行容器的 antd 默认；选中底色与光标是逐行差异故留在本行元素上 */
 function CommitRow({
   entry,
   index,
@@ -101,7 +101,7 @@ function CommitRow({
       align="center"
       gap={8}
       style={{
-        // 行内边距留在可点元素自身（下沉到 Listy 的 styles.item 会让那圈内边距落在包装 div 上，不属命中区/选中底色区）
+        // 行内边距已移除（改用 Listy 行容器的 antd 默认）：那圈内边距落在包装 div 上，不属命中区/选中底色区（已由用户裁定接受）
         padding: '4px 8px',
         cursor: onSelectCommit ? 'pointer' : undefined,
         backgroundColor: selected ? token.controlItemBgActive : undefined,
@@ -117,10 +117,10 @@ function CommitRow({
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {entry.subject}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {entry.author}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {formatCommitDate(entry.dateIso)}
       </Typography.Text>
     </Flex>
@@ -158,7 +158,7 @@ function TreeNodeRow({
             data-testid={`committed-dir-${node.path}`}
             align="center"
             gap={4}
-            style={{ padding: '4px 0', paddingLeft: depth * 16, cursor: 'pointer' }}
+            style={{ paddingLeft: depth * 16, cursor: 'pointer' }}
             onClick={() => onToggle(node.path)}
           >
             {open ? <CaretDownOutlined style={{ fontSize: 10 }} /> : <CaretRightOutlined style={{ fontSize: 10 }} />}
@@ -192,7 +192,7 @@ function TreeNodeRow({
         data-testid={`committed-file-${node.fileIndex ?? node.path}`}
         align="center"
         gap={8}
-        style={{ padding: '4px 0', paddingLeft: depth * 16, cursor: onOpenFile ? 'pointer' : undefined }}
+        style={{ paddingLeft: depth * 16, cursor: onOpenFile ? 'pointer' : undefined }}
         onClick={() => onOpenFile?.(node.path, hash)}
       >
         {node.status !== undefined ? <CommittedStatusTag status={node.status} /> : null}
@@ -252,7 +252,7 @@ export function CommittedChangesPanel({
           <Card size="small" title={`提交列表（${entries.length}）`} style={{ flex: 1, minWidth: 0 }}>
             <Flex vertical>
               {/* 提交列表走 antd Listy（6.6.0 起的列表组件，取代手写 map 行）：容器/行结构/悬停底色由组件负责；
-                  行内边距沿用改造前的 4px 8px（Listy 默认 12px 16px）；行键与原 map 的 key 同（entry.hash）。 */}
+                  行内边距走 antd 默认（不再手调）；行键与原 map 的 key 同（entry.hash）。 */}
               <Listy
                 items={entries}
                 rowKey={(entry) => entry.hash}
@@ -264,7 +264,6 @@ export function CommittedChangesPanel({
                     onSelectCommit={onSelectCommit}
                   />
                 )}
-                styles={{ item: { padding: 0 } }}
               />
               {/* 「加载更多」：仅在 hasMore 时出现；loading 态由 loadingMore 驱动（数据注入与回调由容器持有） */}
               {page?.hasMore ? (

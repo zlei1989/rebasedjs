@@ -82,8 +82,8 @@ function HunkBlock({
   };
   return (
     <div data-testid={`hunk-diff-block-${index}`}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <Typography.Text code style={{ fontSize: 12 }}>
+      <Flex align="center" gap={8} style={{ marginBottom: 4 }}>
+        <Typography.Text code>
           @@ -{hunk.beforeStart},{hunk.beforeCount} +{hunk.afterStart},{hunk.afterCount} @@
         </Typography.Text>
         {/* hunk 头 `@@ -a,b +c,d @@ <定位串>` 的定位串常是整个函数签名，且 `ellipsis` 会带来
@@ -93,12 +93,12 @@ function HunkBlock({
             高度 17→31px（其文本换行），而定位串照样要截断，即收缩的代价落在错的元素上。
             补 `flex: 1 + minWidth: 0`（basis 0%）后收缩全部由本元素吸收、标记保持原尺寸；
             宽屏下标记宽度与文本左沿、字号不变（实测同为 106px / 左沿 130 / 12px），观感不变。
-            刻意**不**换 `EllipsisText` 原语：它没有 `style` 入口，会丢掉本元素的 `fontSize: 12`
-            （本文件是 domain 组件、嵌在 panel 内，非紧凑密度页，无 density 兜底）→ 改字号属未授权视觉变更。 */}
-        <Typography.Text type="secondary" style={{ fontSize: 12, flex: 1, minWidth: 0 }} ellipsis>
+            字号不再手写：本组件嵌在 panel 内、panel 又被两端 app 页的紧凑 PageShell 包住，
+            基准字号由紧凑密度统一供给（12px）→ 此处只保留 `flex: 1 + minWidth: 0`，不写 `fontSize`。 */}
+        <Typography.Text type="secondary" style={{ flex: 1, minWidth: 0 }} ellipsis>
           {hunk.heading}
         </Typography.Text>
-      </div>
+      </Flex>
       <div style={{ height: Math.min(320, Math.max(lineCount * 19 + 20, 80)) }}>
         <MonacoDiffView original={before} modified={after} options={{ readOnly: true }} loader={loader} />
       </div>
@@ -106,7 +106,7 @@ function HunkBlock({
         {comments.map((comment) => (
           <Flex vertical key={comment.id} data-testid={`hunk-comment-${comment.id}`} gap={2}>
             <Flex align="center" gap={8}>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary">
                 新侧 {comment.line} 行 · {comment.author} · {formatCommitDate(comment.atIso)}
               </Typography.Text>
             </Flex>
@@ -160,7 +160,7 @@ export function HunkDiffView({ patch, status, comments = [], onAddComment, addin
   const hunks = parseUnifiedDiff(patch);
   if (hunks.length === 0) return <DegradedHint status={status} />;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <Flex vertical gap={12}>
       {hunks.map((hunk, index) => (
         <HunkBlock
           key={index}
@@ -174,6 +174,6 @@ export function HunkDiffView({ patch, status, comments = [], onAddComment, addin
           )}
         />
       ))}
-    </div>
+    </Flex>
   );
 }

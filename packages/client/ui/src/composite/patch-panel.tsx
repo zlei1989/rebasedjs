@@ -52,16 +52,16 @@ function PatchRow({
   onDelete: (name: string) => void;
 }): React.ReactNode {
   return (
-    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 行内边距不再手调：由 Listy 行容器的 antd 默认内边距提供——行容器由组件负责，
     // 本组件只渲染行内容；`gap={8}` 等行内间距仍留在本行，视觉不变。
     <Flex data-testid={`row-patch-${patch.name}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {patch.name}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {formatBytes(patch.size)}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {formatCommitDate(patch.createdAtIso)}
       </Typography.Text>
       {/* 行内按钮在 acting 期间禁用；禁用按钮不派发 hover，故在 Tooltip 与 Button 之间包一层 span 承接悬停 */}
@@ -243,8 +243,7 @@ export function PatchPanel({ patches, onCreate, onApply, onImportShelf, onDelete
                 onDelete={onDelete}
               />
             )}
-            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
-            styles={{ item: { padding: '4px 0' } }}
+            // 行内边距走 antd 默认（不再手调）；下边框与悬停底色走组件默认样式
           />
         )}
       </Card>

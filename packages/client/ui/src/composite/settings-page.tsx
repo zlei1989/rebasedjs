@@ -64,7 +64,7 @@ function ConfigRow({
     <Flex align="center" gap={8}>
       <Flex vertical style={{ width: 200, flexShrink: 0 }}>
         <Typography.Text>{entry.key}</Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary">
           {entry.value ?? '未设置'}
         </Typography.Text>
       </Flex>
@@ -116,7 +116,7 @@ function AccountRow({
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {entry.account}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary">
         {entry.tokenPreview}
       </Typography.Text>
       <Popconfirm
@@ -295,7 +295,7 @@ function GpgConfigModal({
             description="gpg --list-secret-keys 无结果或 gpg 不可用；请先在系统配置签名密钥（gpg.program 可指定 gpg 程序路径）"
           />
         )}
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary">
           配置与 git config 同步（commit.gpgsign / user.signingkey）
         </Typography.Text>
       </Flex>
@@ -326,7 +326,7 @@ function ProtectedBranchCard({
   return (
     <Card title="保护分支" size="small" data-testid="protected-branches-card">
       <Flex vertical gap={8}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary">
           每行一个正则模式，匹配剥远程名前缀的分支名（origin/main → main）；匹配得到的远程分支上的已推送提交不可重写
           （Reword/Drop/Squash/Fixup 将被拒绝——GitProtectedBranches.isCommitPublishedBlocking 语义）
         </Typography.Text>
@@ -494,7 +494,7 @@ export function SettingsPage({
                   </Tag>
                   <Typography.Text>{gpgConfig.key ?? '未配置签名密钥（commit.gpgsign=true）'}</Typography.Text>
                   {gpgConfig.key !== null && (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary">
                       {gpgConfig.keys.find((k) => k.id === gpgConfig.key)?.description ?? ''}
                     </Typography.Text>
                   )}

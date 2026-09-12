@@ -38,14 +38,14 @@ function HistoryRow({
   onAnnotate?: (hash: string) => void;
 }): React.ReactNode {
   return (
-    // 行内边距（原 `padding: '4px 0'`）留在**可点元素自身**：下沉到 Listy 的 `styles.item` 会让那圈内边距
-    // 落在包装 div 上（不属本元素命中区，点在内边距上不触发行选中）。
+    // 行内边距已移除（改用 Listy 行容器的 antd 默认）。代价：那圈内边距落在包装 div 上，
+    // 不属本元素命中区——点在内边距上不触发行选中（Listy 无 onItemClick，无法两全；已由用户裁定接受）。
     // 行级 Tooltip 按产品口径不挂（原 rowHover/actionHover 受控气泡随之删除）。
     <Flex
       data-testid={`history-entry-${index}`}
       align="center"
       gap={8}
-      style={{ padding: '4px 0', cursor: 'pointer' }}
+      style={{ cursor: 'pointer' }}
       onClick={() => onSelectCommit?.(entry.hash)}
       onDoubleClick={() => onOpenDiff?.(entry.hash, entry.parents)}
     >
@@ -55,10 +55,10 @@ function HistoryRow({
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {entry.subject}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {entry.author}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {formatCommitDate(entry.dateIso)}
       </Typography.Text>
       {onAnnotate !== undefined ? (
@@ -122,8 +122,7 @@ export function HistoryPanel({
                 onAnnotate={onAnnotate}
               />
             )}
-            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
-            styles={{ item: { padding: '4px 0' } }}
+            // 行内边距走 antd 默认（不再手调）；下边框与悬停底色走组件默认样式
           />
         </Card>
       )}

@@ -38,7 +38,7 @@ function CompareCard({
   return (
     <Card size="small" title={`${title}（${commits.length}）`}>
       <Flex vertical>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="compare-hint">
+        <Typography.Text type="secondary" data-testid="compare-hint">
           {hint}
         </Typography.Text>
         {commits.length === 0 ? (
@@ -46,7 +46,7 @@ function CompareCard({
             无提交
           </Typography.Text>
         ) : (
-          /* 提交行走 antd Listy：行容器自带下边框/悬停底色；行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。
+          /* 提交行走 antd Listy：行容器自带下边框/悬停底色；行内边距走 antd 默认（不再手调）。
              行**不挂 Tooltip**（产品口径）；整行可点的手型光标是逐行样式故留在行元素上。 */
           <Listy
             items={commits}
@@ -57,19 +57,19 @@ function CompareCard({
                 data-testid={`compare-row-${title}-${c.shortHash}`}
                 align="center"
                 gap={8}
-                style={{ padding: '4px 0', cursor: 'pointer' }}
+                style={{ cursor: 'pointer' }}
                 onClick={() => onSelectCommit?.(c.hash)}
               >
-                <Typography.Text code style={{ fontSize: 12, flexShrink: 0 }}>
+                <Typography.Text code style={{ flexShrink: 0 }}>
                   {c.shortHash}
                 </Typography.Text>
                 <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
                   {c.message}
                 </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+                <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
                   {c.author}
                 </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+                <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
                   {formatCommitDate(c.dateIso)}
                 </Typography.Text>
               </Flex>

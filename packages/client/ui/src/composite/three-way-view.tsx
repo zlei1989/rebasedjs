@@ -32,11 +32,11 @@ function CompareSegment({
   return (
     <Flex vertical gap={4} style={{ flex: 1, minHeight: 0 }}>
       <Flex align="center" gap={8}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary">
           {title}
         </Typography.Text>
         {identical ? (
-          <Typography.Text type="secondary" italic data-testid={`${testId}-identical`} style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" italic data-testid={`${testId}-identical`}>
             无差异
           </Typography.Text>
         ) : null}

@@ -33,7 +33,7 @@ export function DiffStreamView({
   // gap/padding 照抄既有值 8（PageShell 默认不落 style，不传会静默丢掉内距与行距）。
   return (
     <PageShell gap={8} padding={8}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary">
         {error === undefined || error === null
           ? connected
             ? '分块加载中…（渲染截至当前进度）'

@@ -236,7 +236,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 
 ### 2.5 ui —— 纯展示组件层
 
-**规则**：props 驱动；**不 import client、api**；不发起任何接口调用；样式 antd + Tailwind（遵循 AGENT.md 风格约束）；依赖方向 `composite → domain → base`；`graph-layout` 仅被 `CommitGraph` 使用。
+**规则**：props 驱动；**不 import client、api**；不发起任何接口调用；样式一律走 antd（主题 token / 紧凑密度 / 语义 `styles`，遵循 AGENT.md 风格约束，不使用 Tailwind）；依赖方向 `composite → domain → base`；`graph-layout` 仅被 `CommitGraph` 使用。
 
 **组件清单**（现状）：
 
@@ -276,11 +276,11 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 
 | Java 侧资产 | 技术形态 | rebased.js 落点 | 复用方式 |
 |------------|---------|----------------|---------|
-| 通用控件（表格/树/表单/对话框/工具栏/弹窗/标签页） | Swing（JBTable/JBTree/JBPopup/JBDialog）+ Jewel（Compose Multiplatform） | antd（Table/Tree/Form/Modal/Menu/Tabs/Popover 等）+ Tailwind | **不移植**：Swing/Compose 渲染模型与 React DOM 不通；antd 覆盖通用控件需求 |
+| 通用控件（表格/树/表单/对话框/工具栏/弹窗/标签页） | Swing（JBTable/JBTree/JBPopup/JBDialog）+ Jewel（Compose Multiplatform） | antd（Table/Tree/Form/Modal/Menu/Tabs/Popover 等） | **不移植**：Swing/Compose 渲染模型与 React DOM 不通；antd 覆盖通用控件需求 |
 | 编辑器（语法高亮/diff/annotation gutter/inlay） | IntelliJ 自研编辑器（平台核心） | Monaco（`monaco-lazy`/`MonacoDiffView`/`MonacoTextView`） | **不移植**：Monaco 具备对应能力，替代 TextMate 插件的语法高亮职责 |
 | **VCS Log 图布局算法** | `platform/vcs-log/graph` + `graph-api`（`GraphLayoutBuilder`、`EdgePrintElementImpl` 等 + testData） | `ui/graph-layout/`（纯函数布局引擎） | **算法级移植**（已落地）：TS 重写算法，Java testData 转 vitest 夹具做行为等价测试；源码 Apache-2.0，移植保留版权声明 |
 | Git 专属复杂组件（交互式 rebase 编辑器、分支树、暂存区、冲突面板、提交对话框、Committed Changes 浏览器） | git4idea Swing 组件 | 自研 React 组件 + antd 组合 | **信息架构参照**：对话框字段结构、状态机、树模型分组维度逐项对照（见 3.2），不搬代码 |
-| 视觉风格（Darcula/IntelliJ LAF） | 平台 LAF 资源 | antd 主题变量 + Tailwind 设计令牌 | 风格对齐：深色主题为默认，不强求像素级复刻 |
+| 视觉风格（Darcula/IntelliJ LAF） | 平台 LAF 资源 | antd 主题变量（token + 紧凑密度） | 风格对齐：深色主题为默认，不强求像素级复刻 |
 
 ### 3.2 关键组件的落点映射（信息架构参照表）
 

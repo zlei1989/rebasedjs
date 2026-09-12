@@ -1,6 +1,6 @@
 /**
  * 全局样式：主题底色（暗色/明亮，html[data-theme] 由 Providers 写入）+ 盒模型复位（SSR 壳）；
- * 不引 tailwind 指令——本包暂无 PostCSS 配置。
+ * 本文件只放这一层壳所需的复位与变量——字号/间距一律由 antd 主题 token 与紧凑密度供给，不在此手调。
  * 主题变量口径（供 ui 包内联样式的 var() 消费）：
  *  --app-bg 页面底色 / --app-fg 正文色 / --app-border 分隔线 / --app-muted 次要文本 / --app-selected 选中行底色
  */

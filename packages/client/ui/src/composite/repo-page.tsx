@@ -10,7 +10,7 @@
  * 点击最近列表项打开该仓库（注入 onOpenRepo 才可点）+ 打开中行内加载态（openingRepoId 命中行）。
  */
 import { useMemo, useState } from 'react';
-import { Button, Flex, Input, Listy, Modal, Popconfirm, Spin, theme, Tooltip } from 'antd';
+import { Button, Flex, Input, Listy, Modal, Popconfirm, Spin, theme, Tooltip, Typography } from 'antd';
 import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SettingOutlined, SwitcherOutlined } from '@ant-design/icons';
 import type { RepoInfo } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
@@ -274,22 +274,21 @@ export function RepoPage({
                 gap={8}
                 // 整行可点即打开该仓库（未接线则不挂事件，无死控件）；打开中的行不再响应，防连点重复走打开流程
                 onClick={clickable && !opening ? () => onOpenRepo(repo) : undefined}
-                // 行内边距留在**可点元素自身**（不能下沉到 Listy 的 styles.item：那层是包装 div，
-                // 它的 padding 既不属于本元素的命中区，点击落在内边距上也不会触发打开）；光标在打开中给 progress
-                style={{
-                  padding: '8px 4px',
-                  ...(clickable ? { cursor: opening ? 'progress' : 'pointer' } : {}),
-                }}
+                // 行内边距已移除：回归 antd 默认，由 Listy 行容器提供（紧凑密度 8px 8px）。
+                // 代价：行容器的内边距不属本元素命中区，点击落在其上不会触发行打开；
+                // Listy 无 onItemClick，故「antd 默认内边距」与「整行可点」无法兼得（已由用户裁定接受）。
+                // 光标在打开中给 progress
+                style={clickable ? { cursor: opening ? 'progress' : 'pointer' } : undefined}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600 }}>{repo.name}</div>
-                  <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>{relativeToHome(repo.path, homeDir)}</div>
+                  <Typography.Text type="secondary">{relativeToHome(repo.path, homeDir)}</Typography.Text>
                 </div>
                 {/* 打开中：打开含 POST 往返 + 配置落盘 + 最近列表刷新，有耗时需即时反馈，否则点击似无响应 */}
                 {opening ? (
                   <Flex align="center" gap={6} data-testid="repo-opening">
                     <Spin size="small" />
-                    <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>打开中…</span>
+                    <Typography.Text type="secondary">打开中…</Typography.Text>
                   </Flex>
                 ) : null}
                 {onRemove ? (
@@ -310,8 +309,8 @@ export function RepoPage({
               </Flex>
             );
           }}
-          // 行包装层只留圆角（悬停底色圆角随它）；内边距在行元素上 —— 保证整行命中区与改造前一致
-          styles={{ item: { padding: 0, borderRadius: token.borderRadius } }}
+          // 行包装层只留圆角（悬停底色圆角随它）；行内边距走组件默认（不再手调）
+          styles={{ item: { borderRadius: token.borderRadius } }}
         />
       )}
       {onClone ? (

@@ -72,7 +72,7 @@ function FileNavButtons({
           </Button>
         </span>
       </Tooltip>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary">
         {index + 1}/{files.length}
       </Typography.Text>
       <Tooltip title={next === undefined ? '当前文件已是该组最后一个，没有下一个可切' : '切到同组的下一个文件（保留当前对比模式）'}>

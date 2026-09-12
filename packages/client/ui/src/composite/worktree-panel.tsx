@@ -45,7 +45,7 @@ function WorktreeRow({
   // 强制移除开关：默认关闭（安全默认）；勾选后带 force 调 onRemove（git worktree remove --force，丢弃其中的未提交改动）
   const [force, setForce] = useState(false);
   return (
-    // 行内边距（原 `padding: '4px 0'`）已交给 Listy 的行容器（`styles.item`）——行容器由组件负责，
+    // 行内边距不再手调：由 Listy 行容器的 antd 默认内边距提供——行容器由组件负责，
     // 本组件只渲染行内容；`gap={8}` 等行内间距仍留在本行，视觉不变。
     <Flex data-testid={`worktree-row-${wt.path}`} align="center" gap={8}>
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
@@ -71,7 +71,7 @@ function WorktreeRow({
           分离
         </Tag>
       ) : null}
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {wt.head.slice(0, 7)}
       </Typography.Text>
       <Popconfirm
@@ -80,7 +80,7 @@ function WorktreeRow({
         cancelText="取消"
         description={
           <Flex vertical gap={4}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary">
               工作树内有未提交改动时需勾选强制移除（其中的改动将被丢弃）
             </Typography.Text>
             <Tooltip title="勾选后移除会携带 --force：新工作树里未提交的改动将一并被丢弃">
@@ -281,8 +281,7 @@ export function WorktreePanel(props: WorktreePanelProps): React.ReactNode {
                 onRemove={onRemove}
               />
             )}
-            // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
-            styles={{ item: { padding: '4px 0' } }}
+            // 行内边距走 antd 默认（不再手调）；下边框与悬停底色走组件默认样式
           />
         )}
       </Card>

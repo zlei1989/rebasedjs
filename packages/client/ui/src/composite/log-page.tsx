@@ -610,7 +610,7 @@ export function LogPage({
                 onChange={setShowTags}
               />
             </Tooltip>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary">
               标签
             </Typography.Text>
           </Flex>
@@ -775,7 +775,7 @@ export function LogPage({
           <Typography.Text type="secondary">暂无变更文件</Typography.Text>
         ) : (
           <Flex vertical gap={8}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary">
               {changesEntry.subject}
             </Typography.Text>
             {changesEntry.files.map((file) => (

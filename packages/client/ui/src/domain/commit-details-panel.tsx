@@ -6,7 +6,7 @@
  * 操作按钮：摘樱桃/还原/Reset 当前分支到此处——均为可选回调注入，缺省不渲染对应按钮
  * （确认弹窗与 hook 调用由容器持有）。
  */
-import { Button, Tag, Tooltip } from 'antd';
+import { Button, Flex, Tag, Tooltip } from 'antd';
 import { CopyOutlined } from '@ant-design/icons';
 import type { CommitInfo } from '@rebased/contracts';
 import { classifyRefs } from './refs';
@@ -41,13 +41,13 @@ export function CommitDetailsPanel({
     void navigator.clipboard?.writeText(commit.hash);
   };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <Flex vertical gap={8} style={{ padding: 8 }}>
+      <Flex align="center" gap={8}>
         <code>{commit.shortHash}</code>
         <Tooltip title="把该提交的完整 hash 复制到剪贴板（浏览器无剪贴板权限时静默跳过）">
           <Button data-testid="copy-hash" size="small" icon={<CopyOutlined />} onClick={copyHash} />
         </Tooltip>
-      </div>
+      </Flex>
       <div>{formatAuthorLine(commit.author, commit.dateIso)}</div>
       <div>
         <strong>{subject}</strong>
@@ -71,7 +71,7 @@ export function CommitDetailsPanel({
         </div>
       ) : null}
       {commit.parents.length > 0 ? (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Flex align="center" gap={8}>
           <span>父提交：</span>
           {commit.parents.map((p) => (
             // 父提交链接：地址栏 hash 变化即由容器解析 ?select=<hash> 深链并切换选中提交
@@ -81,11 +81,11 @@ export function CommitDetailsPanel({
               </a>
             </Tooltip>
           ))}
-        </div>
+        </Flex>
       ) : null}
       {/* 操作区：浏览快照/查看变更集/摘樱桃/还原/Reset 当前分支到此处——逐个按回调注入渲染（仅调用方注入回调时出现；确认弹窗与 hook 调用由容器持有） */}
       {onResetHere || onCherryPick || onRevert || onBrowse || onOpenChanges ? (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Flex gap={8} wrap>
           {onBrowse ? (
             <Tooltip title="浏览该提交的文件快照：以只读方式打开这一版的目录内容（不改动工作区）">
               <Button data-testid="browse-snapshot" size="small" onClick={() => onBrowse(commit.hash)}>
@@ -121,8 +121,8 @@ export function CommitDetailsPanel({
               </Button>
             </Tooltip>
           ) : null}
-        </div>
+        </Flex>
       ) : null}
-    </div>
+    </Flex>
   );
 }

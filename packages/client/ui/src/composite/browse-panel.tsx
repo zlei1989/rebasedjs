@@ -158,7 +158,6 @@ export function BrowsePanel({
                 style={{
                   margin: 0,
                   fontFamily: 'Menlo, Consolas, monospace',
-                  fontSize: 12,
                   lineHeight: 1.7,
                   whiteSpace: 'pre',
                 }}

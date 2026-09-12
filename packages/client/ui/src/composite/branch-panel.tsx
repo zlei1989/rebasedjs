@@ -493,12 +493,11 @@ function BranchGroupCard<T extends { name: string }>({
       {items.length === 0 ? (
         empty ?? null
       ) : (
-        // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）；下边框与悬停底色走组件默认样式
+        // 行内边距走 antd 默认（不再手调）；下边框与悬停底色走组件默认样式
         <Listy
           items={items}
           rowKey={(item) => item.name}
           itemRender={itemRender}
-          styles={{ item: { padding: '4px 0' } }}
         />
       )}
     </Card>
@@ -807,7 +806,7 @@ export function BranchPanel({
           <Typography.Text type="secondary">暂无差异（工作树与分支一致）</Typography.Text>
         ) : (
           // 差异文件列表同样走 Listy：行容器（下边框/悬停底色）由组件负责，
-          // 行内边距取 4px 0——相邻行间距 4+4 = 原 Flex vertical gap 8 的同一口径
+          // 行内边距走 antd 默认——不再手调，行间距由组件决定
           <Listy
             items={workingDiffData.files}
             rowKey={(file) => `${file.status}-${file.path}`}
@@ -826,7 +825,6 @@ export function BranchPanel({
                 </Tooltip>
               </Flex>
             )}
-            styles={{ item: { padding: '4px 0' } }}
           />
         )}
       </Modal>

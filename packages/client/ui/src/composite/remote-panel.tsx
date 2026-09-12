@@ -218,7 +218,7 @@ function FetchSpecModal({
       onCancel={close}
     >
       <Flex vertical gap={12}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary">
           按 refspec 拉取指定引用（如 +refs/pull/7/head:refs/remotes/origin/pr-7）；refspec 需指定远程。
         </Typography.Text>
         <Tooltip title="选择要拉取的远程：refspec 依赖远程名解析，未选则「确定」不可点">
@@ -304,7 +304,7 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
           <EmptyState title="暂无远程" />
         ) : (
           // 行列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：行容器/悬停底色由组件负责，
-          // 调用方只给数据与行内容；行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。
+          // 调用方只给数据与行内容；行内边距走 antd 默认（不再手调）。
           <Listy
             items={remotes.remotes}
             rowKey={(remote) => remote.name}
@@ -316,7 +316,6 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
                 onEdit={setEditTarget}
               />
             )}
-            styles={{ item: { padding: '4px 0' } }}
           />
         )}
       </Card>

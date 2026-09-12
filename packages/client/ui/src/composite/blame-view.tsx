@@ -120,7 +120,7 @@ function BlameRow({
       <Typography.Text style={{ width: 120, flexShrink: 0 }} ellipsis>
         {line.author}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {formatCommitDate(line.dateIso)}
       </Typography.Text>
       <Typography.Text style={{ flex: 1, minWidth: 0, fontFamily: 'monospace' }} ellipsis>
@@ -141,20 +141,20 @@ function AffectedFileRow({
   onOpenFile?: (path: string) => void;
 }): React.ReactNode {
   return (
-    /* 整行可点（未注入 onOpenFile 时为只读行）→ 内边距留在**可点元素自身**：
-       下沉到 Listy 的 styles.item 会让那圈内边距落在包装 div 上（不属本元素命中区）。
-       下边框/悬停底色交给 Listy 行容器。
+    /* 整行可点（未注入 onOpenFile 时为只读行）：行内边距已移除，改用 Listy 行容器的 antd 默认；
+       代价是那圈内边距落在包装 div 上、不属本元素命中区
+       （Listy 无 onItemClick，无法两全；已由用户裁定接受）。下边框/悬停底色交给 Listy 行容器。
        行**不挂 Tooltip**（本次产品口径：行不挂气泡，行内按钮/图标的气泡保留） */
     <Flex
       data-testid={`affected-file-${index}`}
       align="center"
       gap={8}
-      style={{ padding: '4px 0', cursor: onOpenFile ? 'pointer' : undefined }}
+      style={{ cursor: onOpenFile ? 'pointer' : undefined }}
       onClick={() => onOpenFile?.(file.path)}
     >
       <CommittedStatusTag status={file.status} />
       {file.renameFrom ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
           {file.renameFrom} →
         </Typography.Text>
       ) : null}
@@ -204,17 +204,16 @@ function AffectedFilesModal({
         )
       ) : (
         <Flex vertical>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary">
             {entry.subject} · {entry.author} · {formatCommitDate(entry.dateIso)}
           </Typography.Text>
           {/* 文件清单走 antd Listy（6.6.0 起的列表组件）：行容器/下边框/悬停底色由组件负责，
-              调用方只给数据与行内容。行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。 */}
+              调用方只给数据与行内容。行内边距走 antd 默认（不再手调）。 */}
           <Listy
             items={entry.files}
             // 提交内文件路径唯一（git name-status 逐路径一条），故以 path 作行键
             rowKey={(file) => file.path}
             itemRender={(file, index) => <AffectedFileRow file={file} index={index} onOpenFile={onOpenFile} />}
-            styles={{ item: { padding: 0 } }}
           />
         </Flex>
       )}

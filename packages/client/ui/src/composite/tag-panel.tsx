@@ -202,12 +202,11 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
           <EmptyState title="暂无标签" />
         ) : (
           // 行列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：行容器/悬停底色由组件负责，
-          // 调用方只给数据与行内容；行内边距沿用改造前的 4px 0（Listy 默认 12px 16px）。
+          // 调用方只给数据与行内容；行内边距走 antd 默认（不再手调）。
           <Listy
             items={tags.tags}
             rowKey={(tag) => tag.name}
             itemRender={(tag) => <TagRow tag={tag} onAction={onAction} />}
-            styles={{ item: { padding: '4px 0' } }}
           />
         )}
       </Card>

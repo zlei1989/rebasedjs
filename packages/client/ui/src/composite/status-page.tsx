@@ -158,14 +158,6 @@ export function groupByChangelist(entries: ChangeEntry[], view: ChangelistView):
 /** 三组内部标识：决定徽标取码（staged 取 X 列、unstaged 取 Y 列、untracked 无码）与 onSelectPatch 的 staged 参数 */
 type ChangeGroupKind = 'staged' | 'unstaged' | 'untracked';
 
-/**
- * 变更行容器的 Listy 样式（必须是静态对象：styles 不支持按行取值）。
- * 行内边距**不在这里**：`styles.item` 作用在 Listy 的包装 div 上，那圈内边距既不属于行元素命中区、
- * 也不会随行的选中底色一起亮，故内边距留在 `renderRow` 的行元素上（`padding: '4px 0'`，与改造前一致）；
- * 下边框与悬停底色走组件默认样式。
- */
-const ROW_STYLES = { item: { padding: 0 } };
-
 /** 行内 code 徽标：取该组语义对应的列字符（重命名 R、新增 A、修改 M、删除 D、类型变更 T、未跟踪 ?） */
 function codeBadge(entry: ChangeEntry, group: ChangeGroupKind): string {
   if (group === 'staged') return entry.code[0] ?? '?';
@@ -246,13 +238,14 @@ function ChangeGroup({
     };
 
     return (
-      // 整行可点（单击选中预览 / 双击看差异）：行内边距留在**可点元素自身**（下沉到 Listy 的 styles.item
-      // 会让那圈内边距落在包装 div 上，不属本元素命中区），逐行差异（cursor）一并留在行元素上
+      // 整行可点（单击选中预览 / 双击看差异）：行内边距已移除，改用 Listy 行容器的 antd 默认；
+      // 代价是那圈内边距落在包装 div 上、不属本元素命中区（Listy 无 onItemClick，无法两全；已由用户裁定接受）；
+      // 逐行差异（cursor）一并留在行元素上
       <Flex
         data-testid={`row-${group}-${entry.path}`}
         align="center"
         gap={8}
-        style={{ padding: '4px 0', cursor: 'pointer' }}
+        style={{ cursor: 'pointer' }}
         onClick={() => onSelectPatch?.(entry.path, group === 'staged')}
         onDoubleClick={() => onOpenDiff?.(entry.path, group === 'staged')}
       >
@@ -375,12 +368,12 @@ function ChangeGroup({
       }
     >
       {/* 行列表走 antd Listy（6.6.0 起的列表组件，取代老 List）：行容器/下边框/悬停底色由组件负责，
-          调用方只给数据（items）与行内容（itemRender）。行内边距沿用改造前的 4px 0（Listy 默认 12px 16px），
+          调用方只给数据（items）与行内容（itemRender）。行内边距走 antd 默认（不再手调），
           逐行差异（cursor、选中态）留在行元素上——styles/classNames 只支持静态对象。 */}
       {entries.length === 0 ? (
         <Typography.Text type="secondary">无变更</Typography.Text>
       ) : byChangelist === null || changelists === undefined ? (
-        <Listy items={entries} rowKey={(entry) => entry.path} itemRender={renderRow} styles={ROW_STYLES} />
+        <Listy items={entries} rowKey={(entry) => entry.path} itemRender={renderRow} />
       ) : (
         <>
           {/* 默认列表条目平铺在前（无子标题），非默认列表按列表名子标题分组在后；每个分桶各是一个 Listy */}
@@ -388,7 +381,6 @@ function ChangeGroup({
             items={byChangelist.get(DEFAULT_KEY) ?? []}
             rowKey={(entry) => entry.path}
             itemRender={renderRow}
-            styles={ROW_STYLES}
           />
           {changelists.lists
             .filter((l) => !l.isDefault)
@@ -408,7 +400,6 @@ function ChangeGroup({
                     items={listEntries}
                     rowKey={(entry) => entry.path}
                     itemRender={renderRow}
-                    styles={ROW_STYLES}
                   />
                 </Flex>
               );
@@ -547,7 +538,7 @@ function PageActionModal({
           />
         </Tooltip>
         {patch ? (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary">
             对勾选的 {patchPaths.length} 个文件创建补丁（{patchStaged ? '暂存区 diff' : '工作区 diff'}）
           </Typography.Text>
         ) : null}
@@ -830,7 +821,7 @@ function PatchCard({
                   </Popconfirm>
                 </>
               )}
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary">
                 已选 {selected.length} / {split!.hunks.length} 个 hunk
               </Typography.Text>
             </Flex>
@@ -854,7 +845,7 @@ function PatchCard({
                         />
                       </Tooltip>
                     </span>
-                    <Typography.Text code style={{ fontSize: 12 }}>
+                    <Typography.Text code>
                       hunk {hunk.index + 1}
                     </Typography.Text>
                     {/* hunk 头 `@@ -a,b +c,d @@ <定位串>` 的定位串是不可断行串（常常是整个函数签名），
@@ -877,7 +868,6 @@ function PatchCard({
                       maxHeight: 240,
                       overflow: 'auto',
                       fontFamily: 'monospace',
-                      fontSize: 12,
                       whiteSpace: 'pre',
                     }}
                   >
@@ -895,7 +885,6 @@ function PatchCard({
               maxHeight: 480,
               overflow: 'auto',
               fontFamily: 'monospace',
-              fontSize: 12,
               whiteSpace: 'pre',
             }}
           >

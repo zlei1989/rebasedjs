@@ -5,7 +5,7 @@
  *  评论输入框与 review body 共用、REQUEST_CHANGES 带 body、patch 空串不渲染展开区。
  *  列表渲染：PR 列表 / 详情时间线 / 详情改动文件三处统一走 antd Listy（6.6.0 起的列表组件）——
  *  容器、行容器与悬停底色由组件负责，行内容由调用方 `itemRender` 渲染；行**不挂 Tooltip**
- *  （产品口径：行级气泡与行内按钮气泡会在同一块悬停区叠弹），行内边距在调用处 `styles.item`。
+ *  （产品口径：行级气泡与行内按钮气泡会在同一块悬停区叠弹），行内边距走 Listy 行容器的 antd 默认。
  */
 import { useState } from 'react';
 import {
@@ -114,14 +114,14 @@ function PrRow({
   // 选中底色走主题 token（明亮 #e6f4ff / 暗色 #111a2c），不再硬编码明亮专用色
   const { token } = theme.useToken();
   // 行**不挂 Tooltip**（产品口径：行的可点后果已由行内容自述，且行级气泡会与行内按钮气泡叠弹）。
-  // 逐行统一的 4px 8px 内边距归调用处 Listy 的 `styles.item`；这里只留逐行差异（cursor / 选中底色）。
+  // 行内边距走 Listy 行容器的 antd 默认（逐行统一）；这里只留逐行差异（cursor / 选中底色）。
   return (
     <Flex
       data-testid={`github-pr-row-${pr.number}`}
       align="center"
       gap={8}
       style={{
-        // 行内边距留在可点元素自身（下沉到 Listy 的 styles.item 会让那圈内边距落在包装 div 上，不属命中区/选中底色区）
+        // 行内边距已移除（改用 Listy 行容器的 antd 默认）：那圈内边距落在包装 div 上，不属命中区/选中底色区（已由用户裁定接受）
         padding: '4px 8px',
         cursor: 'pointer',
         backgroundColor: selected ? token.controlItemBgActive : undefined,
@@ -132,7 +132,7 @@ function PrRow({
       <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
         {pr.title}
       </Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {pr.author}
       </Typography.Text>
       <Tag color={pr.state === 'open' ? 'success' : 'default'} style={{ flexShrink: 0 }}>
@@ -143,7 +143,7 @@ function PrRow({
           已合并
         </Tag>
       ) : null}
-      <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+      <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
         {formatCommitDate(pr.updatedAtIso)}
       </Typography.Text>
     </Flex>
@@ -153,7 +153,7 @@ function PrRow({
 /** 时间线条目：kind 徽标（comment 评论/review 审查+reviewState）+ author + 时间 + body（保留换行） */
 function TimelineRow({ entry }: { entry: GitHubTimelineEntry }): React.ReactNode {
   return (
-    // 行内边距归调用处 Listy 的 `styles.item`（逐行统一的 4px 0）
+    // 行内边距归 Listy 行容器的 antd 默认（逐行统一）
     <Flex vertical data-testid={`github-timeline-${entry.id}`}>
       <Flex align="center" gap={8}>
         <Tag color={entry.kind === 'review' ? 'blue' : 'default'} style={{ flexShrink: 0 }}>
@@ -164,10 +164,10 @@ function TimelineRow({ entry }: { entry: GitHubTimelineEntry }): React.ReactNode
             {entry.reviewState}
           </Tag>
         ) : null}
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
           {entry.author}
         </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+        <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
           {formatCommitDate(entry.atIso)}
         </Typography.Text>
       </Flex>
@@ -201,7 +201,7 @@ function FileRow({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    // 行内边距归调用处 Listy 的 `styles.item`（逐行统一的 4px 0）
+    // 行内边距归 Listy 行容器的 antd 默认（逐行统一）
     <Flex vertical data-testid={`github-file-${index}`}>
       <Flex align="center" gap={8}>
         <Tag color={FILE_STATUS_COLORS[file.status]} style={{ flexShrink: 0 }}>
@@ -210,8 +210,8 @@ function FileRow({
         <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
           {file.path}
         </Typography.Text>
-        <Typography.Text type="success" style={{ fontSize: 12, flexShrink: 0 }}>{`+${file.additions}`}</Typography.Text>
-        <Typography.Text type="danger" style={{ fontSize: 12, flexShrink: 0 }}>{`-${file.deletions}`}</Typography.Text>
+        <Typography.Text type="success" style={{ flexShrink: 0 }}>{`+${file.additions}`}</Typography.Text>
+        <Typography.Text type="danger" style={{ flexShrink: 0 }}>{`-${file.deletions}`}</Typography.Text>
       </Flex>
       {file.patch !== '' || file.status === 'renamed' ? (
         <Flex vertical gap={4}>
@@ -532,12 +532,11 @@ function PrDetailBlock({
                 <EmptyState title="暂无动态" />
               ) : (
                 // 时间线走 antd Listy：容器/行容器/悬停底色由组件负责，调用方只给数据 + 行内容；
-                // 行内边距沿用改造前的 4px 0（Listy 默认 12px 16px），下边框与悬停底色走组件默认样式
+                // 行内边距走 antd 默认（不再手调），下边框与悬停底色走组件默认样式
                 <Listy
                   items={timeline.entries}
                   rowKey={(entry) => `${entry.kind}-${entry.id}`}
                   itemRender={(entry) => <TimelineRow entry={entry} />}
-                  styles={{ item: { padding: '4px 0' } }}
                 />
               ),
           },
@@ -562,7 +561,6 @@ function PrDetailBlock({
                       commentActing={commentActing}
                     />
                   )}
-                  styles={{ item: { padding: '4px 0' } }}
                 />
               ),
           },
@@ -655,7 +653,7 @@ export function GitHubPanel(props: GitHubPanelProps): React.ReactNode {
         ) : prs.prs.length === 0 ? (
           <EmptyState title="暂无拉取请求" />
         ) : (
-          // PR 列表走 antd Listy：容器/行容器/悬停底色由组件负责；行内边距沿用改造前的 4px 8px。
+          // PR 列表走 antd Listy：容器/行容器/悬停底色由组件负责；行内边距走 antd 默认。
           // 行（PrRow）自身不挂 Tooltip，此处也不再包一层
           <Listy
             items={prs.prs}
@@ -663,7 +661,6 @@ export function GitHubPanel(props: GitHubPanelProps): React.ReactNode {
             itemRender={(pr) => (
               <PrRow pr={pr} selected={pr.number === number} onSelect={onSelectPr} />
             )}
-            styles={{ item: { padding: 0 } }}
           />
         )}
       </Card>

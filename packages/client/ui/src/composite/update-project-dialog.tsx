@@ -115,7 +115,7 @@ export function UpdateProjectDialog({
                 Reset to tracked：{resetToTracked.localBranch} → {resetToTracked.upstream}
               </Button>
             </Tooltip>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary">
               丢弃工作区/索引变更，回到上游分支状态
             </Typography.Text>
           </Flex>
