@@ -587,7 +587,7 @@ export function BranchPanel({
           其余子项都是按钮/勾选（antd 自带可收缩性）。 */}
       <Toolbar gap={8}>
         <Tooltip title="打开新建分支弹窗：可指定起始点，并选择创建后是否立即检出">
-          <Button
+          <Button size="small"
             type="primary"
             icon={<PlusOutlined />}
             data-testid="create-branch-button"
@@ -643,7 +643,7 @@ export function BranchPanel({
               }
             >
               <span>
-                <Button
+                <Button size="small"
                   data-testid="cleanup-merged"
                   danger
                   icon={<DeleteOutlined />}
@@ -659,7 +659,7 @@ export function BranchPanel({
         {/* 弹窗 Fetch（GitBranchPopupFetchAction 语义）：fetch 全部远程 → 容器重验证分支列表 */}
         {onFetch !== undefined ? (
           <Tooltip title="拉取全部远程更新：完成后容器重新校验分支列表，耗时取决于远端">
-            <Button data-testid="branch-fetch" loading={fetching ?? acting} onClick={onFetch}>
+            <Button size="small" data-testid="branch-fetch" loading={fetching ?? acting} onClick={onFetch}>
               Fetch
             </Button>
           </Tooltip>

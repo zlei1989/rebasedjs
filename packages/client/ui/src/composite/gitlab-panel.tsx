@@ -354,7 +354,7 @@ function CreateMrModal({
     >
       <Flex vertical gap={8}>
         <Tooltip title="选择源分支：其上的改动将被合入目标分支（不能与目标分支相同）">
-          <Select
+          <Select size="small"
             data-testid="gitlab-create-source"
             placeholder="源分支"
             value={source === '' ? undefined : source}
@@ -363,7 +363,7 @@ function CreateMrModal({
           />
         </Tooltip>
         <Tooltip title="选择目标分支：改动最终合入的分支（不能与源分支相同）">
-          <Select
+          <Select size="small"
             data-testid="gitlab-create-target"
             placeholder="目标分支"
             value={target === '' ? undefined : target}
@@ -510,7 +510,7 @@ function MrDetailBlock({
             }
           >
             <span style={{ display: 'inline-flex' }}>
-              <Button
+              <Button size="small"
                 type="primary"
                 data-testid="gitlab-send-comment"
                 disabled={acting || comment.trim() === ''}
@@ -536,7 +536,7 @@ function MrDetailBlock({
               }
             >
               <span style={{ display: 'inline-flex' }}>
-                <Button data-testid="gitlab-approve" disabled={acting}>
+                <Button size="small" data-testid="gitlab-approve" disabled={acting}>
                   Approve
                 </Button>
               </span>
@@ -557,7 +557,7 @@ function MrDetailBlock({
               }
             >
               <span style={{ display: 'inline-flex' }}>
-                <Button data-testid="gitlab-request-changes" disabled={acting}>
+                <Button size="small" data-testid="gitlab-request-changes" disabled={acting}>
                   Request changes
                 </Button>
               </span>
@@ -572,7 +572,7 @@ function MrDetailBlock({
             }
           >
             <span style={{ display: 'inline-flex' }}>
-              <Button data-testid="gitlab-merge" disabled={acting} onClick={() => setMergeOpen(true)}>
+              <Button size="small" data-testid="gitlab-merge" disabled={acting} onClick={() => setMergeOpen(true)}>
                 合并
               </Button>
             </span>
@@ -585,7 +585,7 @@ function MrDetailBlock({
             }
           >
             <span style={{ display: 'inline-flex' }}>
-              <Button data-testid="gitlab-checkout" disabled={acting} onClick={onCheckout}>
+              <Button size="small" data-testid="gitlab-checkout" disabled={acting} onClick={onCheckout}>
                 检出 MR 分支
               </Button>
             </span>

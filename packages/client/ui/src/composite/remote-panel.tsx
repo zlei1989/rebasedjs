@@ -222,7 +222,7 @@ function FetchSpecModal({
           按 refspec 拉取指定引用（如 +refs/pull/7/head:refs/remotes/origin/pr-7）；refspec 需指定远程。
         </Typography.Text>
         <Tooltip title="选择要拉取的远程：refspec 依赖远程名解析，未选则「确定」不可点">
-          <Select
+          <Select size="small"
             data-testid="fetch-spec-remote"
             placeholder="选择远程"
             value={remote}
@@ -256,7 +256,7 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
           子项均为按钮，无需补 minWidth:0。 */}
       <Toolbar gap={8}>
         <Tooltip title="打开添加远程弹窗：填写名称与 URL 后写入仓库配置（git remote add）">
-          <Button
+          <Button size="small"
             type="primary"
             icon={<PlusOutlined />}
             data-testid="add-remote-button"
@@ -266,7 +266,7 @@ export function RemotePanel({ remotes, onAction, onFetch, onFetchSpec, onUnshall
           </Button>
         </Tooltip>
         <Tooltip title="拉取全部远程的最新提交（git fetch --all）：不合并、不改动工作区，耗时随远程数量增加">
-          <Button data-testid="fetch-all-button" loading={acting} onClick={() => onFetch()}>
+          <Button size="small" data-testid="fetch-all-button" loading={acting} onClick={() => onFetch()}>
             Fetch 全部
           </Button>
         </Tooltip>

@@ -438,7 +438,7 @@ function PrDetailBlock({
             }
           >
             <span style={{ display: 'inline-flex' }}>
-              <Button
+              <Button size="small"
                 type="primary"
                 data-testid="github-send-comment"
                 disabled={acting || comment.trim() === ''}
@@ -464,7 +464,7 @@ function PrDetailBlock({
               }
             >
               <span style={{ display: 'inline-flex' }}>
-                <Button data-testid="github-approve" disabled={acting}>
+                <Button size="small" data-testid="github-approve" disabled={acting}>
                   Approve
                 </Button>
               </span>
@@ -485,7 +485,7 @@ function PrDetailBlock({
               }
             >
               <span style={{ display: 'inline-flex' }}>
-                <Button data-testid="github-request-changes" disabled={acting}>
+                <Button size="small" data-testid="github-request-changes" disabled={acting}>
                   Request changes
                 </Button>
               </span>
@@ -500,7 +500,7 @@ function PrDetailBlock({
             }
           >
             <span style={{ display: 'inline-flex' }}>
-              <Button data-testid="github-merge" disabled={acting} onClick={() => setMergeOpen(true)}>
+              <Button size="small" data-testid="github-merge" disabled={acting} onClick={() => setMergeOpen(true)}>
                 合并
               </Button>
             </span>
@@ -513,7 +513,7 @@ function PrDetailBlock({
             }
           >
             <span style={{ display: 'inline-flex' }}>
-              <Button data-testid="github-checkout" disabled={acting} onClick={onCheckout}>
+              <Button size="small" data-testid="github-checkout" disabled={acting} onClick={onCheckout}>
                 检出 PR 分支
               </Button>
             </span>

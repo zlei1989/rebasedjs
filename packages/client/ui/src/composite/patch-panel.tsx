@@ -214,7 +214,7 @@ export function PatchPanel({ patches, onCreate, onApply, onImportShelf, onDelete
           由原语统一 flexWrap + width:100% + minWidth:0；唯一子项是按钮，无需补 minWidth:0。 */}
       <Toolbar>
         <Tooltip title="生成补丁文件存到仓库的补丁目录（打开命名与范围弹窗）">
-          <Button
+          <Button size="small"
             type="primary"
             icon={<PlusOutlined />}
             data-testid="patch-create-button"

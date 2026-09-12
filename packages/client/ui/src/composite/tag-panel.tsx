@@ -173,7 +173,7 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
           统一 flexWrap + width:100% + minWidth:0；子项均为按钮，无需补 minWidth:0。 */}
       <Toolbar gap={8}>
         <Tooltip title="创建一个新标签（打开名称 / 引用 / 附注信息弹窗）">
-          <Button
+          <Button size="small"
             type="primary"
             icon={<PlusOutlined />}
             data-testid="tag-create-button"

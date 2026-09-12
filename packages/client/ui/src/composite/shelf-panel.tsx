@@ -145,7 +145,7 @@ export function ShelfPanel({ shelves, onAction, acting }: ShelfPanelProps): Reac
           由原语统一 flexWrap + width:100% + minWidth:0；唯一子项是按钮，无需补 minWidth:0。 */}
       <Toolbar>
         <Tooltip title="把当前工作区改动存成一个搁置存档（打开搁置名弹窗）">
-          <Button
+          <Button size="small"
             type="primary"
             icon={<PlusOutlined />}
             data-testid="shelf-save-button"

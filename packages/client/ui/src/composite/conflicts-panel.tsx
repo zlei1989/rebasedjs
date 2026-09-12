@@ -248,7 +248,7 @@ export function ConflictsPanel({
             {/* Tooltip 在内、Popconfirm 在外；不插 span 的原因同「删除该文件」——避免禁用态下
                 Popconfirm 的点击链被挪到 span 上而仍能弹出确认 */}
             <Tooltip title="放弃当前这一提交的变更并继续后续流程（skip 语义，被丢弃的改动不可恢复）">
-              <Button data-testid="skip-operation" disabled={remaining === 0}>
+              <Button size="small" data-testid="skip-operation" disabled={remaining === 0}>
                 跳过
               </Button>
             </Tooltip>
