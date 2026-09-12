@@ -496,7 +496,14 @@
 
 ### 4.30 SettingsPage（slug `settings`；P1/P2）
 
-- **入口**：顶栏「设置」→ `/repos/:id/settings`（key=repoId 切仓强制重挂载）。
+> **§5.23 拆分后本节的页面归属**：设置页按**作用域**拆成两页——`/settings` = **应用设置**（应用设置卡片 /
+> 保护分支 / Git 可执行文件 / 账户，全部与应用配置 `~/.rebasedjs/config.json` 相关，与 repoId 无关），
+> `/repos/:id/settings` = **仓库设置**（Git 配置（仓库级）9 键 / GPG 提交签名，写本仓库 `.git/config`）。
+> 下表 7 行的**功能与预期效果不变**，但落点变为：F-149 / F-151 / F-153 / F-155 → `/settings`；
+> F-150 / F-154 → `/repos/:id/settings`；F-152（config-store 持久化）两页都适用。
+> 入口：首页「设置」→ `/settings`；日志页顶栏设置图标 → `/repos/:id/settings`；两页顶部互跳。
+
+- **入口**：顶栏「设置」→ `/repos/:id/settings`（key=repoId 切仓强制重挂载）；应用设置页在 `/settings`（首页「设置」进入）。
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
@@ -549,7 +556,7 @@
 | R20 | 2026-09-11 | F-149~F-155（SettingsPage 7 行：应用设置读写 / git 配置 9 键 / 账户令牌 / config-store 重启持久化 / git 可执行文件 / GPG 配置 / 保护分支与联动拦截） | ✅ 7（SettingsPage 7/7 收官） | 本轮无新缺陷；F-152 真杀进程重启后复查，F-155 用「已推送提交 Reword」实测联动拦截 |
 | R21 | 2026-09-11 | F-156~F-159（BrowsePanel 4 行：文件树 / 只读查看与二进制 / 降级边界 / 入口与回边） | ✅ 4（BrowsePanel 4/4 收官） | 本轮无新缺陷；树与内容均与 `ls-tree -r` / `show <rev>:<file>` 互证，越界与绝对路径均被 `INVALID_QUERY` 拦下 |
 | R22 | 2026-09-11 | **全站流体布局与密度几何验收**（非 F-xx 功能行）：六档宽度 × 明暗 × 24 路由 + 6 个状态（含 GitHub/GitLab 展开差异、认证/重置弹窗、EllipsisText 浮层）+ 两条例外断言；web-koa 对等抽查 | ✅ 576/576 格（web-next 384 + web-koa 192） | 修复前基线 375/384：`stashes` 行在 360/480 顶宽（`scrollWidth 492 > clientWidth 360/480`）→ 该行加 `wrap`；另 4 格为断言测量竞态（已修断言）。见 §5.16 |
-| **R23** | **2026-09-12** | **全量重跑（159 行全跑完 + 收官抽查）**：按 §1.3 用 `scripts/smoke-setup.ps1` 复位重建全部冒烟仓后，从 F-001 起按矩阵顺序跑完 **F-001~F-159**（31 个页面全覆盖：RepoPage 8 / LogPage 20 / DiffPage 10 / StatusPage 13 / CommitDialog 7 / ResetDialog 3 / BranchPanel 11 / MergeDialog 3 / RebaseDialog 5 / StashPanel 5 / TagPanel 3 / RemotePanel 4 / PushDialog 3 / PullDialog 2 / UpdateProjectDialog 3 / BlameView 4 / HistoryPanel 3 / CommittedChangesPanel 3 / SearchPanel 3 / ConflictsPanel 6 / PatchPanel 4 / ShelfPanel 3 / WorktreePanel 3 / SubmodulePanel 2 / IgnoreDialog 2 / GitHubPanel 6 / GitLabPanel 5 / GitConsole 2 / QuickActions 2 / SettingsPage 7 / BrowsePanel 4）；另完成收官抽查：**明亮主题 8 张**（§5.18①）、**响应式 6 张**（§5.18②，`scrollWidth <= clientWidth+1` 全通过），并重拍 F-058 回执与 F-119 换态图。截图**全量重拍 196 张**（归档时删除 1 张失效证据图，账目 195 张，见 §5.19：引用=在盘、无缺失、无重复 SHA、无孤儿） | ✅ **150** / ❌ **0** / ⏭ **9**（F-056 的 gpg 分支 + F-136~F-139、F-141~F-144 共 8 行需真实托管仓库与 PAT） | **新登记缺陷**：D-39（`refs.changed` 后 chips 不刷新）、D-40（「清理已合并（N）」计数与执行集不一致）、D-41（并发下 `.git/index.lock` raw 报错透出，P3）、D-42（配置 BOM 化 → 全站 400 且文案误导，P2）、D-43（硬杀 dev 后 `.next` 缓存不一致 → 二级嵌套 API 404，P2）、D-44（`conflicts-06.png` 与 `log-page-16.png` 同图，证据链重复）——**D-39~D-42 与 D-44 已于本轮修复并复验（修复落点/回归守卫/实测见 §5.20），D-43 复核两次未复现、按偶发登记**；**流程/夹具纠偏 P-12~P-28**（见 §5.17）；**主题/响应式/账目** 三节见 §5.18~§5.19 |
+| **R23** | **2026-09-12** | **全量重跑（159 行全跑完 + 收官抽查）**：按 §1.3 用 `scripts/smoke-setup.ps1` 复位重建全部冒烟仓后，从 F-001 起按矩阵顺序跑完 **F-001~F-159**（31 个页面全覆盖：RepoPage 8 / LogPage 20 / DiffPage 10 / StatusPage 13 / CommitDialog 7 / ResetDialog 3 / BranchPanel 11 / MergeDialog 3 / RebaseDialog 5 / StashPanel 5 / TagPanel 3 / RemotePanel 4 / PushDialog 3 / PullDialog 2 / UpdateProjectDialog 3 / BlameView 4 / HistoryPanel 3 / CommittedChangesPanel 3 / SearchPanel 3 / ConflictsPanel 6 / PatchPanel 4 / ShelfPanel 3 / WorktreePanel 3 / SubmodulePanel 2 / IgnoreDialog 2 / GitHubPanel 6 / GitLabPanel 5 / GitConsole 2 / QuickActions 2 / SettingsPage 7 / BrowsePanel 4）；另完成收官抽查：**明亮主题 8 张**（§5.18①）、**响应式 6 张**（§5.18②，`scrollWidth <= clientWidth+1` 全通过），并重拍 F-058 回执与 F-119 换态图。截图**全量重拍 196 张**（归档时删除 1 张失效证据图，账目 195 张，见 §5.19：引用=在盘、无缺失、无重复 SHA、无孤儿） | ✅ **150** / ❌ **0** / ⏭ **9**（F-056 的 gpg 分支 + F-136~F-139、F-141~F-144 共 8 行需真实托管仓库与 PAT） | **新登记缺陷**：D-39（`refs.changed` 后 chips 不刷新）、D-40（「清理已合并（N）」计数与执行集不一致）、D-41（并发下 `.git/index.lock` raw 报错透出，P3）、D-42（配置 BOM 化 → 全站 400 且文案误导，P2）、D-43（硬杀 dev 后 `.next` 缓存不一致 → 二级嵌套 API 404，P2）、D-44（`conflicts-06.png` 与 `log-page-16.png` 同图，证据链重复）——**D-39~D-42 与 D-44 已于本轮修复并复验（修复落点/回归守卫/实测见 §5.20），D-43 复核两次未复现、按偶发登记**；**流程/夹具纠偏 P-12~P-29**（见 §5.17）；**主题/响应式/账目** 三节见 §5.18~§5.19 |
 
 **收官复核（R21 末）**
 
@@ -702,6 +709,7 @@
 | P-25 | **本轮被实测推翻的文档括注（已在各行就地改写）**：① F-132 的忽略内容区是 antd `Input.TextArea`（rows=10），**不是**带行号的 Monaco；② F-156 现为 **18 个文件 / 2 个 gitlink（dir.with.dots、sub-module）/ 根提交 `56f751ab`**（旧记录 17 / 4 / `3236538` 系四态夹具与旧历史下的结果）；③ F-149 的 `recentRepoIds` 现为 **10** 条（旧记录 8）；④ F-155 的目标提交在 `origin/master` 上，而 `origin/master` 经 F-070 强推后已是 `a91ade7`（`761961d` 仍是其祖先）；⑤ F-111 的 grep 词现命中 **18** 条、pickaxe 词改为 `staged new file`（`staged-only` 0 命中）；⑥ F-113 的 `fetch-probe-local` 分支已不存在（改用 `diverge-test`）；⑦ F-117 合并提交为 `ec1320f` | 后续轮次请以**当场 CLI 实测**为准，不要沿用本文档任何历史 hash/计数——本会话对主仓历史做过多次改写（F-055 amend 到历史、F-059 hard reset、F-070 强推修复、F-066 删分支、§4.24 后移除四态子模块夹具） |
 | P-26 | **运行环境的两次外部变化**：① **有并行会话在同一 `rebasedjs` 仓提交**（`b41ccaa chore: 收纳并行会话的在途改动（截图重拍/documents/冒烟脚本）`，19:45:32，把本轮当时已产出的截图一并入库；另有 `8af62ff`/`aa3e24f` 改 UI 控件尺寸）→ 本轮截图与文档改动会陆续进入仓库历史，工作区里可能残留未提交的图；② **dev 服务在 F-152 后被以分离进程重启**（cmd PID 11852，父进程已退；日志 `%TEMP%\rebased-dev-restart[2].log`）——重启会清空 exec 环形缓冲（F-145 的控制台证据必须在重启前取），且硬杀易触发 D-43 | 收尾账目以工作区实际文件为准（不依赖 git 状态）；若后续轮次需要干净基线，先确认无并行会话在写同一仓 |
 | P-27 | **两条截图自动化的实测坑（收尾批踩到，写进口径免得重复踩）**：① **`browser_hover('body')` 不能用来「把指针移开」**——body 中心可能正好压在 antd 帮助图标上，会把 Tooltip 拍进画面（`responsive-768-light-settings.png` 首次即中招并重拍）；可靠做法是 `page.mouse.move(1434, 892)`（右下角空白）并等 ~700ms。② **antd 是 v6.6.3：toast 根节点是 `.ant-message.ant-message-list.ant-message-top`，不存在 v5 的 `.ant-message-notice-content`**；按 v5 类名轮询会「10s 未命中但操作其实已成功」。可靠做法是**文本轮询 `document.body.innerText` 命中目标文案后立即截图**——实测「提交并推送」的 toast 在**点击后约 2.8 s** 才出现、停留约 3 s，窗口很窄 | 两条已并入 §1.2 的截图口径；后续批次一律「文本轮询 → 立即截图」+「鼠标移到右下角」 |
+| P-29 | **Turbopack 错误代码框的多字节 panic 会把整个 dev 服务带走**（2026-09-12 实测连续 4 次；即旧记录里的「E-01」）。链路：① 被编辑文件处于**瞬时错误态**（本次是 `apps/web-next/app/repos/[repoId]/settings/page.tsx` 作为 Server Component 却 import `useRouter`/客户端 hooks，缺 `'use client'`）；② Turbopack 为该诊断渲染代码框时命中 `next-code-frame` 的 Rust panic——`end byte index 93 is not a char boundary; it is inside '一' (bytes 91..94) of \`/** 树节点：title 为展示名… */\``；③ 进程以 `0xC0000409`（fail-fast）退出，`pnpm -r dev` 随即连带中止 web-koa（:3031）→ 用户侧表现为**整站突然打不开**。**取证特征**：日志里前面的请求全是 200，紧接着一条 `thread '<unnamed>' panicked at crates\next-code-frame\src\highlight.rs`，最后 `Exit status 3221226505`（**panic 会把真正的编译错误盖掉**，看不到错误正文） | ① **先拿到真实错误**：用 webpack 跑一次（`pnpm --filter @rebased/web-next dev -- --webpack`），错误正文照常打印（本次即据此定位到缺 `'use client'`）；② 修掉诊断本身（给该页补 `'use client'` 或把 hooks 下移到客户端子组件）后，Turbopack 不再产生该诊断、dev 稳定；③ 重启前若曾用 webpack 跑过，**必须删 `apps/web-next/.next` 再回到 Turbopack**，否则 webpack 与 Turbopack 的缓存混用会出现 `Cannot find module '../chunks/ssr/[turbopack]_runtime.js'`（各页 500）；④ 多会话共用一台机时先确认 :3030/:3031 归属再起（本次有一次重启因端口被另一会话的 dev 占用而 `EADDRINUSE` 失败）。**与 D-43 区分**：D-43 是 `.next` 缓存不一致导致的偶发嵌套 404（一级 200 + 二级 404），本条是「编译诊断 + 中文代码框」触发的**确定性**崩溃（全站不可达） |
 
 #### R1 夹具与流程纠偏（P-01~P-05；非产品缺陷，记入以免后续轮次重复踩坑）
 
@@ -843,9 +851,9 @@
 **变更② 界面主题新增「自动」（跟随操作系统）**
 
 - 选项：**自动 / 明亮 / 暗色**；类型 `ThemeMode = 'auto' | 'light' | 'dark'`（`contracts/src/domain.ts`），patch schema `z.enum(['auto','light','dark'])`（`contracts/src/endpoints.ts`，非法值仍 400）。服务端只持久化偏好，**默认仍为 `dark`**（不改既有默认观感）。
-- 解析：`apps/web-next/app/providers.tsx` 用 `matchMedia('(prefers-color-scheme: dark)')` 把 `auto` 解析成实际明暗并**订阅系统变化**（切系统主题即时跟随，无需刷新）；`data-theme` 恒为解析后的 `light`/`dark`（globals.css / Monaco / 布局断言只认这两值），另写 `data-theme-preference` 保留偏好原值，便于区分「跟随系统」与「显式指定」。
+- 解析：主题口径统一在 `packages/client/ui/src/base/app-theme.tsx`（`useResolvedTheme`）——用 `matchMedia('(prefers-color-scheme: dark)')` 把 `auto` 解析成实际明暗并**订阅系统变化**（切系统主题即时跟随，无需刷新）；`data-theme` 恒为解析后的 `light`/`dark`（globals.css / Monaco / 布局断言只认这两值），另写 `data-theme-preference` 保留偏好原值，便于区分「跟随系统」与「显式指定」。两个 app 的根 Provider（`apps/web-next/app/providers.tsx` / `apps/web-koa/src/main.tsx`）都从 `useSettings()` 取偏好后交给该 hook，故两端主题行为同源。
 - 实测：`PUT {theme:'auto'}` → 设置页选中「自动」、`data-theme-preference=auto`；浏览器偏好为浅色时 `data-theme=light`；`page.emulateMedia({colorScheme:'dark'})` → **不刷新页面**即变 `data-theme=dark`、body `rgb(20,20,20)`，切回浅色恢复。
-- **已知缺口（既有，本轮未改）**：web-koa 的 SPA 仍固定暗色（`apps/web-koa/src/main.tsx` 硬编码 `theme.darkAlgorithm`），故设置页的主题控件在 koa 侧点了不生效；需要时另行接线。
+- **已知缺口已修（2026-09-13，§5.23）**：web-koa 的 SPA 原先固定暗色（`apps/web-koa/src/main.tsx` 硬编码 `theme.darkAlgorithm`），设置页的主题控件在 koa 侧点了不生效。现已改为同一个 `useResolvedTheme` 驱动（含 `DensityProvider mode` 与 `ConfigProvider.config({holderRender})`），并把 `globals.css` 的 `--app-*` 主题变量与 `data-theme` 选择器补进 `apps/web-koa/src/index.css`（此前 ui 包按 `var(--app-*)` 上色的地方在 koa 下拿不到值）。
 
 **变更③ 分支页面板「弹窗外」控件统一 small（2026-09-12，用户指出具体元素后）**
 
