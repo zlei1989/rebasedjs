@@ -7,7 +7,7 @@
  * （纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
 import { useBranchAction, useBranches, useBranchWorkingDiff, useCheckout, useCheckoutRebase, useCheckoutUpdate, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
-import { BranchPanel, PageShell } from '@rebased/ui';
+import { BranchPanel, mergedCleanupCandidates, PageShell } from '@rebased/ui';
 import { Button, Modal, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
@@ -117,15 +117,25 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             .catch(onError);
         }}
         onCleanupMerged={() => {
-          // 清理已合并到 HEAD 的本地非当前分支：逐条走既有 delete（已合并无需 force），全部完成后重验证列表
-          const targets = branches.branches.filter((b) => !b.remote && b.mergedIntoHead && !b.current);
+          // 清理已合并到 HEAD 的本地非当前分支：候选口径与 ui 计数同源（mergedCleanupCandidates），
+          // 逐条容错——单条失败只记下来、其余继续，最后给准确回执（冒烟 D-40：此前一个失败即中断
+          // 整条 promise，剩余候选不删且成功回执永不出现）
+          const targets = mergedCleanupCandidates(branches.branches);
           void (async () => {
+            const failed: string[] = [];
             for (const branch of targets) {
-              await branchAction({ action: 'delete', name: branch.name });
+              try {
+                await branchAction({ action: 'delete', name: branch.name });
+              } catch (error) {
+                failed.push(`${branch.name}（${error instanceof Error ? error.message : String(error)}）`);
+              }
             }
             void mutateBranches();
-            void message.success(`已清理 ${targets.length} 个已合并分支`);
-          })().catch(onError);
+            if (failed.length === 0) void message.success(`已清理 ${targets.length} 个已合并分支`);
+            else if (failed.length < targets.length)
+              void message.warning(`已清理 ${targets.length - failed.length} 个已合并分支，${failed.length} 个失败：${failed.join('；')}`);
+            else void message.error(`清理失败：${failed.join('；')}`);
+          })();
         }}
         // 与当前分支比较（GitCompareWithBranchAction 语义 #10）：跳日志页 ?compare=<branch>（对比视图）
         onCompare={(branch) => router.push(`/repos/${repoId}?compare=${encodeURIComponent(branch)}`)}

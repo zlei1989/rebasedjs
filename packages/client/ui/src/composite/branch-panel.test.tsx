@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { BranchList, BranchRef } from '@rebased/contracts';
-import { BranchPanel } from './branch-panel';
+import { BranchPanel, mergedCleanupCandidates } from './branch-panel';
 
 /** 测试分支工厂：补全 BranchRef 必填字段，默认本地、非当前、已合并 */
 function makeBranch(partial: Partial<BranchRef> & { name: string }): BranchRef {
@@ -330,6 +330,30 @@ describe('BranchPanel 过滤/查找已合并', () => {
     );
     // 仅 feature-merged 可清理：main 为当前分支、wt-branch 被工作树占用
     expect(screen.getByTestId('cleanup-merged')).toHaveTextContent('清理已合并（1）');
+  });
+
+  // 冒烟 D-40：ui 的计数与两个容器的执行集此前各算一遍（容器漏了 worktree 排除），
+  // 于是「承诺 8 个」实删 2 个后中断；本用例锁定「唯一口径」这个约定本身
+  it('mergedCleanupCandidates 是清理候选的唯一口径：排除远程/当前/未合并/worktree 占用', () => {
+    const list = [
+      makeBranch({ name: 'ok', mergedIntoHead: true }),
+      makeBranch({ name: 'is-current', mergedIntoHead: true, current: true }),
+      makeBranch({ name: 'not-merged', mergedIntoHead: false }),
+      makeBranch({ name: 'wt', mergedIntoHead: true, checkedOutInWorktree: true }),
+      makeBranch({ name: 'origin/ok', mergedIntoHead: true, remote: true }),
+    ];
+    expect(mergedCleanupCandidates(list).map((b) => b.name)).toEqual(['ok']);
+  });
+
+  // 同一类判据差异（D-40 复核时实测）：git branch -d 还要求「已合并入**上游**」，
+  // 领先上游的 master 会被计入却删不掉（raw git: not deleting branch … not yet merged to …）
+  it('mergedCleanupCandidates 排除「领先上游」的已合并分支（git -d 会拒绝，且强删会丢未推送提交）', () => {
+    const list = [
+      makeBranch({ name: 'safe', mergedIntoHead: true, upstream: 'origin/safe', ahead: 0, behind: 2 }),
+      makeBranch({ name: 'ahead-of-upstream', mergedIntoHead: true, upstream: 'origin/master', ahead: 5 }),
+      makeBranch({ name: 'no-upstream', mergedIntoHead: true, upstream: null, ahead: 0 }),
+    ];
+    expect(mergedCleanupCandidates(list).map((b) => b.name)).toEqual(['safe', 'no-upstream']);
   });
 
   it('force-push 修复：当前分支与上游分叉（ahead>0 且 behind>0）时渲染按钮；点击回调；其余行/状态不渲染', () => {

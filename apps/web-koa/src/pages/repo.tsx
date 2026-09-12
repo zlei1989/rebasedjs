@@ -151,10 +151,14 @@ export function RepoPage(): React.ReactNode {
     onOperation: (next) => void mutateOperation(next, { revalidate: false }),
     // 引用推送（refs.changed：分支/标签/贮藏 建删/移动；首帧为全量基线，空数组=指纹变化但名单未知——watcher 扩展的首个消费方）：
     // 重验证日志快照（ref chips 与图形可达性变化）+ 全局重验证分支列表缓存键（本页未挂载 useBranches；
-    // 全局 mutate 仅对已挂载该键的页面生效）。HEAD 切换由 repo.state-changed（onStatus）覆盖，不在此帧
+    // 全局 mutate 仅对已挂载该键的页面生效）。HEAD 切换由 repo.state-changed（onStatus）覆盖，不在此帧。
+    // 另需**重订阅 log/stream**（与 onStatus 同手法）：渲染列表走 mergeLogCommits「同 hash 取流」，
+    // 流侧那几行是建/删分支**之前**送达的、refs 冻结在当时的值——只重验证 REST 快照拿不回它们，
+    // chips 会一直停在旧值直到整页刷新（冒烟 D-39 实测）。
     onRefs: () => {
       void mutateLog();
       void mutateGlobal(`/api/repos/${repoId}/branches`);
+      setRefreshKey((k) => k + 1);
     },
   });
   const { data: repos } = useRecentRepos();

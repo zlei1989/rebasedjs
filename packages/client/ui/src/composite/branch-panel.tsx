@@ -452,6 +452,28 @@ function TagRow({ tag, onCheckout }: { tag: TagEntry; onCheckout: (action: Check
   );
 }
 
+/**
+ * 清理已合并的候选集合（**唯一口径**）：本地、已合并入 HEAD、非当前分支、未被任何 worktree 检出，
+ * 且没有「领先自己上游」的未推送提交。四个排除条件都对应 git 的真实拒绝理由：
+ *  - 当前分支：不能删自己；
+ *  - worktree 占用：`git branch -d` 报 `used by worktree`（D-20/D-40 实测）；
+ *  - 领先上游（如 master 领先 origin/master）：`git branch -d` 报 `not deleting branch … that is not yet
+ *    merged to …`——因为 `-d` 既查 HEAD、也查该分支的上游；强删会丢本地未推送提交，故**不得**计入候选。
+ *
+ * ui 的「清理已合并（N）」计数与两个容器（web-next / web-koa）的执行集**都用它**——各算一遍会让
+ * 「承诺 N 个」与「实际删几个」分叉（冒烟 D-40：承诺 8 个、实删 2 个后报 raw git 错误、成功回执不出现）。
+ */
+export function mergedCleanupCandidates(branches: BranchRef[]): BranchRef[] {
+  return branches.filter(
+    (b) =>
+      !b.remote &&
+      b.mergedIntoHead &&
+      !b.current &&
+      b.checkedOutInWorktree !== true &&
+      !(b.upstream !== null && b.ahead > 0),
+  );
+}
+
 /** 分支组卡片：标题带计数；行列表走 antd Listy（6.6.0 起的列表组件，官方推荐替代老 List）。
  *  行容器（内边距/下边框/悬停底色）由组件负责，调用方只给数据 + 行内容；Listy 空数据不渲染空态，故空态由 empty 传入。 */
 function BranchGroupCard<T extends { name: string }>({
@@ -514,13 +536,8 @@ export function BranchPanel({
   };
   const locals = useMemo(() => branches.branches.filter((b) => !b.remote), [branches]);
   const remotes = useMemo(() => branches.branches.filter((b) => b.remote), [branches]);
-  /** 清理目标：本地已合并且非当前分支（当前分支不可删） */
-  // 清理候选：已合并入 HEAD 且非当前分支，且未被任何 worktree 检出（后者 git 必然拒绝删除，
-  // 计入会让「清理已合并（N）」承诺可清理却失败——冒烟 D-20）
-  const mergedLocals = useMemo(
-    () => locals.filter((b) => b.mergedIntoHead && !b.current && b.checkedOutInWorktree !== true),
-    [locals],
-  );
+  // 清理候选：口径见 mergedCleanupCandidates（唯一出口，容器执行集也用同一个函数）
+  const mergedLocals = useMemo(() => mergedCleanupCandidates(branches.branches), [branches]);
   const visibleLocals = useMemo(() => locals.filter(match), [locals, filterText, mergedOnly]);
   const visibleRemotes = useMemo(() => remotes.filter(match), [remotes, filterText, mergedOnly]);
 

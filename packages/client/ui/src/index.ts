@@ -33,7 +33,7 @@ export { IgnoreDialog, type IgnoreDialogProps } from './composite/ignore-dialog'
 export { ConsolePanel, type ConsolePanelProps } from './composite/console-panel';
 export { GitHubPanel, type GitHubPanelProps } from './composite/github-panel';
 export { GitLabPanel, type GitLabPanelProps } from './composite/gitlab-panel';
-export { BranchPanel, type BranchPanelProps } from './composite/branch-panel';
+export { BranchPanel, mergedCleanupCandidates, type BranchPanelProps } from './composite/branch-panel';
 export { BranchCompareView, type BranchCompareViewProps } from './composite/branch-compare-view';
 export { BlameView, type BlameViewProps } from './composite/blame-view';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
