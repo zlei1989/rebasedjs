@@ -33,6 +33,11 @@
  *     命中数还有下限 `min`（部分加载的页面同样不算通过，见 routeCells 顶部注释）。
  *   - 就绪门与主题门必须**串联**（`prepareCell`）：主题探针迟迟不落时会整页重载一次，
  *     重载后必须重跑该格的就绪门再测量 —— 否则会量到「刚重载、数据还没到」的空页并判绿。
+ *   - 每格的判定现在是**三条**：① 页面级横向溢出为 0；② 该格文本的**主导基准字号**等于该路由的
+ *     密度归属（compact 12px / 设置页 14px，见 assertDensity）—— 这两条都参与判定、都不重试；
+ *     ③ 与格相关的例外断言（两栏堆叠 / Monaco 内部滚动 / EllipsisText 浮层）。
+ *     为什么要有 ②：`/merge` 曾整条路由没有密度归属（以 antd 默认 14px 渲染），而当时 576 格
+ *     溢出矩阵**全绿** —— 溢出为 0 与密度正确是两件独立的事。
  *   - 页面 JS 异常分两栏记录：真异常 + 已按判据过滤的良性噪声（Monaco 的 diff worker 被取消，
  *     见 classifyPageError）。判据按 stack 而不是按消息文本，避免把真缺陷一起过滤掉。
  *   - 主题是**服务端持久化设置**（PUT /api/settings）：脚本先读原值、跑完恢复，不留痕。
@@ -331,6 +336,95 @@ function measureInPage() {
     bodyBackground: background,
     isDark: luma === null ? null : luma < 128,
     offenders: offenders.slice(0, 5),
+  };
+}
+
+/**
+ * 页面级**密度**取样（按路由的密度断言用，见 assertDensity）。
+ *
+ * 取什么：排除 `.monaco-editor` 子树后，所有「可见 + 自带非空文本节点」的元素的 computed fontSize
+ * 直方图，并单独数出 12px（compact 基准）与 14px（antd 默认基准）两种节点的个数。
+ *
+ * 为什么用「主导字号」而不是逐路由手挑一个节点：26 条路由 × 2 app 手挑选择器既脆又难维护，
+ * 而本断言要抓的正是「整页落回另一档基准字号」这件事 —— 它在**全页文本上**表现为众数，逐路由
+ * 手挑一个节点反而可能在改名/改文案后静默失效。取样数、直方图与两档计数都写进产物，可复核。
+ *
+ * 为什么排除 Monaco：编辑器字号由 Monaco 自己的配置决定（实测 14px，与 antd 密度无关），
+ * 属**组件内部**例外（同「Monaco 内部可横向滚动」那条例外）；不排除会让 diff 页恒以 14px 主导而误红。
+ *
+ * 为什么覆盖 portal：Modal 经 createPortal 渲染到 body，而 React context 穿过 portal ——
+ * `/merge` 这类「整页只有一个 Modal、背后文档为空」的路由，唯一可测的文本就在弹窗里，
+ * 而这次修的正是「同一弹窗从 /merge 进是 14px、从 /conflicts 进是 12px」。
+ */
+function measureDensityInPage() {
+  const hist = {};
+  let sampled = 0;
+  let monacoSkipped = 0;
+  let count12 = 0;
+  let count14 = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.closest('.monaco-editor') !== null) {
+      monacoSkipped += 1;
+      continue;
+    }
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    const own = [...el.childNodes]
+      .filter((n) => n.nodeType === 3)
+      .map((n) => n.textContent ?? '')
+      .join('')
+      .trim();
+    if (own === '') continue;
+    const fontSize = getComputedStyle(el).fontSize;
+    hist[fontSize] = (hist[fontSize] ?? 0) + 1;
+    sampled += 1;
+    if (fontSize === '12px') count12 += 1;
+    if (fontSize === '14px') count14 += 1;
+  }
+  const ranked = Object.entries(hist)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([size, count]) => `${size}×${count}`);
+  return { count12, count14, sampled, monacoSkipped, hist: ranked };
+}
+
+/**
+ * 按路由的**密度断言**（本轮新增）：本格页面文本的主导基准字号必须等于该路由的密度归属。
+ *
+ * 期望值：默认 **12px**（`PageShell` 不传 `density` ⇒ compact）；设置页路由 **14px**
+ * （`density="default"` 豁免，antd 默认基准）。判据是**主导**（12px 与 14px 谁是众数），
+ * 不是「出现了 12px」—— 后者在两档下都可能成立（compact 页仍有 14px 的卡片标题，
+ * 默认档页也有 12px 的次要文本），没有判别力。
+ *
+ * 三态：
+ *   - pass：期望档的计数严格多于另一档；
+ *   - fail：另一档更多，或两档计数相同（无法判定主导 ⇒ 判红，不掷硬币）；
+ *     失败原因里带上两档计数、取样数与直方图，读者不必再跑一次才知道差在哪。
+ *   - no-sample：`.monaco-editor` 之外**一个文本节点都没有**（理论上不该出现）。这种情况不判红
+ *     （没有密度可言），但会被**逐格列进汇总**，不允许静默跳过。
+ */
+async function assertDensity(page, cell, expected) {
+  const m = await page.evaluate(measureDensityInPage);
+  const detail = `12px 节点 ${m.count12} 个 / 14px 节点 ${m.count14} 个，取样 ${m.sampled} 个文本节点（跳过 Monaco 子树 ${m.monacoSkipped} 个），直方图 ${m.hist.join(' ')}`;
+  const base = { expected, ...m };
+  if (m.count12 === 0 && m.count14 === 0) {
+    return {
+      ...base,
+      status: 'no-sample',
+      reason: `本格在 .monaco-editor 之外没有任何可见文本节点，密度未被断言（${detail}）`,
+    };
+  }
+  const own = expected === 14 ? m.count14 : m.count12;
+  const other = expected === 14 ? m.count12 : m.count14;
+  if (own > other) {
+    return { ...base, status: 'pass', reason: `密度 ${expected}px 主导（${detail}）` };
+  }
+  return {
+    ...base,
+    status: 'fail',
+    reason:
+      `密度断言不成立：本格期望 ${expected}px 主导（${cell.density === 'default' ? '设置页豁免档' : 'compact 档'}），` +
+      `实测 ${m.count12 === m.count14 ? '两档计数相同、无法判定主导' : `由 ${expected === 14 ? 12 : 14}px 主导`}（${detail}）`,
   };
 }
 
@@ -668,6 +762,15 @@ const SLOW_GATE_TIMEOUT = 60000;
  * `content` 逐页核实过数据来源（组件源码里「数据到齐才渲染」的那一支），注释里给出依据；
  * 某页确实没有任何数据级内容时（对话-only 页 / 该夹具下必然为空），**在行内写明原因**而不是留白。
  *
+ * **按路由的密度断言（本轮新增，见 assertDensity）**：每一格都带一个**期望基准字号** ——
+ * 默认 **12px**（`PageShell` 不传 `density` ⇒ compact），设置页路由标 `density: 'default'` ⇒ **14px**
+ * （antd 默认密度，用户显式要求的唯一豁免）。判据是该格文本的**主导**字号等于期望值，
+ * 与页面级溢出断言同为**判定**（不是 note / 不是告警）：密度错档即判红，且**不参与重试**。
+ * 为什么必须加它：本轮的 Critical 缺陷（`/merge` 整条路由没有密度归属、以 antd 默认 14px 渲染）
+ * 在 576 格溢出矩阵里**全绿** —— 溢出为 0 与密度正确是两件事，只有这一条能看见后者。
+ * `merge` 的背景文档为空（见 e2e 文档 §5.16④），但它渲染的对话框挂在 body 上，取样因此落在
+ * 弹窗文本上 —— 这正是「同一弹窗从 /merge 进是 14px、从 /conflicts 进是 12px」那条链路的判据。
+ *
  * `min`（内容级门的**命中数下限**）与 `gateTimeout`：
  *   `content` 命中 1 条就通过，仍可能是「一页只渲染出 22 个树节点里的 1 个」这类部分加载 ——
  *   故对**又大又与夹具无关**的列表给下限：browse 的树节点（实测 20）→ 10、console 的历史记录
@@ -701,6 +804,9 @@ function routeCells(ctx) {
     { name: 'committed', path: `/repos/${ctx.repo.id}/committed`, ready: '[data-testid="committed-entry-0"]' },
     { name: 'history', path: `/repos/${ctx.repo.id}/history?file=${q(ctx.file)}`, ready: '[data-testid="history-entry-0"]' },
     { name: 'search', path: `/repos/${ctx.repo.id}/search`, ready: '[data-testid^="branch-quick-"]' },
+    // merge：整页只有一个**常驻打开**的 Modal（背景文档为空），就绪点即弹窗内的分支选择器。
+    // 这一格的**溢出**断言是弱的（背后文档为空 ⇒ 空页永不溢出，见 e2e 文档 §5.16④），
+    // 但**密度**断言不空：取样覆盖 portal 里的弹窗文本，弹窗落在哪一档密度由它判定。
     { name: 'merge', path: `/repos/${ctx.repo.id}/merge`, ready: '[data-testid="merge-branch-select"]' },
     { name: 'remotes', path: `/repos/${ctx.repo.id}/remotes`, ready: '[data-testid^="row-remote-"]' },
     // conflicts：就绪点是页脚那个「继续」按钮的 span（`ConflictRow` 一条都不渲染时它也在），
@@ -717,8 +823,11 @@ function routeCells(ctx) {
     },
     // settings：git-executable-card 是**静态** Card（SettingsPage 无条件渲染全部卡片，容器也没有提前 return），
     // 数据没到时它照样在 —— 这正是「量到未装数据的页面」的典型；改成等 git 配置行（9 个 CONFIG_KEYS 的
-    // 输入行，`config-view` 的响应到达才渲染）真的出现
-    { name: 'settings', path: `/repos/${ctx.repo.id}/settings`, ready: '[data-testid="git-executable-card"]', content: '[data-testid^="config-input-"]', min: 4 },
+    // 输入行，`config-view` 的响应到达才渲染）真的出现。
+    // density: 'default' = 本路由是**密度豁免页**（用户显式要求设置页保持 antd 默认密度），
+    // 故密度断言期望 14px；其余所有格子省略该字段 = 期望 compact 12px。改这一档必须同时改这里，
+    // 否则「设置页被别的路由的紧凑主题罩住」这类回归不会被发现。
+    { name: 'settings', path: `/repos/${ctx.repo.id}/settings`, ready: '[data-testid="git-executable-card"]', content: '[data-testid^="config-input-"]', min: 4, density: 'default' },
     { name: 'stashes', path: `/repos/${ctx.repo.id}/stashes`, ready: '[data-testid="stash-save-button"]', content: '[data-testid^="row-stash-"]', min: 1 },
     // status：manage-changelists 是工具行按钮；内容级门等变更行（staged/unstaged/untracked 三组任一）
     { name: 'status', path: `/repos/${ctx.repo.id}/status`, ready: '[data-testid="manage-changelists"]', content: '[data-testid^="row-staged-"], [data-testid^="row-unstaged-"], [data-testid^="row-untracked-"]', min: 1 },
@@ -1195,6 +1304,8 @@ async function prepareCell(page, url, cell, theme, timeout, base) {
  * **永远不算中断**（不重试，直接判红）：
  *   - 页面级横向溢出 —— 这是本脚本要给的结论本身（**已测量并溢出 = 结论**，绝不重试）；
  *   - 例外断言失败（两栏堆叠 / Monaco 拖动没位移 / tooltip 该弹没弹或不该弹却弹了）——同样是结论；
+ *   - **密度断言失败**（`密度断言:` —— 该格文本的主导字号不是期望档）——同样是结论：密度档位不会
+ *     因为再导航一次而改变，重试只会把一次明确的错误洗成运气；
  *   - 内容级命中数低于下限（`命中 N 条 < 下限 M`，N > 0）—— 说明量到的是「部分加载」的页面，也是结论。
  *
  * 注意一处**文案容易读错的地方**：内容级门**一条都没命中**时（`内容级就绪选择器未出现…`，命中数 0）
@@ -1216,6 +1327,7 @@ function isStall(record) {
   const measured = record.scrollWidth !== null && record.clientWidth !== null;
   if (measured && record.scrollWidth > record.clientWidth + OVERFLOW_TOLERANCE) return false;
   if (/例外断言:/.test(reason)) return false;
+  if (/密度断言:/.test(reason)) return false;
   if (/命中 \d+ 条 < 下限/.test(reason)) return false;
   return /就绪选择器未出现|page\.goto: Timeout|page\.waitForSelector: Timeout|Execution context was destroyed|主题未生效/.test(reason);
 }
@@ -1293,6 +1405,11 @@ async function run(opts, pw, exe) {
               if (notReady === null && (cell.name === 'browse' || cell.name === 'log-select')) {
                 extra = await assertPanes(page, width, collapseBelow);
               }
+              // 按路由的密度断言与溢出断言**同一时刻、同一页面状态**下取样（interact 之后）：
+              // 弹窗态 / 展开态格子的密度也要被看到。期望值由路由表决定（设置页 14，其余 12）。
+              const density =
+                notReady === null ? await assertDensity(page, cell, cell.density === 'default' ? 14 : 12) : null;
+              record.density = density;
               const overflow = await assertNoPageOverflow(page, theme, themeProbe);
               if (notReady !== null) {
                 overflow.status = 'fail';
@@ -1305,6 +1422,11 @@ async function run(opts, pw, exe) {
               if (extra !== null && extra.status === 'fail') {
                 overflow.status = 'fail';
                 overflow.reason = `${overflow.reason ?? ''} | 例外断言: ${extra.reason}`.trim();
+              }
+              // 密度错档是**结论**：与溢出、例外断言同级参与判定（见 isStall 的永不重试清单）
+              if (density !== null && density.status === 'fail') {
+                overflow.status = 'fail';
+                overflow.reason = `${overflow.reason ?? ''} | 密度断言: ${density.reason}`.trim();
               }
               Object.assign(record, overflow, { extra });
             } catch (error) {
@@ -1370,7 +1492,12 @@ function report(results, opts) {
   } else {
     for (const r of failed) {
       console.log(`  ✗ ${r.theme}/${r.width}px ${r.cell}: ${r.reason}`);
-      console.log(`      scrollWidth=${r.scrollWidth} clientWidth=${r.clientWidth} 内容级就绪命中=${r.readyItems ?? '—'}`);
+      console.log(
+        `      scrollWidth=${r.scrollWidth} clientWidth=${r.clientWidth} 内容级就绪命中=${r.readyItems ?? '—'}` +
+          (r.density === null || r.density === undefined
+            ? ''
+            : ` 密度=期望${r.density.expected}px/实测主导${r.density.count12 >= r.density.count14 ? 12 : 14}px（12px ${r.density.count12} 个、14px ${r.density.count14} 个）`),
+      );
       for (const o of r.offenders ?? []) {
         console.log(`      越界元素: <${o.tag}> right=${o.right} width=${o.width} testid=${o.testid} text=${JSON.stringify(o.text)}`);
       }
@@ -1412,6 +1539,42 @@ function report(results, opts) {
     console.log(`\n环境中断重试（判据见 isStall；首轮失败原因逐格列出）: ${retried.length} 格 —— 重试后通过 ${recovered} 格 / 两次均失败 ${retried.length - recovered} 格`);
     for (const r of retried) {
       console.log(`  - ${r.theme}/${r.width}px ${r.cell}: ${r.status === 'pass' ? '重试后通过' : '两次均失败'}｜首轮：${String(r.firstAttemptReason ?? '').slice(0, 140)}`);
+    }
+  }
+  // 按路由的**密度断言**结果逐格可见：期望档、各宽度的实测主导字号、12px/14px 两档计数。
+  // 没有这一段，「密度档位对不对」只存在于明细 JSON 里 —— 而本轮的 Critical 缺陷正是
+  // 「溢出矩阵全绿、密度却整条路由错档」，判定必须和证据一起出现在人读的产出里。
+  // `no-sample`（该格无可见文本节点）单独列出：它不判红，但**逐格披露**，不允许静默跳过。
+  const densityRows = results.filter((r) => r.density !== null && r.density !== undefined);
+  if (densityRows.length > 0) {
+    console.log('\n按路由的密度断言（判据 = 该格文本的**主导**字号；期望 compact 12px / 设置页 14px）:');
+    for (const name of [...new Set(densityRows.map((r) => r.cell))]) {
+      const rows = densityRows.filter((r) => r.cell === name);
+      const expected = rows[0].density.expected;
+      const perWidth = opts.widths
+        .map((w) => {
+          const row = rows.find((r) => r.width === w);
+          if (row === undefined) return '—';
+          if (row.density.status === 'no-sample') return '无样本';
+          return `${row.density.count12 >= row.density.count14 ? 12 : 14}`;
+        })
+        .join('/');
+      const counts = opts.widths
+        .map((w) => {
+          const row = rows.find((r) => r.width === w);
+          return row === undefined ? null : `${w}:${row.density.count12}/${row.density.count14}`;
+        })
+        .filter((v) => v !== null)
+        .join(' ');
+      const bad = rows.filter((r) => r.density.status === 'fail').length;
+      console.log(
+        `  ${bad === 0 ? '✅' : `❌ ${bad} 格`} ${name.padEnd(34)} 期望 ${expected}px  各档主导 ${perWidth}  （12px/14px 计数 ${counts}）`,
+      );
+    }
+    const noSample = densityRows.filter((r) => r.density.status === 'no-sample');
+    if (noSample.length > 0) {
+      console.log(`\n密度未被断言（.monaco-editor 之外无可见文本节点；逐格列出，不判红也不静默跳过）: ${noSample.length} 格`);
+      for (const r of noSample.slice(0, 12)) console.log(`  - ${r.theme}/${r.width}px ${r.cell}`);
     }
   }
   if (opts.json !== null) {
@@ -1457,6 +1620,10 @@ function buildMatrix(results, opts) {
     `# 横向溢出断言矩阵（${opts.label}）`,
     '',
     `断言：\`documentElement.scrollWidth <= clientWidth + 1\``,
+    '',
+    '本轮的判定**含按路由的密度断言**（该格文本的主导基准字号：compact 12px / 设置页 14px，判据见 `assertDensity()`）——',
+    '它参与判定且**不参与重试**，故矩阵里的 `❌ 非溢出失败（…密度断言…）` 是密度错档，不是溢出；逐格密度实测见',
+    '汇总的「按路由的密度断言」一节与明细 JSON 的 `density` 字段。',
     '',
     '记号：`✅` 一次通过；`✅↻` 首轮被**环境中断**、整格重跑一次后通过（明细 JSON 里 `attempts=2`，判据见 `isStall()`）；',
     '`❌ sw>cw` **已测量并溢出** —— 结论，永不重试；`❌ 非溢出失败（原因）` 量到了数字但**没有**横向溢出，',
