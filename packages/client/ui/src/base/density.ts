@@ -15,7 +15,7 @@ export type DensityMode = 'light' | 'dark';
 /**
  * 紧凑密度的字号 token：**只给 `fontSizeSM`**，其余两档交给 compactAlgorithm 派生，实效即 14→12 / 12→11 / 16→14。
  *
- * 为什么不能写 `fontSize`（antd 6.6.1 实测，请勿「顺手补回」）：
+ * 为什么不能写 `fontSize`（antd 6.6.3 实测，请勿「顺手补回」）：
  *   `compactAlgorithm` **会覆盖**传入的 `fontSize`——它取「基础算法派生出的 fontSizeSM」作为新基准再推导整档字号
  *   （`es/theme/themes/compact/index.js`：`const fontSize = mergedMapToken.fontSizeSM;` 后 `genFontMapToken(fontSize)`）。
  *   所以显式 `fontSize: 12` 会先让基础算法把 fontSizeSM 派生成 10，compact 再以 10 为基准

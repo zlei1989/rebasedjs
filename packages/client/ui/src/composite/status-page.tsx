@@ -990,8 +990,8 @@ export function StatusPage({
   };
 
   // 页面根：PageShell 自带纵向 Flex + width:100% + minWidth:0 + height:100%。
-  // StatusPage 是**被嵌入**的页面（两端宿主 apps/web-koa/src/pages/status.tsx:129 与
-  // apps/web-next/app/repos/[repoId]/status/page.tsx:131 都是自带布局根的 <Flex vertical align="flex-start">），
+  // StatusPage 是**被嵌入**的页面（两端宿主 apps/web-koa/src/pages/status.tsx 与
+  // apps/web-next/app/repos/[repoId]/status/page.tsx 都是自带布局根的紧凑 `PageShell`），
   // 故按 Ruling P1 传 density="default"：只豁免密度，不在这里施加紧凑主题。
   // gap/padding 照抄既有值 16（PageShell 默认不落 style，不传会静默丢掉内距）。
   return (

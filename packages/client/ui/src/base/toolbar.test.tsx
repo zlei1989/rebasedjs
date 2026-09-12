@@ -1,7 +1,7 @@
 /**
  * Toolbar 测试：断言换行不变量、对齐映射与默认不落间距。
  *
- * antd v6 事实（与 PageShell 同一实测结论）：本仓库装的 antd 6.6.1 中 `Flex` **不写内联布局样式**，
+ * antd v6 事实（与 PageShell 同一实测结论）：本仓库装的 antd 6.6.3 中 `Flex` **不写内联布局样式**，
  *   改由类名提供（实测产出 `<div class="ant-flex ant-flex-align-center ant-flex-wrap-wrap" style="width:100%;min-width:0px">`，
  *   内联 flexWrap/justifyContent/alignItems 全为空串，而 jsdom 计算值（cssinjs 已注入 <style>）为实际布局值）。
  *   故：antd 由 props 控制的三项（flexWrap / justifyContent / alignItems）断言 getComputedStyle 计算值；

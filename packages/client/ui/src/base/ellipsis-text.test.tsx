@@ -2,7 +2,7 @@
  * EllipsisText 测试：断言文本渲染、等宽开关、自带 minWidth:0（flex 内截断的前提）、
  * maxWidth 守卫（含 maxWidth={0}）、**ellipsis 启用标记**与 **type / strong 透传（各成对正/反断言）**。
  *
- * 这里能断什么、不能断什么（antd 6.6.1 实测结论）：
+ * 这里能断什么、不能断什么（antd 6.6.3 实测结论）：
  *
  * **能断 —— 「ellipsis 已启用」这一启用标记**由类名与计算样式承载：
  *   根元素带 `ant-typography-ellipsis` 与 `ant-typography-ellipsis-single-line`（截断 CSS 的唯一载体，
@@ -45,7 +45,7 @@ describe('EllipsisText', () => {
   // type 透传（Ruling P17）：次要色长文本转进本原语后必须仍然保持次要色。
   // 判别性来自**成对断言**：只断「传了 type 有类名」无法区分「真的转发」与「实现里写死了 type="secondary"」；
   // 反向再断「不传 type 时该类名缺席」，才把两条实现路径分开。
-  // 类名是实测口径（antd 6.6.1 用 CSS 类承色，非内联样式）：
+  // 类名是实测口径（antd 6.6.3 用 CSS 类承色，非内联样式）：
   //   传 type="secondary" → 根 <span> 类名含 `ant-typography-secondary`（并含 ant-typography-ellipsis*）；
   //   不传 type        → 类名只有 `ant-typography ant-typography-ellipsis ant-typography-ellipsis-single-line` 等，无 `-secondary`。
   it('type 转发到 antd：传 secondary 有承色类，未传则无该类', () => {
@@ -64,7 +64,7 @@ describe('EllipsisText', () => {
   // 必须仍然加粗——不能为了可截断而丢掉字重，也不能为保字重而放弃收缩。
   // 与 type 同构的**成对断言**：只断「传了 strong 有痕迹」无法区分「真转发」与「实现里写死了 strong」；
   // 反向再断「不传 strong 时该痕迹缺席」，才把两条实现路径分开。
-  // 承载方式与 type 不同，是**实测结论**（antd 6.6.1 实测，见下方 outerHTML）：
+  // 承载方式与 type 不同，是**实测结论**（antd 6.6.3 实测，见下方 outerHTML）：
   //   type   → 根 <span> 上的 CSS 类 `ant-typography-secondary`；
   //   strong → **不是**类名，而是 antd 在根 <span> 内**再包一层 <strong>** 承载字重（根类名逐字不变）。
   //   传 strong        → <span class="ant-typography ant-typography-ellipsis ant-typography-ellipsis-single-line …"

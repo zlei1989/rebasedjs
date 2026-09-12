@@ -1,6 +1,8 @@
 /**
  * 长文本截断：长 hash / 长路径 / 长分支名的统一呈现。
- * 做什么：Typography.Text + ellipsis，支持等宽、语义色（type）、加粗语义（strong）与最大宽度，可选 hover 显示完整值。
+ * 做什么：Typography.Text + ellipsis，支持等宽、语义色（type）、加粗语义（strong）与最大宽度，
+ *        可选 hover 显示完整值 —— **前提是文本真的溢出**（antd 只在溢出时才启用/渲染 tooltip，
+ *        短文本传了 title 也不会弹浮层）；
  * 怎么做：用 antd 原生 ellipsis={{ tooltip }}（不自行包 Tooltip，少一层节点）；
  *        自身带 minWidth:0 —— flex 容器内截断生效的前提是父级链上都有 minWidth:0，
  *        父级由 PageShell / SplitPane 保证，本组件保证自身；
@@ -20,17 +22,23 @@ export interface EllipsisTextProps {
    * 依赖「传了 title 就一定有 hover 提示」。
    */
   title?: string;
-  /** 等宽呈现（hash 用） */
+  /**
+   * 等宽呈现（hash / ref 用）。
+   * 注意：本 prop **映射到 antd 的 `code`**（内部渲染 `<Typography.Text code>`），不只是换字体 ——
+   * `code` 会带上内联代码样式的**底色与内边距**（一枚芯片观感），属**视觉变更**。
+   * 故只有当原始标记本来就是 `code` 时才可以传 `mono`；给分支名、上游名这类纯等宽文本补 `mono`
+   * 会凭空多出底色（Ruling P17(b)：曾有三处站点因此被回退）。
+   */
   mono?: boolean;
   /**
    * 语义色，原样转发给 `Typography.Text`（antd 以 CSS 类表达，如 secondary → `ant-typography-secondary`，
-   * 6.6.1 非内联样式）。
+   * 6.6.3 非内联样式）。
    * 类型取 antd 自己的 `TextProps['type']`（不在此手写联合类型）：antd 增删取值时本组件自动跟随、不会漂移。
    */
   type?: TextProps['type'];
   /**
    * 加粗语义（字重），原样转发给 `Typography.Text`。
-   * 承载方式与 `type` 不同（antd 6.6.1 实测）：`type` 是根 `<span>` 上的 CSS 类（`ant-typography-secondary`），
+   * 承载方式与 `type` 不同（antd 6.6.3 实测）：`type` 是根 `<span>` 上的 CSS 类（`ant-typography-secondary`），
    * `strong` 则是 antd 在根 `<span>` 内**再包一层 `<strong>`**，根类名逐字不变。
    * 类型取 antd 自己的 `TextProps['strong']`（不在此手写 `boolean`）：antd 改这个 prop 的形状时
    * 本组件自动跟随、不会漂移。加它的理由与 `type` 相同 —— 使「截断」与「原本就是加粗」不必二选一
