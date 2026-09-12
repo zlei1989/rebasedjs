@@ -139,6 +139,8 @@ function listyRowHeightTheme(fontHeight: number): ThemeConfig {
  * 无 refs 时返回 null（不留空壳 DOM）。
  */
 function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): React.ReactNode {
+  // chip 文字色走主题 token（原 #fff 为硬编码，亮/暗主题下都用「实色底 + 反白字」）
+  const { token } = theme.useToken();
   const { branches, tags } = classifyRefs(refs);
   /** chip 通用样式：可收缩 + 省略号（空间不足时看到 `…`，hover 由 title 给出全名） */
   const chipStyle: React.CSSProperties = {
@@ -160,7 +162,7 @@ function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): Re
           ...chipStyle,
           backgroundColor: colorForRef(b),
           borderColor: 'transparent',
-          color: '#fff',
+          color: token.colorTextLightSolid,
         }}
       >
         {b}

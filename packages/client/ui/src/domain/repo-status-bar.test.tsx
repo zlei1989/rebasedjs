@@ -14,12 +14,13 @@ describe('RepoStatusBar', () => {
     expect(screen.getByText('main')).toBeInTheDocument();
   });
 
-  it('ahead/behind 非零时渲染 incoming/outgoing 圆点徽标（蓝/绿）', () => {
+  it('ahead/behind 非零时渲染 incoming/outgoing 圆点徽标（antd Badge 预设色 blue/green）', () => {
     render(<RepoStatusBar status={makeStatus({ ahead: 3, behind: 2 })} />);
     const incoming = screen.getByTestId('incoming');
     const outgoing = screen.getByTestId('outgoing');
-    expect(incoming).toHaveStyle({ backgroundColor: '#389FD6' });
-    expect(outgoing).toHaveStyle({ backgroundColor: '#59A869' });
+    // 走 antd Badge 语义色（原手搓 span + 硬编码 #389FD6/#59A869）：色类落在内层圆点上，尺寸由组件给
+    expect(incoming.querySelector('.ant-badge-status-dot')).toHaveClass('ant-badge-color-blue');
+    expect(outgoing.querySelector('.ant-badge-status-dot')).toHaveClass('ant-badge-color-green');
   });
 
   it('徽标 tooltip 文本为 "N incoming and M outgoing commits"', async () => {

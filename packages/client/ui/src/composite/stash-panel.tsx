@@ -318,7 +318,7 @@ export function StashPanel({
             将检出目标分支并应用该贮藏（贮藏保留，不弹出）
           </Typography.Text>
           <Tooltip title="目标本地分支：仅列本地分支，远程分支不会出现在选项里">
-            <Select size="small"
+            <Select
               data-testid="unstash-as-branch"
               placeholder="选择本地分支"
               style={{ width: '100%' }}

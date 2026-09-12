@@ -191,7 +191,7 @@ export function TagPanel({ tags, onAction, acting }: TagPanelProps): React.React
           onConfirm={() => onAction({ action: 'pushAll' })}
         >
           <Tooltip title="一次性把本地全部标签推到远程（标签多时耗时较长，远程同名会被拒绝）">
-            <Button data-testid="tag-push-all" loading={acting}>
+            <Button data-testid="tag-push-all" size="small" loading={acting}>
               推送全部
             </Button>
           </Tooltip>

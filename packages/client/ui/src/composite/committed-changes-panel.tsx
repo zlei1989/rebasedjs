@@ -102,7 +102,6 @@ function CommitRow({
       gap={8}
       style={{
         // 行内边距已移除（改用 Listy 行容器的 antd 默认）：那圈内边距落在包装 div 上，不属命中区/选中底色区（已由用户裁定接受）
-        padding: '4px 8px',
         cursor: onSelectCommit ? 'pointer' : undefined,
         backgroundColor: selected ? token.controlItemBgActive : undefined,
       }}
@@ -148,6 +147,8 @@ function TreeNodeRow({
   onToggle: (path: string) => void;
   onOpenFile?: (path: string, hash: string) => void;
 }): React.ReactNode {
+  // 折叠图标字号走主题档位（原硬编码 10px 是全仓最后一处手写字号）
+  const { token } = theme.useToken();
   if (node.type === 'dir') {
     const open = !collapsed.has(node.path);
     return (
@@ -161,7 +162,7 @@ function TreeNodeRow({
             style={{ paddingLeft: depth * 16, cursor: 'pointer' }}
             onClick={() => onToggle(node.path)}
           >
-            {open ? <CaretDownOutlined style={{ fontSize: 10 }} /> : <CaretRightOutlined style={{ fontSize: 10 }} />}
+            {open ? <CaretDownOutlined style={{ fontSize: token.fontSizeSM }} /> : <CaretRightOutlined style={{ fontSize: token.fontSizeSM }} />}
             <FolderOutlined />
             {/* 目录名改 EllipsisText：目录名是不可断行串，长名会把本行（Flex，无 wrap）顶宽；
                 EllipsisText 自带 minWidth:0 + ellipsis，截断取代撑宽；本处无 type/fontSize/strong 等
@@ -270,6 +271,7 @@ export function CommittedChangesPanel({
                 <Tooltip title="继续向后加载下一页提交记录（追加到现有列表）">
                   <Button
                     data-testid="committed-load-more"
+                    size="small"
                     loading={loadingMore}
                     onClick={onLoadMore}
                     style={{ marginTop: 8 }}

@@ -15,6 +15,7 @@ import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SettingOutlined, Swit
 import type { RepoInfo } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { PageShell } from '../base/page-shell';
+import { Toolbar } from '../base/toolbar';
 import { relativeToHome } from './repo-page-utils';
 
 export interface RepoPageProps {
@@ -198,10 +199,11 @@ export function RepoPage({
   // 原 maxWidth:720 会人为收窄页面（不满足横向沾满）故移除；gap/padding 照抄既有值。
   return (
     <PageShell gap={16} padding={16}>
-      <Flex gap={8} align="center" wrap>
+      <Toolbar gap={8}>
         <Tooltip title="仓库路径：支持 ~ 前缀，回车等同点「打开」">
           <Input
             placeholder="仓库路径"
+            size="small"
             value={openPath}
             onChange={(e) => setOpenPath(e.target.value)}
             onPressEnter={submitOpen}
@@ -209,21 +211,21 @@ export function RepoPage({
           />
         </Tooltip>
         <Tooltip title="打开该路径：校验并注册为最近仓库，随后进入提交日志页">
-          <Button type="primary" icon={<FolderOpenOutlined />} onClick={submitOpen}>
+          <Button type="primary" size="small" icon={<FolderOpenOutlined />} onClick={submitOpen}>
             打开
           </Button>
         </Tooltip>
         {/* 克隆/初始化：入口按钮仅在容器注入回调时渲染（端点未接线时不出现死控件） */}
         {onClone ? (
           <Tooltip title="从远程 URL 克隆一个新仓库到本地目录">
-            <Button icon={<SwitcherOutlined />} loading={cloning} onClick={() => setCloneOpen(true)}>
+            <Button icon={<SwitcherOutlined />} size="small" loading={cloning} onClick={() => setCloneOpen(true)}>
               克隆
             </Button>
           </Tooltip>
         ) : null}
         {onInit ? (
           <Tooltip title="在指定目录新建（git init）一个空仓库">
-            <Button icon={<PlusOutlined />} loading={initializing} onClick={() => setInitOpen(true)}>
+            <Button icon={<PlusOutlined />} size="small" loading={initializing} onClick={() => setInitOpen(true)}>
               初始化
             </Button>
           </Tooltip>
@@ -233,6 +235,7 @@ export function RepoPage({
           <Tooltip title="打开应用设置：界面主题、保护分支模式、Git 可执行文件与账户（对所有仓库生效）">
             <Button
               icon={<SettingOutlined />}
+              size="small"
               data-testid="open-settings-button"
               onClick={() => onOpenSettings()}
             >
@@ -240,7 +243,7 @@ export function RepoPage({
             </Button>
           </Tooltip>
         ) : null}
-      </Flex>
+      </Toolbar>
       {visible.length === 0 ? (
         <EmptyState title="暂无最近仓库" description="输入路径打开一个 Git 仓库" />
       ) : (
@@ -269,12 +272,14 @@ export function RepoPage({
                 style={clickable ? { cursor: opening ? 'progress' : 'pointer' } : undefined}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{repo.name}</div>
-                  <Typography.Text type="secondary">{relativeToHome(repo.path, homeDir)}</Typography.Text>
+                  <Typography.Text strong>{repo.name}</Typography.Text>
+                  <div>
+                    <Typography.Text type="secondary">{relativeToHome(repo.path, homeDir)}</Typography.Text>
+                  </div>
                 </div>
                 {/* 打开中：打开含 POST 往返 + 配置落盘 + 最近列表刷新，有耗时需即时反馈，否则点击似无响应 */}
                 {opening ? (
-                  <Flex align="center" gap={6} data-testid="repo-opening">
+                  <Flex align="center" gap="small" data-testid="repo-opening">
                     <Spin size="small" />
                     <Typography.Text type="secondary">打开中…</Typography.Text>
                   </Flex>
@@ -289,7 +294,7 @@ export function RepoPage({
                   >
                     <Popconfirm title="移除该仓库？" okText="确定" cancelText="取消" onConfirm={() => onRemove(repo.id)}>
                       <Tooltip title="从最近列表移除（仅移出列表，不删除磁盘上的仓库）">
-                        <Button data-testid="repo-remove" type="text" disabled={opening} icon={<DeleteOutlined />} />
+                        <Button data-testid="repo-remove" type="text" size="small" disabled={opening} icon={<DeleteOutlined />} />
                       </Tooltip>
                     </Popconfirm>
                   </span>

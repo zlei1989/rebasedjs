@@ -453,8 +453,10 @@ export function LogPage({
                 </Button>
               </Tooltip>
             ) : null}
-            {/* minWidth:0 + overflow:hidden 让长仓库名可被压缩并走 ellipsis，而不是把右端操作挤出屏幕 */}
-            <span style={{ fontWeight: 600, padding: '4px 8px', whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{repoName}</span>
+            {/* minWidth:0 让长仓库名可被压缩并走 ellipsis，而不是把右端操作挤出屏幕；行内边距与字号交 antd（原手写 padding/fontWeight） */}
+            <Typography.Text strong ellipsis={{ tooltip: repoName }} style={{ minWidth: 0 }}>
+              {repoName}
+            </Typography.Text>
             <RepoStatusBar status={status} />
             {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
             {operation && onAbortOperation ? (
@@ -487,6 +489,7 @@ export function LogPage({
                   <Button
                     aria-label="撤销最近提交"
                     type="text"
+                    size="small"
                     icon={<RollbackOutlined />}
                     loading={undoCommitting}
                   />
@@ -499,6 +502,7 @@ export function LogPage({
                 <Button
                   aria-label="变更"
                   type="text"
+                  size="small"
                   icon={<DiffOutlined />}
                   onClick={onOpenStatus}
                 />
@@ -510,6 +514,7 @@ export function LogPage({
                 <Button
                   aria-label="分支"
                   type="text"
+                  size="small"
                   icon={<BranchesOutlined />}
                   onClick={onOpenBranches}
                 />
@@ -521,6 +526,7 @@ export function LogPage({
                 <Button
                   aria-label="合并"
                   type="text"
+                  size="small"
                   icon={<MergeOutlined />}
                   onClick={onOpenMerge}
                 />
@@ -532,6 +538,7 @@ export function LogPage({
                 <Button
                   aria-label="贮藏"
                   type="text"
+                  size="small"
                   icon={<InboxOutlined />}
                   onClick={onOpenStashes}
                 />
@@ -543,6 +550,7 @@ export function LogPage({
                 <Button
                   aria-label="设置"
                   type="text"
+                  size="small"
                   icon={<SettingOutlined />}
                   onClick={onOpenSettings}
                 />
@@ -560,7 +568,7 @@ export function LogPage({
                   title="更多功能：只读浏览（溯源/历史/已提交/搜索）、本地操作与远程操作统一收在这里"
                   open={moreMenuOpen ? false : undefined}
                 >
-                  <Button aria-label="更多" type="text" icon={<MoreOutlined />} />
+                  <Button aria-label="更多" type="text" size="small" icon={<MoreOutlined />} />
                 </Tooltip>
               </Dropdown>
             ) : null}
@@ -568,11 +576,12 @@ export function LogPage({
         </Col>
       </Row>
       {/* 过滤/分页行：仅容器同时注入过滤回调时渲染（过滤受控，Enter/失焦提交防每击键重查）；
+          容器只做「横排 + token 分隔线」的布局宿主，行内边距交页面栅格（不手调）；
           窄屏（≤768）允许换行，避免输入框/开关被压成竖排文字 */}
       {onFiltersChange !== undefined ? (
         <div
           data-testid="log-filter-row"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}
         >
           <Tooltip title="按作者过滤提交：支持姓名或邮箱片段，回车或失焦才生效">
             <Input
@@ -628,7 +637,6 @@ export function LogPage({
                   disabled={initialLoading === true || !hasMore}
                   loading={initialLoading === true || loadingMore}
                   onClick={onLoadMore}
-                  style={{ marginLeft: 'auto' }}
                 >
                   {initialLoading === true || hasMore ? '加载更多' : '已到最早的提交'}
                 </Button>
@@ -764,7 +772,8 @@ export function LogPage({
         title={`变更集（${changesEntry?.shortHash ?? (changesHash === undefined || changesHash === '' ? '' : changesHash.slice(0, 7))}）`}
         open={changesHash !== undefined && changesHash !== ''}
         okText="关闭"
-        cancelButtonProps={{ style: { display: 'none' } }}
+        // 只有一个「关闭」键：走 footer 语义（同 stash-panel），不再用内联样式藏取消键
+        footer={(_, { OkBtn }) => <OkBtn />}
         onOk={onCloseChanges}
         onCancel={onCloseChanges}
       >

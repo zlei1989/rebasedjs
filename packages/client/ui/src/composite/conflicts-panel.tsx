@@ -257,6 +257,7 @@ export function ConflictsPanel({
           <span data-testid="continue-merge-wrap">
             <Button
               type="primary"
+              size="small"
               disabled={remaining > 0}
               loading={continuing}
               onClick={onContinue}

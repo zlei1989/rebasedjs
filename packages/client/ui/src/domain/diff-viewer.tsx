@@ -64,6 +64,7 @@ export function DiffViewer({
       <Flex align="center" gap={12} wrap="wrap">
         <Tooltip title="差异呈现方式：左右两栏逐行对照，或单栏里成对显示增删行">
           <Segmented
+            size="small"
             options={[
               { label: '并排', value: 'side' },
               { label: '行内', value: 'inline' },
@@ -87,7 +88,7 @@ export function DiffViewer({
         )}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <Tooltip title="忽略空白差异：开启后缩进与行尾空白的改动不计入差异，只看实质内容变化">
-            <Switch checked={ignoreWhitespace} onChange={(checked) => onToggleWhitespace?.(checked)} />
+            <Switch size="small" checked={ignoreWhitespace} onChange={(checked) => onToggleWhitespace?.(checked)} />
           </Tooltip>
           忽略空白
         </span>

@@ -614,6 +614,7 @@ function CommitCard({
         <Tooltip title="提交信息：首行作为标题；amend 模式不会沿用原提交信息，必须重新填写">
           <Input.TextArea
             data-testid="commit-message"
+            size="small"
             autoSize={{ minRows: 2, maxRows: 6 }}
             value={message}
             onChange={(e) => setMessage(e.target.value)}

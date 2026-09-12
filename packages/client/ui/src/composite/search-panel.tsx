@@ -89,7 +89,7 @@ function BranchQuickSearch({
         {/* 输入即滤：说明作用对象（下方分支列表）与前提（纯前端过滤，不发请求） */}
         <Tooltip title="按分支名过滤下方列表：输入子串即时筛选（纯前端过滤，不发请求），清空恢复全部">
           <Input
-            data-testid="branch-quick-input"
+            data-testid="branch-quick-input" size="small"
             placeholder="输入分支名（文本即滤）"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -159,7 +159,7 @@ export function SearchPanel({
         {/* 关键词输入框：说明回车等价操作与检索范围（模式由下方 Segmented 决定） */}
         <Tooltip title="输入提交关键词：回车等同点「搜索」；命中范围取决于下方所选模式，空白关键词不发起检索">
           <Input
-            data-testid="search-input"
+            data-testid="search-input" size="small"
             placeholder="搜索提交信息或内容"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -173,7 +173,7 @@ export function SearchPanel({
           <span style={{ display: 'inline-flex' }}>
             <Button
               type="primary"
-              data-testid="search-submit"
+              data-testid="search-submit" size="small"
               // antd 对双汉字按钮默认自动插空格「搜 索」：关闭保证按钮可见文本与无障碍名精确为「搜索」
               autoInsertSpace={false}
               disabled={q.trim() === ''}
@@ -187,7 +187,7 @@ export function SearchPanel({
       </Toolbar>
       {/* 模式开关：说明两个选项各自的检索口径（文字标签本身不自解释差异） */}
       <Tooltip title="切换检索模式：信息 grep 匹配提交信息全文，内容 pickaxe 匹配新增/删除的内容行">
-        <Segmented options={MODE_OPTIONS} value={mode} onChange={(v) => setMode(v as SearchMode)} />
+        <Segmented size="small" options={MODE_OPTIONS} value={mode} onChange={(v) => setMode(v as SearchMode)} />
       </Tooltip>
       {searching ? (
         <Spin data-testid="search-loading" />
