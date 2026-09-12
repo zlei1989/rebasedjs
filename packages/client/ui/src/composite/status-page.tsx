@@ -1012,20 +1012,20 @@ export function StatusPage({
               title="新建、重命名、设为默认或删除变更列表（默认列表不可删除/设默认）"
               open={manageMenuOpen ? false : undefined}
             >
-              <Button data-testid="manage-changelists">管理列表</Button>
+              <Button size="small" data-testid="manage-changelists">管理列表</Button>
             </Tooltip>
           </Dropdown>
         )}
         {onShelve !== undefined && (
           <Tooltip title="把工作区与暂存区的全部改动保存为具名搁置，之后可从搁置列表恢复">
-            <Button data-testid="action-shelve" onClick={() => setPageAction({ kind: 'shelf' })}>
+            <Button size="small" data-testid="action-shelve" onClick={() => setPageAction({ kind: 'shelf' })}>
               搁置
             </Button>
           </Tooltip>
         )}
         {onStash !== undefined && (
           <Tooltip title="把当前全部改动存入 git 贮藏（stash），工作区随之回到干净状态">
-            <Button data-testid="action-stash" onClick={() => setPageAction({ kind: 'stash' })}>
+            <Button size="small" data-testid="action-stash" onClick={() => setPageAction({ kind: 'stash' })}>
               存入贮藏
             </Button>
           </Tooltip>
