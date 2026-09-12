@@ -653,6 +653,7 @@ function CommitCard({
           {onAmendSpecific !== undefined ? (
             <Tooltip title="按提交标题选择要改写的历史提交：选中后本次提交 amend 到该提交，并自动取消上面的 amend 开关">
               <Select
+                size="small"
                 data-testid="amend-target-select"
                 /* 固定下限 220 → 0（Ruling P14）：本行是横向 Flex + wrap，Select 的宽度由内容测量决定；
                    下限 220 在 360px 视口（内容盒约 313~328px，含纵向滚动条更窄）与同行控件共享一行时会溢出。
@@ -694,6 +695,7 @@ function CommitCard({
               <span>
                 <Button
                   type="primary"
+                  size="small"
                   data-testid="commit-button"
                   loading={committing}
                   disabled={message.trim() === ''}
@@ -716,6 +718,7 @@ function CommitCard({
               >
                 <span>
                   <Button
+                    size="small"
                     data-testid="commit-and-push-button"
                     loading={committing}
                     disabled={message.trim() === '' || amendTargetHash !== ''}

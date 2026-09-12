@@ -72,6 +72,11 @@ function SaveForm({ acting, onAction }: { acting?: boolean; onAction: (action: S
       <Toolbar gap={8}>
         <Tooltip title="贮藏说明：写入 stash message，留空则该贮藏以 WIP 命名">
           <Input
+            // size="small"：本行此前只剩这两个控件还是默认档（卡片 Card size="small"、下方行内操作全 size="small"）。
+            // 紧凑密度下实测：默认档输入 27.6px / 按钮 28px，改 small 后输入 21.6px / 按钮 21px（与下方行按钮 21px、
+            // 两个勾选 20px 同量级），混排时这一行会比同页控件高出一圈。
+            // 两个勾选不参与：antd 6.6.3 的 Checkbox 没有 size 属性（属固定规格，无档位可切）。
+            size="small"
             data-testid="stash-message-input"
             placeholder="贮藏说明（可空）"
             value={message}
@@ -102,6 +107,7 @@ function SaveForm({ acting, onAction }: { acting?: boolean; onAction: (action: S
         <Tooltip title="把当前工作区改动存为一个贮藏条目，随后工作区回到干净状态">
           <Button
             type="primary"
+            size="small"
             data-testid="stash-save-button"
             loading={acting}
             onClick={submit}
