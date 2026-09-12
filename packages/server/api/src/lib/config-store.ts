@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Changelist, RepoInfo, SettingsState } from '@rebased/contracts';
+import { ServiceError } from '@rebased/contracts';
 
 /** 单仓库的变更列表簿记：lists 为列表定义；assignments 为 路径 → listId */
 export interface ChangelistBook {
@@ -47,8 +48,21 @@ function configFile(): string {
 export function loadConfig(): AppConfig {
   const file = configFile();
   if (!existsSync(file)) return structuredClone(DEFAULTS);
-  const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<AppConfig>;
-  return { ...structuredClone(DEFAULTS), ...parsed, settings: { ...DEFAULTS.settings, ...parsed.settings } };
+  // 容忍外部工具写入的 UTF-8 BOM：PowerShell 5.1 的 Set-Content/Out-File/ConvertTo-Json 默认带 BOM，
+  // 而 `JSON.parse` 遇到 U+FEFF 会直接抛 SyntaxError——该异常冒到路由层会被误报成
+  // 「请求体不是合法 JSON」的 400 并让全站不可用（冒烟 D-42 实测事故；应用自身写盘不产 BOM）。
+  const text = readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
+  try {
+    const parsed = JSON.parse(text) as Partial<AppConfig>;
+    return { ...structuredClone(DEFAULTS), ...parsed, settings: { ...DEFAULTS.settings, ...parsed.settings } };
+  } catch (error) {
+    // 配置文件真的坏了：抛可直接展示的中文原因（含路径），别让 SyntaxError 冒充「请求体不是合法 JSON」
+    throw new ServiceError(
+      'GIT_ERROR',
+      `配置文件不是合法 JSON：${file}（${error instanceof Error ? error.message : String(error)}）`,
+      { cause: error },
+    );
+  }
 }
 
 export function saveConfig(config: AppConfig): void {

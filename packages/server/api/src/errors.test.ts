@@ -21,4 +21,23 @@ describe('toServiceError', () => {
     const s = toServiceError(new Error('boom'));
     expect(s.code).toBe('GIT_ERROR');
   });
+
+  // 冒烟 D-41：index.lock 是并发写索引的瞬态竞争，不该把 raw git 英文原样弹给用户
+  it('index.lock 竞争 → STALE_LOCK(409) 且给可重试的中文提示', () => {
+    const g = new GitExitError(
+      ['add', '-A'],
+      128,
+      '',
+      'fatal: Unable to create \'D:/repo/.git/index.lock\': File exists.\n\nAnother git process seems to be running in this repository',
+    );
+    const s = toServiceError(g);
+    expect(s.code).toBe('STALE_LOCK');
+    expect(s.message).toContain('仓库正忙');
+    expect((s.context as { args: string[] }).args).toEqual(['add', '-A']);
+  });
+
+  it('其它 git 失败仍为 GIT_ERROR（不误判成锁竞争）', () => {
+    const g = new GitExitError(['status'], 128, '', 'fatal: not a git repository');
+    expect(toServiceError(g).code).toBe('GIT_ERROR');
+  });
 });

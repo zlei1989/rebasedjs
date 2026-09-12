@@ -11,10 +11,23 @@ import Koa from 'koa';
 import serve from 'koa-static';
 import { errorHandler } from './middleware/error';
 import { router } from './routes/repos';
+import { InvalidRequestBodyError } from './server-context';
 
 const app = new Koa();
 app.use(errorHandler);
-app.use(bodyParser());
+// bodyparser 的解析失败用它的 onError 钩子精确标记为 InvalidRequestBodyError：
+// 只有「请求体解析失败」会被映射成 400「请求体不是合法 JSON」，服务端内部其它 SyntaxError
+// 走 toServiceError 的 500 可读原因（冒烟 D-42）。注意 bodyparser 抛的不是 SyntaxError 实例，
+// 故不能再靠 `instanceof SyntaxError` 判断（旧写法在 koa 侧实为死分支）。
+app.use(
+  bodyParser({
+    // encoding 是该库类型的必填项，值与库内默认一致（restOpts.encoding || 'utf-8'）
+    encoding: 'utf-8',
+    onError: (err: unknown): never => {
+      throw new InvalidRequestBodyError(err);
+    },
+  }),
+);
 app.use(router.routes());
 // 生产静态托管：vite build 产物 public/（dev 由 Vite 5173 代理）；目录不存在时跳过挂载
 if (existsSync('public')) app.use(serve('public'));

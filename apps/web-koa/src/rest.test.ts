@@ -47,6 +47,18 @@ describe('web-koa REST 端点', () => {
     expect(typeof body.branch).toBe('string');
   });
 
+  // 冒烟 D-42：400「请求体不是合法 JSON」只应来自**请求体解析失败**（bodyparser 的错被标记成
+  // InvalidRequestBodyError 后才映射 400），服务端内部其它 SyntaxError 不再冒充它
+  it('错误映射：非法 JSON 请求体 → 400 INVALID_QUERY「请求体不是合法 JSON」', async () => {
+    const res = await fetch(`${base}/api/repos/open`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{ not json',
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY', message: '请求体不是合法 JSON' } });
+  });
+
   it('open 端点：空 path 返回 400 INVALID_QUERY', async () => {
     const res = await fetch(`${base}/api/repos/open`, {
       method: 'POST',

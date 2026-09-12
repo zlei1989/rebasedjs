@@ -25,13 +25,16 @@ describe('settings', () => {
     expect(getSettings().protectedBranchPatterns).toEqual(['^main$', '^release/']);
   });
 
-  it('主题补丁写入并持久化（light/dark 二值）', () => {
+  it('主题偏好补丁写入并持久化（auto/light/dark 三值）', () => {
     updateSettings({ theme: 'light' });
     expect(getSettings().theme).toBe('light');
     // 与既有补丁合并而非重置其他字段
     expect(getSettings().logInEditor).toBe(false);
     updateSettings({ theme: 'dark' });
     expect(getSettings().theme).toBe('dark');
+    // 三态：auto=跟随操作系统（服务端只持久化偏好，实际明暗由浏览器端按 prefers-color-scheme 解析）
+    updateSettings({ theme: 'auto' });
+    expect(getSettings().theme).toBe('auto');
   });
 
   it('旧配置缺 protectedBranchPatterns/theme → 归一化补空列表与暗色', () => {
@@ -58,5 +61,33 @@ describe('settings', () => {
     expect(info.exec).toBe('git');
     expect(info.ok).toBe(true);
     expect(info.version).toMatch(/^git version \S+/);
+  });
+
+  // 冒烟 D-42（实测事故）：外部工具（PS 5.1 的 Set-Content/Out-File）会给 config.json 写 UTF-8 BOM，
+  // 之前 JSON.parse 直接抛 SyntaxError → 路由层误报「请求体不是合法 JSON」的 400、全站不可用
+  it('配置文件带 UTF-8 BOM 仍可正常读取（不再让全站 400）', () => {
+    const file = join(configDir, 'config.json');
+    writeFileSync(
+      file,
+      `\uFEFF${JSON.stringify({ repos: [], settings: { logInEditor: false, recentRepoIds: [], protectedBranchPatterns: [], theme: 'auto' } })}`,
+      'utf8',
+    );
+    expect(getSettings()).toEqual({ logInEditor: false, recentRepoIds: [], protectedBranchPatterns: [], theme: 'auto' });
+  });
+
+  it('配置文件真损坏 → 抛可读中文原因的 ServiceError（而不是冒充请求体问题的 SyntaxError）', () => {
+    const file = join(configDir, 'config.json');
+    writeFileSync(file, '{ not json', 'utf8');
+    let thrown: unknown;
+    try {
+      getSettings();
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain('配置文件不是合法 JSON');
+    expect((thrown as { code?: string }).code).toBe('GIT_ERROR');
+    // 复位为默认形状，避免影响后续用例与其它测试文件
+    writeFileSync(file, JSON.stringify({ repos: [], settings: { logInEditor: true, recentRepoIds: [] } }), 'utf8');
   });
 });

@@ -5,8 +5,21 @@ import type { ParameterizedContext } from 'koa';
 import { ZodError } from 'zod';
 
 /**
+ * 请求体解析失败的唯一标记类型（与 web-next 同构）：**只有它**映射为 400「请求体不是合法 JSON」。
+ * 冒烟 D-42：此前把**任何** SyntaxError 都映射成该 400，会让「读配置/解析远端响应失败」这类
+ * 服务端内部解析异常冒充客户端请求体问题。bodyparser 层的错误在 app.ts 里被标记成它。
+ */
+export class InvalidRequestBodyError extends SyntaxError {
+  constructor(cause?: unknown) {
+    super('请求体不是合法 JSON');
+    this.name = 'InvalidRequestBodyError';
+    this.cause = cause;
+  }
+}
+
+/**
  * 统一错误出口（Koa 版）：toServiceError → ctx.status + {error:{code,message,context?}} JSON body。
- * zod 校验失败（ZodError）映射为 INVALID_QUERY（400），而非未知错误的 GIT_ERROR（500）——与 web-next 同构。
+ * zod 校验失败（ZodError）与请求体 JSON 语法失败映射为 INVALID_QUERY（400）；其余按 toServiceError ——与 web-next 同构。
  */
 export function handleApiError(error: unknown, ctx: ParameterizedContext): void {
   if (error instanceof ZodError) {
@@ -14,8 +27,7 @@ export function handleApiError(error: unknown, ctx: ParameterizedContext): void 
     ctx.body = { error: { code: 'INVALID_QUERY', message: '查询参数不合法', context: error.issues } };
     return;
   }
-  // 空/非法 JSON 请求体：与 web-next 的 400 口径统一（bodyparser 层错误在此兜底，不当 500）
-  if (error instanceof SyntaxError) {
+  if (error instanceof InvalidRequestBodyError) {
     ctx.status = httpStatusFor('INVALID_QUERY');
     ctx.body = { error: { code: 'INVALID_QUERY', message: '请求体不是合法 JSON' } };
     return;
