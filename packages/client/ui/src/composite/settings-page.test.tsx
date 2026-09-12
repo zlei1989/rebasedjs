@@ -53,6 +53,39 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
+  it('界面主题三选（自动/明亮/暗色）：点「自动」以 { theme: "auto" } 调 onPatchSettings', () => {
+    const onPatchSettings = vi.fn();
+    render(
+      <SettingsPage
+        settings={makeSettings()}
+        onPatchSettings={onPatchSettings}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+      />,
+    );
+    // 三选项都在（顺序：自动 / 明亮 / 暗色）
+    expect(screen.getByText('自动')).toBeInTheDocument();
+    expect(screen.getByText('明亮')).toBeInTheDocument();
+    expect(screen.getByText('暗色')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('自动'));
+    expect(onPatchSettings).toHaveBeenCalledTimes(1);
+    expect(onPatchSettings).toHaveBeenCalledWith({ theme: 'auto' });
+  });
+
+  it('界面主题三选：点「明亮」以 { theme: "light" } 调 onPatchSettings', () => {
+    const onPatchSettings = vi.fn();
+    render(
+      <SettingsPage
+        settings={{ ...makeSettings(), theme: 'auto' }}
+        onPatchSettings={onPatchSettings}
+        config={makeConfig()}
+        onSetConfig={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText('明亮'));
+    expect(onPatchSettings).toHaveBeenCalledWith({ theme: 'light' });
+  });
+
   it('Git 配置行显示生效值；未设置键显示"未设置"', () => {
     render(
       <SettingsPage

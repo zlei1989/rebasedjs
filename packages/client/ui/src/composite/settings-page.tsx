@@ -1,10 +1,13 @@
 /**
- * 设置页：应用设置（logInEditor 开关 + 界面主题 dark/light）+ 仓库 Git 配置（白名单键逐行：生效值展示 + local 覆盖输入 + 保存）+ GPG 提交签名（可选卡片）。
+ * 设置页：应用设置（logInEditor 开关 + 界面主题偏好 auto/light/dark）+ 仓库 Git 配置（白名单键逐行：生效值展示 + local 覆盖输入 + 保存）+ GPG 提交签名（可选卡片）。
  *  账户卡片为可选第三张卡：仅在注入 accounts/回调时渲染（向后兼容）；token 本体不下行，仅展示掩码 tokenPreview。
  * 纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
+ * 尺寸口径：**本页组件一律 `size="small"`（无例外）**——每个控件逐个显式声明，页根再包一层
+ *  `ConfigProvider componentSize="small"` 兜底 Modal / Popconfirm 等 portal 内默认档控件；
+ *  antd 的 Checkbox 没有 size 概念（方框尺寸固定），故「勾选框」不受此口径影响。
  */
 import { useState } from 'react';
-import { Alert, Button, Card, Checkbox, Flex, Form, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, ConfigProvider, Flex, Form, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Tooltip, Typography } from 'antd';
 import type {
   AccountBody,
   AccountDeleteBody,
@@ -18,6 +21,7 @@ import type {
   GpgConfigView,
   SettingsPatch,
   SettingsState,
+  ThemeMode,
 } from '@rebased/contracts';
 import { PageShell } from '../base/page-shell';
 
@@ -67,6 +71,7 @@ function ConfigRow({
       <Tooltip title={`填写 ${entry.key} 的仓库级（local）覆盖值：保存后写入本仓库 .git/config，仅对本仓库生效`}>
         <Input
           data-testid={`config-input-${entry.key}`}
+          size="small"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           style={{ flex: 1 }}
@@ -83,6 +88,7 @@ function ConfigRow({
         <span>
           <Button
             data-testid={`config-save-${entry.key}`}
+            size="small"
             disabled={!dirty}
             onClick={() => onSetConfig(entry.key, value)}
           >
@@ -117,11 +123,13 @@ function AccountRow({
         title={`确定删除账户 ${entry.account}（${entry.host}）？`}
         okText="确定"
         cancelText="取消"
+        okButtonProps={{ size: 'small' }}
+        cancelButtonProps={{ size: 'small' }}
         onConfirm={() => onDeleteAccount({ host: entry.host, account: entry.account })}
       >
         {/* Tooltip 放最内层（Popconfirm > Tooltip > Button）：保持 Popconfirm 的触发链完整 */}
         <Tooltip title="删除该账户保存的本地凭据：只清本机记录，不影响远端服务器上的账号">
-          <Button danger data-testid={`delete-account-${entry.host}-${entry.account}`}>
+          <Button size="small" danger data-testid={`delete-account-${entry.host}-${entry.account}`}>
             删除
           </Button>
         </Tooltip>
@@ -165,7 +173,8 @@ function AddAccountModal({
       open={open}
       okText="确定"
       cancelText="取消"
-      okButtonProps={{ disabled, 'data-testid': 'add-account-submit' }}
+      okButtonProps={{ size: 'small', disabled, 'data-testid': 'add-account-submit' }}
+      cancelButtonProps={{ size: 'small' }}
       onOk={submit}
       onCancel={close}
     >
@@ -173,6 +182,7 @@ function AddAccountModal({
         <Tooltip title="填写远程主机的域名（如 github.com）：与账户名一起定位一份凭据，三项任一为空都不能提交">
           <Input
             data-testid="account-host-input"
+            size="small"
             placeholder="主机（如 github.com）"
             value={host}
             onChange={(e) => setHost(e.target.value)}
@@ -181,6 +191,7 @@ function AddAccountModal({
         <Tooltip title="填写该主机上的账户名：认证时作为用户名，列表按 host + 账户名去重">
           <Input
             data-testid="account-name-input"
+            size="small"
             placeholder="账户名"
             value={account}
             onChange={(e) => setAccount(e.target.value)}
@@ -190,6 +201,7 @@ function AddAccountModal({
         <Tooltip title="填写该账户的访问令牌（token）：保存到本地凭据库供该主机认证，列表里只显示掩码预览">
           <Input.Password
             data-testid="account-token-input"
+            size="small"
             placeholder="访问令牌（token）"
             value={token}
             onChange={(e) => setToken(e.target.value)}
@@ -228,7 +240,8 @@ function GpgConfigModal({
       open
       okText="确定"
       cancelText="取消"
-      okButtonProps={{ disabled: enabled && key === null, 'data-testid': 'gpg-config-submit' }}
+      okButtonProps={{ size: 'small', disabled: enabled && key === null, 'data-testid': 'gpg-config-submit' }}
+      cancelButtonProps={{ size: 'small' }}
       confirmLoading={saving}
       onOk={submit}
       onCancel={onClose}
@@ -260,6 +273,7 @@ function GpgConfigModal({
           <span>
             <Select
               data-testid="gpg-key-select"
+              size="small"
               style={{ width: '100%' }}
               placeholder="选择签名密钥"
               disabled={!enabled || noKeys}
@@ -310,7 +324,7 @@ function ProtectedBranchCard({
   });
   const dirty = text !== patterns.join('\n');
   return (
-    <Card title="保护分支" data-testid="protected-branches-card">
+    <Card title="保护分支" size="small" data-testid="protected-branches-card">
       <Flex vertical gap={8}>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           每行一个正则模式，匹配剥远程名前缀的分支名（origin/main → main）；匹配得到的远程分支上的已推送提交不可重写
@@ -319,6 +333,7 @@ function ProtectedBranchCard({
         <Tooltip title="填写保护分支的正则模式：每行一个，匹配到的远程分支上的已推送提交不允许被重写">
           <Input.TextArea
             data-testid="protected-patterns-input"
+            size="small"
             rows={3}
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -344,6 +359,7 @@ function ProtectedBranchCard({
             <span>
               <Button
                 data-testid="protected-patterns-save"
+                size="small"
                 disabled={!dirty || invalid !== undefined}
                 onClick={() => onSave(lines)}
               >
@@ -374,157 +390,165 @@ export function SettingsPage({
   const [gpgOpen, setGpgOpen] = useState(false);
   // 页面根：横向沾满（原 maxWidth:720 人为收窄，移除）；gap/padding 照抄既有值。
   // 密度传 "default"：设置页按 spec D6 保持 antd 默认密度（其余页面由 PageShell 走紧凑密度）。
+  // componentSize="small"：本页控件一律小尺寸（逐个控件也已显式声明，此处兜底 portal 内的默认档控件）。
   return (
-    <PageShell density="default" gap={16} padding={16}>
-      <Card title="应用设置">
-        {settings ? (
-          /*
-           * 应用设置两项均走 Form.Item 纵向布局：label 在上、控件在下（无表单字段语义，仅取其排版）。
-           * component={false} 不落地 form 元素：内部只有受控控件，无原生提交语义。
-           */
-          <Form layout="vertical" component={false}>
-            {/* 标签文案即原说明文字：Switch（无内联文本）由 label 承担可读名称 */}
-            <Form.Item label="在编辑器中查看提交日志" style={{ marginBottom: 12 }}>
-              <Tooltip title="切换提交日志的查看方式：开启后用本机编辑器打开，关闭则用内置页面查看（应用设置 logInEditor）">
-                <Switch
-                  checked={settings.logInEditor}
-                  onChange={(checked) => onPatchSettings({ logInEditor: checked })}
-                />
-              </Tooltip>
-            </Form.Item>
-            {/* 界面主题：暗色/明亮二选一，写入应用设置后由 Providers 全站生效（含 Monaco 与 body 底色） */}
-            <Form.Item label="界面主题" style={{ marginBottom: 0 }}>
-              <Tooltip title="选择界面配色（暗色/明亮）：保存后全站立即生效，含编辑器与页面底色">
-                <Segmented
-                  data-testid="theme-segmented"
-                  value={settings.theme}
-                  options={[
-                    { label: '暗色', value: 'dark' },
-                    { label: '明亮', value: 'light' },
-                  ]}
-                  onChange={(value) => onPatchSettings({ theme: value as 'light' | 'dark' })}
-                />
-              </Tooltip>
-            </Form.Item>
-          </Form>
-        ) : (
-          <Skeleton active />
-        )}
-      </Card>
-      {/* 保护分支（GitVcsPanel.protectedBranchesRow 语义）：模式列表 + 行内正则校验；仅在应用设置就绪后渲染 */}
-      {settings !== undefined && (
-        <ProtectedBranchCard
-          patterns={settings.protectedBranchPatterns}
-          onSave={(patterns) => onPatchSettings({ protectedBranchPatterns: patterns })}
-        />
-      )}
-      <Card title="Git 配置（仓库级）">
-        {config ? (
-          <Flex vertical gap={8}>
-            {config.entries.map((entry) => (
-              <ConfigRow key={entry.key} entry={entry} onSetConfig={onSetConfig} />
-            ))}
-          </Flex>
-        ) : (
-          <Skeleton active />
-        )}
-      </Card>
-      {/* git 可执行文件检测（GitExecutableSelectorPanel 语义）：检测 + 版本徽标；未检出 → 引导到 PATH 修复 */}
-      {gitExecutable !== undefined ? (
-        <Card title="Git 可执行文件" data-testid="git-executable-card">
-          {gitExecutable.ok ? (
-            <Flex align="center" gap={8}>
-              <Tag color="green" data-testid="git-executable-ok">已检测</Tag>
-              <Typography.Text type="secondary">{gitExecutable.exec}（PATH 查找）</Typography.Text>
-              <Typography.Text code data-testid="git-executable-version">
-                {gitExecutable.version ?? ''}
-              </Typography.Text>
-            </Flex>
+    <ConfigProvider componentSize="small">
+      <PageShell density="default" gap={16} padding={16}>
+        <Card title="应用设置" size="small">
+          {settings ? (
+            /*
+             * 应用设置两项均走 Form.Item 纵向布局：label 在上、控件在下（无表单字段语义，仅取其排版）。
+             * component={false} 不落地 form 元素：内部只有受控控件，无原生提交语义。
+             */
+            <Form layout="vertical" size="small" component={false}>
+              {/* 标签文案即原说明文字：Switch（无内联文本）由 label 承担可读名称 */}
+              <Form.Item label="在编辑器中查看提交日志" style={{ marginBottom: 12 }}>
+                <Tooltip title="切换提交日志的查看方式：开启后用本机编辑器打开，关闭则用内置页面查看（应用设置 logInEditor）">
+                  <Switch
+                    size="small"
+                    checked={settings.logInEditor}
+                    onChange={(checked) => onPatchSettings({ logInEditor: checked })}
+                  />
+                </Tooltip>
+              </Form.Item>
+              {/* 界面主题偏好：自动（跟随系统）/明亮/暗色三选一，写入应用设置后由 Providers 全站生效（含 Monaco 与 body 底色） */}
+              <Form.Item label="界面主题" style={{ marginBottom: 0 }}>
+                <Tooltip title="选择界面配色：自动跟随操作系统的明暗偏好；明亮/暗色为显式指定。保存后全站立即生效（含编辑器与页面底色）">
+                  <Segmented
+                    data-testid="theme-segmented"
+                    size="small"
+                    value={settings.theme}
+                    options={[
+                      { label: '自动', value: 'auto' },
+                      { label: '明亮', value: 'light' },
+                      { label: '暗色', value: 'dark' },
+                    ]}
+                    onChange={(value) => onPatchSettings({ theme: value as ThemeMode })}
+                  />
+                </Tooltip>
+              </Form.Item>
+            </Form>
           ) : (
-            <Alert
-              type="warning"
-              showIcon
-              data-testid="git-executable-error"
-              title="未检测到可用的 git 可执行文件"
-              description="请安装 Git 并确保 git 命令在服务进程的 PATH 环境中可执行（git --version 可正常运行）"
-            />
+            <Skeleton active />
           )}
         </Card>
-      ) : null}
-      {/* GPG 提交签名（GitGpgConfigDialog / GpgSignConfigurableRow 语义）：状态行 + 「配置…」→ 密钥 Modal */}
-      {gpgConfig !== undefined && onSetGpgConfig !== undefined && (
-        <Card
-          title="GPG 提交签名"
-          data-testid="gpg-card"
-          extra={
-            <Tooltip title="打开 GPG 签名配置弹窗：开关提交签名并选择签名密钥">
-              <Button data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
-                配置…
-              </Button>
-            </Tooltip>
-          }
-        >
-          <Flex align="center" gap={8}>
-            {gpgConfig.enabled ? (
-              <>
-                <Tag color="green" data-testid="gpg-enabled-tag">
-                  已启用
-                </Tag>
-                <Typography.Text>{gpgConfig.key ?? '未配置签名密钥（commit.gpgsign=true）'}</Typography.Text>
-                {gpgConfig.key !== null && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {gpgConfig.keys.find((k) => k.id === gpgConfig.key)?.description ?? ''}
-                  </Typography.Text>
-                )}
-              </>
-            ) : (
-              <>
-                <Tag data-testid="gpg-disabled-tag">未启用</Tag>
-                <Typography.Text type="secondary">commit.gpgsign 为 false/未设置</Typography.Text>
-              </>
-            )}
-          </Flex>
-        </Card>
-      )}
-      {/* 账户卡片：仅在 accounts 与两个回调齐备时渲染（旧容器缺省即不出现，向后兼容） */}
-      {accounts && onAddAccount && onDeleteAccount && (
-        <Card
-          title="账户"
-          extra={
-            <Tooltip title="打开添加账户弹窗：填写主机、账户名与访问令牌后保存到本地凭据">
-              <Button type="primary" data-testid="add-account-button" onClick={() => setAddOpen(true)}>
-                添加账户
-              </Button>
-            </Tooltip>
-          }
-        >
-          {accounts.accounts.length === 0 ? (
-            <Typography.Text type="secondary">暂无账户</Typography.Text>
-          ) : (
+        {/* 保护分支（GitVcsPanel.protectedBranchesRow 语义）：模式列表 + 行内正则校验；仅在应用设置就绪后渲染 */}
+        {settings !== undefined && (
+          <ProtectedBranchCard
+            patterns={settings.protectedBranchPatterns}
+            onSave={(patterns) => onPatchSettings({ protectedBranchPatterns: patterns })}
+          />
+        )}
+        <Card title="Git 配置（仓库级）" size="small">
+          {config ? (
             <Flex vertical gap={8}>
-              {accounts.accounts.map((entry) => (
-                <AccountRow
-                  key={`${entry.host}-${entry.account}`}
-                  entry={entry}
-                  onDeleteAccount={onDeleteAccount}
-                />
+              {config.entries.map((entry) => (
+                <ConfigRow key={entry.key} entry={entry} onSetConfig={onSetConfig} />
               ))}
             </Flex>
+          ) : (
+            <Skeleton active />
           )}
         </Card>
-      )}
-      {onAddAccount && (
-        <AddAccountModal open={addOpen} onAddAccount={onAddAccount} onClose={() => setAddOpen(false)} />
-      )}
-      {/* GPG 配置 Modal：条件渲染（开才挂载）→ 每次打开从当前配置重置 checkbox/密钥选择 */}
-      {gpgOpen && gpgConfig !== undefined && onSetGpgConfig !== undefined && (
-        <GpgConfigModal
-          config={gpgConfig}
-          saving={gpgSaving}
-          onSetGpgConfig={onSetGpgConfig}
-          onClose={() => setGpgOpen(false)}
-        />
-      )}
-    </PageShell>
+        {/* git 可执行文件检测（GitExecutableSelectorPanel 语义）：检测 + 版本徽标；未检出 → 引导到 PATH 修复 */}
+        {gitExecutable !== undefined ? (
+          <Card title="Git 可执行文件" size="small" data-testid="git-executable-card">
+            {gitExecutable.ok ? (
+              <Flex align="center" gap={8}>
+                <Tag color="green" data-testid="git-executable-ok">已检测</Tag>
+                <Typography.Text type="secondary">{gitExecutable.exec}（PATH 查找）</Typography.Text>
+                <Typography.Text code data-testid="git-executable-version">
+                  {gitExecutable.version ?? ''}
+                </Typography.Text>
+              </Flex>
+            ) : (
+              <Alert
+                type="warning"
+                showIcon
+                data-testid="git-executable-error"
+                title="未检测到可用的 git 可执行文件"
+                description="请安装 Git 并确保 git 命令在服务进程的 PATH 环境中可执行（git --version 可正常运行）"
+              />
+            )}
+          </Card>
+        ) : null}
+        {/* GPG 提交签名（GitGpgConfigDialog / GpgSignConfigurableRow 语义）：状态行 + 「配置…」→ 密钥 Modal */}
+        {gpgConfig !== undefined && onSetGpgConfig !== undefined && (
+          <Card
+            title="GPG 提交签名"
+            size="small"
+            data-testid="gpg-card"
+            extra={
+              <Tooltip title="打开 GPG 签名配置弹窗：开关提交签名并选择签名密钥">
+                <Button size="small" data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
+                  配置…
+                </Button>
+              </Tooltip>
+            }
+          >
+            <Flex align="center" gap={8}>
+              {gpgConfig.enabled ? (
+                <>
+                  <Tag color="green" data-testid="gpg-enabled-tag">
+                    已启用
+                  </Tag>
+                  <Typography.Text>{gpgConfig.key ?? '未配置签名密钥（commit.gpgsign=true）'}</Typography.Text>
+                  {gpgConfig.key !== null && (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {gpgConfig.keys.find((k) => k.id === gpgConfig.key)?.description ?? ''}
+                    </Typography.Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Tag data-testid="gpg-disabled-tag">未启用</Tag>
+                  <Typography.Text type="secondary">commit.gpgsign 为 false/未设置</Typography.Text>
+                </>
+              )}
+            </Flex>
+          </Card>
+        )}
+        {/* 账户卡片：仅在 accounts 与两个回调齐备时渲染（旧容器缺省即不出现，向后兼容） */}
+        {accounts && onAddAccount && onDeleteAccount && (
+          <Card
+            title="账户"
+            size="small"
+            extra={
+              <Tooltip title="打开添加账户弹窗：填写主机、账户名与访问令牌后保存到本地凭据">
+                <Button type="primary" size="small" data-testid="add-account-button" onClick={() => setAddOpen(true)}>
+                  添加账户
+                </Button>
+              </Tooltip>
+            }
+          >
+            {accounts.accounts.length === 0 ? (
+              <Typography.Text type="secondary">暂无账户</Typography.Text>
+            ) : (
+              <Flex vertical gap={8}>
+                {accounts.accounts.map((entry) => (
+                  <AccountRow
+                    key={`${entry.host}-${entry.account}`}
+                    entry={entry}
+                    onDeleteAccount={onDeleteAccount}
+                  />
+                ))}
+              </Flex>
+            )}
+          </Card>
+        )}
+        {onAddAccount && (
+          <AddAccountModal open={addOpen} onAddAccount={onAddAccount} onClose={() => setAddOpen(false)} />
+        )}
+        {/* GPG 配置 Modal：条件渲染（开才挂载）→ 每次打开从当前配置重置 checkbox/密钥选择 */}
+        {gpgOpen && gpgConfig !== undefined && onSetGpgConfig !== undefined && (
+          <GpgConfigModal
+            config={gpgConfig}
+            saving={gpgSaving}
+            onSetGpgConfig={onSetGpgConfig}
+            onClose={() => setGpgOpen(false)}
+          />
+        )}
+      </PageShell>
+    </ConfigProvider>
   );
 }

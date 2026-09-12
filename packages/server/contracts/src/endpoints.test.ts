@@ -109,6 +109,14 @@ describe('P1 端点 schema', () => {
       .toEqual({ protectedBranchPatterns: ['^main$', '^release/'] });
     expect(() => settingsPatchSchema.parse({ protectedBranchPatterns: '^main$' })).toThrow();
   });
+
+  it('settingsPatch 主题偏好接受 auto/light/dark（auto=跟随系统），其余值拒绝', () => {
+    expect(settingsPatchSchema.parse({ theme: 'auto' })).toEqual({ theme: 'auto' });
+    expect(settingsPatchSchema.parse({ theme: 'light' })).toEqual({ theme: 'light' });
+    expect(settingsPatchSchema.parse({ theme: 'dark' })).toEqual({ theme: 'dark' });
+    expect(() => settingsPatchSchema.parse({ theme: 'system' })).toThrow();
+    expect(() => settingsPatchSchema.parse({ theme: true })).toThrow();
+  });
 });
 
 describe('configPutBodySchema', () => {

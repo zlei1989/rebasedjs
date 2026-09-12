@@ -61,8 +61,8 @@ export interface FileThreeVersions {
   working: string;
 }
 
-/** 主题模式：dark=暗色（默认，对齐 IDEA 暗色观感）、light=明亮（AGENT.md 要求同时适配两套主题） */
-export type ThemeMode = 'light' | 'dark';
+/** 主题偏好：auto=跟随操作系统（`prefers-color-scheme`，由浏览器端解析为实际明暗）、dark=暗色（默认，对齐 IDEA 暗色观感）、light=明亮（AGENT.md 要求同时适配两套主题） */
+export type ThemeMode = 'auto' | 'light' | 'dark';
 
 export interface SettingsState {
   logInEditor: boolean;
