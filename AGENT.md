@@ -76,6 +76,21 @@ rebasedjs/
 - **流程**：启动真实服务（web-next :3030 / web-koa :3031），用 mcp 在浏览器中按真实用户路径逐项操作（表单输入、按钮、弹窗、导航），并用 CLI 复核实际 git 状态，页面展示与仓库事实互证。
 - **记录**：每次冒烟后在对应计划/关账记录的「冒烟」小节写入：① 范围清单（逐项 ✅/❌/跳过+理由）；② 操作路径（点击/输入序列）；③ 证据（浏览器状态 + CLI 输出互证）；④ 未覆盖项与后续计划（如有）。
 
+## MCP 浏览器（截图与元素读取）
+
+**MCP 服务把「允许写入的根」钉死在启动时的工作目录**，与该目录是否等于本项目无关（换机器、换会话都可能不同）——**不要假设、也不要在本文档写死任何绝对路径**，按下面五步执行。
+
+1. **探针：先问它允许写哪里。** `browser_take_screenshot` 的 `filename` 传本项目内的绝对路径，读报错：
+   - 报 `File access denied: <path> is outside allowed roots. Allowed roots: <rootA>, <rootB>` → `<rootA>/<rootB>` 就是当前允许的根；
+   - 无报错并落盘 → 本项目已在允许的根内。
+   被拒的写入**不留文件**，因此可放心用截图当探针。（备选：列进程看 MCP 服务的启动目录与命令行——Windows `Get-CimInstance Win32_Process`，macOS/Linux `ps -eo pid,args`。）
+2. **按探针结果落盘**：
+   - **本项目在允许的根内** → `filename` 直接用**本项目绝对路径**，一步写入 `docs/shots/<name>.png`；
+   - **不在** → `filename` 只给**纯文件名**（带目录的相对路径会按**服务的工作目录**解析，通常 `ENOENT`），落盘后用文件移动命令按**绝对路径**搬进 `docs/shots/`（Windows `Move-Item`，macOS/Linux `mv`）。想免掉这一步：让 MCP 服务**以本项目为工作目录**启动（需重启服务，会话中途改不了）。
+3. **收尾校验**：入库后做重复校验（Windows `Get-FileHash -Algorithm SHA256`，macOS/Linux `shasum -a 256`）；命名与账目规则见 `docs/e2e-verification.md` §1.2。
+4. **一律用绝对路径**：MCP 服务的工作目录与本项目不同，且命令行的当前目录**每次调用都会重置**。
+5. **几何断言别靠眼睛**：用 `read_picked_element`（选中元素的 cssSelector / domPath / attributes / boundingRect）或 `browser_evaluate` 读 `getBoundingClientRect()`。
+
 ## 测试性能（新增测试必读）
 
 - **单次 `git` spawn ~330ms**——夹具尽量少发 git 进程，测试耗时 = spawn 数 × 0.3s

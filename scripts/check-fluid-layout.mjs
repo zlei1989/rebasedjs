@@ -837,13 +837,18 @@ function routeCells(ctx) {
       ready: '.monaco-editor .view-lines',
       after: assertMonacoInternalScroll,
     },
-    // settings：git-executable-card 是**静态** Card（SettingsPage 无条件渲染全部卡片，容器也没有提前 return），
-    // 数据没到时它照样在 —— 这正是「量到未装数据的页面」的典型；改成等 git 配置行（9 个 CONFIG_KEYS 的
-    // 输入行，`config-view` 的响应到达才渲染）真的出现。
+    // app-settings：应用（全局）设置页 `/settings` —— 与 `/repos/:id/settings` 拆开后新增的路由。
+    // ready 用 app-settings-card（页面壳）只是第一段；**内容门**用 theme-segmented：主题控件在
+    // `GET /api/settings` 到达（settings 非 undefined）前是 Skeleton，不渲染 —— 命中即证明数据已装页面。
+    // 账户行的测试 id 是 `delete-account-*`（夹具无账户时为 0 条），串成内容门会把这一格判红，故不设。
+    // density: 'default'：与仓库设置页同理——设置页两页都是密度豁免页（antd 默认 14px）。
+    { name: 'app-settings', path: '/settings', ready: '[data-testid="app-settings-card"]', content: '[data-testid="theme-segmented"]', min: 1, density: 'default' },
+    // settings（仓库设置页）：git-executable-card 已随拆分移到应用设置页，本页 ready 改为数据级信号
+    // repo-config-card + git 配置行（`config-view` 响应到达才渲染），不再需要「静态卡片会白通过」的老注解。
     // density: 'default' = 本路由是**密度豁免页**（用户显式要求设置页保持 antd 默认密度），
     // 故密度断言期望 14px；其余所有格子省略该字段 = 期望 compact 12px。改这一档必须同时改这里，
     // 否则「设置页被别的路由的紧凑主题罩住」这类回归不会被发现。
-    { name: 'settings', path: `/repos/${ctx.repo.id}/settings`, ready: '[data-testid="git-executable-card"]', content: '[data-testid^="config-input-"]', min: 4, density: 'default' },
+    { name: 'settings', path: `/repos/${ctx.repo.id}/settings`, ready: '[data-testid="repo-config-card"]', content: '[data-testid^="config-input-"]', min: 4, density: 'default' },
     { name: 'stashes', path: `/repos/${ctx.repo.id}/stashes`, ready: '[data-testid="stash-save-button"]', content: '[data-testid^="row-stash-"]', min: 1 },
     // status：manage-changelists 是工具行按钮；内容级门等变更行（staged/unstaged/untracked 三组任一）
     { name: 'status', path: `/repos/${ctx.repo.id}/status`, ready: '[data-testid="manage-changelists"]', content: '[data-testid^="row-staged-"], [data-testid^="row-unstaged-"], [data-testid^="row-untracked-"]', min: 1 },
@@ -1679,6 +1684,7 @@ async function runShots(opts, pw, exe) {
     ['log-compare', `/repos/${ctx.repo.id}?compare=${ctx.branch}`],
     ['browse', `/repos/${ctx.repo.id}/browse?rev=${ctx.hash}`],
     ['diff', `/repos/${ctx.repo.id}/diff?file=${q(ctx.file)}&from=${ctx.prevHash}&to=${ctx.hash}`],
+    ['app-settings', '/settings'],
     ['settings', `/repos/${ctx.repo.id}/settings`],
     ['status', `/repos/${ctx.repo.id}/status`],
     ['console', `/repos/${ctx.repo.id}/console`],

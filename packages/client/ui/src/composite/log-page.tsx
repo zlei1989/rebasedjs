@@ -539,7 +539,7 @@ export function LogPage({
             ) : null}
             {/* 设置入口 */}
             {onOpenSettings ? (
-              <Tooltip title="打开设置页：调整当前仓库的 git 配置、账户与外观偏好">
+              <Tooltip title="打开仓库设置：该仓库的 git 配置（local）与 GPG 提交签名（应用级项在首页「设置」）">
                 <Button
                   aria-label="设置"
                   type="text"

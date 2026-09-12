@@ -98,8 +98,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
             返回日志
           </Button>
         </Tooltip>
-        <Tooltip title="打开该仓库的设置页：配置 GitHub 令牌等认证信息">
-          <Button type="link" data-testid="github-open-settings" onClick={() => router.push(`/repos/${repoId}/settings`)}>
+        <Tooltip title="打开应用设置：GitHub 令牌配在「账户」卡片（账户是应用级资源，对所有仓库生效）">
+          <Button type="link" data-testid="github-open-settings" onClick={() => router.push('/settings')}>
             设置
           </Button>
         </Tooltip>
@@ -114,8 +114,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
           message="GitHub 认证失败"
           description={(prsError instanceof Error && prsError.message !== '' ? prsError.message : '令牌无效或已过期，请到设置中重新配置。')}
           action={
-            <Tooltip title="打开设置页重新配置 GitHub 令牌">
-              <Button size="small" onClick={() => router.push(`/repos/${repoId}/settings`)}>
+            <Tooltip title="打开应用设置：在「账户」卡片重新配置 GitHub 令牌">
+              <Button size="small" onClick={() => router.push('/settings')}>
                 去设置
               </Button>
             </Tooltip>

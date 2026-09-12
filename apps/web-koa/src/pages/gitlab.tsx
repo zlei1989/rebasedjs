@@ -100,8 +100,8 @@ export function RepoGitlabPage(): React.ReactNode {
             返回日志
           </Button>
         </Tooltip>
-        <Tooltip title="打开该仓库的设置页：配置 GitLab 令牌等认证信息">
-          <Button type="link" data-testid="gitlab-open-settings" onClick={() => navigate(`/repos/${repoId}/settings`)}>
+        <Tooltip title="打开应用设置：GitLab 令牌配在「账户」卡片（账户是应用级资源，对所有仓库生效）">
+          <Button type="link" data-testid="gitlab-open-settings" onClick={() => navigate('/settings')}>
             设置
           </Button>
         </Tooltip>
@@ -116,8 +116,8 @@ export function RepoGitlabPage(): React.ReactNode {
           message="GitLab 认证失败"
           description={(mrsError instanceof Error && mrsError.message !== '' ? mrsError.message : '令牌无效或已过期，请到设置中重新配置。')}
           action={
-            <Tooltip title="打开设置页重新配置 GitLab 令牌">
-              <Button size="small" onClick={() => navigate(`/repos/${repoId}/settings`)}>
+            <Tooltip title="打开应用设置：在「账户」卡片重新配置 GitLab 令牌">
+              <Button size="small" onClick={() => navigate('/settings')}>
                 去设置
               </Button>
             </Tooltip>

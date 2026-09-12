@@ -1,13 +1,14 @@
 /**
- * 设置页：应用设置（logInEditor 开关 + 界面主题偏好 auto/light/dark）+ 仓库 Git 配置（白名单键逐行：生效值展示 + local 覆盖输入 + 保存）+ GPG 提交签名（可选卡片）。
- *  账户卡片为可选第三张卡：仅在注入 accounts/回调时渲染（向后兼容）；token 本体不下行，仅展示掩码 tokenPreview。
- * 纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks。
- * 尺寸口径：**本页组件一律 `size="small"`（无例外）**——每个控件逐个显式声明，页根再包一层
- *  `ConfigProvider componentSize="small"` 兜底 Modal / Popconfirm 等 portal 内默认档控件；
- *  antd 的 Checkbox 没有 size 概念（方框尺寸固定），故「勾选框」不受此口径影响。
+ * 设置页（两个，按**作用域**彻底分开，互不复用同一页）：
+ *  - `AppSettingsPage` = 应用（全局）设置：在编辑器中查看提交日志 + 界面主题偏好 + 保护分支模式 + Git 可执行文件检测 + 账户/令牌；
+ *  - `RepoSettingsPage` = 仓库设置：该仓库的 git 配置白名单 9 键（local 覆盖）+ GPG 提交签名。
+ * 为什么拆：两页的数据源作用域不同（前者走 GET /api/settings 等应用级端点、与 repoId 无关；后者写
+ * 仓库 `.git/config` 与 `commit.gpgsign`）。同一页混排会让「保存」写到哪儿全靠猜，故按作用域分页，
+ * 入口也分开（首页 → 应用设置；日志页顶栏 → 仓库设置）。
+ * 纯 props 驱动：ui 不调接口，数据与回调由调用方容器注入 hooks（沿用拆分前的口径）。
  */
 import { useState } from 'react';
-import { Alert, Button, Card, Checkbox, ConfigProvider, Flex, Form, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Flex, Form, Input, Modal, Popconfirm, Segmented, Skeleton, Select, Switch, Tag, Tooltip, Typography } from 'antd';
 import type {
   AccountBody,
   AccountDeleteBody,
@@ -23,81 +24,32 @@ import type {
   SettingsState,
   ThemeMode,
 } from '@rebased/contracts';
-import { PageShell } from '../base/page-shell';
+import { SettingsShell } from './settings-shell';
 
-export interface SettingsPageProps {
+/** 两个设置页共用的页面骨架 props：返回导航 + 互跳另一类设置页（互跳缺失会让人「进去出不来」） */
+interface SettingsPageChromeProps {
+  onBack: () => void;
+  /** 另一类设置页的打开回调；不传则不渲染互跳链接（如某些容器只有一类入口时） */
+  onOpenOtherSettings?: () => void;
+  /** 互跳链接禁用态：如打开应用设置时「最近仓库为空」——无从指定要配置哪个仓库 */
+  otherSettingsDisabled?: boolean;
+}
+
+// ───────────────────────────────────── 应用（全局）设置 ─────────────────────────────────────
+
+export interface AppSettingsPageProps extends SettingsPageChromeProps {
   /** 应用设置；未就绪（undefined）时对应卡片显 Skeleton */
   settings?: SettingsState;
-  /** 设置补丁回调（如 { logInEditor: false }） */
+  /** 设置补丁回调（如 { logInEditor: false } / { theme: 'auto' } / { protectedBranchPatterns }） */
   onPatchSettings: (patch: SettingsPatch) => Promise<unknown> | void;
-  /** 仓库 Git 配置视图；未就绪（undefined）时对应卡片显 Skeleton */
-  config?: GitConfigView;
-  /** 保存某配置键的仓库级（local）值 */
-  onSetConfig: (key: ConfigKey, value: string) => Promise<unknown> | void;
-  /** 账户掩码列表；缺省（undefined）时不渲染「账户」卡片（向后兼容） */
+  /** 账户掩码列表；缺省（undefined）时不渲染「账户」卡片 */
   accounts?: AccountList;
   /** 添加账户回调；添加成功/失败反馈由容器负责 */
   onAddAccount?: (body: AccountBody) => void;
   /** 删除账户回调 */
   onDeleteAccount?: (body: AccountDeleteBody) => void;
-  /** git 可执行文件信息（GitExecutableSelectorPanel 语义）：提供时渲染「Git 可执行文件」卡片（检测 + 版本 + 失败引导） */
+  /** git 可执行文件信息（GitExecutableSelectorPanel 语义）：提供时渲染「Git 可执行文件」卡片 */
   gitExecutable?: GitExecutableInfo;
-  /** GPG 提交签名配置（GitGpgConfigDialog 语义）：提供时渲染「GPG 提交签名」卡片（启用态 + 选定密钥 + 可用密钥列表） */
-  gpgConfig?: GpgConfigView;
-  /** 保存 GPG 签名配置回调（{ enabled, key }；enabled=true 时 key 必选） */
-  onSetGpgConfig?: (body: GpgConfigBody) => Promise<unknown> | void;
-  /** GPG 保存请求进行中：Modal 确定 loading */
-  gpgSaving?: boolean;
-}
-
-/** 单个配置键行：生效值副文本 + local 覆盖输入 + 保存（值非空且与 localValue 不同才可点） */
-function ConfigRow({
-  entry,
-  onSetConfig,
-}: {
-  entry: GitConfigEntry;
-  onSetConfig: (key: ConfigKey, value: string) => Promise<unknown> | void;
-}): React.ReactNode {
-  const [value, setValue] = useState(entry.localValue ?? '');
-  const dirty = value !== '' && value !== (entry.localValue ?? '');
-  return (
-    <Flex align="center" gap={8}>
-      <Flex vertical style={{ width: 200, flexShrink: 0 }}>
-        <Typography.Text>{entry.key}</Typography.Text>
-        <Typography.Text type="secondary">
-          {entry.value ?? '未设置'}
-        </Typography.Text>
-      </Flex>
-      <Tooltip title={`填写 ${entry.key} 的仓库级（local）覆盖值：保存后写入本仓库 .git/config，仅对本仓库生效`}>
-        <Input
-          data-testid={`config-input-${entry.key}`}
-          size="small"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          style={{ flex: 1 }}
-        />
-      </Tooltip>
-      {/* 禁用按钮不派发 hover，故在 Tooltip 与 Button 之间包一层 span 承接提示；文案随禁用原因切换 */}
-      <Tooltip
-        title={
-          dirty
-            ? '把输入值写入本仓库的 .git/config（仅覆盖当前仓库，不改全局配置）'
-            : '输入值与生效值相同或为空：改动内容后才能保存'
-        }
-      >
-        <span>
-          <Button
-            data-testid={`config-save-${entry.key}`}
-            size="small"
-            disabled={!dirty}
-            onClick={() => onSetConfig(entry.key, value)}
-          >
-            保存
-          </Button>
-        </span>
-      </Tooltip>
-    </Flex>
-  );
 }
 
 /** 账户行：host + account + 掩码 tokenPreview + 删除（Popconfirm 确认后回调 {host, account}） */
@@ -212,6 +164,276 @@ function AddAccountModal({
   );
 }
 
+/** 保护分支设置卡片（GitVcsPanel.protectedBranchesRow 语义）：每行一个正则模式；
+ *  行内校验正则语法（非法标红禁止保存，对齐 Java Pattern.compile 校验）；保存经 onPatchSettings 补丁 */
+function ProtectedBranchCard({
+  patterns,
+  onSave,
+}: {
+  patterns: string[];
+  onSave: (patterns: string[]) => void;
+}): React.ReactNode {
+  const [text, setText] = useState(patterns.join('\n'));
+  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l !== '');
+  const invalid = lines.find((l) => {
+    try {
+      new RegExp(l);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  const dirty = text !== patterns.join('\n');
+  return (
+    <Card title="保护分支" size="small" data-testid="protected-branches-card">
+      <Flex vertical gap={8}>
+        <Typography.Text type="secondary">
+          每行一个正则模式，匹配剥远程名前缀的分支名（origin/main → main）；匹配得到的远程分支上的已推送提交不可重写
+          （Reword/Drop/Squash/Fixup 将被拒绝——GitProtectedBranches.isCommitPublishedBlocking 语义）
+        </Typography.Text>
+        <Tooltip title="填写保护分支的正则模式：每行一个，匹配到的远程分支上的已推送提交不允许被重写">
+          <Input.TextArea
+            data-testid="protected-patterns-input"
+            size="small"
+            rows={3}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={'每行一个模式，如：\n^main$\n^release/'}
+          />
+        </Tooltip>
+        {invalid !== undefined && (
+          <Typography.Text type="danger" data-testid="protected-patterns-error">
+            非法正则：{invalid}
+          </Typography.Text>
+        )}
+        <div>
+          {/* 禁用按钮不派发 hover：包 span 承接提示；文案随禁用原因（非法正则 / 未改动）切换 */}
+          <Tooltip
+            title={
+              invalid !== undefined
+                ? `正则语法非法（${invalid}）：修正该行后才能保存`
+                : dirty
+                  ? '保存这份模式列表：写入应用设置（全局，对所有仓库生效），立即约束可改写的提交范围'
+                  : '内容与已保存的模式相同：改动后才能保存'
+            }
+          >
+            <span>
+              <Button
+                data-testid="protected-patterns-save"
+                size="small"
+                disabled={!dirty || invalid !== undefined}
+                onClick={() => onSave(lines)}
+              >
+                保存
+              </Button>
+            </span>
+          </Tooltip>
+        </div>
+      </Flex>
+    </Card>
+  );
+}
+
+/**
+ * 应用（全局）设置页：与仓库无关的偏好与资源。
+ * 作用域提示：页头「应用设置」标题即口径——本页所有项对所有仓库生效（写入应用配置 ~/.rebasedjs/config.json），
+ * 不随当前打开的仓库变化；仓库级项在「仓库设置」页。
+ */
+export function AppSettingsPage({
+  settings,
+  onPatchSettings,
+  accounts,
+  onAddAccount,
+  onDeleteAccount,
+  gitExecutable,
+  onBack,
+  onOpenOtherSettings,
+  otherSettingsDisabled,
+}: AppSettingsPageProps): React.ReactNode {
+  const [addOpen, setAddOpen] = useState(false);
+  return (
+    <SettingsShell
+      backLabel="返回首页"
+      backTooltip="返回仓库列表页"
+      onBack={onBack}
+      crossLabel="仓库设置"
+      crossTooltip={
+        otherSettingsDisabled
+          ? '暂无最近仓库：仓库设置按仓库生效，先在首页打开一个仓库'
+          : '打开仓库设置：配置某个仓库的 git 配置（local）与 GPG 提交签名'
+      }
+      crossTestId="repo-settings-link"
+      crossDisabled={otherSettingsDisabled}
+      onCross={() => onOpenOtherSettings?.()}
+    >
+      <Card title="应用设置" size="small" data-testid="app-settings-card">
+        {settings ? (
+          /*
+           * 应用设置两项均走 Form.Item 纵向布局：label 在上、控件在下（无表单字段语义，仅取其排版）。
+           * component={false} 不落地 form 元素：内部只有受控控件，无原生提交语义。
+           */
+          <Form layout="vertical" size="small" component={false}>
+            {/* 标签文案即原说明文字：Switch（无内联文本）由 label 承担可读名称 */}
+            <Form.Item label="在编辑器中查看提交日志" style={{ marginBottom: 12 }}>
+              <Tooltip title="切换提交日志的查看方式：开启后用本机编辑器打开，关闭则用内置页面查看（应用设置 logInEditor）">
+                <Switch
+                  size="small"
+                  checked={settings.logInEditor}
+                  onChange={(checked) => onPatchSettings({ logInEditor: checked })}
+                />
+              </Tooltip>
+            </Form.Item>
+            {/* 界面主题偏好：自动（跟随系统）/明亮/暗色三选一，写入应用设置后由两端的 Providers 全站生效（含 Monaco 与 body 底色） */}
+            <Form.Item label="界面主题" style={{ marginBottom: 0 }}>
+              <Tooltip title="选择界面配色：自动跟随操作系统的明暗偏好；明亮/暗色为显式指定。保存后全站立即生效（含编辑器与页面底色）">
+                <Segmented
+                  data-testid="theme-segmented"
+                  size="small"
+                  value={settings.theme}
+                  options={[
+                    { label: '自动', value: 'auto' },
+                    { label: '明亮', value: 'light' },
+                    { label: '暗色', value: 'dark' },
+                  ]}
+                  onChange={(value) => onPatchSettings({ theme: value as ThemeMode })}
+                />
+              </Tooltip>
+            </Form.Item>
+          </Form>
+        ) : (
+          <Skeleton active />
+        )}
+      </Card>
+      {/* 保护分支（GitVcsPanel.protectedBranchesRow 语义）：模式列表 + 行内正则校验；仅在应用设置就绪后渲染 */}
+      {settings !== undefined && (
+        <ProtectedBranchCard
+          patterns={settings.protectedBranchPatterns}
+          onSave={(patterns) => onPatchSettings({ protectedBranchPatterns: patterns })}
+        />
+      )}
+      {/* git 可执行文件检测（GitExecutableSelectorPanel 语义）：检测 + 版本徽标；未检出 → 引导到 PATH 修复 */}
+      {gitExecutable !== undefined ? (
+        <Card title="Git 可执行文件" size="small" data-testid="git-executable-card">
+          {gitExecutable.ok ? (
+            <Flex align="center" gap={8}>
+              <Tag color="green" data-testid="git-executable-ok">已检测</Tag>
+              <Typography.Text type="secondary">{gitExecutable.exec}（PATH 查找）</Typography.Text>
+              <Typography.Text code data-testid="git-executable-version">
+                {gitExecutable.version ?? ''}
+              </Typography.Text>
+            </Flex>
+          ) : (
+            <Alert
+              type="warning"
+              showIcon
+              data-testid="git-executable-error"
+              title="未检测到可用的 git 可执行文件"
+              description="请安装 Git 并确保 git 命令在服务进程的 PATH 环境中可执行（git --version 可正常运行）"
+            />
+          )}
+        </Card>
+      ) : null}
+      {/* 账户卡片：仅在 accounts 与两个回调齐备时渲染（旧容器缺省即不出现，向后兼容） */}
+      {accounts && onAddAccount && onDeleteAccount && (
+        <Card
+          title="账户"
+          size="small"
+          data-testid="accounts-card"
+          extra={
+            <Tooltip title="打开添加账户弹窗：填写主机、账户名与访问令牌后保存到本地凭据">
+              <Button type="primary" size="small" data-testid="add-account-button" onClick={() => setAddOpen(true)}>
+                添加账户
+              </Button>
+            </Tooltip>
+          }
+        >
+          {accounts.accounts.length === 0 ? (
+            <Typography.Text type="secondary">暂无账户</Typography.Text>
+          ) : (
+            <Flex vertical gap={8}>
+              {accounts.accounts.map((entry) => (
+                <AccountRow
+                  key={`${entry.host}-${entry.account}`}
+                  entry={entry}
+                  onDeleteAccount={onDeleteAccount}
+                />
+              ))}
+            </Flex>
+          )}
+        </Card>
+      )}
+      {onAddAccount && (
+        <AddAccountModal open={addOpen} onAddAccount={onAddAccount} onClose={() => setAddOpen(false)} />
+      )}
+    </SettingsShell>
+  );
+}
+
+// ───────────────────────────────────── 仓库设置 ─────────────────────────────────────
+
+export interface RepoSettingsPageProps extends SettingsPageChromeProps {
+  /** 仓库 Git 配置视图；未就绪（undefined）时对应卡片显 Skeleton */
+  config?: GitConfigView;
+  /** 保存某配置键的仓库级（local）值 */
+  onSetConfig: (key: ConfigKey, value: string) => Promise<unknown> | void;
+  /** GPG 提交签名配置（GitGpgConfigDialog 语义）：提供时渲染「GPG 提交签名」卡片 */
+  gpgConfig?: GpgConfigView;
+  /** 保存 GPG 签名配置回调（{ enabled, key }；enabled=true 时 key 必选） */
+  onSetGpgConfig?: (body: GpgConfigBody) => Promise<unknown> | void;
+  /** GPG 保存请求进行中：Modal 确定 loading */
+  gpgSaving?: boolean;
+}
+
+/** 单个配置键行：生效值副文本 + local 覆盖输入 + 保存（值非空且与 localValue 不同才可点） */
+function ConfigRow({
+  entry,
+  onSetConfig,
+}: {
+  entry: GitConfigEntry;
+  onSetConfig: (key: ConfigKey, value: string) => Promise<unknown> | void;
+}): React.ReactNode {
+  const [value, setValue] = useState(entry.localValue ?? '');
+  const dirty = value !== '' && value !== (entry.localValue ?? '');
+  return (
+    <Flex align="center" gap={8}>
+      <Flex vertical style={{ width: 200, flexShrink: 0 }}>
+        <Typography.Text>{entry.key}</Typography.Text>
+        <Typography.Text type="secondary">
+          {entry.value ?? '未设置'}
+        </Typography.Text>
+      </Flex>
+      <Tooltip title={`填写 ${entry.key} 的仓库级（local）覆盖值：保存后写入本仓库 .git/config，仅对本仓库生效`}>
+        <Input
+          data-testid={`config-input-${entry.key}`}
+          size="small"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          style={{ flex: 1 }}
+        />
+      </Tooltip>
+      {/* 禁用按钮不派发 hover，故在 Tooltip 与 Button 之间包一层 span 承接提示；文案随禁用原因切换 */}
+      <Tooltip
+        title={
+          dirty
+            ? '把输入值写入本仓库的 .git/config（仅覆盖当前仓库，不改全局配置）'
+            : '输入值与生效值相同或为空：改动内容后才能保存'
+        }
+      >
+        <span>
+          <Button
+            data-testid={`config-save-${entry.key}`}
+            size="small"
+            disabled={!dirty}
+            onClick={() => onSetConfig(entry.key, value)}
+          >
+            保存
+          </Button>
+        </span>
+      </Tooltip>
+    </Flex>
+  );
+}
+
 /** GPG 提交签名配置 Modal（GitGpgConfigDialog 语义）：checkbox 启用 + 密钥下拉（来自 gpg --list-secret-keys），
  *  确定回调 { enabled, key }（取消勾选 → key 为 null，服务端仅写 commit.gpgsign=false 不清 user.signingkey）。
  *  条件渲染（open 才挂载）保证每次打开从当前配置重置状态；无可用密钥时 Alert 提示且无法勾选启用 */
@@ -303,252 +525,87 @@ function GpgConfigModal({
   );
 }
 
-/** 保护分支设置卡片（GitVcsPanel.protectedBranchesRow 语义）：每行一个正则模式；
- *  行内校验正则语法（非法标红禁止保存，对齐 Java Pattern.compile 校验）；保存经 onPatchSettings 补丁 */
-function ProtectedBranchCard({
-  patterns,
-  onSave,
-}: {
-  patterns: string[];
-  onSave: (patterns: string[]) => void;
-}): React.ReactNode {
-  const [text, setText] = useState(patterns.join('\n'));
-  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l !== '');
-  const invalid = lines.find((l) => {
-    try {
-      new RegExp(l);
-      return false;
-    } catch {
-      return true;
-    }
-  });
-  const dirty = text !== patterns.join('\n');
-  return (
-    <Card title="保护分支" size="small" data-testid="protected-branches-card">
-      <Flex vertical gap={8}>
-        <Typography.Text type="secondary">
-          每行一个正则模式，匹配剥远程名前缀的分支名（origin/main → main）；匹配得到的远程分支上的已推送提交不可重写
-          （Reword/Drop/Squash/Fixup 将被拒绝——GitProtectedBranches.isCommitPublishedBlocking 语义）
-        </Typography.Text>
-        <Tooltip title="填写保护分支的正则模式：每行一个，匹配到的远程分支上的已推送提交不允许被重写">
-          <Input.TextArea
-            data-testid="protected-patterns-input"
-            size="small"
-            rows={3}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={'每行一个模式，如：\n^main$\n^release/'}
-          />
-        </Tooltip>
-        {invalid !== undefined && (
-          <Typography.Text type="danger" data-testid="protected-patterns-error">
-            非法正则：{invalid}
-          </Typography.Text>
-        )}
-        <div>
-          {/* 禁用按钮不派发 hover：包 span 承接提示；文案随禁用原因（非法正则 / 未改动）切换 */}
-          <Tooltip
-            title={
-              invalid !== undefined
-                ? `正则语法非法（${invalid}）：修正该行后才能保存`
-                : dirty
-                  ? '保存这份模式列表：写入应用设置，立即约束可改写的提交范围'
-                  : '内容与已保存的模式相同：改动后才能保存'
-            }
-          >
-            <span>
-              <Button
-                data-testid="protected-patterns-save"
-                size="small"
-                disabled={!dirty || invalid !== undefined}
-                onClick={() => onSave(lines)}
-              >
-                保存
-              </Button>
-            </span>
-          </Tooltip>
-        </div>
-      </Flex>
-    </Card>
-  );
-}
-
-export function SettingsPage({
-  settings,
-  onPatchSettings,
+/**
+ * 仓库设置页：只放**写入本仓库**的项。
+ * 作用域提示：Git 配置行左侧「生效值」来自 git 配置合并（local > global > system），右侧输入框写的是
+ * 本仓库的 local 覆盖值（`.git/config`）；在页面上看到值 ≠ 保存在本仓库——只有点「保存」才落本仓库。
+ */
+export function RepoSettingsPage({
   config,
   onSetConfig,
-  accounts,
-  onAddAccount,
-  onDeleteAccount,
-  gitExecutable,
   gpgConfig,
   onSetGpgConfig,
   gpgSaving,
-}: SettingsPageProps): React.ReactNode {
-  const [addOpen, setAddOpen] = useState(false);
+  onBack,
+  onOpenOtherSettings,
+}: RepoSettingsPageProps): React.ReactNode {
   const [gpgOpen, setGpgOpen] = useState(false);
-  // 页面根：横向沾满（原 maxWidth:720 人为收窄，移除）；gap/padding 照抄既有值。
-  // 密度传 "default"：设置页按 spec D6 保持 antd 默认密度（其余页面由 PageShell 走紧凑密度）。
-  // componentSize="small"：本页控件一律小尺寸（逐个控件也已显式声明，此处兜底 portal 内的默认档控件）。
   return (
-    <ConfigProvider componentSize="small">
-      <PageShell density="default" gap={16} padding={16}>
-        <Card title="应用设置" size="small">
-          {settings ? (
-            /*
-             * 应用设置两项均走 Form.Item 纵向布局：label 在上、控件在下（无表单字段语义，仅取其排版）。
-             * component={false} 不落地 form 元素：内部只有受控控件，无原生提交语义。
-             */
-            <Form layout="vertical" size="small" component={false}>
-              {/* 标签文案即原说明文字：Switch（无内联文本）由 label 承担可读名称 */}
-              <Form.Item label="在编辑器中查看提交日志" style={{ marginBottom: 12 }}>
-                <Tooltip title="切换提交日志的查看方式：开启后用本机编辑器打开，关闭则用内置页面查看（应用设置 logInEditor）">
-                  <Switch
-                    size="small"
-                    checked={settings.logInEditor}
-                    onChange={(checked) => onPatchSettings({ logInEditor: checked })}
-                  />
-                </Tooltip>
-              </Form.Item>
-              {/* 界面主题偏好：自动（跟随系统）/明亮/暗色三选一，写入应用设置后由 Providers 全站生效（含 Monaco 与 body 底色） */}
-              <Form.Item label="界面主题" style={{ marginBottom: 0 }}>
-                <Tooltip title="选择界面配色：自动跟随操作系统的明暗偏好；明亮/暗色为显式指定。保存后全站立即生效（含编辑器与页面底色）">
-                  <Segmented
-                    data-testid="theme-segmented"
-                    size="small"
-                    value={settings.theme}
-                    options={[
-                      { label: '自动', value: 'auto' },
-                      { label: '明亮', value: 'light' },
-                      { label: '暗色', value: 'dark' },
-                    ]}
-                    onChange={(value) => onPatchSettings({ theme: value as ThemeMode })}
-                  />
-                </Tooltip>
-              </Form.Item>
-            </Form>
-          ) : (
-            <Skeleton active />
-          )}
-        </Card>
-        {/* 保护分支（GitVcsPanel.protectedBranchesRow 语义）：模式列表 + 行内正则校验；仅在应用设置就绪后渲染 */}
-        {settings !== undefined && (
-          <ProtectedBranchCard
-            patterns={settings.protectedBranchPatterns}
-            onSave={(patterns) => onPatchSettings({ protectedBranchPatterns: patterns })}
-          />
+    <SettingsShell
+      backLabel="返回日志"
+      backTooltip="返回该仓库的提交日志页"
+      onBack={onBack}
+      crossLabel="应用设置"
+      crossTooltip="打开应用设置：界面主题、保护分支模式、Git 可执行文件与账户（对所有仓库生效）"
+      crossTestId="app-settings-link"
+      onCross={() => onOpenOtherSettings?.()}
+    >
+      <Card title="Git 配置（仓库级）" size="small" data-testid="repo-config-card">
+        {config ? (
+          <Flex vertical gap={8}>
+            {config.entries.map((entry) => (
+              <ConfigRow key={entry.key} entry={entry} onSetConfig={onSetConfig} />
+            ))}
+          </Flex>
+        ) : (
+          <Skeleton active />
         )}
-        <Card title="Git 配置（仓库级）" size="small">
-          {config ? (
-            <Flex vertical gap={8}>
-              {config.entries.map((entry) => (
-                <ConfigRow key={entry.key} entry={entry} onSetConfig={onSetConfig} />
-              ))}
-            </Flex>
-          ) : (
-            <Skeleton active />
-          )}
-        </Card>
-        {/* git 可执行文件检测（GitExecutableSelectorPanel 语义）：检测 + 版本徽标；未检出 → 引导到 PATH 修复 */}
-        {gitExecutable !== undefined ? (
-          <Card title="Git 可执行文件" size="small" data-testid="git-executable-card">
-            {gitExecutable.ok ? (
-              <Flex align="center" gap={8}>
-                <Tag color="green" data-testid="git-executable-ok">已检测</Tag>
-                <Typography.Text type="secondary">{gitExecutable.exec}（PATH 查找）</Typography.Text>
-                <Typography.Text code data-testid="git-executable-version">
-                  {gitExecutable.version ?? ''}
-                </Typography.Text>
-              </Flex>
+      </Card>
+      {/* GPG 提交签名（GitGpgConfigDialog / GpgSignConfigurableRow 语义）：状态行 + 「配置…」→ 密钥 Modal */}
+      {gpgConfig !== undefined && onSetGpgConfig !== undefined && (
+        <Card
+          title="GPG 提交签名"
+          size="small"
+          data-testid="gpg-card"
+          extra={
+            <Tooltip title="打开 GPG 签名配置弹窗：开关提交签名并选择签名密钥">
+              <Button size="small" data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
+                配置…
+              </Button>
+            </Tooltip>
+          }
+        >
+          <Flex align="center" gap={8}>
+            {gpgConfig.enabled ? (
+              <>
+                <Tag color="green" data-testid="gpg-enabled-tag">
+                  已启用
+                </Tag>
+                <Typography.Text>{gpgConfig.key ?? '未配置签名密钥（commit.gpgsign=true）'}</Typography.Text>
+                {gpgConfig.key !== null && (
+                  <Typography.Text type="secondary">
+                    {gpgConfig.keys.find((k) => k.id === gpgConfig.key)?.description ?? ''}
+                  </Typography.Text>
+                )}
+              </>
             ) : (
-              <Alert
-                type="warning"
-                showIcon
-                data-testid="git-executable-error"
-                title="未检测到可用的 git 可执行文件"
-                description="请安装 Git 并确保 git 命令在服务进程的 PATH 环境中可执行（git --version 可正常运行）"
-              />
+              <>
+                <Tag data-testid="gpg-disabled-tag">未启用</Tag>
+                <Typography.Text type="secondary">commit.gpgsign 为 false/未设置</Typography.Text>
+              </>
             )}
-          </Card>
-        ) : null}
-        {/* GPG 提交签名（GitGpgConfigDialog / GpgSignConfigurableRow 语义）：状态行 + 「配置…」→ 密钥 Modal */}
-        {gpgConfig !== undefined && onSetGpgConfig !== undefined && (
-          <Card
-            title="GPG 提交签名"
-            size="small"
-            data-testid="gpg-card"
-            extra={
-              <Tooltip title="打开 GPG 签名配置弹窗：开关提交签名并选择签名密钥">
-                <Button size="small" data-testid="gpg-configure-button" onClick={() => setGpgOpen(true)}>
-                  配置…
-                </Button>
-              </Tooltip>
-            }
-          >
-            <Flex align="center" gap={8}>
-              {gpgConfig.enabled ? (
-                <>
-                  <Tag color="green" data-testid="gpg-enabled-tag">
-                    已启用
-                  </Tag>
-                  <Typography.Text>{gpgConfig.key ?? '未配置签名密钥（commit.gpgsign=true）'}</Typography.Text>
-                  {gpgConfig.key !== null && (
-                    <Typography.Text type="secondary">
-                      {gpgConfig.keys.find((k) => k.id === gpgConfig.key)?.description ?? ''}
-                    </Typography.Text>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Tag data-testid="gpg-disabled-tag">未启用</Tag>
-                  <Typography.Text type="secondary">commit.gpgsign 为 false/未设置</Typography.Text>
-                </>
-              )}
-            </Flex>
-          </Card>
-        )}
-        {/* 账户卡片：仅在 accounts 与两个回调齐备时渲染（旧容器缺省即不出现，向后兼容） */}
-        {accounts && onAddAccount && onDeleteAccount && (
-          <Card
-            title="账户"
-            size="small"
-            extra={
-              <Tooltip title="打开添加账户弹窗：填写主机、账户名与访问令牌后保存到本地凭据">
-                <Button type="primary" size="small" data-testid="add-account-button" onClick={() => setAddOpen(true)}>
-                  添加账户
-                </Button>
-              </Tooltip>
-            }
-          >
-            {accounts.accounts.length === 0 ? (
-              <Typography.Text type="secondary">暂无账户</Typography.Text>
-            ) : (
-              <Flex vertical gap={8}>
-                {accounts.accounts.map((entry) => (
-                  <AccountRow
-                    key={`${entry.host}-${entry.account}`}
-                    entry={entry}
-                    onDeleteAccount={onDeleteAccount}
-                  />
-                ))}
-              </Flex>
-            )}
-          </Card>
-        )}
-        {onAddAccount && (
-          <AddAccountModal open={addOpen} onAddAccount={onAddAccount} onClose={() => setAddOpen(false)} />
-        )}
-        {/* GPG 配置 Modal：条件渲染（开才挂载）→ 每次打开从当前配置重置 checkbox/密钥选择 */}
-        {gpgOpen && gpgConfig !== undefined && onSetGpgConfig !== undefined && (
-          <GpgConfigModal
-            config={gpgConfig}
-            saving={gpgSaving}
-            onSetGpgConfig={onSetGpgConfig}
-            onClose={() => setGpgOpen(false)}
-          />
-        )}
-      </PageShell>
-    </ConfigProvider>
+          </Flex>
+        </Card>
+      )}
+      {/* GPG 配置 Modal：条件渲染（开才挂载）→ 每次打开从当前配置重置 checkbox/密钥选择 */}
+      {gpgOpen && gpgConfig !== undefined && onSetGpgConfig !== undefined && (
+        <GpgConfigModal
+          config={gpgConfig}
+          saving={gpgSaving}
+          onSetGpgConfig={onSetGpgConfig}
+          onClose={() => setGpgOpen(false)}
+        />
+      )}
+    </SettingsShell>
   );
 }

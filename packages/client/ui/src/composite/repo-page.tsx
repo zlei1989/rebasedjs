@@ -43,8 +43,8 @@ export interface RepoPageProps {
   cloning?: boolean;
   /** 初始化进行中：Modal 确定按钮 loading */
   initializing?: boolean;
-  /** 设置入口（欢迎屏 Configure → SettingsPage 语义）：点击以最近仓库 id 回调；无最近仓库时禁用；缺省不渲染 */
-  onOpenSettings?: (repoId: string) => void;
+  /** 设置入口（欢迎屏 Configure 语义）：打开**应用设置**页（与仓库无关，故无仓库时也可点）；缺省不渲染 */
+  onOpenSettings?: () => void;
 }
 
 /** 最近列表上限（对齐 Java RecentProjectsManagerBase 上限 50，与服务端 RECENT_LIMIT 同口径） */
@@ -228,28 +228,16 @@ export function RepoPage({
             </Button>
           </Tooltip>
         ) : null}
-        {/* 设置入口（欢迎屏 Configure 语义）：以最近仓库进入设置页（设置按仓库 git 配置呈现）；无仓库时禁用 */}
+        {/* 设置入口（欢迎屏 Configure 语义）：应用设置是全局项（外观/保护分支/账户），与是否有最近仓库无关 */}
         {onOpenSettings ? (
-          // 禁用按钮不派发 hover，按 antd 做法在 Tooltip 与 Button 间包一层 span 承接提示
-          <Tooltip
-            title={
-              visible.length === 0
-                ? '暂无最近仓库：设置项按仓库 git 配置呈现，先打开一个仓库'
-                : '打开最近仓库的设置页（git 配置 / 账户 / 外观）'
-            }
-          >
-            <span>
-              <Button
-                icon={<SettingOutlined />}
-                disabled={visible.length === 0}
-                data-testid="open-settings-button"
-                onClick={() => {
-                  if (visible[0] !== undefined) onOpenSettings(visible[0].id);
-                }}
-              >
-                设置
-              </Button>
-            </span>
+          <Tooltip title="打开应用设置：界面主题、保护分支模式、Git 可执行文件与账户（对所有仓库生效）">
+            <Button
+              icon={<SettingOutlined />}
+              data-testid="open-settings-button"
+              onClick={() => onOpenSettings()}
+            >
+              设置
+            </Button>
           </Tooltip>
         ) : null}
       </Flex>

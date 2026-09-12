@@ -242,9 +242,9 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 
 | 层 | 组件 |
 |----|------|
-| base/ | **布局原语：`PageShell`、`Toolbar`、`EllipsisText`、`SplitPane` + 密度模块 `density.ts`/`density-context.tsx`（口径见 §6）**、`VirtualList`、`GraphCanvas`、`FileTree`、`MonacoDiffView`/`MonacoTextView`（`monaco-lazy` 懒加载 monaco-editor）、`EmptyState`、`OperationStatus` |
+| base/ | **布局原语：`PageShell`、`Toolbar`、`EllipsisText`、`SplitPane` + 密度模块 `density.ts`/`density-context.tsx`（口径见 §6）+ 主题模块 `app-theme.tsx`（`useResolvedTheme`：偏好 → 实际明暗 + antd 配置 + `data-theme`，两个 app 共用，§5.23）**、`VirtualList`、`GraphCanvas`、`FileTree`、`MonacoDiffView`/`MonacoTextView`（`monaco-lazy` 懒加载 monaco-editor）、`EmptyState`、`OperationStatus` |
 | domain/ | `CommitGraph`、`RepoStatusBar`、`CommitDetailsPanel`、`DiffViewer`（并排/行内 + staged/工作区切换 + 忽略空白开关）、`HunkDiffView`（PR/MR 行级 diff）、`DirectoryTree`、`CommittedStatus` |
-| composite/ | `RepoPage`、`LogPage`、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`BlameView`、`HistoryPanel`、`CommittedChangesPanel`、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BrowsePanel`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`SettingsPage` |
+| composite/ | `RepoPage`、`LogPage`、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`BlameView`、`HistoryPanel`、`CommittedChangesPanel`、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BrowsePanel`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`AppSettingsPage`/`RepoSettingsPage`/`SettingsShell`（§5.23 设置页按作用域拆两页，外壳共用） |
 | graph-layout/ | 自 vcs-log/graph 移植的布局算法（纯函数，不 import React；`fixtures/java/` 为 Java testData 转制的行为等价夹具） |
 
 ### 2.6 框架层：web-next 与 web-koa

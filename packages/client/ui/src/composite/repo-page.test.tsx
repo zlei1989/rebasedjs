@@ -250,8 +250,8 @@ describe('RepoPage 点击列表项打开仓库（点击最近项目 → 日志�
   });
 });
 
-describe('RepoPage 设置入口（欢迎屏 Configure → SettingsPage 语义 #3）', () => {
-  it('有最近仓库：点击以最近仓库 id 调 onOpenSettings（打开时间降序优先）', () => {
+describe('RepoPage 设置入口（欢迎屏 Configure 语义 #3）', () => {
+  it('点击以无参回调打开应用设置（全局项，与最近仓库无关）', () => {
     const onOpenSettings = vi.fn();
     render(
       <RepoPage
@@ -266,15 +266,18 @@ describe('RepoPage 设置入口（欢迎屏 Configure → SettingsPage 语义 #3
     );
     fireEvent.click(screen.getByTestId('open-settings-button'));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
-    expect(onOpenSettings).toHaveBeenCalledWith('newer');
+    // 应用设置与仓库无关：回调不带任何仓库参数
+    expect(onOpenSettings.mock.calls[0]).toEqual([]);
   });
 
-  it('无最近仓库：按钮禁用；未注入回调：按钮不渲染', () => {
+  it('无最近仓库：按钮仍可点（应用设置不依赖仓库）；未注入回调：按钮不渲染', () => {
     const onOpenSettings = vi.fn();
     const { rerender } = render(
       <RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} onOpenSettings={onOpenSettings} />,
     );
-    expect(screen.getByTestId('open-settings-button')).toBeDisabled();
+    expect(screen.getByTestId('open-settings-button')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('open-settings-button'));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
     rerender(<RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} />);
     expect(screen.queryByTestId('open-settings-button')).not.toBeInTheDocument();
   });

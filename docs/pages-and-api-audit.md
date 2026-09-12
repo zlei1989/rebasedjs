@@ -92,7 +92,7 @@
 | 27 | GitLabPanel | GitLab 认证/MR 全流程 | gitlab | P4 | ✅ |
 | 28 | GitConsole | Git 命令输出控制台 | console | P3 | ✅ |
 | 29 | QuickActionsMenu | 快捷操作聚合菜单 | 聚合各域 | P2+ | 🟡 等效（顶栏 + 更多菜单 + 操作条） |
-| 30 | SettingsPage | 应用设置 + git 配置 | settings/config | P1/P2 | ✅ |
+| 30 | SettingsPage（应用设置 + 仓库设置两页） | 应用设置（全局）+ 仓库 git 配置/GPG | settings/config | P1/P2 | ✅ |
 | 31 | BrowsePanel | 某提交处只读浏览文件树 + 文件内容（历史快照浏览） | browse | P4 | ✅ |
 
 > 有路由的页面 23 个（`/` + `/repos/:id` 下 22 个子路由，两端对称）；内嵌模态 7 个（ResetDialog、RebaseDialog、PushDialog、PullDialog、UpdateProjectDialog、MergeView、AuthDialog）；CommitDialog 由 StatusPage 内嵌提交框承载、QuickActionsMenu 由顶栏+更多菜单聚合承载，均不计入已复刻页面数。
@@ -124,10 +124,10 @@
 | diff | `repos/:id/diff/stream` | GET | 大 diff SSE 分块流 | DiffStreamView 渐进渲染（全文未就绪期间呈现当前进度） | ✅ |
 | diff | `repos/:id/diff/patch` | GET | unified patch 全文 | StatusPage 补丁预览、PatchPanel | ✅ |
 | events | `repos/:id/events` | GET | SSE 仓库状态/操作推送（首帧双事件） | LogPage、StatusPage 等自订阅 | ✅ |
-| settings | `settings`、`settings/git-executable` | GET/PUT + GET | 应用设置读写 / git 可执行文件检测（PATH + 版本，GitExecutableSelectorPanel 语义） | SettingsPage | ✅ |
-| auth | `auth/accounts`、`auth/accounts/delete` | GET/POST/POST | 账户/令牌存储（应用级） | SettingsPage 账户卡片、远程认证 | ✅ |
-| config | `repos/:id/config` | GET/PUT | git 配置白名单 9 键读写（含 GPG/commit template） | SettingsPage | ✅ |
-| gpg-config | `repos/:id/settings/gpg-config` | GET/PUT | GPG 提交签名配置（启用态 + 密钥列表 + 写 commit.gpgsign/user.signingkey） | SettingsPage | ✅ |
+| settings | `settings`、`settings/git-executable` | GET/PUT + GET | 应用设置读写 / git 可执行文件检测（PATH + 版本，GitExecutableSelectorPanel 语义） | AppSettingsPage（`/settings`） | ✅ |
+| auth | `auth/accounts`、`auth/accounts/delete` | GET/POST/POST | 账户/令牌存储（应用级） | AppSettingsPage 账户卡片、远程认证 | ✅ |
+| config | `repos/:id/config` | GET/PUT | git 配置白名单 9 键读写（含 GPG/commit template） | RepoSettingsPage（`/repos/:id/settings`） | ✅ |
+| gpg-config | `repos/:id/settings/gpg-config` | GET/PUT | GPG 提交签名配置（启用态 + 密钥列表 + 写 commit.gpgsign/user.signingkey） | RepoSettingsPage | ✅ |
 | operation | `repos/:id/operation`、`operation/abort`、`operation/continue`、`operation/skip` | GET + 3×POST | 进行中操作查询/中止/继续（continue 泛化四操作共用）/跳过（rebase/cherry-pick/revert） | LogPage 操作条、ConflictsPanel「完成合并/跳过」 | ✅ |
 | staging | `repos/:id/staging` | POST | 文件级 stage/unstage/discard | StatusPage | ✅ |
 | staging | `repos/:id/staging/hunks` | POST | hunk 级暂存（按 diff/patch hunk 索引） | StatusPage 补丁预览行内 hunk 选择 | ✅ |
@@ -600,9 +600,12 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 
 ### 4.30 SettingsPage ✅
 
-应用设置 + git 配置页；对应 `GitVcsPanel` / `GitExecutableSelectorPanel` / `GitGpgConfigDialog` / `SSHConnectionSettings` / `VcsLogConfigurable` / `GitConfig`。
+设置页（§5.23 按**作用域**拆为两页）；对应 `GitVcsPanel` / `GitExecutableSelectorPanel` / `GitGpgConfigDialog` / `SSHConnectionSettings` / `VcsLogConfigurable` / `GitConfig`。
 
-- **落点**：路由 `/repos/:id/settings`（key=repoId 切仓库强制重挂载）；组件 `composite/settings-page.tsx`；服务 `api/{config,gpg,auth}.ts`；端点 `GET/PUT /settings`、`GET/PUT /config`、`GET/PUT /settings/gpg-config`、`auth/accounts` 三端点。
+- **落点**：
+  - **应用设置（全局）** `/settings` —— 组件 `AppSettingsPage`（`composite/settings-page.tsx`）；端点 `GET/PUT /settings`、`GET /settings/git-executable`、`auth/accounts` 三端点；进入入口：首页「设置」。
+  - **仓库设置** `/repos/:id/settings`（key=repoId 切仓强制重挂载）—— 组件 `RepoSettingsPage`（同文件）；端点 `GET/PUT /config`、`GET/PUT /settings/gpg-config`；进入入口：日志页顶栏设置图标。
+  - 两页共用 `composite/settings-shell.tsx`（返回按钮 + 互跳链接 + 统一 small 尺寸/默认密度外壳）；服务层仍为 `api/{config,gpg,auth,settings}.ts`（未改）。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
@@ -668,11 +671,11 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 |---|-----------|-----------|-----------|-----------|
 | 1 | RepoPage → 主窗口 | 点击最近项目 / Open | `OpenSelectedProjectsAction`（PlatformActions.xml:1251） | ✅ 点击最近列表项（或输入路径 Open）→ `openRepoFlow`（校验 + 注册 + 刷新「最近」排序）→ `navigate(/repos/:id)`；打开中行内「打开中…」加载态，失效条目走中文错误提示而非空白日志页 |
 | 2 | RepoPage → 克隆对话框 → 主窗口 | Get from VCS | `GetFromVersionControlAction` → `VcsCloneDialog`；`ProjectCheckoutListener.java:21` | ✅ 克隆 Modal（URL + Directory）→ `POST /repos/clone` → 日志页 |
-| 3 | RepoPage → SettingsPage | 欢迎屏 Configure | PlatformActions.xml:1208-1209 | ✅ 欢迎屏「设置」按钮（以最近仓库 id → `/repos/:id/settings`；无最近仓库禁用） |
+| 3 | RepoPage → SettingsPage | 欢迎屏 Configure | PlatformActions.xml:1208-1209 | ✅ 欢迎屏「设置」按钮 → `/settings`（**应用设置**页，与仓库无关，故无最近仓库也可点） |
 | 4 | 主窗口 → RepoPage | File → Close Project | `CloseProjectsActionBase.kt:42-46` | ✅ LogPage 顶栏「首页」链接 → `/`（File→Close Project 语义） |
-| 5 | 任意处 → SettingsPage | File → Settings | PlatformActions.xml:509-510 | ➖（改由 LogPage 顶栏进入） |
-| 6 | LogPage → SettingsPage | Log tab 下拉 Show Settings | `Vcs.Log.ShowSettingsAction`（vcs-log.xml:324） | ✅ 顶栏设置按钮 → `/repos/:id/settings` |
-| 7 | SettingsPage → LogPage | 关闭对话框回源页 | —（模态语义） | ✅ 「返回日志」按钮 |
+| 5 | 任意处 → SettingsPage | File → Settings | PlatformActions.xml:509-510 | ➖（改由 LogPage 顶栏 / 首页「设置」进入） |
+| 6 | LogPage → SettingsPage | Log tab 下拉 Show Settings | `Vcs.Log.ShowSettingsAction`（vcs-log.xml:324） | ✅ 顶栏设置按钮 → `/repos/:id/settings`（**仓库设置**页：git 配置 local + GPG 签名） |
+| 7 | SettingsPage → LogPage | 关闭对话框回源页 | —（模态语义） | ✅ 仓库设置页「返回日志」按钮；应用设置页「返回首页」（两页另有互跳链接） |
 | 8 | GitHub/GitLabPanel → SettingsPage | 面板菜单 Settings | `GHOpenSettingsAction.kt:13`、`GitLabOpenSettingsAction.kt:14` | ✅ 面板顶部「设置」按钮 → `/repos/:id/settings`（无令牌提示卡「去设置」回边既有） |
 
 #### 5.3.2 日志 / 差异 / 历史域

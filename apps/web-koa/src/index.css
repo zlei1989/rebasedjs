@@ -1,4 +1,9 @@
-/** SPA 基础样式：与 web-next 的 globals.css 同源（暗色底 + 盒模型复位） */
+/**
+ * SPA 基础样式：与 web-next 的 globals.css 同源（主题底色变量 + 盒模型复位）。
+ * 主题变量口径（供 ui 包内联样式的 var() 消费）：
+ *  --app-bg 页面底色 / --app-fg 正文色 / --app-border 分隔线 / --app-muted 次要文本 / --app-selected 选中行底色
+ * data-theme 由 useResolvedTheme（@rebased/ui）写入，故设置页切主题后此处底色同步切换。
+ */
 * {
   box-sizing: border-box;
 }
@@ -8,8 +13,33 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #141414;
-  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 暗色（默认，等价原 #141414 观感）：与 web-next 同值，未挂载前不闪白 */
+:root,
+html[data-theme='dark'] {
+  --app-bg: #141414;
+  --app-fg: rgba(255, 255, 255, 0.85);
+  --app-border: #303030;
+  --app-muted: #888;
+  --app-selected: #111a2c;
+  color-scheme: dark;
+}
+
+/* 明亮主题：与 antd defaultAlgorithm 的容器底色一致 */
+html[data-theme='light'] {
+  --app-bg: #ffffff;
+  --app-fg: rgba(0, 0, 0, 0.88);
+  --app-border: #f0f0f0;
+  --app-muted: #888;
+  --app-selected: #e6f4ff;
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--app-bg);
+  color: var(--app-fg);
 }
 
 /* Vite SPA 挂载点承接视口高度：body → #root → .ant-app 的高度链不断（Monaco 编辑器 flex:1/minHeight:0 依赖它） */

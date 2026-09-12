@@ -101,7 +101,7 @@
 | 27 | GitLabPanel | P4 | `/repos/:id/gitlab` | 更多「GitLab」（gitlab.com 远程才渲染） | F-140~F-144（5） | gitlab | ✅ 1/5（F-141~F-144 跳过：需真实 gitlab.com 项目 + PAT） |
 | 28 | GitConsole | P3 | `/repos/:id/console` | 更多「控制台」 | F-145~F-146（2） | console | ✅ 2/2 |
 | 29 | QuickActionsMenu（等效聚合） | P2+ | 顶栏 5 按钮 + 更多菜单 18 项 | 顶栏按钮区 | F-147~F-148（2） | quick-actions | ✅ 2/2 |
-| 30 | SettingsPage | P1/P2 | `/repos/:id/settings` | 顶栏「设置」 | F-149~F-155（7） | settings | ✅ 7/7 |
+| 30 | SettingsPage（拆两页：应用设置 `/settings` + 仓库设置 `/repos/:id/settings`） | P1/P2 | `/settings` 与 `/repos/:id/settings` | 首页「设置」→ 应用设置；顶栏「设置」→ 仓库设置 | F-149~F-155（7，落点见 §4.30 顶部说明） | settings / app-settings | ✅ 7/7 |
 | 31 | BrowsePanel | P4 | `/repos/:id/browse?rev=` | 详情面板「浏览快照」 | F-156~F-159（4） | browse | ✅ 4/4 |
 
 ---
@@ -686,6 +686,7 @@
 | 编号 | 现象（冒烟行） | 根因 | 修复 | 复验 |
 |------|----------------|------|------|------|
 | D-43 | **硬杀 dev 服务后「二级嵌套」API 路由 404、设置页 GPG 卡片等静默消失**（P2；**偶发，未能按需复现**——见右列复核）：原发现于 F-152 真重启之后，dev 日志显示 `GET /api/repos/:id/settings/gpg-config` **404（HTML not-found，8~53ms）**，同批 `commit/amend-targets`、`staging/hunks`、`browse/content` 亦 404，而 `/api/settings`、`/api/repos/:id/config` 始终 200 | `taskkill /T /F` **硬杀** Turbopack dev 进程后，`apps/web-next/.next`（本机实测 4.15~7.3 GB）留下不一致缓存，重启时**部分嵌套路由条目解析丢失**；一级路由不受影响，故表现为「部分接口 404、页面静默少一块」。原发现时的上下文是**浏览器正在连续访问、dev 同时在写缓存**时被硬杀 | **本轮未修复**（环境面 + 产品面各一半）：环境处置——① F-152「真重启」**优先优雅退出**（Ctrl+C / 结束 dev 脚本而非 `/F`）；② 一旦出现嵌套 404，删 `apps/web-next/.next` 再重启即可（原发现时即以此恢复，恢复后全站 200）。产品面建议——对路由缺失给出可读提示，而非静默 404 + 卡片消失 | **复现性（2026-09-12 复核，两次尝试均未复现）**：① 干净硬杀（`taskkill /PID <cmd> /T /F` → 重启）→ `settings/gpg-config`、`commit/amend-targets`、`browse/content` **全部 200**，日志无 404；② **带并发负载硬杀**（后台持续打这 5 个路由，2s 后 `/T /F`）→ 仍全部 200、日志无 404。结论：**症状与处置有效但为条件触发**（需命中缓存写入窗口），不能按需稳定复现；证据仍以原发现时的日志 `%TEMP%\rebased-dev-restart.log`（404 行）与恢复日志 `rebased-dev-restart2.log`（全 200）为准。**取证/运维口径**：遇到「一级 200 + 嵌套 404 + 页面少一块」先删 `.next` 重启，不要先怀疑业务代码 |
+| D-51 | **Turbopack dev 在「模块有编译错误 + 错误行上方注释含中文」时 panic 并**吞掉真实错误**（P3，工具链缺陷，非产品缺陷）：`next dev` 编译 `/repos/[repoId]/settings` 时进程直接退出（exit `3221226505` = STATUS_STACK_BUFFER_OVERRUN），stderr 只有 `panicked at crates\next-code-frame\src\highlight.rs:1011:45: end byte index 93 is not a char boundary; it is inside '一' (bytes 91..94)`，真正的编译错误一行都没打出来 | Next.js 16.2.7 错误码帧渲染（`next-code-frame` 的 highlight）按**字节下标**切片源码，而该行注释是中文（多字节），切点落在字符中间即 panic（Rust `str` 切片越界） | **不修产品代码**（工具链 bug，升级 Next 才可能消失）：处置口径——① 用 `next dev --webpack`（或 `next build --webpack`）拿真实错误，本轮即以此定位到「容器漏 `'use client'`」；② 已把该口径写进 §5.25 的 dev 注意事项 | 2026-09-13 实测复现 2 次（同一路由两次启动均 panic）；改用 `--webpack` 后同一代码立刻给出完整可读错误（`You're importing a module that depends on useRouter into a React Server Component`），修复后 Turbopack 下两路由均 200 |
 
 > D-39/D-40/D-41/D-42（本节原登记项）与收官阶段的 D-44 已修复并复验：修复落点、回归守卫与实测证据见 §5.20。
 
@@ -899,8 +900,55 @@
 
 本文档只保留**对后续迭代仍然有用**的内容；「已修复缺陷」的逐条叙述已删除，替换为可复用的结论：
 
-- **保留**：① 方法学与取证口径（§1）；② 功能矩阵总览 + 159 行逐行证据（§2、§4，行内保留截图名与 CLI 互证）；③ 不测清单与理由（§3）；④ 跨页面验收基线（§5.16 布局/密度六档）；⑤ **仍开放项**（§5.17 的 D-43、§5.16 的 D-38）与全部流程/夹具纠偏 P-01~P-28（§5.17）；⑥ 主题与响应式抽查、截图账目流程（§5.18~§5.19）；⑦ 修复项的**修复落点 + 回归守卫 + 实测结论**（§5.20 R23 缺陷、§5.23 提交图渲染）；⑧ 当前产品口径与已知缺口（§5.21~§5.22）。
+- **保留**：① 方法学与取证口径（§1）；② 功能矩阵总览 + 159 行逐行证据（§2、§4，行内保留截图名与 CLI 互证）；③ 不测清单与理由（§3）；④ 跨页面验收基线（§5.16 布局/密度六档）；⑤ **仍开放项**（§5.17 的 D-43、D-51，§5.16 的 D-38）与全部流程/夹具纠偏 P-01~P-28（§5.17）；⑥ 主题与响应式抽查、截图账目流程（§5.18~§5.19）；⑦ 修复项的**修复落点 + 回归守卫 + 实测结论**（§5.20 R23 缺陷、§5.23 提交图渲染）；⑧ 当前产品口径与已知缺口（§5.21~§5.22）。
 - **已删除**：历史缺陷 D-01~D-38、D-39~D-42、D-44 的「现象 / 根因 / 复现步骤 / 当轮复验」叙述——它们均已修复，逐条叙述只对当时轮次有意义（D-35~D-37 压缩为一行，见 §5.16）。
 - **追溯方式**：需要旧记录时取 git 历史中的本文档旧版：`git log --oneline -- docs/e2e-verification.md`，再 `git show <sha>:docs/e2e-verification.md`。
 - **后续新增记录的写法**：仍按本节开头的记录规范回填；**缺陷修复后**请把该条压缩成「一句话现象 + 修复落点 + 回归守卫 + 实测结论」并并入 §5.20 式表格，不要保留长篇复现叙事。
+
+### 5.25 设置页按作用域拆两页 + web-koa 主题接线（2026-09-13）
+
+> 触发：用户要求 ① 修掉「主题在 web-koa 不生效」；② 把全局类与仓库类设置分开，并改成**首页 → 应用设置（全局）**、**日志页 → 仓库设置**。
+
+**变更① 主题口径收敛到 ui 包，web-koa 接线**
+
+- 现象（改前）：web-koa 的 SPA 固定暗色（`main.tsx` 硬编码 `theme.darkAlgorithm` + `DensityProvider mode="dark"`），设置页主题控件在 koa 侧点了不生效；`index.css` 也硬编码 `#141414`，ui 包按 `var(--app-*)` 上色的地方在 koa 下拿不到值。
+- 修复落点：新增 `packages/client/ui/src/base/app-theme.tsx`（`useResolvedTheme` + 纯函数 `resolveThemeMode`）——**偏好由 app 从 `useSettings()` 取后以 props 传入**（ui 不 import `@rebased/client`，与 `DensityProvider`/`SettingsPage` 的既有口径一致）；hook 内统一做三件事：解析 auto（订阅 `prefers-color-scheme`）、产出 `ThemeConfig`、写 `html[data-theme]`/`data-theme-preference` 并注册 `ConfigProvider.config({ holderRender })`。两个 app 的根 Provider（`app/providers.tsx` / `main.tsx` 的 `ThemedApp`）改为消费同一 hook；`apps/web-koa/src/index.css` 补齐 `--app-bg/--app-fg/--app-border/--app-muted/--app-selected` 与两种 `data-theme` 选择器（与 web-next `globals.css` 同值）。
+- **反向口径（本轮曾走错，留作教训）**：一度把该 hook 放进 `@rebased/client`，代价是数据层包凭空多出 `antd` 运行时依赖与 `jsdom` 开发依赖 —— 已撤回。**主题解析属 ui 职责**（antd/配置/文档根属性），偏好获取属 app 容器职责，`client` 只做数据获取。
+- 回归守卫：`packages/client/ui/src/base/app-theme.test.tsx`（6 例：未就绪按暗色兜底 / 显式 light / auto 跟随系统且**系统变化即时生效**与卸载退订 / `apply:false` 不写文档根 / holderRender 承载 AntdApp）。
+- 修复后实测（浏览器 DOM）：koa SPA `http://localhost:5173/settings` 切「明亮」→ `data-theme=light`、`preference=light`、body `rgb(255,255,255)`、`--app-bg=#ffffff`；切「暗色」→ `data-theme=dark`、body `rgb(20,20,20)`、`--app-bg=#141414`、卡片底色 `rgb(20,20,20)`（antd 算法确实换档）；`:5173` diff 页 Monaco 容器底色 `rgb(255,255,254)` = **Monaco 明亮主题**（`monaco-lazy` 按 `data-theme` 取 `light`）。
+
+**变更② 设置页按作用域拆两页**
+
+| 页面 | URL | 卡片（数据源） | 入口 |
+|------|-----|----------------|------|
+| **应用设置** | `/settings`（新增；web-next `app/settings/page.tsx`、web-koa `pages/app-settings.tsx`） | 应用设置（`logInEditor`/`theme`）+ 保护分支 + Git 可执行文件 + 账户（`GET/PUT /settings`、`/settings/git-executable`、`auth/accounts`——全部与 repoId 无关） | 首页「设置」按钮 |
+| **仓库设置** | `/repos/:id/settings`（保留） | Git 配置（仓库级）9 键 + GPG 提交签名（`repos/:id/config`、`repos/:id/settings/gpg-config`——写本仓库 `.git/config`） | 日志页顶栏设置图标 |
+
+- 组件落点：`composite/settings-page.tsx` 导出 `AppSettingsPage` / `RepoSettingsPage`（共用文件内私有卡片子组件），外壳抽到新文件 `composite/settings-shell.tsx`（返回按钮 + 两页互跳链接 + `componentSize="small"` 与 `density="default"` 的统一口径）。删除旧的单一 `SettingsPage` 与其 454 行测试，拆为 `app-settings-page.test.tsx`（16 例）+ `repo-settings-page.test.tsx`（11 例），两边都含**作用域隔离断言**（应用页不渲染 git 配置行/GPG 卡，仓库页不渲染应用设置/保护分支/账户/可执行文件卡）。
+- 入口改指：首页 `RepoPage.onOpenSettings` 由 `(repoId) => void` 改为 `() => void`（无参），按钮**不再因「无最近仓库」禁用**（应用设置不依赖仓库），Tooltip 改为「打开应用设置…」；GitHub/GitLab 面板的「设置」「去设置」改指 `/settings`（令牌配在全局账户卡片）；日志页顶栏设置图标语义不变（→ 仓库设置），Tooltip 收窄为「仓库设置：该仓库的 git 配置与 GPG 提交签名」。
+- 互跳：应用设置页顶部「仓库设置」（无最近仓库时**禁用**并在 Tooltip 说明原因——取最近列表第一条作落点）、仓库设置页顶部「应用设置」；返回按钮分别为「返回首页」/「返回日志」。**导航条形态**：antd `Space` + `Divider orientation="vertical"`（两个 link 按钮同一行、中间一条竖线；antd 6 口径用 `Space.separator` / `Divider.orientation`，`split`/`type` 已废弃），`Space size={0}`（项间距交给 Divider 自身 8px 左右外边距，实测两链接各距竖线 8px），按钮 `size="small"` 逐个显式声明（实测高 24px、两页几何一致）。
+- 回归守卫：`repo-page.test.tsx` 的设置入口两例（无参回调；无仓库仍可点）、两页互跳各一例（调 `onBack` / `onOpenOtherSettings`，并断言导航条存在 `.ant-divider-vertical`）。
+- 巡检脚本：`scripts/check-fluid-layout.mjs` 路由表新增 `app-settings`（`/settings`，density `default`，ready `app-settings-card` + 内容门 `theme-segmented`），仓库设置页 ready 由静态 `git-executable-card`（已随拆分移走）改为数据级 `repo-config-card`；截图页清单同步新增 `app-settings`。
+- 修复后实测（:3030，MCP 逐步点）：首页「设置」→ `/settings`（应用级卡片俱全：应用设置 / 保护分支 / Git 可执行文件 / 账户）→ 点「仓库设置」→ `/repos/f761a9f6…/settings`（只有「Git 配置（仓库级）」「GPG 提交签名」两张卡，DOM 断言 `app-settings-card`/`protected-branches-card`/`accounts-card` 均不存在）→ 点「应用设置」→ 回 `/settings`；日志页顶栏设置图标 → `/repos/9918c699…/settings`。主题在导航间保持（`data-theme=light` 跨页仍在），冒烟后已切回「自动」（`GET /api/settings` → `"theme":"auto"`）。
+- **dev 环境注意（本轮踩坑，非产品缺陷）**：`next dev`（Turbopack）在「模块有编译错误 + 错误行上方注释含中文」时，其错误码帧渲染会 panic（`next-code-frame/src/highlight.rs` 的字节下标落在多字节字符中间），进程直接退出、且真实错误被吞掉；本轮据此用 `next dev --webpack` 才拿到真实错误（`app/repos/[repoId]/settings/page.tsx` 漏了首行 `'use client'`，已修）。遇到同类「二级路由 404 / dev 进程消失」先按 D-43 删 `.next`，仍复现则临时改用 `--webpack` 定位。
+- **未覆盖与后续**：① `apps/web-next/app/settings/page.tsx` 的 Next.js 服务端/客户端边界只靠 `next build --webpack` 与实际渲染验证，本轮未跑 `check-fluid-layout.mjs` 全量矩阵（该脚本的 `app-settings` 格为新增，尚未实测）；② web-koa 侧「无最近仓库」时互跳禁用的 UI 分支未在 :5173 实测（单测覆盖）；③ 本轮未重拍设置页截图（`settings-0*.png` 仍反映拆分前的单页形态，重拍时需按新两页命名）。
+
+**冒烟（2026-09-13，本节改动的逐项实测；截图已入库 `docs/shots/`）**
+
+- **范围清单**：① 首页「设置」→ 应用设置页（全局）✅；② 应用设置页卡片组成（应用设置/保护分支/Git 可执行文件/账户）✅；③ 应用设置页 →「仓库设置」互跳 ✅；④ 仓库设置页卡片组成（仅 Git 配置（仓库级）/GPG 提交签名）✅；⑤ 仓库设置页 →「应用设置」互跳 ✅；⑥ 主题切换（暗色→明亮）即时生效、跨页保持 ✅；⑦ GitHub 面板「设置」→ 应用设置页 ✅；⑧ web-koa SPA（:5173）主题随应用设置生效 ✅；⑨ 导航条形态（Space size=0 + 竖直 Divider；按钮 small 24px）两页一致 ✅；⑩ 冒烟后主题复位为 `auto`（`GET /api/settings` → `"theme":"auto"`）✅。
+- **操作路径**：`:3030/settings`（暗色取证）→ 点「仓库设置」→ `:3030/repos/f761a9f6…/settings`（暗色取证）→ 点「应用设置」→ 切「明亮」→ 应用设置页（明亮取证）→ 点「仓库设置」（明亮取证）→ `:3030/repos/9918c699…/github`（入口取证）→ 点「设置」→ 落在 `/settings` → `:5173/settings`（koa 明亮取证）→ 回 `:3030/settings` 切「自动」复位。
+- **证据（截图 6 张，全为绝对路径入库 `docs/shots/`）**：
+
+| 截图 | 取景与判定 |
+|------|------------|
+| `app-settings-01-dark.png` | 应用设置页（暗色）：导航条「返回首页 | 仓库设置」同一行、竖线分隔；卡片为 应用设置（编辑器开关 + 主题三选）/ 保护分支 / Git 可执行文件 / 账户，**无**任何仓库级卡片 |
+| `app-settings-02-light.png` | 同页切「明亮」后：body `rgb(255,255,255)`、卡片与控件全亮色（证明主题即时生效、无需刷新） |
+| `repo-settings-01-dark.png` | 仓库设置页（暗色）：导航条「返回日志 | 应用设置」；仅两张卡「Git 配置（仓库级）」9 行 +「GPG 提交签名」 |
+| `repo-settings-02-light.png` | 同页明亮态：切主题后跨页保持（本页由互跳进入，未再点主题控件） |
+| `github-settings-entry-light.png` | GitHub 面板顶部「设置」入口（明亮态）：Tooltip 语义为「打开应用设置：GitHub 令牌配在「账户」卡片」 |
+| `koa-app-settings-light.png` | **web-koa SPA（:5173）应用设置页**：`data-theme=light`、body `rgb(255,255,255)`、`--app-bg=#ffffff` —— 即「主题在 koa 侧不生效」缺口的修复证据 |
+
+- **DOM 互证（与截图同轮）**：`:3030` 应用设置页导航条 `返回首页 x=16 w=72` → 竖线 `x=96 w=1 h=13`（`.ant-divider-vertical`）→ `仓库设置 x=104 w=72`，两侧各 8px（`Space size={0}` 后仅剩 Divider 自带外边距）；两按钮 `ant-btn-sm` 高 24px。`:5173` 同页同几何（`ant-btn-sm` 24px + `.ant-divider-vertical` 存在）。`:3030` 仓库设置页 DOM 断言 `app-settings-card`/`protected-branches-card`/`accounts-card` 均不存在，只剩 `repo-config-card` + `gpg-card`；应用设置页反之。
+- **CLI 互证**：`git config --global --list` → `user.name/user.email/core.autocrlf` 仍来自全局（页面上「生效值」列即这些值），仓库 `.git/config` 内这 9 键仍为空 → 印证「应用设置页不含仓库级项、仓库设置页写 local」的作用域切分与页面呈现一致；冒烟结束 `GET /api/settings` → `theme: auto`。
+- **截图账目**：本轮新增 **6** 张，`docs/shots/` 计 **206** 张；全量 SHA256 自检 **0 重复组**（含新增 6 张两两不同）。`settings-0*.png`（8 张）为拆分前单页形态，**未删除**（其功能点证据仍有效），后续按新两页命名重拍时再归档。
 

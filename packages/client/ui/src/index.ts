@@ -21,7 +21,12 @@ export { CommitDetailsPanel, type CommitDetailsPanelProps } from './domain/commi
 export { RepoPage, type RepoPageProps } from './composite/repo-page';
 export { LogPage, type LogPageProps } from './composite/log-page';
 export { DiffPage, type DiffPageProps } from './composite/diff-page';
-export { SettingsPage, type SettingsPageProps } from './composite/settings-page';
+export {
+  AppSettingsPage,
+  RepoSettingsPage,
+  type AppSettingsPageProps,
+  type RepoSettingsPageProps,
+} from './composite/settings-page';
 export {
   StatusPage,
   type StatusPageProps,
@@ -72,6 +77,13 @@ export { AuthDialog, type AuthDialogProps } from './composite/auth-dialog';
 export type { MonacoEditorInnerProps, MonacoLazyLoader, MonacoLazyProps } from './base/monaco-lazy';
 export { relativeToHome } from './composite/repo-page-utils';
 export { DensityProvider, useDensityMode, type DensityProviderProps } from './base/density-context';
+export {
+  resolveThemeMode,
+  useResolvedTheme,
+  type ResolvedTheme,
+  type ThemePreference,
+  type UseResolvedThemeOptions,
+} from './base/app-theme';
 export { PageShell, type PageShellProps } from './base/page-shell';
 export { Toolbar, type ToolbarProps } from './base/toolbar';
 export { EllipsisText, type EllipsisTextProps } from './base/ellipsis-text';

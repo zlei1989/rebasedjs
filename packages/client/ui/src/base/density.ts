@@ -9,7 +9,7 @@
 import { theme } from 'antd';
 import type { ThemeConfig } from 'antd';
 
-/** 明暗模式（web-next 由 useSettings 驱动，web-koa 固定暗色） */
+/** 明暗模式（两个 app 都由 useResolvedTheme 解析应用设置得出，见 base/app-theme.tsx） */
 export type DensityMode = 'light' | 'dark';
 
 /**
