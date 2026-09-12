@@ -16,6 +16,7 @@ rebased.js 以 TypeScript 全栈重写 Rebased 的**操作页面、功能域、�
 - **技术栈**：Next.js 与 Koa 两个薄下游应用，共享同一套 `ui` + `client`，端点完全对称（103 路由文件 ↔ 118 注册）；服务端核心（`core` git CLI 引擎 / `api` 功能服务层 / `contracts` 契约）零框架依赖。
 - **移植方法**：*算法移植、结构参照、风格对齐，不搬渲染代码*——Swing/Jewel 控件换 antd + Tailwind，IntelliJ 编辑器换 Monaco；VCS Log 图布局算法（`vcs-log/graph`）做算法级移植为纯函数引擎（Java testData 转 vitest 行为等价夹具，保留 Apache-2.0 版权声明）；Git 专属复杂组件（交互式 rebase、分支树、暂存区、冲突面板等）按信息架构逐项对照自研。
 - **架构原则**：单向依赖 + `withBoundary()` eslint 硬约束（`api`/`core` 禁框架，`ui` 纯展示禁接口调用），详见 [`docs/architecture-design.md`](docs/architecture-design.md)。
+- **使用手册**：31 个页面的功能说明（用途、使用场景、怎么用）见 [`docs/manual.md`](docs/manual.md)。
 
 ## 三、复刻基线
 
@@ -75,7 +76,7 @@ rebasedjs/
 ├── apps/web-koa/      # 下游应用②：Koa（路由 + 静态托管同一 SPA）
 ├── packages/server/   # core（git CLI 原语，零依赖）/ api（一个功能一个文件）/ contracts（zod 契约）
 ├── packages/client/   # ui（纯展示组件 + graph-layout 布局引擎）/ client（SWR + SSE hooks）
-└── docs/              # 架构规范 + 盘点报告 + 验收证据
+└── docs/              # 使用手册 + 架构规范 + 盘点报告 + 验收证据
 ```
 
 ## 七、如何使用 DeepSeek 布置目标任务复刻
