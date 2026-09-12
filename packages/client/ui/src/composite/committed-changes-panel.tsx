@@ -13,6 +13,7 @@ import { CaretDownOutlined, CaretRightOutlined, FolderOutlined } from '@ant-desi
 import type { CommittedEntry, CommittedFileStatus, CommittedPage } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { EllipsisText } from '../base/ellipsis-text';
+import { PageShell } from '../base/page-shell';
 import { CommittedStatusTag } from '../domain/committed-status';
 import { formatCommitDate } from '../domain/format';
 
@@ -234,14 +235,19 @@ export function CommittedChangesPanel({
   };
 
   return (
-    <Flex vertical gap={8} style={{ padding: 16 }}>
+    /* 根是**纵向列容器**（页面级 composite 根），故按 Ruling P15(b) 迁 PageShell —— 它带来的
+       width:100% / minWidth:0 正是本文件此前唯一缺失的那件「防顶宽」机制。
+       传 density="default"：本组件被两端 app 页面容器嵌入（committed.tsx / committed/page.tsx 均为
+       紧凑 PageShell），密度归宿主，这里只豁免、不重复施加（与 status-page / blame-view 同形）。
+       gap/padding 照抄迁移前的值（8 / 16）；PageShell 默认不落 style，不传会静默丢掉内距。 */
+    <PageShell density="default" gap={8} padding={16}>
       {entries.length === 0 ? (
         <EmptyState title="暂无提交记录" />
       ) : (
         /* 提交列表 + 变更文件两栏：本层是**横向** Flex（交叉轴为纵向），`align="flex-start"` 表示
            「子项顶部对齐」，与横向沾满无关 —— 按 Ruling P15 予以**保留**（删掉会把顶对齐变成等高拉伸，
-           属未获授权的视觉变更）。本组件根是其上的纵向 Flex（panel 根），按 P15(b) 不迁 PageShell：
-           横向行容器改 PageShell 会由「行」变「列」，且面板布局与密度归 app 页面容器所有。 */
+           属未获授权的视觉变更）。注意：这条理由只属于**本层横向行**，不是「panel 根不迁 PageShell」
+           的理由（早先版本的注释把两者混为一谈，已更正）。 */
         <Flex gap={16} align="flex-start">
           <Card size="small" title={`提交列表（${entries.length}）`} style={{ flex: 1, minWidth: 0 }}>
             <Flex vertical>
@@ -310,6 +316,6 @@ export function CommittedChangesPanel({
           </Card>
         </Flex>
       )}
-    </Flex>
+    </PageShell>
   );
 }

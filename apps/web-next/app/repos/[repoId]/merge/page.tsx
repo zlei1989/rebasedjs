@@ -8,7 +8,7 @@
  */
 import { useBranches, useMerge, useRepoEvents } from '@rebased/client';
 import type { MergeBody } from '@rebased/contracts';
-import { MergeDialog } from '@rebased/ui';
+import { MergeDialog, PageShell } from '@rebased/ui';
 import { message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
@@ -49,7 +49,13 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // 分支列表未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!branches) return null;
   return (
-    // key=repoId：SPA 同挂载实例切换仓库时强制重挂载，对话框内选择态随之重置
-    <MergeDialog key={repoId} open branches={branches} confirming={merging} onOk={onOk} onCancel={back} />
+    // 本路由的**密度归属方**：本页只渲染一个 Modal，但它经 createPortal 挂在 body 上，
+    // 而 React context 会穿过 portal —— 故紧凑 PageShell 必须真的存在于 Modal 之上，
+    // 否则同一弹窗从 /merge 进入是 antd 默认 14px、从 /conflicts 进入却是 12px（同一组件两种密度）。
+    // PageShell 自身不渲染可见内容（无 padding/gap），不改变弹窗外观。
+    <PageShell>
+      {/* key=repoId：同挂载实例切换仓库时强制重挂载，对话框内选择态随之重置 */}
+      <MergeDialog key={repoId} open branches={branches} confirming={merging} onOk={onOk} onCancel={back} />
+    </PageShell>
   );
 }

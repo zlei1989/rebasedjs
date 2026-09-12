@@ -13,7 +13,7 @@
  * from/to/staged/three 等参数（renameFrom/root 为条目级属性，切换时清除）。
  */
 import { useDiffStream, useFileDiff, useFileThreeWay, useSettings } from '@rebased/client';
-import { DiffPage, DiffStreamView } from '@rebased/ui';
+import { DiffPage, DiffStreamView, PageShell } from '@rebased/ui';
 import { Typography } from 'antd';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -60,7 +60,15 @@ export function RepoDiffPage(): React.ReactNode {
   if (!file) return null;
   // 加载失败显式呈现（如 committed 打开路径损坏等端点 GIT_ERROR）；根提交提示行不依赖数据，跳过错误分支
   const loadError = isThreeWay ? threeWayError : error;
-  if (!isRoot && loadError) return <Typography.Text type="danger" data-testid="diff-error">{loadError.message}</Typography.Text>;
+  // 错误态也要有**密度归属**：本分支在 DiffPage/DiffStreamView 之前提前返回，若不自己带一层
+  // PageShell，这一页会整页落回 antd 默认 14px（与该路由正常态的 12px 不一致）
+  if (!isRoot && loadError) {
+    return (
+      <PageShell>
+        <Typography.Text type="danger" data-testid="diff-error">{loadError.message}</Typography.Text>
+      </PageShell>
+    );
+  }
   if (isThreeWay) {
     if (!threeWayVersions) return null;
     return <DiffPage versions={{ before: '', after: '' }} threeWayVersions={threeWayVersions} file={file} staged={staged} />;
