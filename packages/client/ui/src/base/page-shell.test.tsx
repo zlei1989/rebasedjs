@@ -2,7 +2,7 @@
  * PageShell 测试：断言布局不变量（横向撑满/纵向链/不设 alignItems）与密度施加/豁免。
  * 注：jsdom 无布局引擎，无法断言真实宽度与溢出——宽度类验收由六档浏览器断言承担（设计文档 §8 第 2 项）。
  *
- * antd v6 事实（实测，非假设）：本仓库装的 antd 6.6.1 中 `Flex` **不再写内联布局样式**，
+ * antd v6 事实（实测，非假设）：本仓库装的 antd 6.6.3 中 `Flex` **不再写内联布局样式**，
  *   改由类名提供——实测产出
  *   `<div class="ant-flex … ant-flex-vertical ant-flex-align-stretch" style="width:100%;min-width:0px;height:100%">`，
  *   内联 display/flexDirection/alignItems 全为空串，而 jsdom 计算值（cssinjs 已注入 <style>）为
@@ -68,7 +68,7 @@ function referenceBg(mode: DensityMode): string {
 }
 
 describe('PageShell', () => {
-  it('横向撑满且不设 alignItems —— 44 处 align="flex-start" 的解', () => {
+  it('横向撑满且不设 alignItems —— 40 处纵向根 align="flex-start" 的解', () => {
     const root = renderShell();
     const computed = getComputedStyle(root);
     expect(computed.display).toBe('flex');
@@ -76,9 +76,13 @@ describe('PageShell', () => {
     expect(root.style.width).toBe('100%');
     expect(root.style.minWidth).toBe('0px');
     expect(root.style.height).toBe('100%');
-    // 不变量：纵向 Flex 的交叉轴是水平方向，align-items 绝不可为 flex-start（实测计算值 stretch，
-    // 即子元素默认横向拉伸）。本组件自身不落内联 alignItems，故内联串亦为空。
-    expect(computed.alignItems).not.toBe('flex-start');
+    // 不变量：纵向 Flex 的交叉轴是水平方向，align-items 必须让子元素**横向拉伸**。
+    // 断言的是**实效值**（stretch/normal），而不是「不等于 flex-start」—— 后者对 antd 的 `align="start"`
+    // 完全无效：antd 用**类名**施加 align（`align="start"` → `ant-flex-align-start` → CSS `align-items: start`，
+    // 内联 style 仍为空串），于是 `<Flex vertical align="start">` 会让子元素停止横向拉伸（正是本次要根除的
+    // 宽度 bug）却照样通过旧断言。实效值断言对它必然变红（见 committed 的 mutation 记录）。
+    // 实测（antd 6.6.3）：vertical 且未传 align 时类名为 `ant-flex-align-stretch`，计算值 'stretch'。
+    expect(['normal', 'stretch']).toContain(computed.alignItems);
     expect(root.style.alignItems).toBe('');
   });
 
