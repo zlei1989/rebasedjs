@@ -375,8 +375,48 @@ async function assertNoPageOverflow(page, theme, themeProbe = null) {
   };
 }
 
-/** 例外 1：两栏堆叠 / 并排（判据取自 split-pane.tsx 的 collapseBelow 默认值） */
+/**
+ * 例外 1：两栏堆叠 / 并排（判据取自 split-pane.tsx 的 collapseBelow 默认值）。
+ *
+ * **为什么测量前要有界地等宿主出现（Fix round 3 实测到的竞态，不是预防性写法）**：
+ * 日志页的提交详情栏在首帧会先挂上、随后**短暂整块消失**、再重新挂上。实测时间线（480px，`?select=`，
+ * 60 次 / 50ms 采样压成段）：`commit-details` 与两个宿主在 ~25ms 同时出现 → ~540ms 起**三个一起消失**
+ * ~500ms → ~800ms 重新挂上后稳定；8 轮探针里复现 1 轮，单独复跑该格 5 次里红 1 次。
+ * 成因在容器侧：`selectedCommit = commits.find((c) => c.hash === selectedHash) ?? null`
+ * （`apps/web-next/app/repos/[repoId]/page.tsx:179`）—— 提交列表在挂载后被重新装配的那一瞬间「找不到」，
+ * `LogPage` 便走 `selectedCommit ? <SplitPane> : 主区独占` 的 else 分支，侧栏连同两个宿主一起卸载。
+ *
+ * 在那一刻采样会得到两种后果，**两种都是假的**：① 本断言报「未找到宿主」这种与布局无关的红；
+ * ② 紧接着的页面级溢出断言量在一个「详情栏还没装回来」的页面上 —— 空页永不溢出，那是白通过。
+ * 所以这里先有界地等宿主出现（10s，与 `assertHunkExpanded` 等 Monaco 懒加载同一口径），**等来之后
+ * 再 settle 一次**，量的才是稳定态。宿主确实不出现（真的没有两栏）时照旧判红：判定没有被放宽，
+ * 只是不再对「已知会自我修复的瞬时状态」下结论。等了多少毫秒写进通过原因，使这次竞态在产物里可见。
+ */
+const PANE_HOST_WAIT = 10000;
+
 async function assertPanes(page, width, collapseBelow) {
+  // 快路径与改动前**一字不差**：宿主都在 → 不等待、不额外 settle，直接量。
+  let hostWait = 0;
+  const present = await page.evaluate(
+    () =>
+      document.querySelector('[data-testid="split-side-host"]') !== null &&
+      document.querySelector('[data-testid="split-main-host"]') !== null,
+  );
+  if (!present) {
+    // 宿主在采样时缺席：这**正是**上面那段瞬时卸载（不是「没有两栏」的直接证据，故给有界等待）。
+    const started = Date.now();
+    try {
+      await page.waitForSelector('[data-testid="split-side-host"]', { timeout: PANE_HOST_WAIT, state: 'attached' });
+      await page.waitForSelector('[data-testid="split-main-host"]', { timeout: PANE_HOST_WAIT, state: 'attached' });
+    } catch {
+      return { status: 'fail', reason: `未找到 split-side-host / split-main-host 宿主（采样时缺席，再等 ${PANE_HOST_WAIT}ms 仍未出现）` };
+    }
+    hostWait = Date.now() - started;
+    // 宿主是「等回来的」：它刚重新挂上，等布局静止再量，量的才是稳定态。
+    await settle(page);
+  }
+  // 只有**真的等过**才写这句：否则每个两栏格都会带一句「等了 5ms」，把真信号（几百毫秒的瞬时卸载）淹掉。
+  const waited = hostWait > 0 ? `（采样时宿主缺席，等 ${hostWait}ms 回来后重新静止才量）` : '';
   const panes = await page.evaluate(measurePanesInPage);
   if (panes === null) return { status: 'fail', reason: '未找到 split-side-host / split-main-host 宿主' };
   if (width < collapseBelow) {
@@ -388,7 +428,7 @@ async function assertPanes(page, width, collapseBelow) {
     }
     return {
       status: 'pass',
-      reason: `两栏纵向堆叠且各占满宽度（容器 ${panes.containerWidth}px）：side=${JSON.stringify(panes.side)} main=${JSON.stringify(panes.main)}`,
+      reason: `两栏纵向堆叠且各占满宽度（容器 ${panes.containerWidth}px）：side=${JSON.stringify(panes.side)} main=${JSON.stringify(panes.main)}${waited}`,
     };
   }
   if (!panes.sideBySide) {
@@ -397,7 +437,7 @@ async function assertPanes(page, width, collapseBelow) {
       reason: `宽视口（${width} >= collapseBelow ${collapseBelow}）两栏未左右并排：side=${JSON.stringify(panes.side)} main=${JSON.stringify(panes.main)}`,
     };
   }
-  return { status: 'pass', reason: `两栏左右并排：side 宽 ${panes.side.w}px / main 宽 ${panes.main.w}px（容器 ${panes.containerWidth}px）` };
+  return { status: 'pass', reason: `两栏左右并排：side 宽 ${panes.side.w}px / main 宽 ${panes.main.w}px（容器 ${panes.containerWidth}px）${waited}` };
 }
 
 /**
@@ -1153,9 +1193,16 @@ async function prepareCell(page, url, cell, theme, timeout, base) {
  * 执行上下文被导航打断、主题还没落到文档上。它们全都不涉及任何断言判据。
  *
  * **永远不算中断**（不重试，直接判红）：
- *   - 页面级横向溢出 —— 这是本脚本要给的结论本身；
+ *   - 页面级横向溢出 —— 这是本脚本要给的结论本身（**已测量并溢出 = 结论**，绝不重试）；
  *   - 例外断言失败（两栏堆叠 / Monaco 拖动没位移 / tooltip 该弹没弹或不该弹却弹了）——同样是结论；
- *   - 内容级命中数低于下限 —— 说明量到的是「部分加载」的页面，也是结论。
+ *   - 内容级命中数低于下限（`命中 N 条 < 下限 M`，N > 0）—— 说明量到的是「部分加载」的页面，也是结论。
+ *
+ * 注意一处**文案容易读错的地方**：内容级门**一条都没命中**时（`内容级就绪选择器未出现…`，命中数 0）
+ * 与就绪门**共用**「就绪选择器未出现」这个说法，故它落在下面的中断正则里、**会被重试一次**。这是有意的：
+ * 0 命中与「页面整页没渲染」在本环境里往往是同一件事（dev 按需编译、别的会话重启服务），而重试**同样**要
+ * 过完整的两段式就绪门，**不可能凭重试拿到一个空洞的绿**（第二次照样 0 命中就照样判红）。实测见过：
+ * `dark/1920 console` 首轮 `内容级就绪选择器未出现…ready=0` → 重跑后通过。
+ * 真正被排除在重试之外的，是上面那条「命中了但低于下限」的结论。
  *
  * 为什么这条不是「把超时调大」：**每次尝试的预算一字未改**（25s / 例外②的 60s），两次都没过**照样判红**；
  * 而且尝试次数与**首轮**失败原因都写进明细 JSON（`attempts` / `firstAttemptReason`）并在汇总里逐格列出，
@@ -1216,7 +1263,12 @@ async function run(opts, pw, exe) {
           if (httpIssues.length < 5) httpIssues.push(`requestfailed ${request.failure()?.errorText ?? ''} ${request.url().slice(0, 100)}`);
         });
         for (const cell of cells) {
-          // setup 只做一次：page.route 的打桩跨导航有效（重试时重新 goto 仍在），重复注册只会叠加处理器
+          // setup **只做一次、在尝试循环之外**，因此它必须满足一条硬要求：**跨导航存活**。
+          // 现有三个 setup 全是 `route` / `stubJson`（注册在 page 上，重试时重新 goto 仍然有效，
+          // 重复注册只会叠加处理器 → 故不能放进循环里重复注册）。
+          // 但将来若有人加一个「改页面状态」的 setup（点开关、填表单、滚到某处…），整格重跑时会**没有
+          // 重新执行它**，那一格就是在与首轮不同的页面上被判定 —— 静默跳过，不会报错。
+          // 加这种 setup 时必须把它挪进下面的尝试循环（或改成在 prepareCell 之后执行一次）。
           if (cell.setup !== undefined) await cell.setup(page);
           // 一格最多跑两次：第一次若被**环境中断**（见 isStall）就整格重来一次（重新导航 + 完整就绪门 +
           // 全部断言与测量），结论类失败不重试。两次都没过照样判红；尝试次数与首轮原因写进产物。
@@ -1284,10 +1336,16 @@ async function run(opts, pw, exe) {
           results.push(record);
         }
         await context.close();
-        const bad = results.filter((r) => r.theme === theme && r.width === width && r.status === 'fail');
+        const inBlock = results.filter((r) => r.theme === theme && r.width === width);
+        const bad = inBlock.filter((r) => r.status === 'fail');
+        // 重试过的格子在**人读的那一行**里也要看得见：否则「重试后通过」与「一次通过」在这一行完全相同。
+        const retriedHere = inBlock.filter((r) => r.attempts === MAX_CELL_ATTEMPTS);
         console.log(
           `[fluid] ${opts.label} ${theme} ${width}px: ${cells.length - bad.length}/${cells.length} 通过` +
-            (bad.length === 0 ? '' : `  失败: ${bad.map((b) => b.cell).join(', ')}`),
+            (bad.length === 0 ? '' : `  失败: ${bad.map((b) => b.cell).join(', ')}`) +
+            (retriedHere.length === 0
+              ? ''
+              : `  重试: ${retriedHere.map((r) => `${r.cell}(${r.status === 'pass' ? '重试后通过' : '两次均失败'})`).join(', ')}`),
         );
       }
     }
@@ -1367,19 +1425,50 @@ function report(results, opts) {
   if (failed.length > 0) process.exitCode = 1;
 }
 
+/** 把失败原因压成能塞进表格单元格的一小段（换行会拆掉 Markdown 表格，竖线会拆掉列） */
+function shortReason(reason) {
+  const text = String(reason ?? '').replace(/\s+/g, ' ').replace(/\|/g, '｜').trim();
+  return text.length > 48 ? `${text.slice(0, 48)}…` : text;
+}
+
+/**
+ * 矩阵单元格的渲染。三条口径必须在这里落实，否则矩阵会**说假话**：
+ *   1. 重试过（`attempts === 2`）的格子加 `↻` —— 否则「重试后通过」与「一次通过」在矩阵里一模一样；
+ *   2. **没有测量结果 ≠ 溢出 0**：就绪门/导航失败时 `scrollWidth`/`clientWidth` 是 `null`，
+ *      旧写法把它渲染成 `❌ null>null`，会被读成「量出一个奇怪的溢出」。这里改成显式「未测量」+ 原因；
+ *   3. **量到数字但没有溢出**（例外断言 / 主题门 / 内容门判红）也不能写成 `❌ sw>cw` ——
+ *      那会渲染成 `❌ 480>480`，读者会以为「480 溢出了 480」；这类红单独记作「非溢出失败」+ 原因。
+ */
+function renderMatrixCell(hit) {
+  if (hit === undefined) return '—';
+  const retried = hit.attempts === MAX_CELL_ATTEMPTS ? '↻' : '';
+  if (hit.status === 'pass') return `✅${retried}`;
+  const measured =
+    hit.scrollWidth !== null && hit.scrollWidth !== undefined && hit.clientWidth !== null && hit.clientWidth !== undefined;
+  if (!measured) return `❌ 未测量${retried}（${shortReason(hit.reason)}）`;
+  if (hit.scrollWidth > hit.clientWidth + OVERFLOW_TOLERANCE) return `❌ ${hit.scrollWidth}>${hit.clientWidth}${retried}`;
+  return `❌ 非溢出失败${retried}（${shortReason(hit.reason)}）`;
+}
+
 /** 生成「行=断言格 / 列=宽度」的 Markdown 矩阵，供报告直接引用 */
 function buildMatrix(results, opts) {
   const cellNames = [...new Set(results.map((r) => r.cell))];
-  const lines = [`# 横向溢出断言矩阵（${opts.label}）`, '', `断言：\`documentElement.scrollWidth <= clientWidth + 1\``, ''];
+  const lines = [
+    `# 横向溢出断言矩阵（${opts.label}）`,
+    '',
+    `断言：\`documentElement.scrollWidth <= clientWidth + 1\``,
+    '',
+    '记号：`✅` 一次通过；`✅↻` 首轮被**环境中断**、整格重跑一次后通过（明细 JSON 里 `attempts=2`，判据见 `isStall()`）；',
+    '`❌ sw>cw` **已测量并溢出** —— 结论，永不重试；`❌ 非溢出失败（原因）` 量到了数字但**没有**横向溢出，',
+    '红的是例外断言 / 主题门 / 内容门（矩阵不把它写成溢出）；`❌ 未测量（原因）` 该格**没有拿到测量值**',
+    '（就绪门 / 导航失败），**不代表溢出 0**，原因写在括注里；`—` 该格本轮没有结果（脚本未跑到）。',
+    '',
+  ];
   for (const theme of opts.themes) {
     lines.push(`## ${theme}`, '', `| 断言格 | ${opts.widths.map((w) => `${w}px`).join(' | ')} |`);
     lines.push(`|---|${opts.widths.map(() => '---').join('|')}|`);
     for (const name of cellNames) {
-      const row = opts.widths.map((w) => {
-        const hit = results.find((r) => r.cell === name && r.theme === theme && r.width === w);
-        if (hit === undefined) return '—';
-        return hit.status === 'pass' ? '✅' : `❌ ${hit.scrollWidth}>${hit.clientWidth}`;
-      });
+      const row = opts.widths.map((w) => renderMatrixCell(results.find((r) => r.cell === name && r.theme === theme && r.width === w)));
       lines.push(`| ${name} | ${row.join(' | ')} |`);
     }
     lines.push('');
