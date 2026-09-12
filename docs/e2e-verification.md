@@ -527,7 +527,7 @@
 
 | 轮次 | 日期 | 执行范围（F-xx…） | 结果汇总（✅/❌/跳过） | 缺陷登记（根因/修复/复验） |
 |------|------|-------------------|------------------------|----------------------------|
-| R1 | 2026-09-10 | F-001~F-028（RepoPage 8 + LogPage 20）、F-029~F-031（DiffPage 3）；暗黑/明亮双主题与 1440/768/480 三档宽度抽查 | ✅ 30 / 跳过 1（F-025） | D-01~D-12（已修复并在当轮复验；逐条明细已归档，见 §5.23） |
+| R1 | 2026-09-10 | F-001~F-028（RepoPage 8 + LogPage 20）、F-029~F-031（DiffPage 3）；暗黑/明亮双主题与 1440/768/480 三档宽度抽查 | ✅ 30 / 跳过 1（F-025） | D-01~D-12（已修复并在当轮复验；逐条明细已归档，见 §5.24） |
 | R2 | 2026-09-10 | F-032~F-038（DiffPage 7）+ F-039~F-051（StatusPage 13）+ F-052~F-058（CommitDialog 7） | ✅ 27 / 跳过 0.5（F-056 的 gpg 分支） | D-14~D-17（已修复并复验）；夹具纠偏 P-06~P-10（见 §5.17） |
 | R3 | 2026-09-10 | F-059~F-061（ResetDialog 3）+ F-062~F-068（BranchPanel 7） | ✅ 10（ResetDialog 3/3、BranchPanel 7/11） | D-19~D-21（已修复并复验）；F-069~F-072 待续 |
 | R4 | 2026-09-10 | F-069~F-072（BranchPanel 余下 4 行）+ F-073~F-075（MergeDialog 3 行） | ✅ 7（BranchPanel 11/11、MergeDialog 3/3 收官） | D-22（已修复并复验）；远端分叉/新分支由 rebased-smoke-other 克隆构造；冲突仓停在 merge 冲突态供 F-114~F-119 复用 |
@@ -655,7 +655,7 @@
 | 状态页 | 工作区（2）= `.gitignore (M)`、`vendor/sub-module (M)`；未跟踪（5） | `git status --porcelain`：`^ M` = 2 条；`^??` = 5 条（crlf.txt / scratch/ / stash-untracked-probe.txt / vendor/conflict-sub/ / vendor/ok-sub/） |
 | 分支页 | 本地行 10、远程行 8、`清理已合并（3）` | `git branch` = 10、`git branch -r` = 8、`git branch --merged HEAD` = 5 → 减去当前分支 `sub-b` 与 worktree 占用的 `wt-branch` 恰为 3（D-20 的排除逻辑） |
 
-#### 缺陷登记（D-38 未修复；D-35~D-37 已修复，压缩为一行，明细见 §5.23）
+#### 缺陷登记（D-38 未修复；D-35~D-37 已修复，压缩为一行，明细见 §5.24）
 
 | 编号 | 现象 | 根因 | 修复 | 复验 |
 |------|------|------|------|------|
@@ -861,11 +861,36 @@
 - 已按新 UI 重拍：`settings-01.png`（暗色、logInEditor=false、3 选项主题控件、全 small）、`theme-light-settings.png`、`responsive-768-light-settings.png`；**另补齐设置页其余 4 张**（`settings-04 / 06 / 07 / 07b`——变更前那批露出的「暗色/明亮」两选项与 32px 控件形态已全部替换：04 为真重启后的明亮态、06 为 GPG 弹窗、07 为保护分支非法正则态、07b 为同态卡片特写）；账目为 **195 张 / 0 重复 SHA / 0 孤儿**（归档时删 1 张失效证据图，见 §5.19）。
 - 回归（2026-09-12 修复轮后复跑，全部退出码 0）：`pnpm typecheck` ✅、`pnpm format`（eslint --fix，无 error/warning）✅、`pnpm test` **全绿**——contracts 185 / core 235 / client 176 / ui 693 / api 386（+1 跳过）/ web-next 174 / web-koa 175。新增守卫用例见 §5.20 各行的「回归守卫」列。
 
-### 5.23 记录归档口径（本文档保留什么）
+### 5.23 提交图渲染修复（2026-09-12，冒烟轮次之外）
+
+> 触发：用户在内置浏览器打开主仓日志页（`rebased-smoke`，`f761a9f6-5c91-4115-9261-69715687e875`）要求「截图识别：提交信息是否显示完整？分支的关系线图是否正确？」。逐行读 SVG 几何后定位到 5 处缺陷（D-45~D-49），本节按 §5.24 的写法登记：**一句话现象 + 修复落点 + 回归守卫 + 修复后实测**。
+
+| 缺陷 | 一句话现象 | 修复落点（代码） | 回归守卫（测试） | 修复后实测 |
+|------|------------|------------------|------------------|------------|
+| D-45 | 合并的第二父**隔偶数行**时，分叉斜线的拐点正落在中间某一行的圆点上 → 图面凭空多出一条「那一行的提交 → 第二父」的假父子边（`5c7c07a` 的第二父 `d91794f` 看着像挂在 `21efcbb` 上，而两者父提交都是 `80b63f4`；`fb9833f` 的第二父 `3b0244b` 隔 14 行时看着像从 `53047d3` 分出去） | `packages/client/ui/src/domain/commit-graph-segments.ts`：斜段不再铺在「两行中点 → 终点」之间，改为**固定只占一行带**（自起点行下方半行 = 行边界起，止于再下一行边界），并轨后**在目标 lane 上竖着走完中间各行** | `packages/client/ui/src/domain/commit-graph-segments.test.ts`：① 拐点不在任何行中线上；② 斜段 ≤ 一行带；③ 中间各行含目标 lane 的竖线；④ **线条不擦过任何一行自己的圆点** | 分叉由「挂在 F-094 本地侧提交那一行」改为**紧贴合并行**；diverge-test 长边不再从中间某行长出来，而是从 `F-074 no-ff 合并` 行分叉、并在中间各行占住自己的车道（`log-graph-02.png`） |
+| D-46 | 跨行线被**逐行视口**裁断：青色回折段断 8px、diverge-test 分支线断 **66px**（约 2.7 行整段消失），线看着断成两截 | 同上文件新增 `RowGeometry.maxX`（本行带内所有切片 + 本行圆点的 x 上界）与 `laneCoveringX()`；`packages/client/ui/src/domain/commit-graph.tsx` 本行图列宽度改按 `maxX` 算（不再只按「本行圆点所在 lane」） | `commit-graph-segments.test.ts`「maxX 覆盖本行全部线段…」；`commit-graph.test.tsx`「跨 lane 的边不被本行视口裁断，也不压到本行文字」 | 两仓逐行读 SVG：**无任何坐标越出 viewBox**（32 行 / 11 行全为 `clipped=false`），线连续；简单形态未回退（`rebased-multi2` 的 feature 两行行宽仍 **56**，与 §4.2 F-009 的取证口径一致） |
+| D-46b | 补足列宽后线条可一直画到列右缘，而图列的**负右边距**把文字往左拉了 11px → 线**压住每行开头约 10px 文字**（修 D-46 的过程中暴露，同轮修掉） | `commit-graph-segments.ts`：`laneCoveringX` 口径定为「本行文字起点 = 车道中心 + `DOT_GUTTER`」，故只要 `laneCenterX(lane) ≥ maxX`，线就永远在文字左侧 | 同 D-46 两条用例（含 `线的最右端 ≤ 文字起点` 断言） | 逐行实测 `线右端 ≤ 文字左端`（`textOverlap=false`，行 5/11/16/20/24 抽查） |
+| D-47 | refs chips 列 `max-width: 140px` + `overflow: auto` + `scrollbar-width: none` → **静默截断**：3 个 chip 时第 3 个一个像素都看不见、第 2 个只剩半边，且没有任何截断提示 | `commit-graph.tsx`：上限放宽到 320px、容器可收缩（`flexShrink:1` + `minWidth:0`）；chips 容器由 antd `Space` 改 `Flex gap="small"`（`Space` 的 `div.ant-space-item` 不可收缩，装不下只能被硬切），每个 chip 自带 `overflow:hidden + ellipsis + title` | `commit-graph.test.tsx`「chip 间距走 antd Flex 档位，且每个 chip 可省略号收缩」（含「4px 仍来自 `paddingXS` 档位类名」的口径锚点） | 主仓三行 chips 全部完整可见：`rebase-topic / origin/rebase-topic`、`unstash-target-2 / unstash-target / stash-branch-f083`、`smoke-new-checkout / diverge-test`（`log-graph-01.png`）；窗口变窄时逐 chip 省略号 + hover 显全名 |
+| D-48 | 主线颜色 ≠ 该分支 chip 的颜色：图列把 decorate 串 `HEAD -> rebase-topic` 整串拿去哈希，chips 用的是 `rebase-topic` → 主线 `#7863a6` vs chip `#63a67e`；且 `#7863a6` 与 lane 1 的 `#7663a6` 只差 2/255（相邻车道肉眼同色） | 新增 `packages/client/ui/src/graph-layout/ref-name.ts` 的 `refNameOf()`（剥 `HEAD -> ` 前缀）；`packages/client/ui/src/graph-layout/build-layout.ts` 的主线着色与 `packages/client/ui/src/domain/refs.ts`（chips 分类）**共用同一实现**，杜绝两处各剥各的 | `packages/client/ui/src/graph-layout/build-layout.test.ts`「color」用例（主线色 = `colorForRef('main')`，并断言未剥前缀时是另一个色 `#6398a6`）；`color.test.ts` 的 Java 色板断言不变 | 主线由紫 `#7863a6` 变为**绿 `#63a67e`**（= `rebase-topic` chip 底色），与 lane 1 紫色一眼可分（`log-graph-01.png`） |
+| D-49 | 每行 SVG 都渲染**整张图**（79 条 polyline + 32 个 circle × 32 行 = 3552 个节点）再靠 viewBox 裁掉，共享主干还被重复描边；大仓（1000 提交 × 40 可见行）会往 DOM 塞约 8 万节点 | `packages/client/ui/src/base/graph-canvas.tsx` 改为「只画传进来的线段与圆点」；`commit-graph.tsx` 每行只传本行切片 + 本行圆点（几何层已按行切好） | `packages/client/ui/src/base/graph-canvas.test.tsx`「只画传进来的线段与圆点」；`commit-graph.test.tsx`「每行只渲染本行的内容：一个圆点…」 | 主仓 32 行合计 **86** 个图形节点（改前 3552），每行恰 1 个圆点 |
+
+**代价（有意承受）**：被更右车道穿过的行要补列宽，本行**文字随之右移**（文字起点恒为「本行车道中心 + 8px」）——即「让线优先于让字」。主仓因有一条跨 14 行、3 条车道的分支，出现 11~27 行文字统一右移一档的「车道块」。若不接受这一档，可把图列改成整表统一宽度（所有行同缩进），但那与既有口径「缩进随线条」（§4.2 F-009）冲突，故本轮保留。
+
+**本轮未改的口径（供后续判断，不要误当缺陷）**：① **lane 序号本身**（`lane = layoutIndex − 1`）是 Java `GraphLayoutBuilder` 的 DFS 行走结果，故「远端侧提交 `d91794f` 落在第 4 条道、中间两条道当时为空」是移植语义（`graph-layout/fixtures/java/layout-builder-*` 的 lanes 快照即为该口径），本轮只改渲染几何、不动 lane 分配；② 列表只显示提交信息首行（有正文的提交在列表不展开）；③ 「标签」开关默认关（对齐 Java `showTagNames=false`），故 tag chips 默认不出现。
+
+**冒烟复核（2026-09-12）**
+
+- **范围清单**：① 主仓 `rebased-smoke`（32 提交、2 处合并、1 条隔 14 行的长边、3 行多 chip）逐行读 SVG 几何 ✅；② `rebased-multi2`（4 车道、3 处合并）复核「同 lane 直边 / 相邻行合并」形态未回退 ✅；③ 明暗两主题各一次 ✅；④ CLI 与页面互证（父子关系）✅。
+- **操作路径**：`/repos/f761a9f6…` → 逐行读 `viewBox` / `line|polyline` / `circle` 几何（含裁剪与压字判定）→ `/repos/99b38826…` 同法 → 设置页切「暗色」→ 回日志页复看 → 切回「明亮」。
+- **证据**：`log-graph-01.png`（主仓整页：chips 完整、主线绿色、分叉贴合合并行）、`log-graph-02.png`（合并行特写：`Merge branch …` 行下方分叉 → 远端侧节点 → 回折并入主线）、`log-graph-03.png`（`rebased-multi2` 四车道）、`log-graph-04.png`（暗色同仓）。CLI 互证：`git log --parents` 逐条核对 D-45 的两处假父子边（`21efcbb` / `d91794f` 的父同为 `80b63f4`；`3b0244b` 的父是 `761961d`）。
+- **未覆盖与后续**：① `rebased-smoke-huge` 与深克隆仓库的**分页追加 + 虚拟滚动**未重跑（几何改动与分页无关，但滚动窗口内的行宽一致性未取新证据）；② 虚线边（`edgeTypes='D'`）在本批夹具中未出现——逐行切分会重置 dash 相位（既有实现同样按行切竖段，故未新增偏差），出现真实虚线边时需复看；③ 截图账目：本轮新增 4 张（`log-graph-01…04.png`），`docs/shots/` 计 **199** 张，引用=在盘、无重复 SHA、无孤儿（流程见 §5.18~§5.19）；④ **一次未复现现象**：本轮首次深链进仓库页时，页面先渲染出仓库骨架、随后在 dev 连续 Fast Refresh 期间 URL 回到 `/`（首页）—— 全仓检索无「自动跳首页」的代码路径（`router.push('/')` 只挂在顶栏「首页」按钮上），后续多次导航与整轮复核均未复现，按**dev 期偶发**记录，不列入缺陷。
+- **回归（2026-09-12 全量复跑，各包退出码 0）**：`npm run typecheck` ✅、`npm run format`（eslint --fix，无 error/warning）✅、`npm run test` **全绿**——contracts 185 / core 235 / client 176 / ui **703** / api 386（+1 跳过）/ web-next 174 / web-koa 175；其中 ui 相对本轮起点（701）净增 **2** 例（新增 `commit-graph-segments.test.ts` 7 例，`graph-canvas` / `commit-graph` 用例数不变但断言口径已更新）。
+
+### 5.24 记录归档口径（本文档保留什么）
 
 本文档只保留**对后续迭代仍然有用**的内容；「已修复缺陷」的逐条叙述已删除，替换为可复用的结论：
 
-- **保留**：① 方法学与取证口径（§1）；② 功能矩阵总览 + 159 行逐行证据（§2、§4，行内保留截图名与 CLI 互证）；③ 不测清单与理由（§3）；④ 跨页面验收基线（§5.16 布局/密度六档）；⑤ **仍开放项**（§5.17 的 D-43、§5.16 的 D-38）与全部流程/夹具纠偏 P-01~P-28（§5.17）；⑥ 主题与响应式抽查、截图账目流程（§5.18~§5.19）；⑦ R23 修复项的**修复落点 + 回归守卫 + 实测结论**（§5.20）；⑧ 当前产品口径与已知缺口（§5.21~§5.22）。
+- **保留**：① 方法学与取证口径（§1）；② 功能矩阵总览 + 159 行逐行证据（§2、§4，行内保留截图名与 CLI 互证）；③ 不测清单与理由（§3）；④ 跨页面验收基线（§5.16 布局/密度六档）；⑤ **仍开放项**（§5.17 的 D-43、§5.16 的 D-38）与全部流程/夹具纠偏 P-01~P-28（§5.17）；⑥ 主题与响应式抽查、截图账目流程（§5.18~§5.19）；⑦ 修复项的**修复落点 + 回归守卫 + 实测结论**（§5.20 R23 缺陷、§5.23 提交图渲染）；⑧ 当前产品口径与已知缺口（§5.21~§5.22）。
 - **已删除**：历史缺陷 D-01~D-38、D-39~D-42、D-44 的「现象 / 根因 / 复现步骤 / 当轮复验」叙述——它们均已修复，逐条叙述只对当时轮次有意义（D-35~D-37 压缩为一行，见 §5.16）。
 - **追溯方式**：需要旧记录时取 git 历史中的本文档旧版：`git log --oneline -- docs/e2e-verification.md`，再 `git show <sha>:docs/e2e-verification.md`。
 - **后续新增记录的写法**：仍按本节开头的记录规范回填；**缺陷修复后**请把该条压缩成「一句话现象 + 修复落点 + 回归守卫 + 实测结论」并并入 §5.20 式表格，不要保留长篇复现叙事。

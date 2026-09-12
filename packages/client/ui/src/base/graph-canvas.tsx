@@ -5,9 +5,11 @@
  * 只覆盖该行可见带的 `viewBox`，于是同一根线在相邻两行画出的两半在边界处以同一坐标相接，
  * 不会出现早期「每行一块局部画布再裁切拼接」造成的接缝与色差。
  * 段的编译（哪一段归哪一行）在 `domain/commit-graph-segments.ts`，便于单测。
+ *
+ * 只画传进来的东西（每行只拿本行的切片与本行的圆点）：早期实现每行都渲染整张图再靠 viewBox 裁掉，
+ * 大仓（1000 提交 × 40 可见行）会往 DOM 里塞 8 万个 SVG 节点，是纯粹的白烧。
  */
 import type { ReactNode } from 'react';
-import type { LayoutRow } from '../graph-layout/types';
 
 /** 一行里要画的线段（全局坐标）：`pts` 为折线顶点，按 [x,y,x,y,...] 成对给出 */
 export interface RowGraphSegment {
@@ -17,10 +19,21 @@ export interface RowGraphSegment {
   dashed?: boolean;
 }
 
+/** 一个节点圆点（全局坐标由 lane/行号算出） */
+export interface GraphNode {
+  /** React key（用提交 hash） */
+  hash: string;
+  lane: number;
+  /** 行号（0 基） */
+  rowIndex: number;
+  color: string;
+}
+
 export interface GraphCanvasProps {
-  /** 逐行要画的线段（下标 = 行号） */
-  segmentsPerRow: RowGraphSegment[][];
-  rows: LayoutRow[];
+  /** 本行要画的线段（已按行切好，全局坐标） */
+  segments: RowGraphSegment[];
+  /** 本行要画的圆点（通常 1 个：本行自己的节点；留成数组便于单测直接喂多节点） */
+  nodes: GraphNode[];
   rowHeight: number;
   laneWidth: number;
 }
@@ -35,39 +48,37 @@ export function rowCenterY(rowIndex: number, rowHeight: number): number {
   return rowIndex * rowHeight + rowHeight / 2;
 }
 
-export function GraphCanvas({ segmentsPerRow, rows, rowHeight, laneWidth }: GraphCanvasProps): ReactNode {
+export function GraphCanvas({ segments, nodes, rowHeight, laneWidth }: GraphCanvasProps): ReactNode {
   return (
     <>
-      {segmentsPerRow.flatMap((segments) =>
-        segments.map((segment) =>
-          segment.pts.length === 2 ? (
-            <line
-              key={segment.key}
-              x1={segment.pts[0]}
-              y1={segment.pts[1]}
-              x2={segment.pts[2]}
-              y2={segment.pts[3]}
-              stroke={segment.color}
-              strokeDasharray={segment.dashed ? '4 3' : undefined}
-            />
-          ) : (
-            <polyline
-              key={segment.key}
-              points={Array.from({ length: segment.pts.length / 2 }, (_, i) => `${segment.pts[i * 2]},${segment.pts[i * 2 + 1]}`).join(' ')}
-              fill="none"
-              stroke={segment.color}
-              strokeDasharray={segment.dashed ? '4 3' : undefined}
-            />
-          ),
+      {segments.map((segment) =>
+        segment.pts.length === 2 ? (
+          <line
+            key={segment.key}
+            x1={segment.pts[0]}
+            y1={segment.pts[1]}
+            x2={segment.pts[2]}
+            y2={segment.pts[3]}
+            stroke={segment.color}
+            strokeDasharray={segment.dashed ? '4 3' : undefined}
+          />
+        ) : (
+          <polyline
+            key={segment.key}
+            points={Array.from({ length: segment.pts.length / 2 }, (_, i) => `${segment.pts[i * 2]},${segment.pts[i * 2 + 1]}`).join(' ')}
+            fill="none"
+            stroke={segment.color}
+            strokeDasharray={segment.dashed ? '4 3' : undefined}
+          />
         ),
       )}
-      {rows.map((row, i) => (
+      {nodes.map((node) => (
         <circle
-          key={row.commit.hash}
-          cx={laneCenterX(row.lane, laneWidth)}
-          cy={rowCenterY(i, rowHeight)}
+          key={node.hash}
+          cx={laneCenterX(node.lane, laneWidth)}
+          cy={rowCenterY(node.rowIndex, rowHeight)}
           r={rowHeight / 6}
-          fill={row.color}
+          fill={node.color}
         />
       ))}
     </>

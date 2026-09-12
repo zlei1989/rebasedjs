@@ -1,13 +1,17 @@
 /**
  * 提交图：graph-layout 布局 + 虚拟滚动渲染 + 选中回调。
  *
- * 渲染口径（2026-09-12 重构，修「垂直线不闭合 / 斜线接不上主竖线 / 缩进不随线条」）：
+ * 渲染口径（2026-09-12 重构，修「垂直线不闭合 / 斜线接不上主竖线 / 缩进不随线条」；
+ *   同日二次修「分叉点挂在无关提交上 / 跨行线被逐行视口裁断」，几何口径见 domain/commit-graph-segments 文件头）：
  *   - **全图一套全局坐标**：x = laneCenterX(lane)，y = rowCenterY(行号)（见 base/graph-canvas）；
  *   - 线段只编译一次并按行切好（domain/commit-graph-segments，纯函数可单测）：
- *     同一根竖线在相邻两行画出的两半共享同一个端点坐标，行边界处严丝合缝；
- *   - 每行渲染一块 SVG，但它只是整图的一个**视口**（viewBox 取该行那一条 + 左右 padding），
- *     不做任何「按行裁切拼接」，因此不可能出现接缝/重复描边的色差；
- *   - 说明文字的缩进 = 本行预留的 lane 列数 × LANE_WIDTH，**随线条缩进**。
+ *     竖段与斜段都在行边界处切开，相邻两行画出的两半共享同一个端点坐标，行边界处严丝合缝；
+ *   - 每行渲染一块 SVG，**只画落在本行带内的切片与本行圆点**（旧实现每行都重画整张图再靠视口裁掉，
+ *     大仓会把 DOM 撑到几万节点）；viewBox = 本行带 × 本行图列宽度，不做「按行裁切拼接」；
+ *   - 本行图列宽度 = 本行带内所有线条与本行圆点的 x 上界（`RowGeometry.maxX`）→
+ *     跨到更右 lane 的斜线不会再被裁断（旧口径按「本行圆点所在 lane」定宽，实测断线 8px / 66px）；
+ *   - 说明文字的缩进 = 本行图列预留的 lane 列数 × LANE_WIDTH，**随线条缩进**
+ *     （线条画到更右的车道，本行文字就跟着让位；没画到右边的行，缩进与旧口径逐像素一致）。
  *
  * UX 对齐 #2：行默认列为 Subject（图 + refs chips）+ Author + Date（Hash 列省）；
  * 分支 chips 默认开，tag chips 默认关（对齐 Java showTagNames=false），由 showTags 打开。
@@ -16,13 +20,13 @@
  *   （`gap="middle"` = 主题 `padding` token；全站默认紧凑密度下恰为 8px，见下方说明区注释与测试锚点）。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ConfigProvider, Flex, Listy, Space, Tag, theme, Typography } from 'antd';
+import { ConfigProvider, Flex, Listy, Tag, theme, Typography } from 'antd';
 import type { ThemeConfig } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
-import { buildLayout, edgesInRow, type LayoutCommit } from '../graph-layout';
+import { buildLayout, type LayoutCommit } from '../graph-layout';
 import { colorForRef } from '../graph-layout/color';
-import { GraphCanvas } from '../base/graph-canvas';
-import { buildRowSegments } from './commit-graph-segments';
+import { GraphCanvas, laneCenterX } from '../base/graph-canvas';
+import { buildRowGeometry, laneCoveringX } from './commit-graph-segments';
 import { classifyRefs } from './refs';
 import { formatCommitDate } from './format';
 
@@ -69,8 +73,18 @@ const GRAPH_PADDING_X = 10;
  * 实测该口径下「文字距圆点中心」在所有 lane、所有 4 个仓库都是同一个值（不受 lane 数影响）。
  */
 const DOT_GUTTER = 8;
-/** refs（分支/标签 chip）列宽上限：单个超长 ref 名在列内横向滚动，不挤掉说明列 */
-const REF_COLUMN_WIDTH = 140;
+/**
+ * refs（分支/标签 chip）列宽上限。
+ *
+ * 旧口径 140px 会把常见情形直接切掉（实测 1440px 窗口下：3 个 chip 的真实宽度 295px，
+ * 140px 容器 + `scrollbarWidth: none` → 第 3 个 chip 一个像素都看不见，第 2 个只剩半边，
+ * 且**没有任何截断提示**）。现在改成「先给足、再逐 chip 省略号」：
+ *   - 上限放宽到能容下 3~4 个常见分支名（320px）；
+ *   - 容器可收缩（flexShrink + minWidth 0），窗口变窄时先压缩 chips 而不是硬切；
+ *   - 每个 chip 自己带 `overflow: hidden + ellipsis` 与 `title`（全名 tooltip）——
+ *     空间真的不够时看到的是省略号与 tooltip，而不是被削掉一半的字。
+ */
+const REF_COLUMN_WIDTH = 320;
 
 /**
  * antd Listy 的「估算行高」口径（**必须与真实行高逐像素相等**，否则列表会出现「滚下去几条不显示」）。
@@ -103,21 +117,34 @@ function listyRowHeightTheme(fontHeight: number): ThemeConfig {
 
 /**
  * 单行 refs chips：分支 chip 底色 = 该分支名的图列色（colorForRef，ref 名 hash → HSB 色板），
- * 与图车道颜色同源——同一分支在图中与 chip 上恒定同色（Java 分支标签着色的等价承载）；
+ * 与图车道颜色同源——同一分支在图中与 chip 上恒定同色（Java 分支标签着色的等价承载）。
+ * 注意「同色」要求两边用**同一个 ref 名**：图列侧用 graph-layout/ref-name 的 refNameOf 剥掉
+ * `HEAD -> ` 前缀后再哈希，chips 侧由 classifyRefs（同一个实现）给出分支名，缺一边就会异色。
  * 标签 chip 保持橙色预设色（tag 不参与分支着色）。
  *
- * 多个 chip 之间的间距（用户口径 4px，视觉上更紧凑）：由 antd `Space` 的 `size="small"` 档位类名统一给
- * （`.ant-space-gap-col-small` = 主题 `paddingXS` token，紧凑密度下 4px；
+ * 多个 chip 之间的间距（用户口径 4px，视觉上更紧凑）：由 antd `Flex` 的 `gap="small"` 档位类名统一给
+ * （`.ant-flex-gap-small` = 组件 token `flexGapSM` = 主题 `paddingXS` token，紧凑密度下 4px；
  * 与说明区 Flex 的 `gap="middle"`（= `padding` = 8px）是两个独立档位，互不影响）。
+ * 为什么是 `Flex` 而不是原来的 `Space`：`Space` 会把每个 child 包一层 `div.ant-space-item`（min-width: auto，
+ * 不可收缩），chips 装不下时只能被容器硬切；`Flex` 下 chip 自身就是 flex item，`overflow: hidden`
+ * 使其最小尺寸归零 → 空间不足时芯片**自己省略号**（配合 `title` 显示全名），不再出现「半截字」。
  * 注意两点，否则「间距会静默消失」：
- *   1. `Space` 只对**直接子项**加间距 —— 必须把 chips 摊平成数组直接交给它，
- *      不能用一个 Fragment 把全部 chip 包成一坨（那样 Space 只看到 1 个子项，chip 之间一个像素都没有）；
+ *   1. `Flex` 的 gap 只作用于**直接子项** —— 必须把 chips 摊平成数组直接交给它，
+ *      不能用一个 Fragment 把全部 chip 包成一坨（那样只有一个子项，chip 之间一个像素都没有）；
  *   2. 不写内联 `gap` / 不给 `Tag` 加 margin（antd v6 的 Tag 本就无默认 margin，实测 0，
- *      故 Space 的档位间距不会被叠加成两份）。
+ *      故档位间距不会被叠加成两份）。
  * 无 refs 时返回 null（不留空壳 DOM）。
  */
 function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): React.ReactNode {
   const { branches, tags } = classifyRefs(refs);
+  /** chip 通用样式：可收缩 + 省略号（空间不足时看到 `…`，hover 由 title 给出全名） */
+  const chipStyle: React.CSSProperties = {
+    // 不设 marginInlineEnd：与说明文字的间距由说明区 Flex 的 gap 统一给（用户口径 8px）
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    verticalAlign: 'middle',
+  };
   // 摊平成一个数组：分支 chips 在前、标签 chips 在后（顺序与 classifyRefs 的分类一致）。
   // key 加前缀：两类 chip 现在同处一个 children 数组，避免「分支名与标签名同名」时 key 撞车。
   const chips = [
@@ -125,8 +152,9 @@ function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): Re
       <Tag
         key={`branch:${b}`}
         data-testid={`ref-chip-${b}`}
+        title={b}
         style={{
-          // 不设 marginInlineEnd：与说明文字的间距由说明区 Flex 的 gap 统一给（用户口径 8px）
+          ...chipStyle,
           backgroundColor: colorForRef(b),
           borderColor: 'transparent',
           color: '#fff',
@@ -137,14 +165,14 @@ function RefChips({ refs, showTags }: { refs: string[]; showTags: boolean }): Re
     )),
     ...(showTags
       ? tags.map((t) => (
-        <Tag key={`tag:${t}`} color="orange">
+        <Tag key={`tag:${t}`} title={t} style={chipStyle} color="orange">
           {t}
         </Tag>
       ))
       : []),
   ];
   if (chips.length === 0) return null;
-  return <Space size="small">{chips}</Space>;
+  return <Flex gap="small">{chips}</Flex>;
 }
 
 export function CommitGraph({
@@ -163,12 +191,9 @@ export function CommitGraph({
     [commits],
   );
   const rows = useMemo(() => buildLayout(layoutCommits), [layoutCommits]);
-  // 跨行长边（edgesInRow）：既用于编译线段，也用于把「经过本行的长边」计入该行的缩进
-  const rowEdges = useMemo(() => edgesInRow(rows), [rows]);
-  const segmentsPerRow = useMemo(
-    () => buildRowSegments(rows, rowEdges, ROW_HEIGHT, LANE_WIDTH),
-    [rows, rowEdges],
-  );
+  // 每行要画的线段切片 + 本行图列必须覆盖的 x 上界（跨行长边由编译层按行边界切分，
+  // 见 domain/commit-graph-segments：旧实现按「本行圆点所在 lane」定宽，跨 lane 的斜线会被视口裁断）
+  const rowGeometry = useMemo(() => buildRowGeometry(rows, ROW_HEIGHT, LANE_WIDTH), [rows]);
   // hash → 原始提交（LayoutCommit 只带图字段，行渲染需要 author/date/message）
   const byHash = useMemo(() => new Map(commits.map((c) => [c.hash, c] as const)), [commits]);
   // antd 的 fontHeight 是运行时 token（genFontMapToken 生成），6.6.3 的类型里没有声明它，
@@ -216,15 +241,20 @@ export function CommitGraph({
           if (!commit) return null;
           // 选中态：底走主题 token（controlItemBgActive），与提交详情面板当前提交一致
           const selected = selectedHash !== null && row.commit.hash === selectedHash;
-          // 本行图列的宽度：按**本行圆点所在 lane** 算（lane 0 的行只占 1 条 lane），
-          // 不用全图最宽、也不用「经过本行的长边」——后者只是从文字下方穿过，不该把本行文字推远。
-          // 画到更右 lane 的边会被视口裁掉（切线朝下/朝上走，视觉上仍连续）。
-          const laneAreaWidth = (row.lane + 1) * LANE_WIDTH + GRAPH_PADDING_X * 2;
+          // 本行图列的宽度：**按本行带内实际画出的线**算（`RowGeometry.maxX` 已含本行圆点）——
+          // 线条画到更右的车道，本行就补足宽度，否则那条线会被自己的 viewBox 裁掉（旧口径按本行 lane
+          // 定宽，实测断线 8px / 66px）。多出来的宽度同时把本行文字往右推：文字起点恒在
+          // `车道中心 + DOT_GUTTER`，故「线条最右端」与文字之间始终留着 DOT_GUTTER（见 laneCoveringX）。
+          // 没画到右边的行，宽度与旧口径逐像素一致（缩进不变）。
+          const geometry = rowGeometry[index] ?? { segments: [], maxX: laneCenterX(row.lane, LANE_WIDTH) };
+          const lane = Math.max(row.lane, laneCoveringX(geometry.maxX, LANE_WIDTH));
+          const laneAreaWidth = (lane + 1) * LANE_WIDTH + GRAPH_PADDING_X * 2;
           const viewMinX = -GRAPH_PADDING_X;
-          // 图列右边界到「本行圆点中心」的距离恒为 GRAPH_PADDING_X + LANE_WIDTH/2（与 lane 无关）。
-          // 用图列的**负右边距**把说明文字拉到「圆点中心 + DOT_GUTTER」：
+          // 图列右边界到「本行图列车道中心」的距离恒为 GRAPH_PADDING_X + LANE_WIDTH/2（与 lane 无关）。
+          // 用图列的**负右边距**把说明文字拉到「本行图列车道中心 + DOT_GUTTER」：
           // margin 可以往回吃，padding 只能往外推（最小 0，之前几轮就是卡在这，怎么调都差 20 多像素）。
-          // 实测口径：文字距圆点中心 = DOT_GUTTER，所有 lane、所有仓库都是同一个值。
+          // 实测口径：本行图列车道 = 本行圆点所在 lane；若本行还画了更右的线（见上），则取那条更右的车道，
+          // 文字随之右移 —— 即「文字起点 = 本行最深线条所在车道中心 + DOT_GUTTER」，文字永不压线。
           const laneMarginRight = DOT_GUTTER - (GRAPH_PADDING_X + LANE_WIDTH / 2);
           return (
             <div
@@ -242,8 +272,9 @@ export function CommitGraph({
               onContextMenu={() => onContextMenu?.(commit.hash)}
             >
               {/*
-              图列 = 整图的一个视口：SVG 只有一行高，viewBox 覆盖 x ∈ [−留白, 本行最大 lane]，y = 本行那条带。
-              线段与圆点都由 GraphCanvas 按全局坐标画，故竖线跨行不断、斜线端点落在竖线上。
+              图列 = 整图的一个视口：SVG 只有一行高，viewBox 覆盖 x ∈ [−留白, 本行图列右界]，y = 本行那条带。
+              只画**落在本行带内的切片与本行圆点**（不是整图重画再裁），线段与圆点都是全局坐标，
+              故竖线跨行不断、斜线端点落在竖线上、相邻两行在行边界处共端点。
               视口宽度 = 用户单位宽度，viewBox 与 width 一致 → 1 用户单位 = 1px，无缩放偏移。 */}
               <div
                 data-testid="commit-graph-lane"
@@ -256,8 +287,8 @@ export function CommitGraph({
                   style={{ display: 'block', overflow: 'hidden' }}
                 >
                   <GraphCanvas
-                    segmentsPerRow={segmentsPerRow}
-                    rows={rows}
+                    segments={geometry.segments}
+                    nodes={[{ hash: row.commit.hash, lane: row.lane, rowIndex: index, color: row.color }]}
                     rowHeight={ROW_HEIGHT}
                     laneWidth={LANE_WIDTH}
                   />
@@ -266,7 +297,8 @@ export function CommitGraph({
               {/*
               说明区：**说明文字 + refs chips 作为一个整体**（chips 跟在说明之后）。
               间距口径（用户明确）：
-                · 说明文字距**本行自己的圆点中心** DOT_GUTTER = 8px —— 由上面图列的负右边距落位；
+                · 说明文字距**本行图列车道中心** DOT_GUTTER = 8px —— 由上面图列的负右边距落位；
+                  只画本行圆点的行，该车道就是圆点所在 lane，与旧口径逐像素一致；
                 · chips 距说明文字 8px —— **不写内联 gap**，交给这层 antd Flex 的 `gap="middle"` 档位类名
                   （`.ant-flex-gap-middle`；该档取主题 `padding` token，全站默认紧凑密度下恰为 8px，
                   见 base/page-shell.tsx + base/density.ts）。该等式的锚点见
@@ -277,7 +309,7 @@ export function CommitGraph({
               用 marginLeft（可为负）而不是 paddingLeft（最小为 0）：图列宽度随 lane 变化，
               若用 padding 会把「本行图列宽 − 圆点位置」的差值夹成 0，文字于是比预期远 15~20px——
               那正是之前几轮反复对不上的根因。margin 可以直接落位到「圆点右缘 + 8px」。
-              「缩进随线条」由 lane 的横向位置自然带来（lane 越深，圆点与文字一起右移）。 */}
+              「缩进随线条」由车道的横向位置自然带来（车道越深，线条与文字一起右移）。 */}
               <Flex
                 data-testid="commit-graph-message"
                 align="center"
@@ -288,18 +320,17 @@ export function CommitGraph({
                   {commit.message.split('\n')[0]}
                 </span>
                 {/*
-                refs chips 列：宽度按内容自适应（有就占位、没有就不占）；上限 REF_COLUMN_WIDTH + 列内滚动。
-                本容器只负责**布局契约**（收缩行为 + 上限 + 列内横向滚动），
-                chip 之间与 chips 前后的间距都不在这里写，见 RefChips 与说明区 Flex。 */}
+                refs chips 列：宽度按内容自适应（有就占位、没有就不占）；上限 REF_COLUMN_WIDTH。
+                本容器只负责**布局契约**（`flexShrink: 1` + `minWidth: 0` 让它能被压缩而不是硬切，
+                `overflow: hidden` 兜底），chip 之间与 chips 前后的间距都不在这里写，见 RefChips 与说明区 Flex。 */}
                 <span
                   data-testid="commit-graph-refs"
                   style={{
                     flexGrow: 0,
-                    flexShrink: 0,
+                    flexShrink: 1,
+                    minWidth: 0,
                     maxWidth: REF_COLUMN_WIDTH,
-                    overflowX: 'auto',
-                    overflowY: 'hidden',
-                    scrollbarWidth: 'none',
+                    overflow: 'hidden',
                   }}
                 >
                   <RefChips refs={commit.refs} showTags={showTags} />

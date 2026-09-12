@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildLayout, buildLinearGraph, containingBranches, edgesInRow } from './build-layout';
+import { colorForRef } from './color';
 import { linearCommits } from './fixtures/linear';
 import { mergeCommits } from './fixtures/merge';
 import * as headsOrder from './fixtures/java/layout-builder-heads-order';
@@ -36,16 +37,21 @@ describe('buildLayout', () => {
     expect(rows[0].edges.some((e) => e.toLane === 1)).toBe(true);
   });
 
-  it('color：主线染 head 首个 ref 哈希色，fragment 染自身 layoutIndex 色', () => {
+  it('color：主线染 head 首个 ref 名哈希色，fragment 染自身 layoutIndex 色', () => {
     const rows = buildLayout(mergeCommits);
     expect(rows.every((r) => r.color.length > 0)).toBe(true);
     // m 是唯一 head：m/b/r 为主线（layoutIndex == head 的 layoutIndex），a 为 fragment（layoutIndex 2）
-    // Java 实测：colorForRef('HEAD -> main') = #6398a6；colorById(2) = #7663a6
-    expect(rows[0].color).toBe('#6398a6');
-    expect(rows[1].color).toBe('#6398a6');
+    // 前提：主线色必须与行内 chip 同色 —— chip 走 classifyRefs 剥掉 `HEAD -> ` 前缀后的分支名，
+    // 故 graph 侧同样先经 refNameOf 归一化（fixture 的 refs 是 `HEAD -> main`）。
+    // Java 实测色板：colorForRef('main') = #639ba6；colorById(2) = #7663a6
+    expect(rows[0].color).toBe(colorForRef('main'));
+    expect(rows[0].color).toBe('#639ba6');
+    expect(rows[1].color).toBe('#639ba6');
     expect(rows[2].color).toBe('#7663a6');
-    expect(rows[3].color).toBe('#6398a6');
+    expect(rows[3].color).toBe('#639ba6');
     expect(rows[2].color).not.toBe(rows[0].color);
+    // 归一化不可省的证据：未剥前缀时主线是另一个色（旧实现就是这个色，与 chip 异色）
+    expect(colorForRef('HEAD -> main')).toBe('#6398a6');
   });
 
   it('merge 展开行：长边经中间行填充，折线跨 lane', () => {

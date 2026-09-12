@@ -92,32 +92,41 @@ describe('CommitGraph', () => {
     expect(theme.getDesignToken(compactTheme('dark')).padding).toBe(8);
   });
 
-  // 多个 ref chip 之间的间距（用户口径 4px，视觉上更紧凑）：chips 之间的空隙由 antd Space 的档位类名统一给。
-  // 关键不变量：每个 chip 必须是 Space 的**直接子项**（Space 只对直接子项加间距；
-  // 若用一个 Fragment 把全部 chip 包成一坨，Space 只看到 1 个子项 → chip 之间一个像素都不会有）。
-  it('多个 chip 之间的间距走 antd Space 档位：每个 chip 一个直接子项', () => {
+  // 多个 ref chip 之间的间距（用户口径 4px，视觉上更紧凑）：chips 之间的空隙由 antd `Flex` 的档位类名统一给。
+  // 关键不变量有两条：
+  //   ① 每个 chip 必须是容器的**直接子项**（档位 gap 只作用于直接子项；用一个 Fragment 包成一坨就一个像素都没有）；
+  //   ② chip 自己可收缩 + 省略号 + `title` 全名 —— 旧实现走 antd `Space`，每个 chip 被包进不可收缩的
+  //      `div.ant-space-item`，列宽一到上限就只能被容器硬切（实测 3 个 chip 时第 3 个完全不可见）。
+  it('chip 间距走 antd Flex 档位，且每个 chip 可省略号收缩（不再被容器硬切）', () => {
     const withRefs: CommitInfo[] = [
       makeCommit({ hash: 'r1', refs: ['main', 'feature', 'tag: v1.0'], message: '多引用' }),
     ];
     render(<CommitGraph commits={withRefs} showTags />);
     const wrap = screen.getByTestId('commit-graph-refs');
-    const space = wrap.firstElementChild as HTMLElement;
-    expect(space.className).toContain('ant-space');
-    expect(space.className).toContain('ant-space-gap-col-small');
+    const bar = wrap.firstElementChild as HTMLElement;
+    expect(bar.className).toContain('ant-flex');
+    expect(bar.className).toContain('ant-flex-gap-small');
     // 间距既不写内联、也不靠 chip 自己的 margin（antd v6 的 Tag 无默认 margin，实测 0）
-    expect(space.style.columnGap).toBe('');
-    expect(space.style.rowGap).toBe('');
+    expect(bar.style.columnGap).toBe('');
+    expect(bar.style.rowGap).toBe('');
     // 口径锚点：small 档 = 主题 `paddingXS` token，紧凑密度下恰为 4px
     // （与说明区 Flex 的 `middle` = `padding` = 8px 是两个档位，互不影响）
     expect(theme.getDesignToken(compactTheme('light')).paddingXS).toBe(4);
     expect(theme.getDesignToken(compactTheme('dark')).paddingXS).toBe(4);
-    // 3 个 chip（main / feature / v1.0）→ 3 个非空子项，每个子项恰好 1 个 chip
-    const items = [...space.children].filter(
-      (el) => el.classList.contains('ant-space-item') && el.firstElementChild !== null,
-    );
-    expect(items).toHaveLength(3);
-    expect(items.map((it) => it.children.length)).toEqual([1, 1, 1]);
-    expect(wrap.querySelectorAll('.ant-space-item > .ant-tag')).toHaveLength(3);
+    // 3 个 chip（main / feature / v1.0）直接是柔性容器的子项，没有 Space 的包装层
+    const chips = [...bar.children] as HTMLElement[];
+    expect(chips).toHaveLength(3);
+    expect(chips.every((el) => el.classList.contains('ant-tag'))).toBe(true);
+    expect(wrap.querySelectorAll('.ant-space-item')).toHaveLength(0);
+    // 收缩契约：省略号 + 全名 title（空间不足时看到 `…` 而不是被削掉半个字）
+    for (const chip of chips) {
+      expect(chip.style.textOverflow).toBe('ellipsis');
+      expect(chip.style.overflow).toBe('hidden');
+      expect(chip.getAttribute('title')).toBeTruthy();
+    }
+    // 容器本身可收缩（flexShrink）且有兜底裁剪，不再是「定宽 + 隐藏滚动条」的静默截断
+    expect(wrap.style.flexShrink).toBe('1');
+    expect(wrap.style.overflow).toBe('hidden');
   });
 
   // 无 refs 时 chips 容器必须是空壳（「有就占位、没有就不占」）：Space 空子项返回 null，不留隐藏节点
@@ -288,5 +297,59 @@ describe('CommitGraph', () => {
       return x === ownX && y === 4 * 24 + 12;
     });
     expect(startsAtNode).toBe(true);
+  });
+
+  /**
+   * 每行图列宽度 = 本行带内所有线段与本行圆点的 x 上界（RowGeometry.maxX），且**文字起点必须让开线条**。
+   * 两条口径都踩过坑：
+   *   ① 旧口径按「本行圆点所在 lane」定宽 → 跨到更右 lane 的线被逐行 viewBox 裁断（实测断线 8px / 66px）；
+   *   ② 只按「线落在 viewBox 内」定宽 → 线可画到列右缘，而列右缘比文字起点还靠右（负右边距的代价），
+   *      实测线压住每行开头约 10px 文字。
+   * 这里断言：所有坐标都在 viewBox 内，且都落在本行车道中心（= 文字起点 − DOT_GUTTER）左侧。
+   */
+  it('跨 lane 的边不被本行视口裁断，也不压到本行文字（文字让开最深的那条线）', () => {
+    render(<CommitGraph commits={mergeCommits} />);
+    const rows = screen.getAllByTestId('commit-graph-row');
+    rows.forEach((row) => {
+      const lane = within(row).getByTestId('commit-graph-lane');
+      const svg = lane.querySelector('svg')!;
+      const [minX, , vbW] = (svg.getAttribute('viewBox') ?? '').split(' ').map(Number);
+      const visibleRight = minX! + vbW!;
+      // 视口宽度 = 图列宽度（1 用户单位 = 1px）
+      expect(lane.style.width).toBe(`${vbW}px`);
+      // 由列宽反解本行车道号：宽度 = (lane + 1) × 18 + 2 × 10
+      const rowLane = (vbW! - 20) / 18 - 1;
+      // 文字起点（全局坐标）= 车道中心 + DOT_GUTTER(8)（图列负右边距把文字拉到圆点右侧 8px）
+      const textStartX = (rowLane + 0.5) * 18 + 8;
+      const shapes = [...svg.querySelectorAll('line, polyline')];
+      expect(shapes.length).toBeGreaterThan(0);
+      const xs = shapes.flatMap((s) =>
+        s.tagName === 'line'
+          ? [Number(s.getAttribute('x1')), Number(s.getAttribute('x2'))]
+          : (s.getAttribute('points') ?? '').split(' ').map((p) => Number(p.split(',')[0])),
+      );
+      for (const x of xs) {
+        expect(x).toBeLessThanOrEqual(visibleRight);
+        expect(x).toBeLessThanOrEqual(textStartX);
+      }
+      // 圆点（中心 + 半径 24/6）也要完整可见
+      const cx = Number(svg.querySelector('circle')!.getAttribute('cx'));
+      expect(cx + 24 / 6).toBeLessThanOrEqual(visibleRight);
+    });
+  });
+
+  /** 每行只画本行带内的切片 + 本行圆点（旧实现每行都重画整张图，再把多余部分靠视口裁掉） */
+  it('每行只渲染本行的内容：一个圆点，且线段数远小于全图线段数', () => {
+    render(<CommitGraph commits={mergeCommits} />);
+    const rows = screen.getAllByTestId('commit-graph-row');
+    const allShapes = rows.flatMap((row) => [
+      ...within(row).getByTestId('commit-graph-lane').querySelectorAll('line, polyline'),
+    ]);
+    // 每行一个圆点（旧实现是「行数 × 圆点数」）
+    for (const row of rows) {
+      expect(within(row).getByTestId('commit-graph-lane').querySelectorAll('circle')).toHaveLength(1);
+    }
+    // 旧实现下每行都会画全图所有切片（行数 × 全图切片数），这里按行求和不会超过全图切片数
+    expect(allShapes.length).toBeLessThanOrEqual(mergeCommits.length * 6);
   });
 });

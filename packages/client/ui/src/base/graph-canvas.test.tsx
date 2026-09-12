@@ -1,8 +1,8 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { LayoutRow } from '../graph-layout/types';
-import { GraphCanvas, laneCenterX, rowCenterY } from './graph-canvas';
-import { buildRowSegments } from '../domain/commit-graph-segments';
+import { GraphCanvas, laneCenterX, rowCenterY, type GraphNode } from './graph-canvas';
+import { buildRowGeometry } from '../domain/commit-graph-segments';
 
 /** 三行布局：lane 0/1 交错，含一条跨 lane 边（0→1）与一条同 lane 直边（1→1） */
 const rows: LayoutRow[] = [
@@ -29,22 +29,35 @@ const rows: LayoutRow[] = [
 const ROW = 24;
 const LANE = 18;
 
+/** 行号 → 节点（画布只认全局坐标，行号由调用方给） */
+const nodeOf = (index: number): GraphNode => ({
+  hash: rows[index]!.commit.hash,
+  lane: rows[index]!.lane,
+  rowIndex: index,
+  color: rows[index]!.color,
+});
+
 describe('GraphCanvas', () => {
-  it('按行数画节点圆点，并把编译好的线段画成 line/polyline', () => {
-    const segmentsPerRow = buildRowSegments(rows, rows.map(() => []), ROW, LANE);
+  it('只画传进来的线段与圆点（每行一块画布，不再整图重画）', () => {
+    const geometry = buildRowGeometry(rows, ROW, LANE);
     const { container } = render(
-      <GraphCanvas segmentsPerRow={segmentsPerRow} rows={rows} rowHeight={ROW} laneWidth={LANE} />,
+      <GraphCanvas segments={geometry[0]!.segments} nodes={[nodeOf(0)]} rowHeight={ROW} laneWidth={LANE} />,
     );
-    // 节点圆点数等于行数
-    expect(container.querySelectorAll('circle')).toHaveLength(rows.length);
+    // 圆点只有本行那一个（旧实现每行都画全图的行数 × 圆点数）
+    expect(container.querySelectorAll('circle')).toHaveLength(1);
     // 有边就应该有线（折线或直线）
     expect(container.querySelectorAll('line').length + container.querySelectorAll('polyline').length).toBeGreaterThan(0);
   });
 
-  it('节点画在全局坐标的 lane/行中心上（x=(lane+0.5)*laneWidth，y=row*rowHeight+rowHeight/2）', () => {
-    const segmentsPerRow = buildRowSegments(rows, rows.map(() => []), ROW, LANE);
+  it('圆点画在全局坐标的 lane/行中心上（x=(lane+0.5)*laneWidth，y=row*rowHeight+rowHeight/2）', () => {
+    const geometry = buildRowGeometry(rows, ROW, LANE);
     const { container } = render(
-      <GraphCanvas segmentsPerRow={segmentsPerRow} rows={rows} rowHeight={ROW} laneWidth={LANE} />,
+      <GraphCanvas
+        segments={geometry.flatMap((g) => g.segments)}
+        nodes={rows.map((_, i) => nodeOf(i))}
+        rowHeight={ROW}
+        laneWidth={LANE}
+      />,
     );
     const circles = [...container.querySelectorAll('circle')];
     rows.forEach((row, i) => {

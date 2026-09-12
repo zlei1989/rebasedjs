@@ -11,6 +11,9 @@
 // - color：完整 Java 着色语义（GraphColorManagerImpl.getColor 实测）：主线节点
 //   （layoutIndex == 其 head 的 layoutIndex）染 head 首个 ref 名哈希色（无 ref 为默认黑），
 //   fragment 节点染自身 layoutIndex 色。色板见 color.ts。
+//   偏离 Java 的一处（有据）：ref 名先经 refNameOf 归一化再哈希——本项目的 refs 是 git decorate
+//   原始串（`HEAD -> x`），而 chips 显示的是 `x`；不归一化则「同一分支在图与 chip 上恒定同色」
+//   的口径不成立（实测主线与 chip 异色、且与 lane 1 撞色），详见 ref-name.ts。
 // - edgesInRow：Java EdgesInRowGenerator 的语义 = 每行收集「严格跨过该行的正常边」
 //   （upRow < i < downRow；NOT_LOAD 等特殊边被 NORMAL 过滤器排除）——即长边在中间行的填充段。
 // - containingBranches：Java ReachableNodes/ContainingBranchesTest —— 分支 b 包含节点 n ⟺
@@ -21,6 +24,7 @@
 // - 偏离 Java branches 参数：带 refs 的提交不参与 head 集合（简报模型中 refs 仅作展示元数据）。
 
 import { colorById, colorForRef } from './color';
+import { refNameOf } from './ref-name';
 import type { EdgeSegment, LayoutCommit, LayoutRow } from './types';
 
 /**
@@ -82,7 +86,9 @@ export function buildLayout(commits: LayoutCommit[]): LayoutRow[] {
     // 完整 Java 着色：主线（layoutIndex == head 的 layoutIndex）染 head 首个 ref 哈希色，
     // fragment 染自身 layoutIndex 色（GraphColorManagerImpl.getColor 实测）
     const isMainLine = layoutIndex.get(commit.hash) === layoutIndex.get(head);
-    const color = isMainLine ? colorForRef(byHash.get(head)!.refs[0] ?? '') : colorById(layoutIndex.get(commit.hash)!);
+    // head 首个 ref 名归一化后哈希：与行内 chips 的 chip 底色同源（同一分支恒定同色）
+    const headRefName = refNameOf(byHash.get(head)!.refs[0] ?? '');
+    const color = isMainLine ? colorForRef(headRefName) : colorById(layoutIndex.get(commit.hash)!);
     const edges: EdgeSegment[] = parentsOf.get(commit.hash)!.map((p) => ({
       fromLane: lane,
       toLane: laneOf.get(p)!,
