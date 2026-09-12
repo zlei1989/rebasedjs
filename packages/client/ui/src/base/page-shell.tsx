@@ -3,7 +3,9 @@
  * 做什么：纵向 Flex 根 + width:100% + minWidth:0 + height:100%，并施加紧凑密度。
  * 怎么做/为什么：
  *   1. 刻意不设 alignItems —— 纵向 Flex 交叉轴是水平方向，align-items:flex-start 会使子元素
- *      不横向拉伸（"没有横向沾满"）并把父级顶宽（意外横向滚动条）。这是 44 处问题的根因。
+ *      不横向拉伸（"没有横向沾满"）并把父级顶宽（意外横向滚动条）。全站原先 44 处
+ *      `align="flex-start"` 里有 40 处正是这种纵向页面根，删掉它们才是修好；另 4 处在**横向**
+ *      容器上（交叉轴为纵向）表示顶对齐，必须保留。
  *   2. minWidth:0 阻止 flex 子项把父级顶宽；scroll="inner" 另需 minHeight:0（纵向主轴默认
  *      min-height:auto 会让内容撑开容器而不产生内部滚动）。
  *   3. padding/gap 默认不落 style —— 既有 16px 内边距由页面级 composite 自带，

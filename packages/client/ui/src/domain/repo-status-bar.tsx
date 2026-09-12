@@ -28,7 +28,7 @@ export function RepoStatusBar({ status }: RepoStatusBarProps): React.ReactNode {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px' }}>
       {/* 分支名用小 Tag 承载（chip 形态，对齐提交图里的 ref chips）。
-          注意：antd 6.6.1 的 Tag **没有** size 变体（TagProps 无 size，样式里也无 -sm/-lg 分支），
+          注意：antd 6.6.3 的 Tag **没有** size 变体（TagProps 无 size，样式里也无 -sm/-lg 分支），
           它本身即「小」尺寸——高度由 token fontSizeSM（紧凑密度下 12px）决定，故不传 size、不额外压字号。 */}
       <Tag>{branch ?? '(detached HEAD)'}</Tag>
       {ahead > 0 || behind > 0 ? (

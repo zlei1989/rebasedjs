@@ -381,7 +381,7 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 
 | 原语 | 位置 | 契约 | 它取代了什么 |
 |------|------|------|--------------|
-| `PageShell` | `packages/client/ui/src/base/page-shell.tsx` | `density?: 'compact' \| 'default'`（默认 compact）、`padding?: number \| string`（不传不落 style）、`gap?: number`（不传不落 style）、`scroll?: 'page' \| 'inner' \| 'none'`（默认 page）、`children` | 每个页面各写一遍的根 `<Flex vertical …>`（落地：两个 app 各 20 个页面文件 + ui 层 11 个页面级 composite 使用 `PageShell`） |
+| `PageShell` | `packages/client/ui/src/base/page-shell.tsx` | `density?: 'compact' \| 'default'`（默认 compact）、`padding?: number \| string`（不传不落 style）、`gap?: number`（不传不落 style）、`scroll?: 'page' \| 'inner' \| 'none'`（默认 page）、`children` | 每个页面各写一遍的根 `<Flex vertical …>`（落地：两个 app **各 20 个页面文件** + ui 层 **11 个**页面级 composite 使用 `PageShell` —— 11 = `log-page` / `repo-page` / `settings-page` / `status-page` / `search-panel` / `merge-view` / `blame-view` / `branch-compare-view` / `diff-page` / `diff-stream-view` / `committed-changes-panel`，可逐文件核对；`github-panel` / `gitlab-panel` 的根是**横向行**，按 §6.2 的轴向判定**不迁**） |
 | `SplitPane` | `base/split-pane.tsx` | `side`、`children`（主区）、`sideWidth?: number`（默认 300）、`sidePosition?: 'start' \| 'end'`（browse 在左、log 在右）、`collapseBelow?: number`（默认 768）、`gap?: number`（不传不落 style） | 写死 `width:300/320 + flexShrink:0` 的侧栏（窄屏必然横向溢出的结构性成因） |
 | `Toolbar` | `base/toolbar.tsx` | `align?: 'start' \| 'center' \| 'end' \| 'between'`（映射**主轴** `justify`）、`gap?`、`wrap?: boolean`（默认 true）、`children`；容器带 `width:100%; minWidth:0` | 手写的 `flexWrap` 补丁（`flexWrap` 缺 `minWidth:0` 时子项仍会顶宽父级） |
 | `EllipsisText` | `base/ellipsis-text.tsx` | `children: string`、`title?`（存在则走 antd 原生 ellipsis tooltip）、`mono?`、`type?`、`strong?`、`maxWidth?: number \| string`；自身带 `minWidth: 0` | 不可断行的长 hash / 长路径 / 长分支名（它们把所在行顶宽，是溢出传播源） |
@@ -393,13 +393,13 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 
 页面根 = 纵向 Flex，`width:100%`、`minWidth:0`、`height:100%`，**刻意不设 `alignItems`**：
 
-1. `align-items` 的默认值（`normal` → 表现为 `stretch`）正是「子元素横向拉伸沾满」的来源。原先 44 处页面根写的是 `align="flex-start"`——在**纵向** Flex 上交叉轴是水平方向，它表示「子项不横向拉伸」，于是页面内容不沾满、且子项按内容宽溢出并把父级顶宽（意外横向滚动条）。**删掉它才是修好，加上它才是 bug**。
+1. `align-items` 的默认值（`normal` → 表现为 `stretch`）正是「子元素横向拉伸沾满」的来源。全站原先有 **44 处** `align="flex-start"`，其中 **40 处**是**纵向页面根**——在纵向 Flex 上交叉轴是水平方向，它表示「子项不横向拉伸」，于是页面内容不沾满、且子项按内容宽溢出并把父级顶宽（意外横向滚动条）；另有 **4 处**在**横向** composite 容器上（`branch-compare-view.tsx` / `committed-changes-panel.tsx` / `github-panel.tsx` / `gitlab-panel.tsx`），按下方口径**保留**。**删掉纵向根上的那个属性才是修好，加回去才是 bug。**
 2. `minWidth: 0` 阻止 flex 子项以「自动最小尺寸 = 内容宽」把父级顶宽；`scroll="inner"` 另需 `minHeight: 0`（纵向 Flex 的主轴是垂直方向，默认 `min-height: auto` 会让内容撑开容器而不产生内部滚动）。
 3. `padding` / `gap` 默认**不落 style**：既有页面的 16px 内边距由页面级 composite 自带，原语默认值一旦非 0，迁移会凭空新增间距并可能制造溢出。
 
 **`align="flex-start"` 的判定口径（极易误判）**：它只在**纵向** flex 容器上是宽度 bug；在**横向** flex 容器上交叉轴是垂直方向，它表示「子项顶部对齐」，**必须保留**（例如 `github-panel.tsx` / `gitlab-panel.tsx` 的「左列表卡 + 右详情卡」行、`branch-compare-view.tsx` 的内层横向容器）。全站迁移时逐处按容器方向判定，不是全局替换。
 
-**直接子项被拉伸的两面**：正因为根不设 `alignItems`，`Tooltip > Button type="link"` 这类**直接子项**会被拉成整行宽、文字居中（antd 按钮自带 `justify-content:center`）。这是原语的必然结果，不是原语缺陷：需要紧凑左对齐的调用点就地写 `style={{ alignSelf: 'flex-start' }}` 收回内容宽（两个 app 共 36 处，见 §6.5）；**不要去改 `PageShell` 的契约**（去掉「不设 alignItems」等于把 44 处宽度 bug 请回来）。
+**直接子项被拉伸的两面**：正因为根不设 `alignItems`，`Tooltip > Button type="link"` 这类**直接子项**会被拉成整行宽、文字居中（antd 按钮自带 `justify-content:center`）。这是原语的必然结果，不是原语缺陷：需要紧凑左对齐的调用点就地写 `style={{ alignSelf: 'flex-start' }}` 收回内容宽（两个 app 共 **38 处** = web-next 19 + web-koa 19，见 §6.5）；**不要去改 `PageShell` 的契约**（去掉「不设 alignItems」等于把 40 处纵向根的宽度 bug 请回来）。
 
 ### 6.3 密度口径
 
@@ -412,19 +412,21 @@ token: { fontSizeSM: 11 }   // 实效 fontSize / fontSizeSM / fontSizeLG = 12 / 
 - **为什么不能写 `fontSize`**：`compactAlgorithm` 会**覆盖**传入的 `fontSize`——它以基础算法派生出的 `fontSizeSM` 为新基准再推导整档字号。显式 `fontSize: 12` 会让基础算法先把 `fontSizeSM` 派生成 10，compact 再以 10 为基准 → **实效 fontSize = 10**（比目标 12 还小）。实测矩阵见 `density.ts` 文件头与 `density.test.ts` 的「实效 token」用例。
 - 间距与控件高度**交给 `compactAlgorithm`**，不重复手调 `padding*` / `controlHeight` 种子 token（会与算法叠加成过度压缩）；`lineHeight` 不动（缩小字号后行高比例已是流体的）。
 - **数值校准结论（T16 六档截图实测）**：12px 基准维持不变——它在 360 / 768 / 1440 三档、明暗两主题下均可读（`responsive-{360,768,1440}[-light]-{log,browse,status,console}.png`），且 12/11/14 正是 antd 自身 small 规格的量级。
-- **豁免**：设置页是唯一例外（`density="default"`，不包紧凑 `ConfigProvider`），实测同宽度下设置页 `fontSize` = 14 / 卡片标题 16，其余页面 = 12（`responsive-768-light-settings-fluid.png`）。
+- **豁免**：密度豁免的是**唯一一条路由** —— 设置页（`density="default"`，不包紧凑 `ConfigProvider`），实测同宽度下设置页 `fontSize` = 14 / 卡片标题 16，其余页面 = 12（`responsive-768-light-settings-fluid.png`）。
+  **注意「唯一例外」是按路由说的，不是按页面文件说的**：密度归属规则最初写成「20 个委派页面文件」而不是「全部 24 条路由」，于是 `/repos/:id/merge` 整条路由**没有任何密度归属方**（两个 app 的容器都直接 `return <MergeDialog open …>`，背后文档为空、也没有布局根），同一弹窗从 `/merge` 进入以 antd 默认 14px 渲染、从 `/conflicts` 进入却是 12px —— 而当时的 576 格溢出矩阵**全绿**（溢出为 0 与密度正确是两件独立的事）。现已修：两个 app 的 merge 容器各包一层紧凑 `PageShell`（Modal 虽经 `createPortal` 挂在 body 上，但 React context **穿过 portal**，密度确实到达弹窗内部）；`/diff` 的加载失败分支同样补了一层 `PageShell`（它在 `DiffPage` 之前提前返回，否则错误态整页落回 14px）。同时 §6.5 新增**按路由的密度断言**，使「某条路由没有密度归属」无法再静默通过。
 
 **硬经验：嵌套 `ConfigProvider` 的 `algorithm` 是「替换」而不是「合并」。** 这正是 `compactTheme` 必须自带完整 `[baseAlgorithm, compactAlgorithm]` 数组的原因——`PageShell` 内层的 `ConfigProvider` 一旦只写 `theme.compactAlgorithm`，就会把外层 app 的明暗底色算法**整个换掉**（暗色主题下页面会变回亮色底，而且不会有任何报错）。若按「antd 会合并算法栈」的直觉去写，暗色模式会**静默**坏掉。
 
 ### 6.4 允许横向滚动的例外清单
 
-页面级横向滚动必须为 0（§6.5）；**组件内部**的横向滚动是允许的，且只有三类：
+页面级横向滚动必须为 0（§6.5）；**组件内部**的横向滚动是允许的，且只有四类：
 
 | 例外 | 位置 | 为什么必须允许 | 断言口径 |
 |------|------|----------------|----------|
 | Monaco 编辑器 | `MonacoDiffView` / `MonacoTextView` / `HunkDiffView`（`github-panel` / `gitlab-panel` 展开差异） | 代码行不换行是编辑器语义；长行必须靠编辑器自己的横向滚动条可达。编辑器宿主（`.monaco-editor`）本身是**裁剪容器**（`scrollWidth == clientWidth`），溢出**不外泄**到文档；真正持有横向滚动区间的是它内部的 `.monaco-scrollable-element` | 四条同时成立：① 长行真实存在（`.view-lines` 宽 > 编辑器 `clientWidth`）；② 宿主 `scrollWidth <= clientWidth + 1`（裁剪，不外泄）；③ `.monaco-scrollable-element` 的 `scrollWidth > clientWidth`（**注意其值是 Monaco 的大滚动哨兵 16777216，不能当长行的度量**）；④ 拖动 Monaco 自己的横向滚动条滑块后内容真的位移 |
 | 长文本块 | `browse-panel` 的内容 `<pre>`、console / patch 预览等等宽文本块 | 等宽原文不折行，属于内容语义 | 这些块自身带 `overflow: auto`，滚动发生在块内 |
 | 浮层 / 弹窗包裹层（overlay） | antd 的 `.ant-modal-wrap`（所有 `Modal`：认证弹窗、重置弹窗、忽略配置、CRLF 三选、手动合并全屏 Modal 等），以及同为 `position: fixed` 的浮层容器 | 浮层是**页面之外**的一层，其定位基准是视口而不是文档流：`.ant-modal-wrap` 自带 `overflow: auto`，弹窗内容横向变宽时滚动发生在这层包裹容器里，**不会**传播成文档级横向滚动。这正是「弹窗内部溢出被包裹层吃掉」的机制 | 页面级断言（§6.5）对弹窗开口的格子只能证明「**弹窗背后的页面**不溢出」——`position: fixed` 的元素既不参与文档滚动宽的计算，也被越界元素清单刻意跳过。**弹窗内部**的横向溢出要用另一把尺子：`.ant-modal-wrap`（或 `.ant-modal`）自身的 `scrollWidth <= clientWidth + 1`。目前验收脚本只做了前者，后者列为未覆盖项（`docs/e2e-verification.md` §5.16④） |
+| 提交行的 refs 芯片列 | `domain/commit-graph.tsx` 的 `[data-testid="commit-graph-refs"]`（`flexShrink:0` + `maxWidth: 140` + `overflowX:'auto'` + `scrollbarWidth:'none'`） | 一条提交可能挂任意多个分支/标签芯片，列宽必须设上限才不让提交行被顶宽；超出上限时**在列内横向滚动**（不是裁剪 —— `overflow-x: auto` 会给用户滚动区间），滚动条被 CSS 隐藏（`scrollbarWidth: none`），靠滚轮/触控板横向手势可达 | 该列的 `scrollWidth` 可大于 `clientWidth`（列内滚动），但它是**固定上限的裁剪盒**：页面级断言仍为 0（列宽 ≤ 140px 不会把行顶宽）。**不以「列内是否真的滚得动」为断言**（滚动条被隐藏，等价断言不稳定），改由 `commit` 页的页面级溢出断言覆盖它的外泄风险 |
 
 **不允许**的横向滚动：任何页面级横向滚动条（= 上述断言失败），以及「长 hash / 长路径 / 长分支名」把所在行顶宽——后者用 `EllipsisText`（截断 + 溢出时 tooltip）收口，不是滚动。
 
@@ -442,11 +444,12 @@ node scripts/check-fluid-layout.mjs --shots-only --widths=360,768,1440
   `document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1`（+1 容亚像素）。
 - **两段式就绪门**：每格先等 `ready`（页面壳 / 工具行），再等 `content`（**数据级**条目，如 `row-stash-*` / `tag-row-*` / `config-input-*` / `.ant-tree-treenode`）真的命中；命中数记进明细，并对**又大又与夹具无关**的列表设**命中数下限**（`min`：browse 20→10、console 100→10、settings 9→4；跟着夹具变的小列表用 1）。只等页面壳会量到「数据还没到」的页面，而**空页永远不会横向溢出** —— 那样的绿什么都没证明，故内容级选择器一条都没命中、或命中数低于下限时该格直接判红。页面上确实不存在数据级内容时（对话-only 页、该夹具下必然为空的页）在脚本内逐行写明原因，不留白。
 - **就绪门与主题门必须串联（防「重载洗绿」）**：主题探针迟迟不落时脚本会兜底整页重载一次，重载会把页面打回「数据还没到」的状态。因此「导航 + 就绪门 + 等静止」与主题门由**同一个入口**（脚本里的 `prepareCell`）串联：**只要这一轮发生过整页重载，就绪门就整套重跑**，绝不允许在重载后的页面上直接测量（那正是「空页永不溢出」的假绿通道，实测可复现：绕过这条规则时 `settings` 格在内容 0 条的页面上被判绿）。
+- **按路由的密度断言（终修新增）**：每格除溢出外，还断言该格文本的**主导基准字号** —— 默认 **12px**（`PageShell` 不传 `density` ⇒ compact），只有**设置页路由**期望 **14px**（`density="default"` 豁免）。判据是**主导**（12px 与 14px 谁是众数），不是「出现了 12px」：紧凑页也有 14px 的卡片标题、默认档页也有 12px 的次要文本，出现性没有判别力。取样 = 排除 `.monaco-editor` 子树后所有「可见 + 自带非空文本节点」的元素（编辑器字号由 Monaco 自己决定，属上面的组件内部例外）；取样覆盖 **portal**，故 `/merge` 这类「背后文档为空、只有一个常驻 Modal」的路由由弹窗文本判定密度。期望档计数不严格多于另一档（含两档相同）即判红，且**不参与重试**；`.monaco-editor` 之外一个 12px/14px 文本节点都没有时**先有界重采一次**（实测有 3 格在 antd 样式尚未注入的瞬间采样，直方图全是浏览器默认的 16px / 13.3px —— 那不是「没有文本」而是「还没上样式」，直接记 no-sample 会把断言让给运气），仍然没有才记 `no-sample`（不判红，但在汇总里**逐格列出**，不静默跳过）。逐格实测（期望档、各档主导值、12px/14px 两档计数）打印在汇总的「按路由的密度断言」一节，并落在明细 JSON 的 `density` 字段。**为什么必须有这条**：`/repos/:id/merge` 曾整条路由没有密度归属、以 antd 默认 14px 渲染，而当时 576 格溢出矩阵**全绿** —— 溢出为 0 与密度正确是两件独立的事。
 - **页面 JS 异常按判据分栏**：真异常记录在案；唯一被过滤的良性噪声是 Monaco 的 diff worker 取消（`Canceled`，stack 落在 `monaco-editor` 的 `computeDiff`）——每次渲染 diff 都会发生而页面完全正常。判据锚在 **stack** 上而不是消息文本上，避免把同名真缺陷一起过滤掉。
 - **夹具耦合**：内容级门要求夹具里真的有那些内容（树节点、git 配置、变更行、stash / tag / patch / shelf / worktree / submodule、console 记录），而这些是**可变状态**。夹具被改动时相关格子会如实判红（而不是静默跳过）—— 那一格此时没有可量的数据，绿了才是错的；排查时先看夹具，不要先改门。
 - **环境中断可整格重跑一次（判定类失败永不重试）**：dev 服务按需编译、或同一工作区别的会话重启 dev 服务 / 改被测代码时，页面会在几十秒内**整页不渲染**（`data-theme=null`、任何 `data-testid` 都不出现，甚至 `ERR_CONNECTION_REFUSED`）—— 那种红与布局无关。脚本因此对**中断类**失败整格重跑一次（重新导航 + 完整两段式就绪门 + 全部断言与测量），**每格最多重试一次**，判据集中在 `isStall()`。重试集恰好是这几类**环境 / 停顿**原因：就绪选择器未出现（**含内容级门的 0 命中**：`内容级就绪选择器未出现`，命中数 0 —— 它在本环境里与「页面整页没渲染」常常是同一件事，实测见过 `dark/1920 console` 首轮如此、重跑后通过；而重试**同样**要过完整的两段式就绪门，所以**重试不可能产生一个空洞的绿**，第二次照样 0 命中就照样判红）、`page.goto` / `page.waitForSelector` 超时、执行上下文被导航打断、主题未生效。
-  **真正的保证是另一句**：**已测量且溢出**的格子判红即定、**永不重试**；例外断言失败、内容级命中数**低于下限**（命中了但 `< min`）同样是结论，永不重试。**每次尝试的预算一字未改**（25s / 例外②的 60s），两次都没过照样判红；尝试次数与**首轮**失败原因写进明细 JSON（`attempts` / `firstAttemptReason`），并在**汇总、每档进度行、矩阵**三处都露出（矩阵里重试过的格子带 `↻` 记号），所以「重试之后才绿的格子」不会被误读成一次通过。
-- **矩阵怎么读（`buildMatrix`）**：`✅` 一次通过；`✅↻` 首轮被环境中断、整格重跑一次后通过（`attempts=2`）；`❌ sw>cw` 已测量并溢出（结论）；`❌ 非溢出失败（原因）` 量到了数字但**没有**横向溢出（红的是例外断言 / 主题门 / 内容门，矩阵不把它写成溢出）；`❌ 未测量（原因）` 该格**没有拿到测量值**（就绪门 / 导航失败）—— 这与「测出 0 溢出」是两回事，矩阵宁可写「未测量 + 原因」也不写 `null>null`（后者会被读成一个奇怪的溢出量）。
+  **真正的保证是另一句**：**已测量且溢出**的格子判红即定、**永不重试**；例外断言失败、**密度断言失败**（`密度断言:` —— 密度档位不会因为再导航一次而改变，重试只会把一次明确的错误洗成运气）、内容级命中数**低于下限**（命中了但 `< min`）同样是结论，永不重试。**每次尝试的预算一字未改**（25s / 例外②的 60s），两次都没过照样判红；尝试次数与**首轮**失败原因写进明细 JSON（`attempts` / `firstAttemptReason`），并在**汇总、每档进度行、矩阵**三处都露出（矩阵里重试过的格子带 `↻` 记号），所以「重试之后才绿的格子」不会被误读成一次通过。
+- **矩阵怎么读（`buildMatrix`）**：矩阵的判定含**按路由的密度断言**，故 `❌ 非溢出失败（…密度断言…）` 表示该格密度错档而不是溢出。记号：`✅` 一次通过；`✅↻` 首轮被环境中断、整格重跑一次后通过（`attempts=2`）；`❌ sw>cw` 已测量并溢出（结论）；`❌ 非溢出失败（原因）` 量到了数字但**没有**横向溢出（红的是例外断言 / 密度断言 / 主题门 / 内容门，矩阵不把它写成溢出）；`❌ 未测量（原因）` 该格**没有拿到测量值**（就绪门 / 导航失败）—— 这与「测出 0 溢出」是两回事，矩阵宁可写「未测量 + 原因」也不写 `null>null`（后者会被读成一个奇怪的溢出量）。
 - **覆盖**：两个 app 的全部 24 个页面（`/` 首页 + `/repos/:id` 日志页 + 22 个子页），另加静态加载不产生的状态：`?select=`（选中提交）、`?compare=`（分支对比）、GitHub/GitLab 面板**展开「查看差异」**（`hunk-diff-view`）、认证弹窗、重置弹窗、`EllipsisText` 悬停浮层。
 - **例外断言**（反向断言，防止后续把例外当缺陷改掉）：① `SplitPane` 在 `collapseBelow` 以上左右并排、以下纵向堆叠且各占满宽度（阈值从 `split-pane.tsx` 源码读取，不抄常量）；② Monaco 内部横向滚动可达而页面级仍为 0。两条都在**稳定态**上判定：例外① 采样时若两栏宿主缺席，就**有界地等它回来**（10s）并等布局静止后才量 —— 日志页的详情栏在首帧后会短暂整块卸载再回来（`selectedCommit = commits.find(...) ?? null` 在列表重装配的那一瞬间为 null，侧栏随之走 else 分支），在那一刻采样既会误报「未找到宿主」，也会让随后的页面级断言量在一个空页上（空页永不溢出 = 白通过）；宿主在则走原路径（不等待），等不回来照旧判红，判定未放宽。
 - **`collapseBelow` 校准结论：维持 768**。实测 768px 下 browse 为「侧栏 300 + 主区 424」，可用；但日志页在同一阈值下主区只有 448px，提交信息已被截断到约 10 个字符。试降为 640 后实测（`collapsebelow-experiment-640-*.png`）日志页主区只剩 320px（比它旁边 320px 的详情栏还窄），提交信息与日期列被压到「ch…」「2026-09-11 …」，明显劣于堆叠，故不采用 640。

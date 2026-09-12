@@ -431,8 +431,8 @@ export function LogPage({
           「前面还有哪个按钮会渲染」重算一遍条件（原代码里那串 `onOpenStatus || onOpenBranches || …` 就是）；
           改成两端容器后左右各自成组，右端位置与按钮渲染条件彻底解耦。
           注意两点：
-          1) Row/Col 从 'antd' 顶层具名导入；`Grid` 这个具名导出在 antd 6.6.1 运行时只有 useBreakpoint
-             （`es/grid/index.js` 只 default 出 { Col, Row, useBreakpoint }），在它上面解构 Row/Col 会拿到 undefined。
+          1) Row/Col 从 'antd' 顶层具名导入；`Grid` 这个具名导出在 antd 6.6.3 运行时只有 useBreakpoint
+             （`es/grid/index.js` 只 default 出 { useBreakpoint }，Col/Row 是**具名**导出），在它上面解构 Row/Col 会拿到 undefined。
           2) Row 默认 flexWrap='wrap'，且 Col 默认 `flex: 0 0 auto`（不收缩）——左侧必须显式给
              flex:'1 1 auto' + minWidth:0 才能被压缩（否则撑开 Row 把操作区挤到第二行）。 */}
       <Row
