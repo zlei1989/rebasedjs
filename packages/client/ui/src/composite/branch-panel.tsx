@@ -619,6 +619,7 @@ export function BranchPanel({
             data-testid="branch-filter"
             placeholder="过滤分支名"
             allowClear
+            size="small"
             style={{ width: 200 }}
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}

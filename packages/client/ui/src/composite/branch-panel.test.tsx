@@ -290,6 +290,15 @@ describe('BranchPanel 过滤/查找已合并', () => {
     expect(screen.getByText('远程分支（0/1）')).toBeInTheDocument();
   });
 
+  // UI 口径（2026-09-12，用户决策）：**弹窗以外**的分支页控件用 small 档；Modal 内的控件保持默认档
+  it('过滤框为 small 档，Modal 内输入保持默认档', async () => {
+    render(<BranchPanel branches={LIST} {...makeHandlers()} />);
+    expect(screen.getByTestId('branch-filter')).toHaveClass('ant-input-sm');
+    fireEvent.click(screen.getByTestId('create-branch-button'));
+    expect(await screen.findByTestId('create-name')).not.toHaveClass('ant-input-sm');
+    expect(screen.getByTestId('create-start-point')).not.toHaveClass('ant-input-sm');
+  });
+
   it('「仅看已合并」：只保留 mergedIntoHead=true 的条目（含远程）', () => {
     render(<BranchPanel branches={LIST} {...makeHandlers()} />);
     fireEvent.click(screen.getByRole('checkbox', { name: /仅看已合并/ }));

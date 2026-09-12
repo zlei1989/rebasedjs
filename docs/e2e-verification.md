@@ -246,7 +246,7 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-062 | 分组（本地/远程/最近检出/标签）与过滤 | 观察四组 → 文本过滤 → 「仅看已合并」开关 | 四组正确；过滤与已合并开关生效 | ✅ | branch-01.png（四组：最近检出 3 / 本地 8 / 远程 2 / 标签 1；文本过滤 `feat` → 1/3、1/8、1/2；仅看已合并 → 本地 3/8、远程 1/2，与 CLI `git branch --merged HEAD`（feature/master/merged-branch = 3）与 `git branch -r --merged HEAD`（origin/feature = 1）逐项一致，D-19 的远程侧未回归） | |
+| F-062 | 分组（本地/远程/最近检出/标签）与过滤 | 观察四组 → 文本过滤 → 「仅看已合并」开关 | 四组正确；过滤与已合并开关生效 | ✅ | branch-01.png（**2026-09-12 按当前夹具重拍**：四组 = 最近检出 9 / 本地 12 / 远程 8 / 标签 3；文本过滤 `probe` → 最近检出 2/9、本地 2/12、远程 4/8（标签组 0 命中即整组不渲染），逐项吻合 CLI——本地 `f019-probe`/`rebase-probe-local` = 2、远程 `origin/fetch-probe`/`-r8`/`-r11`/`rebase-probe` = 4；「仅看已合并」→ 本地 7/12、远程 4/8 = CLI `git branch --merged HEAD`（7，含当前分支 `rebase-topic`）与 `git branch -r --merged HEAD`（4），D-19 的远程侧未回归。R23 首轮记录的四组/过滤计数（本地 8、过滤 `feat` 等）属重建前的旧夹具，以本次实测为准；同图另可见工具栏过滤框已随面板统一为 small 档） | |
 | F-063 | 行内信息（current/上游徽标/已合并图标） | 观察各分支行 | current 标记、ahead/behind 徽标、已合并绿勾正确 | ✅ | branch-02.png（`master`「当前」+ 上游徽标 `origin/master ↓2` + 已合并绿勾；绿勾集合与 CLI `--merged` 完全一致；未合并的 `diverge-test` 无勾） | |
 | F-064 | 创建/删除/重命名/设上游 | 新建 Modal（起始点 + 检出开关）→ 删除（未合并 Popconfirm force 提示）→ 重命名 → 设上游 | 各操作 CLI `branch` 互证 | ✅ | branch-03.png（建 `smoke-created@diverge-test`（`3b0244b`）→ 改名 `smoke-renamed`（旧名 `show-ref` 失败）→ 设上游 `origin/master`（`config branch.*.merge=refs/heads/master` 落盘）→ 未合并分支删除 Popconfirm「该分支未合并，删除将使用强制删除」→ 确认后分支消失；四步 CLI 互证） | |
 | F-065 | 检出三态（既有/新建并检出/detached） | 检出既有分支 → 新建并检出 → 标签行「检出」（detached） | 三态切换正确（CLI HEAD 互证） | ✅ | branch-04.png（三态：检出既有 `diverge-test` → `HEAD=3b0244b`；「新建并检出」`smoke-new-checkout` 入最近检出；标签 `v1.0` 检出 → CLI `## HEAD (no branch)` 指向 `761961d`，界面该行无「当前」标记） | |
@@ -846,6 +846,15 @@
 - 解析：`apps/web-next/app/providers.tsx` 用 `matchMedia('(prefers-color-scheme: dark)')` 把 `auto` 解析成实际明暗并**订阅系统变化**（切系统主题即时跟随，无需刷新）；`data-theme` 恒为解析后的 `light`/`dark`（globals.css / Monaco / 布局断言只认这两值），另写 `data-theme-preference` 保留偏好原值，便于区分「跟随系统」与「显式指定」。
 - 实测：`PUT {theme:'auto'}` → 设置页选中「自动」、`data-theme-preference=auto`；浏览器偏好为浅色时 `data-theme=light`；`page.emulateMedia({colorScheme:'dark'})` → **不刷新页面**即变 `data-theme=dark`、body `rgb(20,20,20)`，切回浅色恢复。
 - **已知缺口（既有，本轮未改）**：web-koa 的 SPA 仍固定暗色（`apps/web-koa/src/main.tsx` 硬编码 `theme.darkAlgorithm`），故设置页的主题控件在 koa 侧点了不生效；需要时另行接线。
+
+**变更③ 分支页面板「弹窗外」控件统一 small（2026-09-12，用户指出具体元素后）**
+
+- 触发：用户在内置浏览器中选中分支页工具栏的过滤输入（`span.ant-input-affix-wrapper`）要求改 small；随后**决策更正**——**弹窗内的组件不改 size，只改弹窗以外的**（新建分支/重命名/设上游/检出并变基/与工作树差异等 Modal 内的输入与底部按钮，以及行内 Popconfirm 的确定/取消，均维持默认档）。
+- 改动（`packages/client/ui/src/composite/branch-panel.tsx`）：仅**弹窗外**的工具栏过滤框 `branch-filter` 置 `size="small"`（`packages/client/ui/src/composite/branch-panel.tsx` 唯一改动点）。
+- 实测（浏览器 DOM）：`[data-testid="branch-filter"]` 的包裹元素带 `ant-input-affix-wrapper-sm`、内部 `<input>` 带 `ant-input-sm`（本机实测包裹高 22px、输入高 20px，与同排 small 按钮 21px 同档；改前为默认档 28px）；Modal 内 `create-name` / `create-start-point` 与 Popconfirm 按钮仍为默认档。
+- 回归守卫：`packages/client/ui/src/composite/branch-panel.test.tsx`「过滤框为 small 档，Modal 内输入保持默认档」（ui 用例 693 → **694**）。
+- 截图影响：`branch-01.png` 已按当前夹具重拍（计数与 CLI 互证见 §4.7 F-062）；`branch-02…09` 只在顶部工具条顺带露出该输入（仍是改前的默认档），行内断言的语义与计数不受影响。
+- **仍非 small 的存量（供后续统一时参考）**：`packages/client/ui/src` 内约 **62** 处带 `size` 属性的控件未显式指定（Input 32 / Button 17 / Input.TextArea 4 / Select 4 / Segmented 3 / Input.Password 1 / Switch 1，集中在 `log-page`、`repo-page`、`patch`、`worktree`、`remote`、`tag`、`search` 等）；另有 13 处 `Radio` 属 antd 无 `size` 属性的设计例外（与 `Checkbox` 同类）。
 
 **截图与回归**
 
