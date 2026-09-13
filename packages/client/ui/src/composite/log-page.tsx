@@ -10,6 +10,16 @@
  * 按需加载：hasMore 为真且未在加载时，把 onLoadMore 作为 CommitGraph 的 onReachBottom 注入
  * （滚到列表底部、或已加载内容填不满视口即自动追加下一页），直到最早的一条提交进入列表；
  * 「加载更多」按钮保留为手动兜底入口。
+ * 过滤行（log-filter-row）另承载两个图动作入口（设计 §2.4/§2.5/§3.5/§3.6）：
+ *   · 线性折叠：「折叠/展开线性分支」按钮组。折叠状态由本页持有（唯一真源），CommitGraph 受控消费；
+ *     **分支过滤激活时整组不渲染**（对齐 Java VisibleGraphImpl.isActionSupported 对 BUTTON_COLLAPSE/EXPAND
+ *     返回 false → setVisible(false)，不是禁用），同时折叠状态被清空（对齐切换过滤即重建 controller）；
+ *   · 分支过滤：可选项经 prop branchOptions 注入（容器经 useBranches 给），选中项放受控 filters.branches
+ *     （容器据它把日志查询切到 --all，见设计 §2.2）。过滤后只显示所选分支的历史线——可见集沿父边可达
+ *     故对祖先封闭，虚线过滤边（DottedFilterEdgesGenerator）在分支过滤下恒无输出（Ruling F1）；
+ *     「部分分支的提交尚未加载」的降级提示是「锚点还没进来 ⇒ 图暂时空白」的兜底说明。
+ * 注意：传给 CommitGraph 的 branches/collapsed 必须是**引用稳定**的数组——`filters?.branches ?? []`
+ * 每次渲染都是新引用，会让图的全量布局重算在父组件每次渲染时白跑（见 EMPTY_BRANCHES）。
  */
 import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
 import { Alert, Button, Col, Dropdown, Flex, Input, Modal, Popconfirm, Row, Skeleton, Space, Switch, Tooltip, Typography, theme } from 'antd';
@@ -23,12 +33,21 @@ import { RepoStatusBar } from '../domain/repo-status-bar';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
 import { CommittedStatusTag } from '../domain/committed-status';
+import { buildLayout, collapseAllFragments, type CollapsedFragment, type LayoutCommit } from '../graph-layout';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+/**
+ * 空分支数组常量：受控 `filters.branches` 缺省时用它兜底。必须是指向同一个数组的常量——
+ * 写成 `?? []` 会让每次渲染产生新引用，进而让 CommitGraph 的全量图布局重算在父组件每次渲染时白跑。
+ */
+const EMPTY_BRANCHES: string[] = [];
 
 /** 日志过滤条件（受控：容器持有，变更即重查快照；为空时才是默认全量视图） */
 export interface LogFilters {
   author?: string;
   path?: string;
+  /** 分支过滤选中的分支名；非空时容器把查询切到 --all（设计 §2.2）并启用图过滤 */
+  branches?: string[];
 }
 
 export interface LogPageProps {
@@ -129,6 +148,11 @@ export interface LogPageProps {
   filters?: LogFilters;
   /** 过滤变更回调（输入去首尾空白后上抛；清空 = 空对象） */
   onFiltersChange?: (filters: LogFilters) => void;
+  /**
+   * 分支过滤可选项（容器经 useBranches 注入 BranchRef.name）。缺省不渲染分支过滤入口——
+   * 与「回调不注入即隐藏」的既有约定一致，避免死控件。
+   */
+  branchOptions?: string[];
   /** 首屏提交加载中（容器注入分页 hook 的 isLoading）：空列表时渲染加载态而不是「暂无提交」，
    *  并把「加载更多」按钮置为加载中——否则首屏拉取期间（实测可达数秒）会被误呈现成
    *  「这个仓库没有提交」+「已到最早的提交」，用户既看不出在加载、也看不出还有更早的提交 */
@@ -210,6 +234,7 @@ export function LogPage({
   onOpenChangedFile,
   filters,
   onFiltersChange,
+  branchOptions,
   hasMore,
   loadingMore,
   onLoadMore,
@@ -233,6 +258,17 @@ export function LogPage({
   const [tagMessage, setTagMessage] = useState('');
   // tag chips 显示开关（默认关，对齐 Java VcsLogApplicationSettings.showTagNames 默认 false）
   const [showTags, setShowTags] = useState(false);
+  // 折叠状态：LogPage 持有（唯一真源），CommitGraph 受控消费；工具栏按钮与图元命中共享同一份
+  const [collapsed, setCollapsed] = useState<CollapsedFragment[]>([]);
+  // 依赖引用必须稳定：`filters?.branches ?? []` 每次渲染都是新数组，会让 CommitGraph 的全量布局重算白跑
+  const filterBranches = useMemo(() => filters?.branches ?? EMPTY_BRANCHES, [filters?.branches]);
+  // 分支过滤激活 ⇒ 折叠状态清空（对齐 Java：切换过滤会重建 controller，既有折叠全部丢弃）
+  useEffect(() => {
+    if (filterBranches.length > 0) setCollapsed([]);
+  }, [filterBranches.length]);
+  // 折叠动作可用性（对齐 Java VisibleGraphImpl.isActionSupported：过滤激活时按钮不渲染）
+  const collapseActionsVisible = filterBranches.length === 0;
+  const expandEnabled = collapsed.length > 0;
   // 提交图区域高度：随可用空间自适应。CommitGraph 的 height 缺省是写死的 480（虚拟滚动的滚动窗口
   // 需要确定高度），窗口比 480 高时图下方留一片空白、更矮时列表溢出宿主盒子；故本页量出宿主盒子的
   // 实测高度交给它。行高/滚动窗口仍归 CommitGraph，本页只负责「这块区域有多高」。
@@ -379,6 +415,46 @@ export function LogPage({
     else if (key === 'worktrees') onOpenWorktrees?.();
     else if (key === 'submodules') onOpenSubmodules?.();
   };
+  // 分支过滤菜单项：本地/远程两组 + 「清空」。用 Dropdown 的 items 承载复选态（勾选用 label 前缀 ✔ 表达，
+  // 因为 antd Menu 的选中态是单选语义，不适合多选；前缀是唯一不引入自绘控件的做法）
+  const branchGroups = useMemo(() => {
+    const local: string[] = [];
+    const remote: string[] = [];
+    for (const name of branchOptions ?? []) (name.includes('/') ? remote : local).push(name);
+    return { local: [...local].sort(), remote: [...remote].sort() };
+  }, [branchOptions]);
+  const branchFilterItems = useMemo<MenuProps['items']>(() => {
+    // label 用具名 testid 的 span：antd 菜单项由 items 数据驱动，测试要点得到具体分支项，
+    // 只能靠 label 里的 DOM 节点寻址（这也让「✔ 前缀」与测试锚点落在同一个节点上）
+    const mark = (name: string): React.ReactNode => (
+      <span data-testid={`log-branch-option-${name}`}>{filterBranches.includes(name) ? `✔ ${name}` : name}</span>
+    );
+    const items: NonNullable<MenuProps['items']> = [];
+    if (branchGroups.local.length > 0) {
+      items.push({ type: 'group', label: '本地分支', children: branchGroups.local.map((n) => ({ key: `b:${n}`, label: mark(n) })) });
+    }
+    if (branchGroups.remote.length > 0) {
+      items.push({ type: 'group', label: '远程分支', children: branchGroups.remote.map((n) => ({ key: `b:${n}`, label: mark(n) })) });
+    }
+    items.push({ type: 'divider' });
+    items.push({ key: 'clear', label: <span data-testid="log-branch-clear">清空</span> });
+    return items;
+  }, [branchGroups, filterBranches]);
+  /** 分支菜单点击：`b:<name>` 取反选中项，「clear」清空；回调载荷是完整过滤对象（容器据此切 --all 查询） */
+  const onBranchFilterClick = (key: string): void => {
+    if (key === 'clear') {
+      onFiltersChange?.({ ...filters, branches: [] });
+      return;
+    }
+    if (!key.startsWith('b:')) return;
+    const name = key.slice(2);
+    const next = filterBranches.includes(name) ? filterBranches.filter((n) => n !== name) : [...filterBranches, name];
+    onFiltersChange?.({ ...filters, branches: next });
+  };
+  // 工具栏「折叠全部」用的布局输入：必须与 CommitGraph 内部那份映射（Commits → LayoutCommit）逐字一致——
+  // collapseAllFragments 给出的 hash 对要能在 CommitGraph 里被 fragmentsToRows 解析到行号。
+  // 两者都是纯函数、输入相同，故结果一致。
+  const commitLayouts: LayoutCommit[] = useMemo(() => commits.map((c) => ({ hash: c.hash, parents: c.parents, refs: c.refs })), [commits]);
   // 主区（提交图）：与右侧详情面板共同构成两栏——宽屏并排、窄屏纵向堆叠由 SplitPane 承担。
   // 提取成变量是因为详情面板按需出现（未选中提交时整块不渲染），而 SplitPane 的侧栏宿主恒存在：
   // 把条件放进 side 会让默认视图（未选中）右侧永久留一条 320px 空列，故两栏块整体按需切换。
@@ -412,6 +488,12 @@ export function LogPage({
               onContextMenu={setMenuHash}
               showTags={showTags}
               selectedHash={selectedCommit?.hash ?? null}
+              // 折叠/分支过滤三项受控 props：本页是唯一真源（工具栏按钮与图元命中改的是同一份状态）。
+              // 三项都传 ⇒ 图的交互面（图元点击折叠、虚线边展开、悬停链高亮）才真正激活；
+              // 过滤态下 branches 非空，图内 graphActionsEnabled=false，高亮与折叠一并失效（Java 语义，勿解耦）
+              branches={filterBranches}
+              collapsed={collapsed}
+              onCollapseChange={setCollapsed}
               // 按需加载：滚到列表底部（或内容还填不满视口）时自动追加下一页，直到最早的一条进来。
               // 正在加载时不注入（回调缺省即不再触发）——避免同一页被连点/触底撞出两次请求
               {...(canLoadMore ? { onReachBottom: onLoadMore } : {})}
@@ -623,6 +705,56 @@ export function LogPage({
               标签
             </Typography.Text>
           </Flex>
+          {/* 线性折叠（Java Collapse/Expand Linear Branches）：过滤激活时整组不渲染——
+              对齐 VisibleGraphImpl.isActionSupported 对 BUTTON_COLLAPSE/BUTTON_EXPAND 返回
+              `graphController !is FilteredController`（过滤态下 setVisible(false)，不是禁用） */}
+          {collapseActionsVisible ? (
+            <>
+              <Tooltip title="折叠线性分支：把无分叉的连续提交折成一条虚线（点虚线可展开）">
+                <Button
+                  size="small"
+                  data-testid="log-collapse-all"
+                  disabled={commits.length === 0}
+                  onClick={() => setCollapsed(collapseAllFragments(buildLayout(commitLayouts)))}
+                >
+                  折叠线性分支
+                </Button>
+              </Tooltip>
+              <Tooltip title="展开线性分支：恢复所有被折叠的提交与连线">
+                <Button
+                  size="small"
+                  data-testid="log-expand-all"
+                  disabled={!expandEnabled}
+                  onClick={() => setCollapsed([])}
+                >
+                  展开线性分支
+                </Button>
+              </Tooltip>
+            </>
+          ) : null}
+          {/* 分支过滤弹窗：仅容器同时注入可选项与过滤回调时渲染 */}
+          {branchOptions !== undefined && branchOptions.length > 0 && onFiltersChange !== undefined ? (
+            <Dropdown
+              trigger={['click']}
+              menu={{ items: branchFilterItems, onClick: ({ key }) => onBranchFilterClick(key) }}
+            >
+              <Tooltip title="按分支过滤提交图：只保留所选分支可达的提交，其余以虚线连过">
+                <Button size="small" data-testid="log-branch-filter">
+                  分支过滤{filterBranches.length > 0 ? `（${filterBranches.length}）` : ''}
+                </Button>
+              </Tooltip>
+            </Dropdown>
+          ) : null}
+          {/* 降级提示（设计 §7 风险 1）：过滤激活时数据源是 --all 且仍可分页，某个选中分支的 tip
+              可能尚未加载 —— 此时它会暂时不可见。按需加载会继续追加直到最早一条，故这里只作说明，
+              不做「无匹配」之类的断言（那会把「还在加载」说成「没有」）。
+              判据用 hasMore（还有更早的提交没进来）而不是精确的可见行数：精确值只有 CommitGraph 内部
+              算得出，为了一个提示在 LogPage 再跑一遍全量布局不值当。 */}
+          {filterBranches.length > 0 && hasMore === true ? (
+            <Typography.Text type="secondary" data-testid="log-branch-filter-hint">
+              部分分支的提交尚未加载，将继续加载
+            </Typography.Text>
+          ) : null}
           {hasMore !== undefined && onLoadMore !== undefined ? (
             // 没有更早的提交（已到仓库第一条）时按钮禁用；禁用按钮不派发 hover，故在 Tooltip 与 Button
             // 之间包 span 承接悬停。外层 span 承接原先挂在按钮上的 marginLeft:auto（按钮自身 style 不变），

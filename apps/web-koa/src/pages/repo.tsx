@@ -18,6 +18,7 @@
 import {
   useAbortOperation,
   useAutosquash,
+  useBranches,
   useBranchAction,
   useCherryPick,
   useCheckout,
@@ -90,6 +91,11 @@ export function RepoPage(): React.ReactNode {
   // （无过滤且只加载了第一页）接入流合并
   const [author, setAuthor] = useState('');
   const [path, setPath] = useState('');
+  // 分支过滤选中项：非空时把日志查询切到 --all —— 数据里必须有「被过滤掉的提交」，
+  // 否则没有可隐藏的节点、也画不出虚线过滤边（设计 §2.2）
+  const [branchFilter, setBranchFilter] = useState<string[]>([]);
+  // 分支过滤可选项：复用既有分支端点（GET /api/repos/:id/branches），无新增端点
+  const { data: branchList } = useBranches(repoId);
   const {
     commits: pageCommits,
     hasMore: logHasMore,
@@ -102,8 +108,11 @@ export function RepoPage(): React.ReactNode {
   } = useLogPages(repoId, {
     ...(author === '' ? {} : { author }),
     ...(path === '' ? {} : { path }),
+    ...(branchFilter.length === 0 ? {} : { all: true }),
   });
-  const streamEnabled = author === '' && path === '' && logPageCount === 1;
+  // 分支过滤激活时数据源是 --all（多分支的全量历史），流是「仅 HEAD 可达提交」的渐进渲染，
+  // 两者不是同一查询——并进窗口会把只属于 HEAD 的流式提交混进全分支页，故一并算进 streamEnabled
+  const streamEnabled = author === '' && path === '' && branchFilter.length === 0 && logPageCount === 1;
   const [refreshKey, setRefreshKey] = useState(0);
   const { commits: streamCommits, connected: streamConnected, error: streamError } = useLogStream(repoId, refreshKey);
   const { data: status, mutate } = useRepoStatus(repoId);
@@ -449,6 +458,7 @@ export function RepoPage(): React.ReactNode {
     setChangesHash('');
     setAuthor('');
     setPath('');
+    setBranchFilter([]);
     resetLogPages();
   }, [repoId]);
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）。
@@ -554,11 +564,13 @@ export function RepoPage(): React.ReactNode {
         }}
         onOpenUpdate={() => setOpenDialog('update')}
         onOpenRemotes={() => navigate(`/repos/${repoId}/remotes`)}
-        filters={{ author, path }}
+        branchOptions={branchList?.branches.map((b) => b.name)}
+        filters={{ author, path, branches: branchFilter }}
         onFiltersChange={(f) => {
           // 过滤变更：回到首屏窗口（分页复位到第一页），选定提交不在窗口时的降级由详情面板缺省逻辑承载
           setAuthor(f.author ?? '');
           setPath(f.path ?? '');
+          setBranchFilter(f.branches ?? []);
           resetLogPages();
         }}
         initialLoading={logInitialLoading}

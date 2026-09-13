@@ -891,3 +891,103 @@ describe('LogPage 行右键菜单', () => {
     expect(onEditCommit).toHaveBeenCalledWith('reword', 'c2', 'c2（重写）');
   });
 });
+
+// 折叠/展开按钮（设计 §2.4 / §3.5）：过滤激活时整组不渲染（对齐 Java setVisible(false)，不是禁用）
+describe('线性折叠工具栏', () => {
+  const chain: CommitInfo[] = [
+    makeCommit({ hash: 'a', parents: ['b'] }),
+    makeCommit({ hash: 'b', parents: ['c'] }),
+    makeCommit({ hash: 'c', parents: ['d'] }),
+    makeCommit({ hash: 'd', parents: [] }),
+  ];
+
+  it('渲染折叠/展开按钮；无折叠时展开禁用', () => {
+    render(<LogPage repoName="alpha" status={status} commits={chain} filters={{}} onFiltersChange={() => {}} />);
+    expect(screen.getByTestId('log-collapse-all')).toBeEnabled();
+    expect(screen.getByTestId('log-expand-all')).toBeDisabled();
+  });
+
+  it('点「折叠线性分支」后图中只剩两端行，展开按钮转为可用', () => {
+    render(<LogPage repoName="alpha" status={status} commits={chain} filters={{}} onFiltersChange={() => {}} />);
+    fireEvent.click(screen.getByTestId('log-collapse-all'));
+    expect(screen.getAllByTestId('commit-graph-row')).toHaveLength(2);
+    expect(screen.getByTestId('log-expand-all')).toBeEnabled();
+  });
+
+  it('点「展开线性分支」恢复全部行', () => {
+    render(<LogPage repoName="alpha" status={status} commits={chain} filters={{}} onFiltersChange={() => {}} />);
+    fireEvent.click(screen.getByTestId('log-collapse-all'));
+    fireEvent.click(screen.getByTestId('log-expand-all'));
+    expect(screen.getAllByTestId('commit-graph-row')).toHaveLength(4);
+  });
+
+  it('分支过滤激活时折叠按钮整组不渲染，且折叠状态被清空', () => {
+    const onFiltersChange = vi.fn();
+    const { rerender } = render(
+      <LogPage repoName="alpha" status={status} commits={chain} filters={{}} onFiltersChange={onFiltersChange} branchOptions={['main']} />,
+    );
+    fireEvent.click(screen.getByTestId('log-collapse-all'));
+    expect(screen.getAllByTestId('commit-graph-row')).toHaveLength(2);
+    rerender(
+      <LogPage repoName="alpha" status={status} commits={chain} filters={{ branches: ['main'] }} onFiltersChange={onFiltersChange} branchOptions={['main']} />,
+    );
+    expect(screen.queryByTestId('log-collapse-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('log-expand-all')).not.toBeInTheDocument();
+    // 清空过滤后回到未折叠状态
+    rerender(
+      <LogPage repoName="alpha" status={status} commits={chain} filters={{}} onFiltersChange={onFiltersChange} branchOptions={['main']} />,
+    );
+    expect(screen.getAllByTestId('commit-graph-row')).toHaveLength(4);
+  });
+});
+
+// 分支过滤弹窗（设计 §3.6）
+describe('分支过滤弹窗', () => {
+  const branchy: CommitInfo[] = [
+    makeCommit({ hash: 'a', parents: ['b'], refs: ['HEAD -> main'] }),
+    makeCommit({ hash: 'b', parents: [], refs: ['origin/side'] }),
+  ];
+
+  it('branchOptions 缺省时不渲染过滤入口（避免死控件）', () => {
+    render(<LogPage repoName="alpha" status={status} commits={branchy} filters={{}} onFiltersChange={() => {}} />);
+    expect(screen.queryByTestId('log-branch-filter')).not.toBeInTheDocument();
+  });
+
+  it('打开弹窗并勾选分支 → onFiltersChange 带 branches', async () => {
+    const onFiltersChange = vi.fn();
+    render(
+      <LogPage repoName="alpha" status={status} commits={branchy} filters={{}} onFiltersChange={onFiltersChange} branchOptions={['main', 'origin/side']} />,
+    );
+    fireEvent.click(screen.getByTestId('log-branch-filter'));
+    // antd 的 Dropdown 弹层可能异步挂载（portal + 动画帧），故用 findByTestId 等待
+    fireEvent.click(await screen.findByTestId('log-branch-option-main'));
+    expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ branches: ['main'] }));
+  });
+
+  it('「清空」按钮把 branches 置空', async () => {
+    const onFiltersChange = vi.fn();
+    render(
+      <LogPage repoName="alpha" status={status} commits={branchy} filters={{ branches: ['main'] }} onFiltersChange={onFiltersChange} branchOptions={['main', 'origin/side']} />,
+    );
+    fireEvent.click(screen.getByTestId('log-branch-filter'));
+    fireEvent.click(await screen.findByTestId('log-branch-clear'));
+    expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ branches: [] }));
+  });
+
+  it('过滤激活且还有更早提交时给出「尚未加载」降级提示（设计 §7 风险 1）', () => {
+    const { rerender } = render(
+      <LogPage repoName="alpha" status={status} commits={branchy} filters={{ branches: ['main'] }} onFiltersChange={() => {}} branchOptions={['main']} hasMore />,
+    );
+    expect(screen.getByTestId('log-branch-filter-hint')).toBeInTheDocument();
+    // 已到最早一条 → 不再提示
+    rerender(
+      <LogPage repoName="alpha" status={status} commits={branchy} filters={{ branches: ['main'] }} onFiltersChange={() => {}} branchOptions={['main']} hasMore={false} />,
+    );
+    expect(screen.queryByTestId('log-branch-filter-hint')).not.toBeInTheDocument();
+    // 未过滤 → 不提示
+    rerender(
+      <LogPage repoName="alpha" status={status} commits={branchy} filters={{}} onFiltersChange={() => {}} branchOptions={['main']} hasMore />,
+    );
+    expect(screen.queryByTestId('log-branch-filter-hint')).not.toBeInTheDocument();
+  });
+});
