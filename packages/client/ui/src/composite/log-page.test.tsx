@@ -660,7 +660,7 @@ describe('LogPage 过滤/分页', () => {
     expect(onFiltersChange).toHaveBeenCalledWith({ author: 'Alice', path: 'src/main.ts' });
   });
 
-  it('filters 受控：初始值回显草稿，清空作者后上抛仅路径', () => {
+  it('filters 受控：初始值回显草稿，清空作者后上抛 author:空串（容器按空串清空）+ 既有 path', () => {
     const onFiltersChange = vi.fn();
     render(
       <LogPage
@@ -674,7 +674,28 @@ describe('LogPage 过滤/分页', () => {
     expect(screen.getByTestId('log-filter-author')).toHaveValue('Bob');
     fireEvent.change(screen.getByTestId('log-filter-author'), { target: { value: '' } });
     fireEvent.blur(screen.getByTestId('log-filter-author'));
-    expect(onFiltersChange).toHaveBeenCalledWith({ path: 'lib/' });
+    // 载荷恒带 author/path 两个键：空串就是「清空该键」（容器按 f.author ?? '' 回写），
+    // 不能省略该键——省略会让容器把 filters 里的旧值再写回去
+    expect(onFiltersChange).toHaveBeenCalledWith({ author: '', path: 'lib/' });
+  });
+
+  // 回归：author/path 写入点（applyFilters）必须带上既有 filters，否则容器按 f.branches ?? []
+  // 回写会把用户刚选好的分支过滤静默清空、查询从 --all 退回默认视图
+  it('author/path 与 branches 共存：提交文本过滤不清空既有分支过滤', () => {
+    const onFiltersChange = vi.fn();
+    render(
+      <LogPage
+        repoName="alpha"
+        status={status}
+        commits={commits}
+        filters={{ branches: ['main'] }}
+        onFiltersChange={onFiltersChange}
+        branchOptions={['main']}
+      />,
+    );
+    fireEvent.change(screen.getByTestId('log-filter-author'), { target: { value: 'alice' } });
+    fireEvent.keyDown(screen.getByTestId('log-filter-author'), { key: 'Enter' });
+    expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ branches: ['main'], author: 'alice' }));
   });
 
   it('hasMore 与 onLoadMore 提供时渲染「加载更多」；内容填不满视口则挂载即自动按需加载一次，点击再触发一次', () => {

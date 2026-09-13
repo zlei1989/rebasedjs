@@ -367,7 +367,10 @@ export function LogPage({
     const author = authorDraft.trim();
     const path = pathDraft.trim();
     if (author === (filters?.author ?? '') && path === (filters?.path ?? '')) return;
-    onFiltersChange?.({ ...(author === '' ? {} : { author }), ...(path === '' ? {} : { path }) });
+    // 载荷必须带上既有 filters：本函数只管 author/path 两个键，若不带上 branches，容器按
+    // `f.branches ?? []` 回写就会把用户刚选好的分支过滤静默清空（查询从 --all 退回默认视图）。
+    // 不做「非空才带上」的条件展开：空串就是「清空该键」的载荷（容器按 `f.author ?? ''` 处理）。
+    onFiltersChange?.({ ...filters, author, path });
   };
   // 「更多」菜单项：仅装配容器注入回调的入口（P3-C 只读浏览 溯源/历史/已提交/搜索 + 本地操作 变基/标签
   // + 远程操作 拉取/推送/更新项目/远程管理 + P3-D 补丁/搁置/控制台/忽略）；全缺省时连「更多」按钮都不渲染
@@ -738,7 +741,7 @@ export function LogPage({
               trigger={['click']}
               menu={{ items: branchFilterItems, onClick: ({ key }) => onBranchFilterClick(key) }}
             >
-              <Tooltip title="按分支过滤提交图：只保留所选分支可达的提交，其余以虚线连过">
+              <Tooltip title="按分支过滤提交图：只保留所选分支可达的提交，其余提交不显示">
                 <Button size="small" data-testid="log-branch-filter">
                   分支过滤{filterBranches.length > 0 ? `（${filterBranches.length}）` : ''}
                 </Button>

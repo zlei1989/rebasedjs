@@ -96,8 +96,8 @@ export default function Page({
   // （无过滤且只加载了第一页）接入流合并
   const [author, setAuthor] = useState('');
   const [path, setPath] = useState('');
-  // 分支过滤选中项：非空时把日志查询切到 --all —— 数据里必须有「被过滤掉的提交」，
-  // 否则没有可隐藏的节点、也画不出虚线过滤边（设计 §2.2）
+  // 分支过滤选中项：非空时把日志查询切到 --all —— 否则被过滤掉的提交不在数据里，
+  // 过滤就没有可隐藏的对象（设计 §2.2）
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
   // 分支过滤可选项：复用既有分支端点（GET /api/repos/:id/branches），无新增端点
   const { data: branchList } = useBranches(repoId);
