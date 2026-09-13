@@ -69,7 +69,9 @@ export interface StreamLogOptions {
   range?: string;
   /**
    * 全分支日志（git log --all）：分支过滤的数据前提——被过滤掉的其他分支提交必须在数据里，
-   * 客户端才隐藏得掉它们、也才画得出虚线过滤边（设计 §2.2）。缺省 false = 仅 HEAD 可达（默认视图不变）。
+   * 客户端才隐藏得掉它们（过滤才有可隐藏的对象）。Ruling F1：分支过滤不产生虚线过滤边
+   * （可见集沿父边可达、对祖先封闭，见 docs/pages-and-api-audit.md §7.9）。
+   * 缺省 false = 仅 HEAD 可达（默认视图不变）。
    */
   all?: boolean;
   signal?: AbortSignal;

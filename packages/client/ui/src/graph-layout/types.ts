@@ -27,7 +27,8 @@ export interface EdgeSegment {
   type?: 'U' | 'D';
   /**
    * 边的来源（渲染/交互用，缺省 = 普通父子边）：
-   * 'collapse' = 线性折叠产生的虚线边，'filter' = 分支过滤产生的虚线过滤边。
+   * 'collapse' = 线性折叠产生的虚线边，'filter' = 过滤类虚线过滤边
+   * （当前分支过滤不产生，见 filter-graph.ts 文件头；文本/结构/revision 过滤与 Hide Commits 那条路径才有）。
    * 点击折叠虚线边 = 展开；点击过滤虚线边 = 无动作（对齐 Java 过滤态无图动作）。
    */
   kind?: 'collapse' | 'filter';

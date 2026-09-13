@@ -5,8 +5,9 @@
  *   - `dottedFilterEdges`             ← `collapsing/DottedFilterEdgesGenerator.kt` 的
  *     `update()` = `downWalk(); cleanup(); upWalk();`（`ShiftNumber` 用 Map 等价实现）。
  *
- * 为什么要画虚线过滤边：分支过滤把「未被选中分支的提交」从图里隐藏，若直接丢边，剩余的可见提交
- * 会散成互不相连的点；虚线边把它们重新连起来，图面结构与 IntelliJ 一致。
+ * 为什么保留虚线过滤边：忠实移植 Java `DottedFilterEdgesGenerator`。它服务于**文本/结构/revision 过滤**
+ * 与 Hide Commits 那条路径（那类可见集不是祖先封闭的），本仓当前只有分支过滤 ⇒ 该生成器**恒无输出、
+ * 属不可达分支**（Ruling F1，见 docs/pages-and-api-audit.md §7.9），保留以备未来接入非祖先封闭的过滤。
  *
  * 行序口径：行号 0 = 最新，父提交在更大行号。故：
  *   - 「UP 邻接」= 子提交（行号更小，已在 downWalk 中处理过）；

@@ -366,7 +366,7 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 | 风险 | 缓解 |
 |------|------|
 | git CLI 平台差异（Windows 路径/CRLF/杀进程树） | core 统一处理 + 三平台 CI 跑集成测试 |
-| 大仓库 log 图性能 | 流式解析 + 虚拟滚动 + 分页游标（分支折叠为可选后置，见 backlog §2.9） |
+| 大仓库 log 图性能 | 流式解析 + 虚拟滚动 + 分页游标 + 线性折叠（已完成，见审计报告 §4.2/§7.9） |
 | 两个下游应用路由重复 | 契约（schema/错误映射/SSE 序列化）集中放 contracts，apps 只留装配 |
 | GitHub/GitLab API 限流与鉴权复杂度 | `auth.ts` 集中 token 管理；`RATE_LIMITED` 统一错误 |
 | credential helper 依赖系统 git 配置 | 引擎层原样调用系统 git（helper 由 git 进程自身处理），`auth.ts` 只做兜底 HTTPS 认证 |

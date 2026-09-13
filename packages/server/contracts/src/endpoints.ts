@@ -25,7 +25,8 @@ export const logQuerySchema = z.object({
   range: z.string().optional(),
   /**
    * 全分支日志（git log --all）。分支过滤激活时由容器置位：被过滤掉的其他分支提交必须在数据里，
-   * 客户端才能隐藏它们并画出虚线过滤边（设计 §2.2）。查询串布尔：z.coerce.boolean() 会把 'false'
+   * 客户端才能把它们隐藏掉——过滤才有可隐藏的对象（Ruling F1：分支过滤不产生虚线过滤边，
+   * 可见集沿父边可达、对祖先封闭，见 docs/pages-and-api-audit.md §7.9）。查询串布尔：z.coerce.boolean() 会把 'false'
    * 当 true（Boolean('false')），故与 staged 同口径按枚举 + transform 解析。
    */
   all: z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]).optional(),
