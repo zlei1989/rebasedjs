@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cloneGitRepo, findRepoRoot, initGitRepo } from './repo';
+import { cloneGitRepo, findRepoRoot, initGitRepo, readHeadBranch } from './repo';
 import { cleanupTmpRepo, createTmpDir, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -39,5 +39,58 @@ describe('repo 原语', () => {
     dirs.push(target);
     await cloneGitRepo(src, target);
     expect(await findRepoRoot(target)).toBe(target);
+  });
+
+  // readHeadBranch：对齐 GitRecentProjectsBranchesService.getBranch——
+  // `ref: <target>` 剥已知前缀后返回分支名；HEAD 为提交哈希（detached）→ null。
+  // 夹具直接写 .git/HEAD 文本（0 git spawn）：被测的是「HEAD 文本 → 分支名」这条解析链。
+  describe('readHeadBranch', () => {
+    it('真实 git 仓库（unborn HEAD）返回默认分支名', async () => {
+      const repo = createTmpRepo();
+      dirs.push(repo);
+      // 期望值从仓库自己的 HEAD 文件取，避免依赖本机 init.defaultBranch
+      const head = readFileSync(join(repo, '.git', 'HEAD'), 'utf8').trim();
+      expect(head.startsWith('ref: refs/heads/')).toBe(true);
+      expect(await readHeadBranch(repo)).toBe(head.replace('ref: refs/heads/', ''));
+    });
+
+    it('HEAD 指向普通本地分支 → 返回分支名', async () => {
+      const repo = createTmpRepo();
+      dirs.push(repo);
+      writeFileSync(join(repo, '.git', 'HEAD'), 'ref: refs/heads/feature-x\n');
+      expect(await readHeadBranch(repo)).toBe('feature-x');
+    });
+
+    it('HEAD 指向远程跟踪引用 → 剥 refs/remotes/ 前缀', async () => {
+      const repo = createTmpRepo();
+      dirs.push(repo);
+      writeFileSync(join(repo, '.git', 'HEAD'), 'ref: refs/remotes/origin/main\n');
+      expect(await readHeadBranch(repo)).toBe('origin/main');
+    });
+
+    it('HEAD 为 40 位提交哈希（detached）→ null', async () => {
+      const repo = createTmpRepo();
+      dirs.push(repo);
+      writeFileSync(join(repo, '.git', 'HEAD'), `${'a'.repeat(40)}\n`);
+      expect(await readHeadBranch(repo)).toBeNull();
+    });
+
+    it('.git 为文件（worktree/linked）→ 解析 gitdir 后读其 HEAD', async () => {
+      const repo = createTmpDir('rebased-head-wt-');
+      const gitDir = createTmpDir('rebased-head-wt-git-');
+      dirs.push(repo, gitDir);
+      writeFileSync(join(gitDir, 'HEAD'), 'ref: refs/heads/wt-branch\n');
+      writeFileSync(join(repo, '.git'), `gitdir: ${gitDir}\n`);
+      expect(await readHeadBranch(repo)).toBe('wt-branch');
+    });
+
+    it('非仓库目录 / 无 HEAD 文件 → null', async () => {
+      const plain = createTmpDir('rebased-head-plain-');
+      const bare = createTmpDir('rebased-head-nogit-');
+      dirs.push(plain, bare);
+      expect(await readHeadBranch(plain)).toBeNull();
+      mkdirSync(join(bare, '.git'), { recursive: true });
+      expect(await readHeadBranch(bare)).toBeNull();
+    });
   });
 });

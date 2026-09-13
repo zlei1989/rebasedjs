@@ -7,6 +7,23 @@ export interface RepoInfo {
   openedAt: string;
 }
 
+/**
+ * 最近仓库列表项：RepoInfo + 列表项呈现所需三个派生字段。
+ * 三者都不写进 `repos` 持久化记录（存的仍是四字段 RepoInfo）——每次读取时现算，与 Java 同口径。
+ */
+export interface RecentRepoInfo extends RepoInfo {
+  /**
+   * HEAD 指向的分支名（GitRecentProjectsBranchesProvider 语义）：
+   * `ref: refs/heads/x` → 'x'；**unborn HEAD（刚 init 无提交）同样是 `ref: refs/heads/x`，故照常返回分支名**；
+   * HEAD 为提交哈希（detached）→ null；无 HEAD / 读失败 / reftable stub → null。
+   */
+  branch: string | null;
+  /** 路径是否仍可用（RecentProjectPanel.isPathValid：只看目录是否存在，不判是否仍是 git 仓库） */
+  valid: boolean;
+  /** 头像色号 0..8（ProjectIconPalette.gradients 的下标）；按项目持久化，见 design.md §4.3 */
+  colorIndex: number;
+}
+
 /** 工作区变更条目（code 为 porcelain v2 XY 码，?? = 未跟踪，!! = 已忽略） */
 export interface ChangeEntry {
   path: string;
