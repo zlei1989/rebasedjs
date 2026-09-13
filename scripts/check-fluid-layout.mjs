@@ -626,13 +626,29 @@ async function assertMonacoInternalScroll(page) {
       });
       // 选「最有代表性」的那个编辑器：优先内容真的溢出的，其次取可见宽度最大的那个
       // （并排模式下 360 档左栏会被压到 38px：它的溢出量最大但证据最不典型，故不用溢出量排序）
-      measured.sort((a, b) => {
+      //
+      // 但**退化的窄栏必须排除在「溢出候选」之外**（2026-09 修正）：480/768 档并排模式下，
+      // 左栏会被压成 ~38px（其 `.scrollbar.horizontal .slider` 只有 20px 宽、滚动宿主
+      // clientWidth 为 0），右栏的长行其实**放得下**（内容 375px ≤ 编辑器 396px）。
+      // 旧排序只按「内容是否超过自身宽度」挑，于是选中这个 38px 栏：它「溢出」是零宽宿主的
+      // 空洞结论，拖它的滑块当然纹丝不动 → 假红（实测 x 46 → 46、滑块几何 20×12）。
+      // 这里把可用宿主的门槛定在 MIN_USABLE_HOST_PX：低于它的栏只记录、不参与「已溢出」判定。
+      const MIN_USABLE_HOST_PX = 120;
+      const usable = measured.filter((m) => m.hostClientWidth >= MIN_USABLE_HOST_PX);
+      const degenerate = measured.filter((m) => m.hostClientWidth < MIN_USABLE_HOST_PX);
+      const pool = usable.length > 0 ? usable : measured;
+      pool.sort((a, b) => {
         const overA = (a.contentWidth ?? 0) > a.hostClientWidth ? 1 : 0;
         const overB = (b.contentWidth ?? 0) > b.hostClientWidth ? 1 : 0;
         if (overA !== overB) return overB - overA;
         return b.hostClientWidth - a.hostClientWidth;
       });
-      return { editors: editors.length, best: measured[0] };
+      return {
+        editors: editors.length,
+        best: pool[0],
+        degenerateHosts: degenerate.map((m) => m.hostClientWidth),
+        minUsableHostPx: MIN_USABLE_HOST_PX,
+      };
     });
 
   // 先等 Monaco 的几何稳定：DiffPage 的两栏编辑器是逐步落位的（clientWidth、内容宽、滚动条滑块宽度
@@ -673,7 +689,11 @@ async function assertMonacoInternalScroll(page) {
   if (info.contentWidth === null || info.contentWidth <= info.hostClientWidth) {
     return {
       status: 'pass',
-      reason: `本档长行放得下（内容 ${info.contentWidth}px <= 编辑器 ${info.hostClientWidth}px），无需内部横向滚动；编辑器宿主自身 ${info.hostScrollWidth}px 不溢出`,
+      reason: `本档长行放得下（内容 ${info.contentWidth}px <= 编辑器 ${info.hostClientWidth}px），无需内部横向滚动；编辑器宿主自身 ${info.hostScrollWidth}px 不溢出${
+        before.degenerateHosts !== undefined && before.degenerateHosts.length > 0
+          ? `（已排除退化窄栏 hostClientWidth=${JSON.stringify(before.degenerateHosts)}，门槛 ${before.minUsableHostPx}px）`
+          : ''
+      }`,
     };
   }
   if (!info.hasHorizontalScrollbar) {
@@ -715,6 +735,14 @@ async function assertMonacoInternalScroll(page) {
     }
     await picked.slider.scrollIntoViewIfNeeded();
     await page.waitForTimeout(250);
+    // Monaco 的横向滚动条是 auto-hide（默认 opacity 0、显形前不接管指针）：先悬停到滑条上等它显形，
+    // 再按下拖动。少了这一步，mouse.down 会落在「看得见几何但点不动」的滑块上，内容自然不位移
+    // （2026-09 实测：同一页面手动悬停 ~1s 后拖动可位移，脚本 250ms 直拖则恒为 0）。
+    const hoverBox = await picked.slider.boundingBox();
+    if (hoverBox !== null) {
+      await page.mouse.move(hoverBox.x + hoverBox.width / 2, hoverBox.y + hoverBox.height / 2);
+      await page.waitForTimeout(900);
+    }
     sliderBox = await picked.slider.boundingBox();
     if (sliderBox === null) return { status: 'fail', reason: '取不到 Monaco 横向滚动条滑块的几何' };
     startX = await page.evaluate(
@@ -727,7 +755,25 @@ async function assertMonacoInternalScroll(page) {
     );
     await page.mouse.move(sliderBox.x + sliderBox.width / 2, sliderBox.y + sliderBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(sliderBox.x + sliderBox.width / 2 + 120, sliderBox.y + sliderBox.height / 2, { steps: 12 });
+    // 首轮按「中心 + 120px」拖；若未位移，第二轮直接拖到滚动条右端（夹具的横向可滚区间可能
+    // 只有几十像素，中心 +120 会越界但仍应夹到右端——实测个别宽度下 Monaco 对越界拖动不夹取，
+    // 于是内容纹丝不动；拖到「右端 -4px」是稳妥写法）。
+    const barBox = sliderBox === null
+      ? null
+      : await page.evaluate(
+        (index) => {
+          const el = [...document.querySelectorAll('.monaco-editor')][index];
+          const bar = el?.querySelector('.scrollbar.horizontal');
+          if (bar === null || bar === undefined) return null;
+          const r = bar.getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, height: r.height };
+        },
+        info.index,
+      );
+    const dragToX = attempt === 0 || barBox === null
+      ? sliderBox.x + sliderBox.width / 2 + 120
+      : barBox.x + barBox.width - 4;
+    await page.mouse.move(dragToX, sliderBox.y + sliderBox.height / 2, { steps: 12 });
     await page.mouse.up();
     await page.waitForTimeout(450);
     endX = await page.evaluate(
@@ -743,7 +789,7 @@ async function assertMonacoInternalScroll(page) {
   if (moved <= 0) {
     return {
       status: 'fail',
-      reason: `拖动 Monaco 横向滚动条后内容未位移：x ${startX} → ${endX}（滑块几何 ${JSON.stringify(sliderBox)}，取滑块方式：编辑器 #${info.index} 子树内文档序第一个 .slider，候选 ${sliderDiag?.candidates ?? '—'} 个）`,
+      reason: `拖动 Monaco 横向滚动条后内容未位移：x ${startX} → ${endX}（滑块几何 ${JSON.stringify(sliderBox)}，取滑块方式：编辑器 #${info.index} 子树内文档序第一个 .slider，候选 ${sliderDiag?.candidates ?? '—'} 个；该编辑器 hostClientWidth=${info.hostClientWidth}、内容宽 ${info.contentWidth}${before.degenerateHosts !== undefined && before.degenerateHosts.length > 0 ? `，已排除退化窄栏 ${JSON.stringify(before.degenerateHosts)}` : ''}）`,
     };
   }
   return {
@@ -964,16 +1010,29 @@ async function assertHunkExpanded(page) {
 async function assertEllipsisTooltip(page) {
   // 选目标：只考虑「可见且真的有宽度」的 EllipsisText（隐藏/零宽的元素悬停不到，也无从谈溢出），
   // 取其中溢出量最大的一个 —— 结果与 DOM 顺序无关。
+  // 另加**可悬停**过滤：中心点必须真的被自己（或自己的子树）命中。本格会先打开重置弹窗，
+  // 弹窗遮罩会把背景行挡住；若只按「可见」挑，360 档会挑到遮罩后面的背景 EllipsisText，
+  // 于是 locator.hover 一直等到超时（实测 2026-09 在 360/明暗两主题稳定复现）。
   const pick = await page.evaluate(() => {
     const all = [...document.querySelectorAll('span[class*="ant-typography-ellipsis"]')];
     const visible = all.filter((el) => el.clientWidth > 0 && el.getBoundingClientRect().width > 0);
-    if (visible.length === 0) return { index: -1, total: all.length, visible: 0 };
-    const ranked = [...visible].sort((a, b) => b.scrollWidth - b.clientWidth - (a.scrollWidth - a.clientWidth));
+    const hoverable = visible.filter((el) => {
+      const r = el.getBoundingClientRect();
+      const cx = r.x + r.width / 2;
+      const cy = r.y + r.height / 2;
+      if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return false;
+      const hit = document.elementFromPoint(cx, cy);
+      return hit !== null && (hit === el || el.contains(hit) || hit.contains(el));
+    });
+    if (visible.length === 0) return { index: -1, total: all.length, visible: 0, hoverable: 0 };
+    const pool = hoverable.length > 0 ? hoverable : visible;
+    const ranked = [...pool].sort((a, b) => b.scrollWidth - b.clientWidth - (a.scrollWidth - a.clientWidth));
     const target = ranked[0];
     return {
       index: all.indexOf(target),
       total: all.length,
       visible: visible.length,
+      hoverable: hoverable.length,
       text: (target.textContent ?? '').trim(),
       scrollWidth: target.scrollWidth,
       clientWidth: target.clientWidth,
@@ -982,6 +1041,44 @@ async function assertEllipsisTooltip(page) {
   });
   if (pick.index < 0) {
     return { status: 'fail', reason: `页面上没有可见的 EllipsisText（共 ${pick.total} 个，可见 0 个）` };
+  }
+  if (pick.hoverable === 0) {
+    // 本格的状态动作会打开重置弹窗；360 档下弹窗遮罩会盖住页面上全部可见的 EllipsisText
+    // （弹窗自身在这一档没有可见的 EllipsisText），于是悬停断言无从执行。
+    // 处置：关掉弹窗后在同页重挑一次——断言的语义（溢出 → 悬停出完整值）不变，只是换个可悬停的站点。
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(600);
+    const retry = await page.evaluate(() => {
+      const all = [...document.querySelectorAll('span[class*="ant-typography-ellipsis"]')];
+      const visible = all.filter((el) => el.clientWidth > 0 && el.getBoundingClientRect().width > 0);
+      const hoverable = visible.filter((el) => {
+        const r = el.getBoundingClientRect();
+        const cx = r.x + r.width / 2;
+        const cy = r.y + r.height / 2;
+        if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return false;
+        const hit = document.elementFromPoint(cx, cy);
+        return hit !== null && (hit === el || el.contains(hit) || hit.contains(el));
+      });
+      if (hoverable.length === 0) return { index: -1, visible: visible.length, hoverable: 0 };
+      const ranked = [...hoverable].sort((a, b) => b.scrollWidth - b.clientWidth - (a.scrollWidth - a.clientWidth));
+      const target = ranked[0];
+      return {
+        index: all.indexOf(target),
+        visible: visible.length,
+        hoverable: hoverable.length,
+        text: (target.textContent ?? '').trim(),
+        scrollWidth: target.scrollWidth,
+        clientWidth: target.clientWidth,
+        overflows: target.scrollWidth > target.clientWidth,
+      };
+    });
+    if (retry.index < 0) {
+      return {
+        status: 'fail',
+        reason: `可见 EllipsisText ${pick.visible} 个全被弹窗遮罩遮挡，关掉弹窗后仍无可悬停站点（可见 ${retry.visible} 个）`,
+      };
+    }
+    Object.assign(pick, retry, { viaRetry: true });
   }
   // 用 locator.hover()：它自带 scrollIntoViewIfNeeded + 真实鼠标移动，比手算坐标稳
   // （手算在元素被容器滚动到视口外时会 hover 到别处，实测在 480 档即因此失败）
