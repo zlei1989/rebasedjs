@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { RepoInfo } from '@rebased/contracts';
+import type { RecentRepoInfo, RepoInfo } from '@rebased/contracts';
 import { RepoPage } from './repo-page';
 
 /** 测试仓库工厂：补全 RepoInfo 必填字段，按需覆盖 */
@@ -9,6 +9,21 @@ function makeRepo(overrides: Partial<RepoInfo> & { id: string }): RepoInfo {
     path: `/home/user/${overrides.id}`,
     name: overrides.id,
     openedAt: '2026-09-01T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+/** 派生列表项工厂：在 makeRepo 之上补 branch/valid/colorIndex（服务端 GET /api/repos 的形状） */
+function makeItem(
+  overrides: Partial<RecentRepoInfo> & { id: string },
+): RecentRepoInfo {
+  return {
+    path: `/home/user/${overrides.id}`,
+    name: overrides.id,
+    openedAt: '2026-09-01T10:00:00.000Z',
+    branch: null,
+    valid: true,
+    colorIndex: 0,
     ...overrides,
   };
 }
@@ -280,5 +295,115 @@ describe('RepoPage 设置入口（欢迎屏 Configure 语义 #3）', () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
     rerender(<RepoPage repos={[]} onOpen={vi.fn()} homeDir={HOME} />);
     expect(screen.queryByTestId('open-settings-button')).not.toBeInTheDocument();
+  });
+});
+
+describe('RepoPage 列表项分支后缀 / 头像 / 失效标记', () => {
+  it('有分支：显示名 = 名称 + 两个空格 + [分支]', () => {
+    render(
+      <RepoPage
+        repos={[makeItem({ id: 'a', name: 'alpha', branch: 'main' })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+      />,
+    );
+    expect(screen.getByTestId('repo-display-name').textContent).toBe('alpha  [main]');
+  });
+
+  it('无分支（detached/读不到）：显示名只有名称，无方括号', () => {
+    render(
+      <RepoPage repos={[makeItem({ id: 'b', name: 'beta', branch: null })]} onOpen={vi.fn()} homeDir={HOME} />,
+    );
+    expect(screen.getByTestId('repo-display-name').textContent).toBe('beta');
+  });
+
+  it('每行渲染首字母头像', () => {
+    render(
+      <RepoPage
+        repos={[makeItem({ id: 'c', name: 'rebased-smoke', path: '/home/user/rebased-smoke' })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+      />,
+    );
+    expect(screen.getByTestId('repo-avatar')).toHaveTextContent('RS');
+  });
+
+  it('头像底色由服务端下发的 colorIndex 决定（换色号即换底色）', () => {
+    const { rerender } = render(
+      <RepoPage repos={[makeItem({ id: 'i', name: 'india', colorIndex: 1 })]} onOpen={vi.fn()} homeDir={HOME} />,
+    );
+    const withOne = screen.getByTestId('repo-avatar').getAttribute('style');
+
+    rerender(<RepoPage repos={[makeItem({ id: 'i', name: 'india', colorIndex: 5 })]} onOpen={vi.fn()} homeDir={HOME} />);
+
+    // 只比「随色号变化」，不比对具体 CSS 串——避免依赖 jsdom 对 background 简写的序列化口径
+    expect(screen.getByTestId('repo-avatar').getAttribute('style')).not.toBe(withOne);
+  });
+
+  it('路径可用：不渲染失效标记、行不降不透明度', () => {
+    render(
+      <RepoPage repos={[makeItem({ id: 'd', name: 'delta', valid: true })]} onOpen={vi.fn()} homeDir={HOME} />,
+    );
+    expect(screen.queryByTestId('repo-invalid')).not.toBeInTheDocument();
+    expect(screen.getByTestId('repo-item')).not.toHaveStyle({ opacity: '0.6' });
+  });
+
+  it('路径不可用：渲染失效标记且行降不透明度', () => {
+    render(
+      <RepoPage repos={[makeItem({ id: 'e', name: 'echo', valid: false })]} onOpen={vi.fn()} homeDir={HOME} />,
+    );
+    expect(screen.getByTestId('repo-invalid')).toBeInTheDocument();
+    expect(screen.getByTestId('repo-item')).toHaveStyle({ opacity: '0.6' });
+  });
+
+  it('点失效行不打开仓库，只弹确认（对齐 Java：弹窗后直接 return）', async () => {
+    const onOpenRepo = vi.fn();
+    render(
+      <RepoPage
+        repos={[makeItem({ id: 'f', name: 'foxtrot', path: '/home/user/gone', valid: false })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={onOpenRepo}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('repo-item'));
+    expect(onOpenRepo).not.toHaveBeenCalled();
+    expect(await screen.findByText('仓库路径不可用')).toBeInTheDocument();
+    expect(screen.getByTestId('repo-invalid-path')).toHaveTextContent('~/gone (unavailable)');
+    // 关闭后依然没有发生打开
+    fireEvent.click(screen.getByTestId('repo-invalid-close'));
+    expect(onOpenRepo).not.toHaveBeenCalled();
+  });
+
+  it('失效确认里「从最近列表移除」调 onRemove(repoId) 且不触发打开', async () => {
+    const onOpenRepo = vi.fn();
+    const onRemove = vi.fn();
+    render(
+      <RepoPage
+        repos={[makeItem({ id: 'g', name: 'golf', valid: false })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={onOpenRepo}
+        onRemove={onRemove}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('repo-item'));
+    fireEvent.click(await screen.findByTestId('repo-invalid-remove'));
+    expect(onRemove).toHaveBeenCalledWith('g');
+    expect(onOpenRepo).not.toHaveBeenCalled();
+  });
+
+  it('未注入 onRemove：失效确认里不渲染「从最近列表移除」', async () => {
+    render(
+      <RepoPage
+        repos={[makeItem({ id: 'h', name: 'hotel', valid: false })]}
+        onOpen={vi.fn()}
+        homeDir={HOME}
+        onOpenRepo={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('repo-item'));
+    expect(await screen.findByText('仓库路径不可用')).toBeInTheDocument();
+    expect(screen.queryByTestId('repo-invalid-remove')).not.toBeInTheDocument();
   });
 });

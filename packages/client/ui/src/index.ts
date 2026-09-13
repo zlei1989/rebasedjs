@@ -18,7 +18,7 @@ export { RepoStatusBar, type RepoStatusBarProps } from './domain/repo-status-bar
 export { DiffViewer, type DiffViewerProps } from './domain/diff-viewer';
 export { HunkDiffView, type HunkDiffViewProps } from './domain/hunk-diff-view';
 export { CommitDetailsPanel, type CommitDetailsPanelProps } from './domain/commit-details-panel';
-export { RepoPage, type RepoPageProps } from './composite/repo-page';
+export { RepoPage, type RepoPageProps, type RepoListItem } from './composite/repo-page';
 export { LogPage, type LogPageProps } from './composite/log-page';
 export { DiffPage, type DiffPageProps } from './composite/diff-page';
 export {
@@ -76,6 +76,12 @@ export {
 export { AuthDialog, type AuthDialogProps } from './composite/auth-dialog';
 export type { MonacoEditorInnerProps, MonacoLazyLoader, MonacoLazyProps } from './base/monaco-lazy';
 export { relativeToHome } from './composite/repo-page-utils';
+export {
+  AVATAR_GRADIENTS,
+  avatarGradient,
+  avatarInitials,
+} from './composite/repo-avatar-utils';
+export { RepoAvatar, type RepoAvatarProps } from './composite/repo-avatar';
 export { DensityProvider, useDensityMode, type DensityProviderProps } from './base/density-context';
 export {
   resolveThemeMode,

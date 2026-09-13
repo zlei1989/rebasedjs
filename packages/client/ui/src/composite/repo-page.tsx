@@ -8,18 +8,30 @@
  * 最近仓库列表走 antd Listy（6.6.0 起的列表组件）：行不挂 Tooltip，行内容由调用方渲染。
  * 纯 props 驱动：ui 不调接口，repos/onOpen/onOpenRepo/onRemove/onClone/onInit/homeDir 由调用方容器注入 hooks 数据。
  * 点击最近列表项打开该仓库（注入 onOpenRepo 才可点）+ 打开中行内加载态（openingRepoId 命中行）。
+ * 列表项呈现（RecentProjectPanel 的 RecentProjectItemRenderer 等价）：首字母渐变头像 + 「名称  [分支]」+
+ * 失效标记（路径不存在时整行弱化、点击只弹确认而不打开）。
  */
 import { useMemo, useState } from 'react';
 import { Button, Flex, Input, Listy, Modal, Popconfirm, Spin, theme, Tooltip, Typography } from 'antd';
-import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SettingOutlined, SwitcherOutlined } from '@ant-design/icons';
-import type { RepoInfo } from '@rebased/contracts';
+import { DeleteOutlined, FolderOpenOutlined, PlusOutlined, SettingOutlined, SwitcherOutlined, WarningOutlined } from '@ant-design/icons';
+import type { RecentRepoInfo, RepoInfo } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { PageShell } from '../base/page-shell';
 import { Toolbar } from '../base/toolbar';
+import { RepoAvatar } from './repo-avatar';
 import { relativeToHome } from './repo-page-utils';
 
+/**
+ * 列表项：服务端派生的 branch/valid/colorIndex 可缺省——ui 组件测试与只给 RepoInfo 的调用方按
+ * 「无分支后缀、路径可用、色号 0（第一组渐变）」渲染（缺省即不显示后缀、不标记失效，无死分支）。
+ */
+export type RepoListItem = RepoInfo & Partial<Omit<RecentRepoInfo, keyof RepoInfo>>;
+
+/** 失效后缀（IdeBundle.properties:2632 `recent.project.unavailable`） */
+const UNAVAILABLE_SUFFIX = '(unavailable)';
+
 export interface RepoPageProps {
-  repos: RepoInfo[];
+  repos: RepoListItem[];
   /** 打开表单提交（path 为用户输入的仓库路径） */
   onOpen: (path: string) => void;
   /**
@@ -176,11 +188,14 @@ export function RepoPage({
   const [openPath, setOpenPath] = useState('');
   const [cloneOpen, setCloneOpen] = useState(false);
   const [initOpen, setInitOpen] = useState(false);
+  // 失效仓库的确认对话框目标（null = 关闭）：对齐 ReopenProjectAction.showReopenDialog——
+  // 路径不存在的项不直接走打开流程，先让用户确认
+  const [invalidRepo, setInvalidRepo] = useState<RepoListItem | null>(null);
   // 最近优先（openedAt 降序）→ 同路径去重（保留最近一条）→ 截断上限 50
   const visible = useMemo(() => {
     const sorted = [...repos].sort((a, b) => b.openedAt.localeCompare(a.openedAt));
     const seen = new Set<string>();
-    const out: RepoInfo[] = [];
+    const out: RepoListItem[] = [];
     for (const repo of sorted) {
       if (seen.has(repo.path)) continue;
       seen.add(repo.path);
@@ -258,25 +273,55 @@ export function RepoPage({
             // 可点条目：仅容器注入 onOpenRepo 时启用；命中 openingRepoId 的行打开中（加载态 + 忽略再次点击）
             const clickable = onOpenRepo !== undefined;
             const opening = repo.id === openingRepoId;
+            // 失效：服务端明确回报 valid===false（缺省/true 均按可用处理）
+            const invalid = repo.valid === false;
+            // 打开分派：失效项先弹确认，其余直接打开
+            const openRow = (): void => {
+              if (invalid) {
+                setInvalidRepo(repo);
+                return;
+              }
+              onOpenRepo?.(repo);
+            };
             return (
               <Flex
                 data-testid="repo-item"
                 align="center"
                 gap={8}
                 // 整行可点即打开该仓库（未接线则不挂事件，无死控件）；打开中的行不再响应，防连点重复走打开流程
-                onClick={clickable && !opening ? () => onOpenRepo(repo) : undefined}
+                onClick={clickable && !opening ? openRow : undefined}
                 // 行内边距已移除：回归 antd 默认，由 Listy 行容器提供（紧凑密度 8px 8px）。
                 // 代价：行容器的内边距不属本元素命中区，点击落在其上不会触发行打开；
                 // Listy 无 onItemClick，故「antd 默认内边距」与「整行可点」无法兼得（已由用户裁定接受）。
-                // 光标在打开中给 progress
-                style={clickable ? { cursor: opening ? 'progress' : 'pointer' } : undefined}
+                // 失效行整体降不透明度（RecentProjectPanel 对失效项的弱化呈现）
+                style={{
+                  ...(clickable ? { cursor: opening ? 'progress' : 'pointer' } : {}),
+                  ...(invalid ? { opacity: 0.6 } : {}),
+                }}
               >
+                {/* 头像：首字母 + 渐变底（RecentProjectIconHelper 的 AvatarIcon 等价）；色号由服务端下发
+                    （缺省 0 = 第一组渐变，兼容只给 RepoInfo 的调用方），失效转灰 + 降不透明度 */}
+                <RepoAvatar colorIndex={repo.colorIndex ?? 0} name={repo.name} valid={!invalid} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <Typography.Text strong>{repo.name}</Typography.Text>
+                  {/* 显示名 = 名称 + `  [分支]`（两个空格，对齐 IdeBundle `{0}  [{1}]`）。
+                      整串拼在一个 Typography.Text 里：JSX 换行会被折叠，拼字符串才能逐字对上 Java 文案。
+                      行**不挂 Tooltip**（既有产品口径：行级气泡与「移除」气泡会叠弹） */}
+                  <Typography.Text strong data-testid="repo-display-name">
+                    {`${repo.name}${repo.branch ? `  [${repo.branch}]` : ''}`}
+                  </Typography.Text>
                   <div>
                     <Typography.Text type="secondary">{relativeToHome(repo.path, homeDir)}</Typography.Text>
                   </div>
                 </div>
+                {/* 失效标记：小图标承接气泡（信息含路径与 (unavailable) 后缀，对齐 Java 的 tooltip 文案），
+                    而不是整行 tooltip——见上方「行不挂 Tooltip」口径 */}
+                {invalid ? (
+                  <Tooltip
+                    title={`${relativeToHome(repo.path, homeDir)} ${UNAVAILABLE_SUFFIX}：该目录已不存在，可能已被移动或删除`}
+                  >
+                    <WarningOutlined data-testid="repo-invalid" style={{ color: token.colorWarning }} />
+                  </Tooltip>
+                ) : null}
                 {/* 打开中：打开含 POST 往返 + 配置落盘 + 最近列表刷新，有耗时需即时反馈，否则点击似无响应 */}
                 {opening ? (
                   <Flex align="center" gap="small" data-testid="repo-opening">
@@ -312,6 +357,42 @@ export function RepoPage({
       {onInit ? (
         <InitModal open={initOpen} acting={initializing} onInit={onInit} onClose={() => setInitOpen(false)} />
       ) : null}
+      {/* 失效仓库确认（`ReopenProjectAction.showReopenDialog` 的等价）：路径不存在时**不尝试打开**——
+          Java 在该分支弹完对话框即 return（`ReopenProjectAction.kt:115-118`），故只给 [关闭 / 从最近列表移除]。
+          footer 用显式按钮数组而非默认 ok/cancel：默认两组按钮表达不了「移除」这条危险动作（且 render 函数式
+          footer 对 antd 版本较敏感，数组式是文档化用法）；onCancel 保留，供右上角 X 与 ESC 关闭 */}
+      <Modal
+        open={invalidRepo !== null}
+        title="仓库路径不可用"
+        onCancel={() => setInvalidRepo(null)}
+        footer={[
+          ...(onRemove !== undefined && invalidRepo !== null
+            ? [
+              <Button
+                key="remove"
+                danger
+                data-testid="repo-invalid-remove"
+                onClick={() => {
+                  onRemove(invalidRepo.id);
+                  setInvalidRepo(null);
+                }}
+              >
+                从最近列表移除
+              </Button>,
+            ]
+            : []),
+          <Button key="close" data-testid="repo-invalid-close" onClick={() => setInvalidRepo(null)}>
+            关闭
+          </Button>,
+        ]}
+      >
+        <Flex vertical gap={8}>
+          <Typography.Text data-testid="repo-invalid-path">
+            {invalidRepo === null ? '' : `${relativeToHome(invalidRepo.path, homeDir)} ${UNAVAILABLE_SUFFIX}`}
+          </Typography.Text>
+          <Typography.Text type="secondary">该目录已不存在，可能已被移动或删除。</Typography.Text>
+        </Flex>
+      </Modal>
     </PageShell>
   );
 }
