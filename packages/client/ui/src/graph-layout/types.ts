@@ -25,6 +25,12 @@ export interface EdgeSegment {
    * 'U' → SOLID 实线，'D' → DASHED 虚线。缺省 'U'。
    */
   type?: 'U' | 'D';
+  /**
+   * 边的来源（渲染/交互用，缺省 = 普通父子边）：
+   * 'collapse' = 线性折叠产生的虚线边，'filter' = 分支过滤产生的虚线过滤边。
+   * 点击折叠虚线边 = 展开；点击过滤虚线边 = 无动作（对齐 Java 过滤态无图动作）。
+   */
+  kind?: 'collapse' | 'filter';
 }
 
 export interface LayoutRow {
