@@ -20,7 +20,7 @@
 | 端点路径 / HTTP 方法 | **103 / 118**（web-next 103 个 route.ts ↔ web-koa repos.ts 118 注册，15 路径双方法，两端完全对称） |
 | 半使用接口 | 0（diff/stream 分块文本已接 Monaco 渐进渲染；staging/hunks 已接行内 hunk 选择） |
 | `@rebased/api` 公共出口 | 123 函数；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`） |
-| 契约层 | zod schema 71、领域类型/别名 97、SSE 事件 6 种在用、错误码 9 实际产生 / 3 预留（CONFLICT 三态承载定档；STALE_LOCK/CANCELLED 保留；HOOK_FAILED 已消费；两端 JSON body 非法统一 400） |
+| 契约层 | zod schema 71、领域类型/别名 99、SSE 事件 6 种在用、错误码 9 实际产生 / 3 预留（CONFLICT 三态承载定档；STALE_LOCK/CANCELLED 保留；HOOK_FAILED 已消费；两端 JSON body 非法统一 400） |
 | 导航边（106 条） | 93 ✅（含等效边）+ 1 🟡（#20 形态）+ 8 ➖ + 4 ❌（明确不做）——❌ 可做 0 |
 
 ### 1.2 口径与图例
@@ -100,7 +100,7 @@
 ### 2.3 汇总
 
 - ✅ 已复刻 29 个；🟡 等效 2 个（CommitDialog、QuickActionsMenu）——均为定案形态（内嵌提交框 / 顶栏+更多菜单聚合），非缺口。
-- 功能点级缺口 0（2026-09-21 终核：P2 各域剩余项全部清零，完成记录见 §7.3）；装饰性后置 1 项不计缺口（RepoPage 列表项分支后缀/图标/失效标记，§7.2 #8）；Show Git Log for Command 已归 ➖（internal 动作，见 §5.3.2 #39）。
+- 功能点级缺口 0（2026-09-21 终核：P2 各域剩余项全部清零，完成记录见 §7.3）；原装饰性后置项 RepoPage 列表项分支后缀/图标/失效标记已落地（§7.2 #8，终态见 §4.1）；Show Git Log for Command 已归 ➖（internal 动作，见 §5.3.2 #39）。
 
 ---
 
@@ -118,7 +118,7 @@
 | repo | `repos/:id` | DELETE | 从最近列表移除（幂等；同时清该仓库变更列表簿记） | RepoPage 移除 Popconfirm | ✅ |
 | app | `app/home-dir` | GET | 宿主用户主目录（路径副文本 `~/` 相对化） | RepoPage（容器注入 homeDir） | ✅ |
 | status | `repos/:id/status` | GET | 工作区状态（分支/上游/变更条目） | LogPage 状态条、StatusPage | ✅ |
-| log | `repos/:id/log`、`repos/:id/log/stream` | GET | 提交历史分页快照 / SSE 增量流 | LogPage（快照+流 merge 去重） | ✅ |
+| log | `repos/:id/log`、`repos/:id/log/stream` | GET | 提交历史分页快照 / SSE 增量流（查询串 `all` 支持全分支，分支过滤的数据前提） | LogPage（快照+流 merge 去重） | ✅ |
 | diff | `repos/:id/diff`、`diff/three-way` | GET ×2 | 单文件两侧全文（staged/from/to）/ 三版本三侧全文 | DiffPage、CommittedChangesPanel | ✅ |
 | diff | `repos/:id/diff/branch-working` | GET | 分支 vs 当前工作树差异清单（`git diff <ref> --name-status`，含未提交变更，R/C 带 renameFrom；无效分支 → INVALID_REF） | BranchPanel「与工作树差异」 | ✅ |
 | diff | `repos/:id/diff/stream` | GET | 大 diff SSE 分块流 | DiffStreamView 渐进渲染（全文未就绪期间呈现当前进度） | ✅ |
@@ -168,7 +168,7 @@
 - **zod schema（71 个）**：覆盖全部入参校验（body/query/路径参数），域分布：repo（open/init/clone）/log/diff（含 three-way）/settings/config、staging/commit（含 commit/push 组合）、branch/checkout、reset、merge/conflict、stash（含 unstash-as/index）、changelist、account、remote/fetch/pull/push/update、rebase/pick/tag、blame/history/browse、committed/search、patch/shelf/console/ignore（含 patch import-shelf name）、github（注释/审查/合并/**行级评论**）、gitlab（评论/讨论/审查/合并/创建）、worktree/submodule、gpg——全部被两端路由使用，无闲置。
 - **SSE 事件（6 种在用）**：`log.line`、`diff.chunk`、`repo.state-changed`、`operation.state-changed`（events 首帧双事件）、`refs.changed`（fetch/pull/push 后引用移动，首帧全量基线）、`stream.error`（流内错误帧）。`operation.progress` 不再新增冗余事件类型——进度由 `operation.state-changed` 携带 step/total 承载（Java `GitRebaseProgress` 逐帧解析在 Web 的等效为轮询态，见 §7.6）。
 - **错误码（12 个）**：实际产生 9 个——`REPO_NOT_FOUND`、`NOT_A_GIT_REPO`、`INVALID_QUERY`、`GIT_ERROR`、`INVALID_REF`、`OPERATION_IN_PROGRESS`、`AUTH_FAILED`（远程 401 → 认证重试回路）、`RATE_LIMITED`（GitHub 限流）、`HOOK_FAILED`（hook 拒绝 → 422）；预留 3 个——`CONFLICT`（冲突语义由业务三态承载，409 仅供资源类冲突）、`STALE_LOCK`、`CANCELLED`。映射表 `httpStatusFor` 两端共用；两端 `handleApiError` 对空/非法 JSON body 统一 SyntaxError → 400 INVALID_QUERY（web-next 原折 500，收尾对齐 koa bodyparser 口径）。
-- **领域类型（98 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
+- **领域类型（99 项）**：贯穿 api → 路由 → client hooks → ui props 全链路。
 
 ### 3.3 服务层与使用状态
 
@@ -198,7 +198,7 @@
 | 移除动作 + Popconfirm | ✅ | `DELETE /api/repos/:id`（幂等）；同清 `recentRepoIds` 与该仓库变更列表簿记 |
 | 克隆对话框（URL + Directory） | ✅ | `POST /api/repos/clone` + RepoPage 克隆 Modal（对齐 `VcsCloneDialog` 最小字段集） |
 | 初始化仓库入口 | ✅ | `POST /api/repos/init` + RepoPage 初始化 Modal |
-| 列表项分支后缀/图标/失效标记 | ❌ | 装饰性后置（保留，不计功能缺口，见 §7.2 #8） |
+| 列表项分支后缀/图标/失效标记 | ✅ | 契约 `RecentRepoInfo extends RepoInfo { branch; valid; colorIndex }`——三者**都不写进 `repos` 持久化记录**，每次 `GET /api/repos` 现算（陈旧分支名因此不可能出现）；core `readHeadBranch` 直读 `.git/HEAD`（**0 次 git spawn**；`ref: refs/heads/x` → 分支名，**unborn HEAD 照常返回分支名**，detached 哈希 / 读失败 / reftable stub → null）；`valid` 只看目录是否存在（不判是否仍是 git 仓库）；头像 = 首字母 + `ProjectIconPalette.gradients` 九组渐变的**明暗两支**（失效去饱和），色号按 Java `ProjectWindowCustomizerService` 口径簿记在 `AppConfig.avatarColors{index,lastIndex}`（`((lastIndex ?? 随机) + 1) % 9`、有效区间 `[0,9)`、**仅在真正分配时写盘**）；显示名 = `名称` + **两个空格** + `[分支]`；失效项降不透明度 + 气泡带 `(unavailable)`，点它**只弹确认框不打开**（按钮「关闭 / 从最近列表移除」） |
 
 ### 4.2 LogPage ✅
 
@@ -228,7 +228,7 @@
 | 分页（limit ≤500 / skip 游标） | ✅ | 按需加载：滚到列表底部（或已加载内容填不满视口）自动追加下一页，页大小 50→100→200→400→500 阶梯、skip 逐页累加，直到服务端 `hasMore=false`（= 仓库第一条进列表，按钮转「已到最早的提交」）；「加载更多」保留为手动入口。过滤或翻页时切快照模式（流仅默认视图第一页接入，Ruling 6 同查询约束） |
 | 过滤（author / path） | ✅ | 「文本即滤」双输入（作者/路径，Enter/失焦提交，去首尾空白；清空即恢复）；与服务端 `--author`/`-- path` 过滤一致 |
 | 行右键菜单形态 | ✅ | 行右键菜单（对齐 Java `Vcs.Log.ContextMenu` 组）：检出（游离 HEAD）/ 从此处新建分支（创建后检出）/ 从此处新建标签（附注可选）/ 在浏览器中打开（GitHub/GitLab 提交页链接）+ 摘樱桃·还原·Reset·浏览快照复用面板按钮 + Push up to Commit（#17）+ Fixup/Squash Commit（auto-squash，§4.9）+ 单提交编辑直通 Reword/Drop/Squash/Fixup（`POST /commit-edit`，§4.9——reword 行右键 Modal 收集新信息） |
-| 分支折叠 / PermanentGraph 高级视图 | ⏸ 可选 | 2026-09-08 重新裁定：由「明确不做」改为可选任务——重裁定理由、前置依赖与触发条件见 §7.9（过滤 UI 前置已落地，仅剩 PermanentGraph 类缓存结构） |
+| 分支折叠 / PermanentGraph 高级视图 | ✅ | 新增 `graph-layout/{collapse,filter-graph,graph-view}.ts` 三个纯函数模块（移植 Java `LinearFragmentGenerator`/`CollapsedActionManager`/`GraphUtil.getReachableMatchingNodes`/`DottedFilterEdgesGenerator`）；过滤行「折叠线性分支 / 展开线性分支」两按钮 + 「分支过滤」弹窗（本地/远程分组 + 清空）；图元命中折叠/展开（点圆点或实线边折叠该链、点折叠虚线边展开，**命中图元不选中该行**）、悬停圆点高亮整链；**过滤激活时两按钮整组不渲染**（对齐 `VisibleGraphImpl.isActionSupported` → `setVisible(false)`，**不是禁用**）且折叠态清空；数据前提 `logQuerySchema.all`（`git log --all`）。**Ruling F1**：分支过滤 = 把未被选中分支可达的提交从视图隐藏，剩余图连通、**无需虚线**；`dottedFilterEdges` 已忠实移植并单测，但在本仓当前可见性模型下属**不可达分支**（未来接入非祖先封闭的过滤即生效，见 §7.9） |
 | 新标签页打开 log、为命令过滤的 log | ➖ | `Git.Log.Show.Command` 为 internal 动作（backend.xml:374-377），非用户可达入口，Web 无对应概念；用户面过滤由日志页过滤行等效承载（§5.3.2 #39） |
 
 ### 4.3 DiffPage ✅
@@ -822,12 +822,12 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 
 原任务清单（2026-09-08 复刻缺口与开发任务清单，已并入本报告并删除）所列缺口已全部闭环，本报告自此为唯一终态口径（完成记录并入 §七）。
 
-1. **页面**：31/31 全覆盖（29 ✅ + 2 🟡 等效定案形态）；功能域 36/36（browse 落地见 §4.31/§7.8），可选 2 项明确不做（§1.3 决策清单）；页面功能点缺口 0（§7.3），可选任务仅分支折叠 1 项（§7.9）。
+1. **页面**：31/31 全覆盖（29 ✅ + 2 🟡 等效定案形态）；功能域 36/36（browse 落地见 §4.31/§7.8），可选 2 项明确不做（§1.3 决策清单）；页面功能点缺口 0（§7.3），原可选任务分支折叠已落地（§7.9）。
 2. **接口**：103 路径 / 118 方法两端完全对称、全部有消费方、无死接口；未挂端点 0（`initRepo`/`cloneRepo` 已挂 `/repos/init`、`/repos/clone`，§7.2）；半使用 0（diff/stream 分块渲染、staging/hunks 行内选择均已接 UI，§7.1）。
-3. **契约**：zod schema 71、领域类型 97、SSE 事件 6 种在用（`operation.progress` 以 `operation.state-changed` 携带 step/total 承载，定档）；错误码 9 实际产生 / 3 预留（CONFLICT 三态承载定档、STALE_LOCK/CANCELLED 保留待底层路径消费）；两端 JSON body 非法 → 400 口径统一（§7.6）。
+3. **契约**：zod schema 71、领域类型 99、SSE 事件 6 种在用（`operation.progress` 以 `operation.state-changed` 携带 step/total 承载，定档）；错误码 9 实际产生 / 3 预留（CONFLICT 三态承载定档、STALE_LOCK/CANCELLED 保留待底层路径消费）；两端 JSON body 非法 → 400 口径统一（§7.6）。
 4. **导航**：106 条边终态 93 ✅（含等效边）+ 1 🟡（#20 形态）+ 8 ➖ + 4 ❌（明确不做）——❌ 可做缺口 0（§7.4）。
 5. **工程与专项**：工程排期项 11 项全部完成（§7.5）；专项裁定 2 项完成——PR/MR 行级 diff 视图（§7.7，边 #98 转 ✅）、browse 历史快照浏览（§7.8）。
-6. **维持决策**：明确不做清单见 §1.3（新需求出现时可重新决议）；可选任务分支折叠触发条件见 §7.9。
+6. **维持决策**：明确不做清单见 §1.3（新需求出现时可重新决议）；原可选任务分支折叠的完成记录见 §7.9。
 
 ---
 
@@ -840,7 +840,7 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 - **#1 diff/stream 分块渲染接入 Monaco**：`useDiffStream` 扩 staged/from/to 同参（流与全文同查询口径，Ruling 6）；新建 ui `base/monaco-text-view.tsx` + `composite/diff-stream-view.tsx`（language `diff` 只读渐进累积分块文本，connected/error 态呈现）；两端 DiffPage 容器：全文（FileVersions）未就绪且流已有文本 → DiffStreamView，全文到达切换标准视图（终态见 §4.3）。
 - **#2 hunk 级暂存 UI**：contracts 共享切片 `splitPatchHunks`/`patchHunkHeading`（api 服务端 hunk 索引重组与 ui 行内选择同源切片，索引编号天然对齐）；StatusPage 补丁预览按 hunk 渲染（Collapse 每 hunk：勾选 + 序号 + `@@` 标题 + 折叠正文），`useHunkStaging` 回写 status 缓存 + 失效重取 patch（终态见 §4.4）。
 
-### 7.2 P1：repo 域收尾（6 项）——✅ 完成（#8 装饰性后置保留）
+### 7.2 P1：repo 域收尾（6 项）——✅ 完成
 
 | # | 任务 | 落点 |
 |---|------|------|
@@ -849,7 +849,7 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 | 5 | 路径 `~/` 相对化接线 | `GET /api/app/home-dir` + `useAppHomeDir`；两端容器注入 `homeDir` |
 | 6 | 最近列表上限对齐 | 服务端 `RECENT_LIMIT=50`（原 20 为不一致），与组件 `MAX_RECENT=50` 同口径 |
 | 7 | 最近列表移除动作 | `removeRepo`（幂等；同清该仓库 changelists 簿记）+ `DELETE /api/repos/:id` + `useRemoveRepo` |
-| 8 | 列表项分支后缀/图标/失效标记 | ❌ 装饰性后置（保留，不计功能缺口） |
+| 8 | 列表项分支后缀/图标/失效标记 | ✅ 已落地（见 §4.1）：契约 `RecentRepoInfo`（`branch`/`valid`/`colorIndex` 现算、不落盘）+ core `readHeadBranch` 直读 `.git/HEAD`（0 spawn；unborn 返回分支名，detached/读失败/reftable stub → null）+ api `listRecentRepos` 派生与 `resolveAvatarColorIndex` 色号簿记 + ui 首字母渐变头像/分支后缀/失效确认框 |
 
 ### 7.3 P2：各域功能点补齐（48 项）——✅ 全部清零（2026-09-21 终核）
 
@@ -893,14 +893,22 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 - **裁定依据**：Java `GitBrowseRepoAtRevisionAction` = 日志右键在指定提交上打开平台 `RepositoryBrowser`——以该提交为根的只读文件树浏览（展开目录、打开文件在该版本的内容；虚拟文件 + commit 上下文，不触碰工作区）。Web 复刻成本低-中：核心原语基本齐备（`readFileAtRev` 已被 DiffPage 使用），文件树组件与 CommittedChangesPanel 目录树共享；补全后功能域 36/36。
 - **落地 6 项**：① core `listTreeAtRevision`（`git ls-tree -r -z` 解析 mode/type/hash/path）；② `api/browse.ts` + `GET /browse?rev=`（`verifyCommitish` 预检 → `INVALID_REF`；内容路径越界 → `INVALID_QUERY`；版本内不存在 → `INVALID_REF`；含 NUL → binary 标记）；③ `composite/BrowsePanel` + 路由 `/repos/:id/browse?rev=`（`base/file-tree.tsx` + `domain/directory-tree.ts` 纯函数，与 CommittedChangesPanel 共用；两端容器接线）；④ 文件内容只读查看（复用 `readFileAtRev`，`GET /browse/content?rev=&file=`）；⑤ 入口与导航边（详情面板「浏览快照」按钮，边 #22 转 ✅）；⑥ 降级边界（二进制提示、子模块/符号链接条目不深入、空版本空态、无效版本显式报错）。终态见 §4.31。
 
-### 7.9 可选任务（低价值后置，1 项）：分支折叠（LogPage）
+### 7.9 分支折叠（LogPage）：任务（原可选，2026-09-13 立项）——✅ 完成
 
 - **2026-09-08 重新裁定**：由「明确不做」改为可选任务。
-- **原裁定依据**（组装 spec §3.1:88、A.2:283-284、§1.3:32）：① graph-layout 移植为最小必需集，`PermanentGraph`（提交图缓存）属「缓存与高级视图」层，不在首跑范围；② 频率证据——折叠家族高频入口仅「文本即滤 + 分支过滤弹窗」，分支折叠无高频使用证据；③ 折叠/虚线过滤边依赖 PermanentGraph 类缓存结构。
+- **原裁定依据**（组装 spec §3.1:88、A.2:283-284、§1.3:32，历史原文保留）：① graph-layout 移植为最小必需集，`PermanentGraph`（提交图缓存）属「缓存与高级视图」层，不在首跑范围；② 频率证据——折叠家族高频入口仅「文本即滤 + 分支过滤弹窗」，分支折叠无高频使用证据；③ 折叠/虚线过滤边依赖 PermanentGraph 类缓存结构。
+  - **口径校正（2026-09-13 完成时回填）**：③ 把折叠与虚线过滤边并列为同一条依赖路径，与落地实测不符——折叠只需「片段识别 + 行号重映射 + 折叠态存储」，本仓以纯函数 + `CollapsedFragment`（端点提交 hash 对）承载，**未引入 `PermanentGraph` 缓存结构**；虚线过滤边则属**文本/结构/revision 过滤与 Hide Commits** 路径，分支过滤根本不产生（Ruling F1，见下）。原「缓存结构」前置由此消解。
 - **重新裁定理由**：折叠是独立可评估的可视化能力，不应与 PermanentGraph 缓存机制永久绑定定性；待过滤 UI 落地、大仓库图密度成为实际问题后值得重新评估。
-- **前置依赖**：① LogPage 过滤 UI——已落地（§7.3）；② PermanentGraph 类缓存结构或自研等价物（折叠状态存储）——未动。
-- **工作量**：中-大（缓存结构移植 + 折叠交互 + 虚线过滤边渲染），单独立项时再估。
-- **触发条件**：大仓库折叠诉求出现时启动评估（过滤 UI 前置已落地，仅剩缓存结构项）。
+- **原前置依赖**：① LogPage 过滤 UI——已落地（§7.3）；② PermanentGraph 类缓存结构或自研等价物（折叠状态存储）——**以自研等价物落地**：折叠态是 `CollapsedFragment[]`（端点提交 hash 对，抗行号偏移），页面持有、图受控消费。
+- **原工作量估算**：中-大（缓存结构移植 + 折叠交互 + 虚线过滤边渲染）——实做为**中**：缓存结构一项未做；虚线过滤边只做忠实移植（分支过滤下按 F1 不出现）；工作量主要落在算法移植与图元命中。
+
+- **完成记录（2026-09-13 立项并完成）**：
+  - **算法清单与 Java 出处**：`graph-layout/collapse.ts` ← `LinearFragmentGenerator.getLongFragment`/`getRelativeFragment` + `CollapsedActionManager.COLLAPSE_ALL`（过滤行「折叠线性分支」= collapse all）；`graph-layout/filter-graph.ts` ← `utils/GraphUtil.getReachableMatchingNodes`（`branchAnchors`/`reachableRows`）+ `collapsing/DottedFilterEdgesGenerator.update()`（`dottedFilterEdges`）；`graph-layout/graph-view.ts` 的 `applyGraphView` 是渲染前唯一变换点——算可见性 → 删隐藏行并把边与端点行号**重映射**到可见序（等价 `CollapsedGraph.CompiledGraph` 中 `compiledNodeIndex` 返回 -1 时丢弃该边）→ 注入虚线边（带 `kind` 供交互区分）。交互层：`base/graph-canvas.tsx` 抛图元事件（圆点 / 透明命中带）、`domain/commit-graph.tsx` 命中语义（点圆点或实线边折叠该链、点折叠虚线边展开、悬停圆点高亮整链；**命中图元不选中该行**，对齐 `GraphCommitCellController.shouldSelectCell`）、`composite/log-page.tsx` 持有折叠态与两按钮。
+  - **折叠与过滤不叠加**（对齐 Java `FilteredController` 下折叠动作不可用）：过滤激活时 `applyGraphView` 忽略折叠、UI 两按钮**整组不渲染**（`VisibleGraphImpl.isActionSupported` 对 BUTTON_COLLAPSE/EXPAND 返回 false → `setVisible(false)`，不是置灰）、同时清空既有折叠态（对齐切换过滤即重建 controller）。
+  - **`--all` 数据前提**：`logQuerySchema.all`（查询串按枚举 + transform 解析，避开 `z.coerce.boolean()` 把 `'false'` 当 true）→ core `StreamLogOptions.all`（`git log --all`）→ api 透传 → client `useLogPages` 的 `all` 进 SWR key（切换过滤自动重取第一页）；分支过滤激活时同时关掉 SSE 流式（否则「仅 HEAD」的流式提交会并进全分支页窗口）。过滤是**从已加载数据里隐藏**而非换查询：实测过滤 `feature` 后 6 行 = `git log --oneline feature`，而 `all=true` 数据侧 12 条 = `git log --all --oneline`；`hasMore` 为真时给「部分分支的提交尚未加载，将继续加载」的降级提示（见 `docs/e2e-verification.md` §5.28）。
+  - **Ruling F1（控制方裁定）：分支过滤不产生虚线过滤边。** 可见集沿父边可达、**对祖先封闭**，故 `DottedFilterEdgesGenerator` 恒无输出（T8 冒烟实测过滤态 `svg [stroke-dasharray]` = 0），剩余图连通、无需虚线——这是忠实于 Java 的行为（`BranchFilterController` 只做 `CollapsedGraph.newInstance(..., visibility)`，**不调**该生成器），不是缺陷。该生成器的 Java 调用方是**文本/结构/revision 过滤**（`FilteredController.create`，那才是稀疏、非祖先封闭的集合）、`FirstParentController.create` 与 `GraphModificationUtil.hideCommits`。本仓保留 `dottedFilterEdges` 的忠实移植与单测，但在当前可见性模型下属**不可达分支**（未来接入非祖先封闭的过滤即生效）。故本节出现的「虚线」只能理解成**折叠**产生的那条（点它即展开该链），不要理解成分支过滤的连线。
+  - **降级与边界（有据的简化）**：① 片段定义为**极大线性直链**——Java `getFragment` 在 grayNodes 仍有 ≥2 候选时继续深入寻找汇合点（用于跨分叉长片段高亮），本仓不产生跨分叉片段（点上去无动作），用户可见折叠能力不受影响；② `DOTTED_ARROW_UP/DOWN` 越界箭头边在本仓恒不触发（每次均为全范围更新，等价 Java `update(graph, 0, nodesCount - 1)`），实现为显式 no-op；③ 链长 < 3 行不产生片段（无中间节点可隐藏）；④「折叠线性分支」= `COLLAPSE_ALL` 一次收起全部可折叠链，无逐链管理 UI；⑤ 折叠是**纯视图态**：被折叠的提交仍在仓库（实测折叠前后 `rev-list --count HEAD` 不变）。
+  - **同轮并行的另一项**（RepoPage 列表项分支后缀/图标/失效标记，§7.2 #8）不在本节范围：其降级口径为 `readHeadBranch` 对 reftable 后端仓库的 HEAD stub 返回 null（只少一个分支后缀，不影响列表），落点见 §4.1。
 
 ---
 
