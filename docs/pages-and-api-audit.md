@@ -220,7 +220,7 @@
 | 顶栏状态条：分支名（detached 提示）、incoming 蓝/outgoing 绿徽标 | ✅ | 对齐 `GitInOutState` 2025 版形态 |
 | 状态变更自动刷新（事件驱动） | ✅ | `repo.state-changed` → 回写缓存 + 重验证日志 + 重订阅流 |
 | `refs.changed` 订阅（分支/标签/贮藏建删移动） | ✅ | 重验证日志快照（ref chips/图可达性）+ 全局分支列表键 |
-| `?select=<hash>` 深链（定位选中提交） | ✅ | BlameView/HistoryPanel/SearchPanel 结果点击均经此回跳 |
+| `?select=<hash>` 深链（定位选中提交） | ✅ | BlameView/HistoryPanel/SearchPanel 结果点击均经此回跳；**选中态以 URL 为唯一真源**：页内点行即把哈希写回地址栏（replace，不新增历史步），刷新/前进后退/复制链接都回到同一选中（`url-select.ts`，两端同构）；目标不在已加载窗口内时有界补页（≤6 页 ≈1750 条）把它拉进列表，到上限即放弃 |
 | 顶栏入口：首页链接 + 撤销最近提交 / 变更（状态页）/ 分支 / 合并 / 贮藏 / 设置 / 更多 7 个按钮 | ✅ | 等价 Java 工具窗口 tab 组 + Git 主菜单入口面；状态页入口按钮文案为「变更」 |
 | 「更多」菜单：16~18 项入口聚合 | ✅ | 溯源/历史/已提交/搜索/变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略/工作树/子模块 16 项恒渲染；「GitHub 面板」「GitLab 面板」各需检测到对应托管远程（仅其一 17 项、两者皆有 18 项） |
 | OperationStatus 操作条（kind 展示 + 中止） | ✅ | `GET /operation` + `operation.state-changed` + `POST /operation/abort` |

@@ -3,6 +3,8 @@
  * 注入 ui LogPage（与 web-next 容器同构；repoId 取 useParams 而非 Next params）。
  * 流式语义（Ruling 6）：stream 是同一查询的渐进式渲染而非快照后的新增，
  * 故 commits 经 mergeLogCommits 合成——流连接中以流为主列表，REST 快照作首屏与 hash 去重兜底。
+ * 选中提交以 URL（?select=<hash>）为唯一真源（见 src/url-select.ts）：行点击 replace 写 URL，
+ * 刷新/深链/前进后退都回到同一选中；目标不在已加载窗口内时有界补页（SELECT_RESTORE_MAX_PAGES）。
  * 远程操作区：顶栏「更多」入口（变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略）+ pull/push/update 对话框（页面化 Modal 不如对话框内联——Java 版即为对话框）。
  * 变基区：RebaseDialog 双模式状态机——简单模式 → useRebase；交互模式 → base 本地状态驱动
  * useRebaseTodo 重取（onBaseChange）+ useInteractiveRebase 提交；结果 success → 提示关闭（events 推送刷新日志）；
@@ -62,17 +64,24 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { mergeLogCommits } from '../log-merge';
+import { readParam, readSelect, withSelectParam } from '../url-select';
+
+/**
+ * 恢复 URL 选中项的自动补页上限：页大小阶梯 50→100→200→400→500（见 useLogPages），
+ * 6 页 ≈ 最早 1750 条提交。到上限即放弃（陈旧 hash 不把整个历史翻到底），代价是该提交仍不可见。
+ */
+const SELECT_RESTORE_MAX_PAGES = 6;
 
 export function RepoPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
-  // 深链选中：blame/history/search 页的提交行跳回本页 ?select=<hash>，初始化选中提交（加载窗口外的提交
-  // 无法命中列表，详情面板不渲染——已知限制，见报告）
-  const [searchParams] = useSearchParams();
-  const select = searchParams.get('select');
+  // 日志页 URL 参数（选中提交 / 分支对比）：选中态的唯一真源就是这里的 ?select=<hash>——行点击写 URL、
+  // 刷新与前进后退从 URL 读回（原「useState 只在首帧初始化」的写法刷新即丢选中，见 src/url-select.ts）。
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedHash = readSelect(searchParams);
   // 分支对比视图（?compare=<branch>，GitCompareWithBranchAction 语义）：双 range 查询
   // current..branch（分支独有）与 branch..current（当前独有）；status readiness 由下方守卫保证。
-  const compareBranch = searchParams.get('compare');
+  const compareBranch = readParam(searchParams, 'compare');
   // 过滤/按需分页（P2 收取）：author/path 过滤（文本即滤，对齐 Java）；分页走 useLogPages 的累积页
   // （页大小 50→100→200→400→500 阶梯，skip 逐页累加），滚到列表底部自动追加下一页，
   // 直到服务端回报 hasMore=false —— 也就是仓库第一条提交进了列表（此前写死 500 上限，超过 500 条
@@ -162,8 +171,6 @@ export function RepoPage(): React.ReactNode {
     },
   });
   const { data: repos } = useRecentRepos();
-  // ?select= 深链初始化：首次挂载即选中目标提交（后续选中仍由 onSelectCommit 经本地 state 驱动）
-  const [selectedHash, setSelectedHash] = useState<string | null>(select ?? null);
   // stream.error 一次性呈现（Task 7 终审 deferred 接通）：error 置位即断开订阅，effect 仅触发一次
   useEffect(() => {
     if (streamError) void message.error(streamError);
@@ -176,6 +183,36 @@ export function RepoPage(): React.ReactNode {
     [pageCommits, streamCommits, streamConnected, streamEnabled],
   );
   const selectedCommit: CommitInfo | null = commits.find((c) => c.hash === selectedHash) ?? null;
+  // 选中提交（行点击与详情面板内的提交链接）写进 URL：replace 而非 push——选中不产生新的浏览步骤，
+  // 连点几十行不该把浏览器历史塞满；prev 展开保留 ?compare= 等其它参数（withSelectParam 不改动入参）。
+  const onSelectCommit = (hash: string): void => {
+    setSearchParams((prev) => withSelectParam(prev, hash), { replace: true, preventScrollReset: true });
+  };
+  // 恢复 URL 选中项（刷新/深链场景）：目标提交可能不在已加载窗口内（首屏只拉 50 条）——有界补页把它拉进来。
+  // 判据用 REST 快照 pageCommits 而非合并后的 commits：补页只改变快照，流式合并出现的瞬时子集
+  // 不该触发补页（冒烟 D-38：详情栏首帧后短暂卸载又回来）。命中快照 / 翻到上限 / 无更早提交即解除。
+  const selectInPages = selectedHash !== null && pageCommits.some((c) => c.hash === selectedHash);
+  // 待恢复目标：URL 选中值变化（含首帧）时重新武装，命中或放弃即解除（避免反复补页）
+  const restoreRef = useRef<{ pages: number } | null>(null);
+  useEffect(() => {
+    restoreRef.current = selectedHash === null ? null : { pages: 0 };
+  }, [selectedHash]);
+  useEffect(() => {
+    const pending = restoreRef.current;
+    if (pending === null) return;
+    if (selectInPages) {
+      restoreRef.current = null; // 已在窗口内：无需补页
+      return;
+    }
+    // 首屏还在拉 / 已到最早一条 / 追加页在飞：等下一帧再判（loadMore 本身也会挡同页连发）
+    if (logInitialLoading === true || !logHasMore || loadingMoreLog) return;
+    if (pending.pages >= SELECT_RESTORE_MAX_PAGES) {
+      restoreRef.current = null; // 到上限：放弃补页，保持「URL 有 hash、列表无该行」的现状
+      return;
+    }
+    pending.pages += 1;
+    loadMoreLog();
+  }, [selectInPages, selectedHash, logInitialLoading, logHasMore, loadingMoreLog, loadMoreLog]);
   // 「Reset 到此处」：从 commits 找目标提交生成展示 label（短哈希 + 主题），打开 ResetDialog
   const onResetHere = (hash: string): void => {
     const commit = commits.find((c) => c.hash === hash);
@@ -403,7 +440,6 @@ export function RepoPage(): React.ReactNode {
   // 容器态跨仓库复位（§2.5 createOpen 硬化）：仓库切换时清空选择/对话框/认证重试等容器持有的状态——
   // ui 层内嵌 Modal 已由 <LogPage key={repoId}> 重挂载复位，此处兜底容器自身状态（选中提交、push-up-to、打开对话框等）
   useEffect(() => {
-    setSelectedHash(select ?? null);
     setPushUpToHash(null);
     setOpenDialog(null);
     setRebaseOpen(false);
@@ -442,7 +478,7 @@ export function RepoPage(): React.ReactNode {
         repoName={repos?.find((r) => r.id === repoId)?.name ?? repoId}
         status={status}
         commits={commits}
-        onSelectCommit={setSelectedHash}
+        onSelectCommit={onSelectCommit}
         selectedCommit={selectedCommit}
         operation={operation}
         // 中止失败以服务端中文 message 提示（成功响应已由 useAbortOperation 回写缓存）
