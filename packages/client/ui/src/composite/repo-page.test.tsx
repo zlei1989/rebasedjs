@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RecentRepoInfo, RepoInfo } from '@rebased/contracts';
 import { RepoPage } from './repo-page';
 
@@ -405,5 +405,49 @@ describe('RepoPage 列表项分支后缀 / 头像 / 失效标记', () => {
     fireEvent.click(screen.getByTestId('repo-item'));
     expect(await screen.findByText('仓库路径不可用')).toBeInTheDocument();
     expect(screen.queryByTestId('repo-invalid-remove')).not.toBeInTheDocument();
+  });
+});
+
+describe('RepoPage 头像明暗跟随文档根 data-theme', () => {
+  // data-theme 是文档根上的全局态（jsdom 跨用例共享，见 base/app-theme.test.tsx 同款清理）：
+  // 本组用例改写它，进出各清一次，避免污染同文件其它用例
+  beforeEach(() => {
+    delete document.documentElement.dataset.theme;
+  });
+  afterEach(() => {
+    delete document.documentElement.dataset.theme;
+  });
+
+  it('data-theme=light：头像底色取 Java JBColor 明亮支（组件路径覆盖 light 分支）', () => {
+    document.documentElement.dataset.theme = 'light';
+    render(
+      <RepoPage repos={[makeItem({ id: 'l', name: 'lima', colorIndex: 0 })]} onOpen={vi.fn()} homeDir={HOME} />,
+    );
+    // 第 0 组明亮支 = #DB3D3C → #FF8E42（暗色支为 #CE443C → #E77E41，此处必须取前者）
+    expect(screen.getByTestId('repo-avatar')).toHaveStyle({
+      background: 'linear-gradient(135deg, #DB3D3C, #FF8E42)',
+    });
+  });
+
+  it('改 data-theme 后头像自动换到另一支渐变（订阅属性变化，不依赖 React 重渲染）', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    render(
+      <RepoPage repos={[makeItem({ id: 'm', name: 'mike', colorIndex: 0 })]} onOpen={vi.fn()} homeDir={HOME} />,
+    );
+    expect(screen.getByTestId('repo-avatar')).toHaveStyle({
+      background: 'linear-gradient(135deg, #CE443C, #E77E41)',
+    });
+
+    // 模拟 app-theme 的 effect 写入（提交之后改属性，不触发任何 React 重渲染）：
+    // 头像须自行订阅文档根属性变化，否则会一直停留在旧明暗支
+    await act(async () => {
+      document.documentElement.dataset.theme = 'light';
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('repo-avatar')).toHaveStyle({
+        background: 'linear-gradient(135deg, #DB3D3C, #FF8E42)',
+      }),
+    );
   });
 });
