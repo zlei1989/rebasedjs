@@ -41,7 +41,11 @@ describe('GraphCanvas', () => {
   it('只画传进来的线段与圆点（每行一块画布，不再整图重画）', () => {
     const geometry = buildRowGeometry(rows, ROW, LANE);
     const { container } = render(
-      <GraphCanvas segments={geometry[0]!.segments} nodes={[nodeOf(0)]} rowHeight={ROW} laneWidth={LANE} />,
+      // 外面套一层 <svg>：画布只画 SVG 元素，直接挂在 HTML 根下会让 React 按 HTML 命名空间创建它们并报
+      // 「unrecognized tag」警告，噪声盖住真实失败信息（同下方两例）
+      <svg>
+        <GraphCanvas segments={geometry[0]!.segments} nodes={[nodeOf(0)]} rowHeight={ROW} laneWidth={LANE} />
+      </svg>,
     );
     // 圆点只有本行那一个（旧实现每行都画全图的行数 × 圆点数）
     expect(container.querySelectorAll('circle')).toHaveLength(1);
@@ -52,12 +56,14 @@ describe('GraphCanvas', () => {
   it('圆点画在全局坐标的 lane/行中心上（x=(lane+0.5)*laneWidth，y=row*rowHeight+rowHeight/2）', () => {
     const geometry = buildRowGeometry(rows, ROW, LANE);
     const { container } = render(
-      <GraphCanvas
-        segments={geometry.flatMap((g) => g.segments)}
-        nodes={rows.map((_, i) => nodeOf(i))}
-        rowHeight={ROW}
-        laneWidth={LANE}
-      />,
+      <svg>
+        <GraphCanvas
+          segments={geometry.flatMap((g) => g.segments)}
+          nodes={rows.map((_, i) => nodeOf(i))}
+          rowHeight={ROW}
+          laneWidth={LANE}
+        />
+      </svg>,
     );
     const circles = [...container.querySelectorAll('circle')];
     rows.forEach((row, i) => {

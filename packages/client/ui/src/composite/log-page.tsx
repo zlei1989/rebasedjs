@@ -418,7 +418,7 @@ export function LogPage({
     else if (key === 'worktrees') onOpenWorktrees?.();
     else if (key === 'submodules') onOpenSubmodules?.();
   };
-  // 分支过滤菜单项：本地/远程两组 + 「清空」。用 Dropdown 的 items 承载复选态（勾选用 label 前缀 ✔ 表达，
+  // 分支过滤菜单项：本地/远程两组 + 「全选」/「清空」。用 Dropdown 的 items 承载复选态（勾选用 label 前缀 ✔ 表达，
   // 因为 antd Menu 的选中态是单选语义，不适合多选；前缀是唯一不引入自绘控件的做法）
   const branchGroups = useMemo(() => {
     const local: string[] = [];
@@ -440,11 +440,18 @@ export function LogPage({
       items.push({ type: 'group', label: '远程分支', children: branchGroups.remote.map((n) => ({ key: `b:${n}`, label: mark(n) })) });
     }
     items.push({ type: 'divider' });
+    // 「全选」（设计 §3.6 动作：全选 / 清空）：把选中集置为全部可选项
+    items.push({ key: 'selectAll', label: <span data-testid="log-branch-select-all">全选</span> });
     items.push({ key: 'clear', label: <span data-testid="log-branch-clear">清空</span> });
     return items;
   }, [branchGroups, filterBranches]);
-  /** 分支菜单点击：`b:<name>` 取反选中项，「clear」清空；回调载荷是完整过滤对象（容器据此切 --all 查询） */
+  /** 分支菜单点击：`b:<name>` 取反选中项，「selectAll」全选，「clear」清空；回调载荷是完整过滤对象（容器据此切 --all 查询） */
   const onBranchFilterClick = (key: string): void => {
+    if (key === 'selectAll') {
+      // 全选 = 全部可选项（按 branchOptions 注入序；集合语义与顺序无关，仅保证确定）
+      onFiltersChange?.({ ...filters, branches: [...(branchOptions ?? [])] });
+      return;
+    }
     if (key === 'clear') {
       onFiltersChange?.({ ...filters, branches: [] });
       return;
@@ -724,14 +731,18 @@ export function LogPage({
                 </Button>
               </Tooltip>
               <Tooltip title="展开线性分支：恢复所有被折叠的提交与连线">
-                <Button
-                  size="small"
-                  data-testid="log-expand-all"
-                  disabled={!expandEnabled}
-                  onClick={() => setCollapsed([])}
-                >
-                  展开线性分支
-                </Button>
+                {/* 首次进页面该按钮恒禁用（无折叠），而禁用元素不派发 hover、Tooltip 永不显示：
+                    同「加载更多」做法，在 Tooltip 与 Button 之间包一层 span 承接悬停 */}
+                <span>
+                  <Button
+                    size="small"
+                    data-testid="log-expand-all"
+                    disabled={!expandEnabled}
+                    onClick={() => setCollapsed([])}
+                  >
+                    展开线性分支
+                  </Button>
+                </span>
               </Tooltip>
             </>
           ) : null}

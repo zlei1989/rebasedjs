@@ -135,6 +135,7 @@ export function GraphCanvas({
                 fill="none"
                 stroke={highlightColor}
                 strokeWidth={2}
+                style={{ pointerEvents: 'none' }}
               />
             ) : null}
             <circle

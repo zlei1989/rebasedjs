@@ -40,6 +40,21 @@ describe('applyGraphView', () => {
     expect(view.dottedEdges).toEqual([{ up: 0, down: 1 }]);
   });
 
+  it('非恒等行号重映射：只折中间一段（{a, c}）时存活边 c→d 指向新的行号', () => {
+    const view = applyGraphView(chain, [], [{ up: 'a', down: 'c' }]);
+    // 只隐藏 b：存活行 a/c/d 重映射为 0/1/2 —— c、d 的行号都比原值小，故这不是恒等变换
+    expect(view.rows.map((r) => r.commit.hash)).toEqual(['a', 'c', 'd']);
+    const cRow = view.rows[1]!;
+    expect(cRow.commit.hash).toBe('c');
+    // c→d 原本是 fromRow 2 / toRow 3，重映射后必须是 1 / 2（若漏了重映射就会留在 2/3）
+    expect(cRow.edges).toEqual([{ fromLane: 2, toLane: 0, fromRow: 1, toRow: 2 }]);
+    // toRow 指向的行确实还是 d（行号锚定可见序，而不是原 delegate 序）
+    expect(view.rows[cRow.edges[0]!.toRow]!.commit.hash).toBe('d');
+    // a 指向被隐藏的 b 的边被裁掉，代之以注入的 a→c 折叠虚线（端点车道取 delegate 车道 0 / 2）
+    expect(view.rows[0]!.edges).toEqual([{ fromLane: 0, toLane: 2, fromRow: 0, toRow: 1, type: 'D', kind: 'collapse' }]);
+    expect(view.dottedEdges).toEqual([{ up: 0, down: 1 }]);
+  });
+
   it('过滤：只保留选中分支可达的行，其余进 hidden（行号重映射）', () => {
     // x(0) 是 side 分支的独有提交；a(1)→b(2)→c(3) 是 main 链。选 main ⇒ 只隐藏 x(0)
     const twoBranch: LayoutRow[] = [

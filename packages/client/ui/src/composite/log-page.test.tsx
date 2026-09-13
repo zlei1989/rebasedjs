@@ -674,8 +674,7 @@ describe('LogPage 过滤/分页', () => {
     expect(screen.getByTestId('log-filter-author')).toHaveValue('Bob');
     fireEvent.change(screen.getByTestId('log-filter-author'), { target: { value: '' } });
     fireEvent.blur(screen.getByTestId('log-filter-author'));
-    // 载荷恒带 author/path 两个键：空串就是「清空该键」（容器按 f.author ?? '' 回写），
-    // 不能省略该键——省略会让容器把 filters 里的旧值再写回去
+    // 新实现恒带 author/path 两个键，故期望值随之显式含 author: ''（空串即「清空该键」，容器按 f.author ?? '' 处理）
     expect(onFiltersChange).toHaveBeenCalledWith({ author: '', path: 'lib/' });
   });
 
@@ -993,6 +992,17 @@ describe('分支过滤弹窗', () => {
     fireEvent.click(screen.getByTestId('log-branch-filter'));
     fireEvent.click(await screen.findByTestId('log-branch-clear'));
     expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ branches: [] }));
+  });
+
+  it('「全选」按钮把 branches 置为全部可选项（内容与顺序都锁定）', async () => {
+    const onFiltersChange = vi.fn();
+    render(
+      <LogPage repoName="alpha" status={status} commits={branchy} filters={{}} onFiltersChange={onFiltersChange} branchOptions={['main', 'origin/side']} />,
+    );
+    fireEvent.click(screen.getByTestId('log-branch-filter'));
+    fireEvent.click(await screen.findByTestId('log-branch-select-all'));
+    // 期望值写全量数组（不是长度）：顺序 = branchOptions 注入序，两个可选项一个不漏
+    expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ branches: ['main', 'origin/side'] }));
   });
 
   it('过滤激活且还有更早提交时给出「尚未加载」降级提示（设计 §7 风险 1）', () => {
