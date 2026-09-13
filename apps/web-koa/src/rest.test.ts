@@ -92,6 +92,40 @@ describe('web-koa REST 端点', () => {
     expect(await res.json()).toEqual([]);
   });
 
+  it('repos 端点：返回派生的 branch 与 valid（branch 取自 HEAD，路径存在 → valid:true）', async () => {
+    const { repoPath } = registerRepo();
+    const head = execFileSync('git', ['-C', repoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+
+    const res = await fetch(`${base}/api/repos`);
+
+    expect(res.status).toBe(200);
+    const list = (await res.json()) as Array<{ branch: string | null; valid: boolean; colorIndex: number }>;
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ branch: head, valid: true });
+    // 色号由服务端分配（配置未预置 avatarColors → 随机起号）：只断言落在色板范围内
+    expect(list[0].colorIndex).toBeGreaterThanOrEqual(0);
+    expect(list[0].colorIndex).toBeLessThan(9);
+  });
+
+  it('repos 端点：注册路径已不存在 → valid:false 且 branch:null', async () => {
+    const missing = join(tmpDir('rebased-web-koa-missing-'), 'no-such-repo');
+    writeFileSync(
+      join(process.env.REBASED_CONFIG_DIR as string, 'config.json'),
+      JSON.stringify({
+        repos: [{ id: 'gone', path: missing, name: 'gone', openedAt: new Date().toISOString() }],
+        settings: { logInEditor: true, recentRepoIds: ['gone'] },
+      }),
+    );
+
+    const res = await fetch(`${base}/api/repos`);
+
+    expect(res.status).toBe(200);
+    const list = (await res.json()) as Array<{ id: string; branch: string | null; valid: boolean; colorIndex: number }>;
+    expect(list).toEqual([expect.objectContaining({ id: 'gone', branch: null, valid: false })]);
+    expect(list[0].colorIndex).toBeGreaterThanOrEqual(0);
+    expect(list[0].colorIndex).toBeLessThan(9);
+  });
+
   it('init 端点：空目录 git init 后注册，返回 {repoId} 且列表可见', async () => {
     const dir = tmpDir('rebased-web-koa-init-');
     const res = await fetch(`${base}/api/repos/init`, {

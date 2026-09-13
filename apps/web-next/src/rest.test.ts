@@ -119,6 +119,40 @@ describe('web-next REST 路由', () => {
     expect(await res.json()).toEqual([]);
   });
 
+  it('repos 端点：返回派生的 branch 与 valid（branch 取自 HEAD，路径存在 → valid:true）', async () => {
+    registerRepo();
+    const head = execFileSync('git', ['-C', lastRepoPath, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+
+    const res = await getRepos();
+
+    expect(res.status).toBe(200);
+    const list = (await res.json()) as Array<{ branch: string | null; valid: boolean; colorIndex: number }>;
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ branch: head, valid: true });
+    // 色号由服务端分配（配置未预置 avatarColors → 随机起号）：只断言落在色板范围内
+    expect(list[0].colorIndex).toBeGreaterThanOrEqual(0);
+    expect(list[0].colorIndex).toBeLessThan(9);
+  });
+
+  it('repos 端点：注册路径已不存在 → valid:false 且 branch:null', async () => {
+    const missing = join(tmpDir('rebased-web-next-missing-'), 'no-such-repo');
+    writeFileSync(
+      join(process.env.REBASED_CONFIG_DIR as string, 'config.json'),
+      JSON.stringify({
+        repos: [{ id: 'gone', path: missing, name: 'gone', openedAt: new Date().toISOString() }],
+        settings: { logInEditor: true, recentRepoIds: ['gone'] },
+      }),
+    );
+
+    const res = await getRepos();
+
+    expect(res.status).toBe(200);
+    const list = (await res.json()) as Array<{ id: string; branch: string | null; valid: boolean; colorIndex: number }>;
+    expect(list).toEqual([expect.objectContaining({ id: 'gone', branch: null, valid: false })]);
+    expect(list[0].colorIndex).toBeGreaterThanOrEqual(0);
+    expect(list[0].colorIndex).toBeLessThan(9);
+  });
+
   it('open 端点：请求体缺 path 返回 400 INVALID_QUERY', async () => {
     const res = await postOpen(
       new Request('http://localhost/api/repos/open', {

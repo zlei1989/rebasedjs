@@ -39,10 +39,10 @@ async function writeSseStream(ctx: RouterContext, open: (signal: AbortSignal) =>
 
 const router = new Router();
 
-/** GET /api/repos —— 最近仓库列表 */
+/** GET /api/repos —— 最近仓库列表（含派生的 branch/valid/colorIndex） */
 router.get('/api/repos', async (ctx) => {
   try {
-    ctx.body = listRecentRepos();
+    ctx.body = await listRecentRepos();
   } catch (error) {
     handleApiError(error, ctx);
   }

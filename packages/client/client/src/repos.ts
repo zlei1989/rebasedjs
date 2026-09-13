@@ -1,12 +1,12 @@
 /** 仓库 hooks：最近列表 SWR + 打开/初始化/克隆/移除 mutation + 宿主主目录（不持业务逻辑，薄封装端点） */
 import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
-import type { CloneRepoBody, InitRepoBody, OpenRepoBody, RepoInfo, RepoStatus } from '@rebased/contracts';
+import type { CloneRepoBody, InitRepoBody, OpenRepoBody, RecentRepoInfo, RepoStatus } from '@rebased/contracts';
 import { delJson, getJson, postJson } from './http';
 
-/** 最近仓库列表：GET /api/repos */
+/** 最近仓库列表：GET /api/repos（每项含服务端派生的 branch/valid/colorIndex） */
 export function useRecentRepos() {
-  return useSWR<RepoInfo[]>('/api/repos', getJson);
+  return useSWR<RecentRepoInfo[]>('/api/repos', getJson);
 }
 
 /** 仓库工作区状态：GET /api/repos/:repoId/status */

@@ -29,6 +29,9 @@ export interface AppConfig {
   changelists?: Record<string, ChangelistBook>;
   /** 账户/令牌簿记：可选——旧配置文件无此字段，读取时按 undefined 处理 */
   auth?: { accounts: StoredAccount[] };
+  /** 头像配色簿记（对齐 Java ProjectWindowCustomizerService）：index 为 路径→色号（0..8，Java associatedIndex）；
+   *  lastIndex 为上次分配出去的号（Java LAST_CALCULATED_COLOR_INDEX_KEY）。可选——旧配置无此字段。 */
+  avatarColors?: { index: Record<string, number>; lastIndex?: number };
 }
 
 const DEFAULTS: AppConfig = {
