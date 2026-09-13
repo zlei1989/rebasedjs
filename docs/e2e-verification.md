@@ -1159,4 +1159,96 @@
 | `committed-changes-panel` | `committed-01…03.png`（提交列表分页 50→100 / 目录树 / 与 diff 页联动）；根 testid `committed-entry-N` / `committed-load-more` 实测在盘 |
 | 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `BrowsePanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复 |
 
+### 5.28 折叠 / 分支过滤 / 最近仓库项 冒烟（Task 8，2026-09-13）
+
+> **触发**：特性分支 `feat/log-collapse-recent-branch` 的 T1–T7 产物首次在真实服务里逐项走查——首页最近仓库项的「分支后缀 / 首字母头像 / 失效标记」、日志页「线性折叠」、日志页「分支过滤」。
+> **夹具**：先跑 `scripts/smoke-setup.ps1` 复位（脚本头部注释已核：只重建 `D:\zhanglei1120\Github` 下的 `rebased-smoke*` / `smoke-*` 目录；退出码 0，汇总 `main 8 commits / big 320 commits / shallow file: True`）。
+> **服务**：`pnpm dev` 后台作业起 web-next `:3081` + web-koa `:3082`；两者均可达（`GET http://localhost:3081/` → 200、`GET http://localhost:3082/api/repos` → 200）。
+> **口径**：本轮**只读验证**（未改 `packages/**`、`apps/**` 任何源码）；按 `Ruling F1`，分支过滤后看不到虚线过滤边是**预期行为**，不计缺陷；折叠产生的虚线边是另一回事（本轮取证必须出现，已出现）。
+> **视口**：块 1 的四张（`repo-page-15/16/17b/17.png`）为会话初始视口 **769×781**（`repo-page-16.png` 实测 770×782，差 1px）；其余九张在 `browser_resize(1440×900)` 之后拍摄，均为 **1440×900**。
+
+**① 范围清单（逐项）**
+
+*块 1：首页最近仓库列表项*
+
+| # | 范围项 | 结论 | 判据（浏览器 DOM / 画面） | 互证（CLI / API） |
+|---|--------|------|---------------------------|-------------------|
+| 1.1 | 显示名 = `名称` + **两个空格** + `[分支]` | ✅ | 11 行中 9 行带后缀，逐行 `textContent` 全部命中 `/^\S.*\S {2}\[[^\]]+\]$/`（例：`rebased-smoke  [master]`、`rebased-smoke-wt  [wt-branch]`）；两行失效项（init / clone）无后缀 | CLI 逐仓 `git -C <path> rev-parse --abbrev-ref HEAD`：smoke/big/conflict/shallow-r6/shallow/huge = `master`，wt = `wt-branch`，**8/8 与页面后缀一致**。`rebased-smoke-noident` 是 **unborn HEAD**（`rev-list --count --all` = 0），`rev-parse` 打印 `HEAD` 并报 `ambiguous argument`，页面取 `.git/HEAD` 文本得 `[master]`——等价 CLI 为 `git symbolic-ref --short HEAD` → `master` ✅ |
+| 1.2 | 首字母渐变头像（色号由服务端 `colorIndex` 下发、**明暗两套**） | ✅ | 逐行读 `[data-testid="repo-avatar"]`：首字母 = 名称前两词大写（`rebased-smoke-conflict` → `RC`、`rebased-smoke-wt` → `RW`）；底色 `background-image: linear-gradient(135deg, …)` | `GET /api/repos` 的 `colorIndex` 与底色**一一对应**：conflict=6 与 huge=6 同渐变 `rgb(143,69,147)→rgb(181,114,227)`、smoke=7 与 wt=7 同渐变 `rgb(200,64,185)→rgb(224,116,174)`；切「明亮」后同一 colorIndex 换另一支（smoke 变 `rgb(214,60,200)→rgb(245,130,185)`、big 由 `rgb(226,114,55)→rgb(232,168,62)` 变 `rgb(245,114,54)→rgb(252,186,63)`）⇒ 明暗两支取色成立 |
+| 1.3 | 失效项标记：降不透明度 + 警示图标 + tooltip 带 `(unavailable)` | ✅ | 把 `rebased-smoke-conflict` 目录改名后刷新：行 `opacity: 0.6`、头像转灰（`rgb(108,108,108)→rgb(170,170,170)`、`opacity 0.6`）、`[data-testid="repo-invalid"]`（`anticon anticon-warning`）出现；悬停该图标读出气泡 `D:\zhanglei1120\Github\rebased-smoke-conflict (unavailable)：该目录已不存在，可能已被移动或删除` | 改名瞬间 `GET /api/repos` 该条即变 `{"branch":null,"valid":false}`（派生字段现算，不落盘） |
+| 1.4 | 点失效项**只弹确认框不打开**（按钮「关闭」「从最近列表移除」） | ✅ | 点行后 URL 仍是 `http://localhost:3081/`（未跳 `/repos/:id`，`pathname === '/'`）；Modal 标题「仓库路径不可用」、正文 `…rebased-smoke-conflict (unavailable)` + 「该目录已不存在，可能已被移动或删除。」、footer 两枚按钮 `repo-invalid-remove`（从最近列表移除）/ `repo-invalid-close`（关 闭） | `GET /api/repos` 侧该仓仍 `valid:false`（未被误开）；点「关 闭」后 `.ant-modal-wrap` `display:none`、列表行数仍 11 |
+| 1.5 | 「从最近列表移除」只移列表、**不删盘** | ✅ | 对 `rebased-smoke-huge`（620 提交，非 `smoke-setup.ps1` 标准夹具）同法改名 → 点行 → 点「从最近列表移除」：该行消失（列表 11 → 10 行，`/api/repos` 11 → 10 条），Modal 自动关闭 | **在被改名的路径上**跑 `git log --oneline -1` = `fc74f21 chore: bulk commit 619`、`rev-list --count HEAD` = **620**（目录与历史毫发无损）⇒ 只动列表条目 |
+| 1.6 | 复位目录名后 `valid` 回到 `true` | ✅ | 两处临时改名均已改回原名（conflict、huge） | `GET /api/repos` → conflict `{"branch":"master","valid":true}`；`git -C … log --oneline -1` = `99b4bfe feat(master): 同区域改动…`；huge 复原后 620 提交仍在 |
+
+*块 2：日志页线性折叠（仓库 `rebased-smoke`，HEAD=master 8 提交）*
+
+| # | 范围项 | 结论 | 判据（浏览器 DOM / 画面） | 互证（CLI） |
+|---|--------|------|---------------------------|-------------|
+| 2.1 | 图列圆点有可点中的命中带 | ✅ | `polyline[data-testid="graph-edge-hit-4-5"]`：`stroke-width=6`、`stroke=transparent`、`pointer-events: stroke`，`getBoundingClientRect()` = `{x:19,y:191,w:0,h:12}`（竖直段，宽 0 高 12；该次实测在 769×781 视口，`browser_resize(1440×900)` 后同一命中带的 y 变为 161.1/173.1，语义不变）；圆点 `circle[data-testid="graph-node-b3912c6…"]` 中心 `(19,191)`、`r=4`、`fill=#81a663`。`document.elementFromPoint(19,191)` 命中的正是命中带（它在可视线之上） | — |
+| 2.2 | 点**提交圆点** → 该线性链折成一条虚线 | ✅ | 点第 5 行（`b3912c6`）圆点后：行数 **8 → 6**，中间两行（`7dd307e`「chore: 新增忽略规则…」、`60911dc`「feat(core): 新增应用入口…」）消失；出现 **2 条** `stroke-dasharray="4 3"` 的虚线切片（跨行边界的两半），命中带变为 `graph-edge-hit-4-5`（`9,108 9,120` / `9,120 9,132`）——被折叠区间即 `b3912c6 → a0d8689` | 被折叠的两个提交**仍在仓库**：`git log --all --oneline` 含 `7dd307e` / `60911dc`，`git cat-file -t 7dd307e…` = `commit`、`60911dc…` = `commit`；`rev-list --count HEAD` 仍 **8**（折叠只是视图态） |
+| 2.3 | 点那条**虚线** → 展开 | ✅ | 在虚线的真实坐标 `(19,179)` 用 `page.mouse.click` 点（透明命中带盖在虚线上，`elementFromPoint` 命中的是 `polyline#graph-edge-hit-4-5`）：行数 **6 → 8**，虚线切片 **2 → 0**，被隐藏的两个提交原样回到列表 | 同 2.2 的 `rev-list --count HEAD` = 8（展开前后仓库侧无任何变化） |
+| 2.4 | 过滤行的「折叠线性分支」「展开线性分支」两个按钮 | ✅ | 折叠前 `log-expand-all` 为 `disabled`；点 `log-collapse-all` → 行数 **8 → 6** + 虚线 2 条、展开按钮转**可用**（`disabled=false`）；再点 `log-expand-all` → 行数 **8**、虚线 0、展开按钮回到 `disabled`。选中态（`1b9a811`）与右侧详情面板在折叠/展开前后均不变 | 折叠结果与 2.2 同一区间（本仓 ≥3 行的线性链只有 1 条：`b3912c6 → a0d8689`，`git log --oneline b3912c6` 给出 4 行） |
+| 2.5 | 悬停圆点 → **整条链**圆点出现高亮环 | ✅ | 悬停 `7dd307e` 圆点后 `[data-testid^="graph-node-ring-"]` 恰 **4 个** = `b3912c6 / 7dd307e / 60911dc / a0d8689`，环 `r=6`、`stroke=#1668dc`（主题主色）；行数仍 8、无任何行被选中 | 该 4 个 hash 与 `git log --oneline b3912c6` 的 4 行**逐条相同**（即线性祖先链，跨过 feature 分叉点即停） |
+| 2.6 | 点圆点**不改变选中的提交**；点行正文仍选中 | ✅ | 先点首行正文 → 选中 `9b97654`、URL 变 `?select=9b97654…`、右侧详情面板出现（`9b97654 / Smoke Tester / fix(core): 合并后修正启动横幅 / 父提交：fa9452a`）；再点第 4 行（`5368ee6`，2 行链**不可折叠**）的圆点 → 选中行仍只有 1 个且仍是 `9b97654`、详情面板与 URL 不变、行数仍 8、虚线 0；随后点第 3 行正文 → 选中与详情面板同步变为 `1b9a811`（父提交 `5368ee6`） | 详情面板的父提交与 `git log -1` 事实一致（`9b97654` 的父是 merge `fa9452a`、`1b9a811` 的父是 `5368ee6`） |
+
+*块 3：日志页分支过滤*
+
+| # | 范围项 | 结论 | 判据（浏览器 DOM / 画面） | 互证（CLI / API / 网络） |
+|---|--------|------|---------------------------|--------------------------|
+| 3.1 | 「分支过滤」弹窗：本地/远程分组 + ✔ 前缀 + 清空 | ✅ | 弹窗文本 = `本地分支 | diverge-test | ✔ feature | master | merged-branch | wt-branch | 远程分支 | origin/feature | origin/master | 清空`；组标题实际渲染为「本地分支」「远程分支」两段；未选中时无 ✔，选中 `feature` 后该行前缀变 `✔ feature`；`[data-testid="log-branch-clear"]` = 「清空」 | `git -C rebased-smoke branch -a` 的 7 个分支名与弹窗选项**逐条一致**（本地 5 + 远程 2，远程按含 `/` 归组） |
+| 3.2 | 选中分支后图只剩该分支可达的提交 | ✅ | 选 `feature` 后行数 **8 → 6**，逐行 hash = `1b9a811 / 5368ee6 / b3912c6 / 7dd307e / 60911dc / a0d8689`；按钮变「分支过滤（1）」 | `git log --oneline feature` 恰好同 6 条（同序）；而**数据侧**更多：`GET /api/repos/:id/log?all=true` 返回 **12** 条 = `git log --all --oneline` 的 12 行（含 `diverge-test` 独有提交 `1bfd86f` 与 3 条 stash 相关提交 `a4af560`/`a738306`/`d8e83d0`）⇒ 过滤是**从已加载数据里隐藏**，不是换查询 |
+| 3.3 | 两个折叠按钮**整组消失**（不是禁用） | ✅ | `document.querySelector('[data-testid="log-collapse-all"]')` = `null`、`log-expand-all` = `null`（**不存在**，非 `disabled`）；同时图内折叠态被清空（行序回到默认、虚线 0） | 对齐 Java `VisibleGraphImpl.isActionSupported`（过滤态 `setVisible(false)`），见 `log-page.tsx:711-737` 注释 |
+| 3.4 | 出现「部分分支的提交尚未加载，将继续加载」提示（**当还有更早提交时**） | ✅ | `rebased-smoke-big`（320 提交、`hasMore=true`）选 `master` 后 `[data-testid="log-branch-filter-hint"]` 出现，文本 = 「部分分支的提交尚未加载，将继续加载」，同时「加载更多」按钮在盘；`rebased-smoke`（12 提交、`hasMore=false`）下该提示**不出现** —— 与「当还有更早提交时」的条件口径一致 | 提示的判据是 `hasMore`（API `hasMore` 字段），选取两端 `hasMore` 相反的两个仓做正反例 |
+| 3.5 | 点「清空」→ 回到默认视图且折叠按钮回来 | ✅ | 点「清空」后：按钮文本回到「分支过滤」（无计数）、`log-collapse-all` / `log-expand-all` **均重新出现**（展开按钮 `disabled`，因为无折叠）、提示消失、行数回到 **8** 行 = `9b97654 / fa9452a / 1b9a811 / 5368ee6 / b3912c6 / 7dd307e / 60911dc / a0d8689`（默认 HEAD 视图） | 该 8 行 = `git log --oneline HEAD`；查询退回不带 `all` 的默认口径 |
+| 3.6 | 网络面板可见 `GET /api/repos/:id/log?...&all=true` | ✅ | Playwright 网络面板：`/api/repos/2035965b…/log?limit=50&skip=0&all=true` → **200**（rebased-smoke，条目 #78）；`/api/repos/7649bb35…/log?limit=50&skip=0&all=true` → **200**（rebased-smoke-big，条目 #79）；未过滤时同端点为不带 `all` 的 `?limit=50&skip=0` | 与 `packages/client/client` 的 `useLogPages({all:true})` 进 SWR key 的口径一致（T4 产物） |
+| 3.7 | **Ruling F1 复核**：分支过滤下没有虚线过滤边是预期 | ✅（符合裁定） | 过滤 `feature` 态下 `document.querySelectorAll('svg [stroke-dasharray]').length` = **0**，图是连通的（6 行正常实线） | 可见集沿父边可达、对祖先封闭 ⇒ `DottedFilterEdgesGenerator` 恒无输出；与 Java `BranchFilterController` 不调该生成器一致。**按裁定不作为缺陷** |
+
+**② 操作路径（点击 / 输入序列）**
+
+1. 复位夹具：`& scripts/smoke-setup.ps1`（本机无 `pwsh`，用 Windows PowerShell 5.1）→ 起服务 `pnpm dev`（后台作业）→ 探针确认 MCP 落盘根（写项目内绝对路径被拒，报 `Allowed roots: D:\zhanglei1120\Github\deepseek-harness\.playwright-mcp, D:\zhanglei1120\Github\deepseek-harness`）→ 之后一律 `filename=.playwright-mcp/shots/<名>.png` 落盘、再用 `Copy-Item` 搬进 `docs/shots/`。
+2. **块 1**：`browser_navigate http://localhost:3081/` → `browser_evaluate` 逐行读 `[data-testid="repo-item"]`（名称文本 / 头像底色 / 行 opacity / 警示图标）→ 截图 `repo-page-15.png` → `Rename-Item rebased-smoke-conflict rebased-smoke-conflict-tmp` → 刷新首页 → 读失效行 → `browser_hover` 警示图标读气泡 → 截图 `repo-page-16.png` → `browser_click` 该行 → 读 Modal（标题/正文/按钮 testid）+ 确认 URL 未变 → 截图 `repo-page-17b.png` → `browser_click [data-testid="repo-invalid-close"]` → 复核 Modal 已关、行数不变 → `Rename-Item … rebased-smoke-conflict` 复原 → `GET /api/repos` 复核 `valid:true`。
+3. **块 1（移除分支 + 主题）**：`Rename-Item rebased-smoke-huge rebased-smoke-huge-tmp` → 刷新 → 点该失效行 → 点「从最近列表移除」→ 复核行消失（11→10）+ 截图 `repo-page-17.png` → CLI 在被改名目录上跑 `git log/rev-list` 证明盘上无损 → 改名复原 → 进 `/settings` 点「界面主题 → 明亮」→ 回首页读全部头像底色 + 截图 `theme-light-repo-page.png` → 回 `/settings` 点「暗色」复位（复核 `data-theme=dark`）。
+4. **块 2**：首页点 `rebased-smoke` 行（真实入口，URL 变 `/repos/2035965b…`）→ 等首行提交出现 → 读 8 行 hash/圆点几何与命中带（`browser_evaluate` 取 `getBoundingClientRect()`）→ 截图 `log-collapse-01b.png` → 点第 5 行圆点（`circle[data-testid="graph-node-b3912c6…"]`）→ 复核 6 行 + 2 条虚线 → 鼠标移到 `(1400,860)` 等 700ms 消掉悬停环 → 截图 `log-collapse-01.png` → `page.mouse.click(19,179)` 点虚线真实坐标 → 复核 8 行 0 虚线 → 截图 `log-collapse-01b.png`（重拍，1440×900）→ `browser_hover` 第 6 行圆点 → 复核 4 个高亮环 → 截图 `log-collapse-02.png` → 点首行正文选中 → 点第 4 行圆点（不可折叠链）→ 复核选中未变 → 点第 3 行正文 → 复核选中已变 → 点「折叠线性分支」→ 复核 8→6 + 展开按钮转可用 → 点「展开线性分支」→ 复核回到 8 行 + 按钮回 disabled。
+5. **块 2（大仓 + 块 3 提示）**：首页点 `rebased-smoke-big` 行 → 点「折叠线性分支」→ 复核首行后跳到 `bulk commit 270`（= git log 序第 49 行）+ 顶部 2 条虚线 → 截图 `log-collapse-03.png` → 点「分支过滤」→ 弹窗只有「本地分支 / master / 清空」→ 鼠标移开消 tooltip 后点 `master` → 复核提示出现、折叠按钮消失 → 截图 `log-branch-filter-03.png`。
+6. **块 3（主仓）**：回首页点 `rebased-smoke` → 点「分支过滤」→ 复核分组与选项 → 鼠标移到 `(1400,860)` 消 tooltip → 点 `feature` → 复核 6 行 + 折叠按钮消失 → 截图 `log-branch-filter-01.png` → 再开弹窗（复核 `✔ feature`）→ 截图 `log-branch-filter-01b.png` → 点「清空」→ 复核 8 行 + 按钮回来 → 悬停「分支过滤」按钮（带 tooltip 以与 `log-collapse-01b.png` 区分画面）→ 截图 `log-branch-filter-02.png`。
+
+> 操作坑（与 §1.2 既有口径一致）：`分支过滤` 按钮的 Tooltip 会**盖住弹窗第一项**（Playwright 报 `… intercepts pointer events`）——先把指针移到 `(1400,860)` 等 ~900ms 令气泡消失再点菜单项；`stroke="transparent"` 的命中带 `boundingRect.width = 0`，`locator.click()` 判为 not visible，故虚线段一律用 `page.mouse.click(<真实坐标>)` 点击（与 §5.27「hunk 级放弃选中」同款处置）。
+
+**③ 证据（浏览器状态 + CLI 输出互证）**
+
+- **块 1 CLI 互证原文**：`rebased-smoke → master`、`rebased-smoke-big → master`、`rebased-smoke-conflict → master`、`rebased-smoke-shallow(-r6) → master`、`rebased-smoke-wt → wt-branch`（页面后缀逐条相同）；`rebased-smoke-noident`：`.git/HEAD` = `ref: refs/heads/master`、`symbolic-ref --short HEAD` = `master`、`rev-list --count --all` = `0`（unborn HEAD，页面显示 `[master]` 属正确而非陈旧）。
+- **块 1 失效链路原文**：改名后 `GET /api/repos` → `{"path":"D:\\zhanglei1120\\Github\\rebased-smoke-conflict","colorIndex":6,"branch":null,"valid":false}`；复原后 → `{"branch":"master","valid":true}`；`rebased-smoke-huge` 移除前后在被改名目录上 `git log --oneline -1` = `fc74f21 chore: bulk commit 619`、`rev-list --count HEAD` = `620`。
+- **块 2 CLI 互证原文**：`git log --all --oneline` 含 `b3912c6 refactor(docs): 重命名文档为 new-name` / `7dd307e chore: 新增忽略规则、二进制资源与本地子模块` / `60911dc feat(core): 新增应用入口与工具函数` / `a0d8689 chore: 初始化仓库与 README`；`cat-file -t` 两者均为 `commit`；`rev-list --count HEAD` = **8**（折叠前后一致）⇒ **被折叠的提交仍在仓库里，折叠只是视图态**。
+- **块 2 大仓互证原文**：页面折叠后第二行是 `chore: bulk commit 270`（`4342450`），`git log --oneline` 中它是**第 49 行**（`3957cf9` 重写 → `c001f3b` 318 → … → `a669fda` 271 → `4342450` 270）⇒ 中间 `1..48` 共 **48 个提交被隐藏**；`git log --all --oneline` 总行数 **320**（一条不少）。
+- **块 3 互证原文**：`git log --oneline feature` = `1b9a811 / 5368ee6 / b3912c6 / 7dd307e / 60911dc / a0d8689`（6 条，与页面 6 行同序）；`GET /api/repos/2035965b…/log?limit=50&skip=0&all=true` = **12 条**（`a4af560`/`d8e83d0`/`a738306` 三条 stash 相关 + `9b97654` + `1bfd86f` diverge-test + …），与 `git log --all --oneline` 的 12 行逐条一致 ⇒ 选中 `feature` 时页面**隐藏了数据里确实存在的另外 6 条**。
+- **控制台**：整轮（首页 → 日志页 → 设置页）`browser_console_messages` 仅 1 条 error：`GET /favicon.ico 404`——既有噪声（本轮未新增任何 console 报错），不登记缺陷。
+
+**④ 截图账目（13 张，均落 `docs/shots/`，SHA256 全目录无重复组）**
+
+| 截图 | 内容（最终正确效果） | SHA256（前 16 位） |
+|------|----------------------|--------------------|
+| `repo-page-15.png` | 首页默认列表（769×781）：9 行「名称 + 两个空格 + `[分支]`」+ 首字母渐变头像；init/clone 两行失效态同框 | `4675A54574C44E54` |
+| `repo-page-16.png` | 失效项标记（770×782）：`rebased-smoke-conflict` 行降不透明度、头像转灰、警示图标 + 气泡含 `(unavailable)` | `037868F4F64C55F6` |
+| `repo-page-17b.png` | 点失效行的确认框（确定前，769×781）：「仓库路径不可用」+ 路径带 `(unavailable)` + 「从最近列表移除 / 关 闭」，背景列表未变、URL 未跳转 | `625FF25A296FCDAC` |
+| `repo-page-17.png` | 「从最近列表移除」后（769×781）：该行已消失（列表 11 → 10），盘上仓库仍在（CLI 620 提交） | `17E4902354D95BB3` |
+| `theme-light-repo-page.png` | 明亮主题下的首页列表：同一 `colorIndex` 取明亮支渐变（明暗两套取色） | `4C73A78DA35DB5B3` |
+| `log-collapse-01b.png` | 折叠前（1440×900）：`rebased-smoke` 默认 8 行、无虚线、无高亮环 | `F6FD0823788176AC` |
+| `log-collapse-01.png` | 点**圆点**后：8 → 6 行，中间两提交消失、两端之间出现虚线段（`stroke-dasharray="4 3"`） | `BEE47CA5C406BE5C` |
+| `log-collapse-02.png` | 悬停圆点：整条线性链 4 个圆点出现高亮环（`#1668dc`） | `DF701C396B28BA53` |
+| `log-collapse-03.png` | 大仓「折叠线性分支」：首行之后直接跳到 `bulk commit 270`（隐藏 48 条）+ 顶部虚线段 | `9E8445FE9D3AF011` |
+| `log-branch-filter-01b.png` | 分支过滤弹窗（1440×900）：本地/远程两组 + `✔ feature` + 「清空」；背景图已是只看 feature 的 6 行、过滤行无折叠按钮 | `E46CDE3FE7EB6E41` |
+| `log-branch-filter-01.png` | 选中 `feature` 后的图：只剩该分支可达的 6 行，「折叠线性分支/展开线性分支」整组消失 | `FDE8A298180070A9` |
+| `log-branch-filter-02.png` | 点「清空」后回到默认视图：8 行 + 两个折叠按钮回来（画面带「分支过滤」入口气泡以与折叠前后态区分） | `2A6ACDA6F81AF995` |
+| `log-branch-filter-03.png` | 大仓过滤激活：提示「部分分支的提交尚未加载，将继续加载」在盘、折叠按钮消失、图回到 50 行首屏 | `7ECA3CD08F7D5F7A` |
+
+**⑤ 未覆盖项与后续计划**
+
+| 未覆盖项 | 原因 | 处置建议 |
+|----------|------|----------|
+| 「折叠线性分支」**一次折叠多条链** | 三个可用夹具里 ≥3 行的线性链各自只有 **1 条**（`rebased-smoke` 是 `b3912c6→a0d8689`，`rebased-smoke-big` / `rebased-smoke-huge` 全线性=1 条，conflict 仓无 ≥3 行链），live 无法构出「多条链同时折叠」的画面 | 本轮只验证到「全部可折叠链被折叠」= 1 条；多链路径由 `collapseAllFragments` 单测覆盖。若要在冒烟里看到，需给 `smoke-setup.ps1` 加一个「两个合并提交」的夹具仓（属脚本改动，本轮不做） |
+| 悬停**虚线段**时高亮两端（Java `LINEAR_EXPAND_CASE`） | 本轮只取证了「悬停圆点 → 整链高亮」这一条悬停路径 | 下一轮补：折叠后把指针停在虚线上，读 `graph-node-ring-*` 是否恰为两端 2 个 |
+| 主题切换的**就地**跟随（不重新挂载页面） | 主题开关在 `/settings`，切完回首页是重新挂载；未构造「停留首页时 `data-theme` 变化」的用户路径 | T3 修复轮已用 `MutationObserver` 订阅 + 单测锁死；如需 live 复证，可用 `auto` 偏好 + 改系统明暗触发 |
+| web-koa SPA（`:5173`）对等抽查三块 | 本轮按 `AGENT.md` 冒烟口径以 web-next `:3081` 为被测端；`:3082` 只做了 API 侧互证（`/api/repos`、`/log?all=true`） | 需要时按 §1.1 的对等抽查口径补跑 |
+| 折叠态与「按需加载」的交互 | 观察到大仓折叠后仍会继续追加更早提交、链两端按 hash 重算仍成立（`fragmentsToRows` 现算行号），但本轮**未**把它当用例系统取证 | 可在下一轮补「折叠后滚到底 → 追加页进来 → 折叠仍成立」一条 |
+
 
