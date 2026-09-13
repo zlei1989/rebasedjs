@@ -4,11 +4,11 @@
  * 文件历史页容器：?file= 查询串（入口通道）+ 页内文件路径输入 → useHistory → ui HistoryPanel（与 web-koa 容器同构）。
  * 查询串只作输入初始值，提交后不回写 URL（v1 简化）；file 为空串时 useHistory 挂 null key 不发请求。
  * 条目点击（onSelectCommit）→ 跳日志页 ?select=<hash>（LogPage 以该参数初始化选中提交）；
- * 双击（onOpenDiff）→ /diff?file&from=parents[0]&to=hash（根提交 → root=1）；
+ * 双击（onOpenDiff）→ 差异页在**新标签页**打开 /diff?file&from=parents[0]&to=hash（根提交 → root=1；见 ui openInNewTab）；
  * Annotate Revision → /blame?file&rev=<hash>。
  */
 import { useHistory } from '@rebased/client';
-import { EmptyState, HistoryPanel, PageShell } from '@rebased/ui';
+import { EmptyState, HistoryPanel, PageShell, openInNewTab } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
@@ -82,11 +82,11 @@ export default function Page({
           error={error?.message}
           onSelectCommit={(hash) => router.push(`/repos/${repoId}?select=${hash}`)}
           onOpenDiff={(hash, parents) => {
-            // 根提交（无父）→ root=1；其余 → from=父哈希、to=该提交
+            // 差异页在新标签页打开（原页留在历史列表上，可继续翻其它提交）；根提交（无父）→ root=1；其余 → from=父哈希、to=该提交
             if (parents.length === 0) {
-              router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&root=1`);
+              openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&root=1`);
             } else {
-              router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&from=${parents[0]}&to=${hash}`);
+              openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&from=${parents[0]}&to=${hash}`);
             }
           }}
           onAnnotate={(hash) => router.push(`/repos/${repoId}/blame?file=${encodeURIComponent(file)}&rev=${hash}`)}

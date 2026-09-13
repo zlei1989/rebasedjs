@@ -791,7 +791,7 @@ export function LogPage({
             {changesEntry.files.map((file) => (
               <Flex key={`${file.status}-${file.path}`} align="center" gap={8}>
                 <CommittedStatusTag status={file.status} />
-                <Tooltip title="查看该文件的差异：以本提交与其父提交为两端，直接跳到该文件的对比视图">
+                <Tooltip title="查看该文件的差异（新标签页打开，本弹窗留在变更集上）：以本提交与其父提交为两端">
                   <Typography.Text
                     data-testid={`changes-file-${file.path}`}
                     style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}

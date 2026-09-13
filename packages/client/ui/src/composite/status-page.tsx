@@ -238,7 +238,7 @@ function ChangeGroup({
     };
 
     return (
-      // 整行可点（单击选中预览 / 双击看差异）：行内边距已移除，改用 Listy 行容器的 antd 默认；
+      // 整行可点（单击选中预览 / 双击在新标签页看差异——容器 openInNewTab，本页留在变更列表上）：行内边距已移除，改用 Listy 行容器的 antd 默认；
       // 代价是那圈内边距落在包装 div 上、不属本元素命中区（Listy 无 onItemClick，无法两全；已由用户裁定接受）；
       // 逐行差异（cursor）一并留在行元素上
       <Flex
@@ -301,7 +301,7 @@ function ChangeGroup({
         {/* 「三版本」行操作：已暂存/工作区组渲染（未跟踪无版本三侧可对比）；点击不触发行选中 */}
         {group !== 'untracked' && onOpenThreeWay !== undefined && (
           <Flex onClick={(e) => e.stopPropagation()}>
-            <Tooltip title="并排对比该文件的 HEAD / 暂存区 / 工作区三个版本">
+            <Tooltip title="并排对比该文件的 HEAD / 暂存区 / 工作区三个版本（新标签页打开，本页留在变更列表上）">
               <Button
                 size="small"
                 type="text"

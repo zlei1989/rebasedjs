@@ -76,8 +76,8 @@ function BlameRow({
         </Button>
       </Tooltip>
       {onShowDiff !== undefined ? (
-        /* 「差异」：说明对比的两侧（该提交 vs 其父提交），不点开猜不到对比基准 */
-        <Tooltip title="对比该提交与其父提交的差异文件（根提交无父版本时容器会降级处理）">
+        /* 「差异」：说明对比的两侧（该提交 vs 其父提交）+ 去向（新标签页，原页不被顶掉），不点开猜不到对比基准 */
+        <Tooltip title="对比该提交与其父提交的差异文件（新标签页打开，根提交无父版本时容器会降级处理）">
           <Button
             size="small"
             type="text"

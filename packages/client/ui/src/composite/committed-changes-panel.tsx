@@ -187,8 +187,8 @@ function TreeNodeRow({
     );
   }
   return (
-    // 文件叶子整行可点（打开该文件的差异）→ 行 Tooltip（叶子无子行，不会与别的行气泡叠加）
-    <Tooltip title={onOpenFile ? '打开该文件在本次提交里的差异对比' : undefined}>
+    // 文件叶子整行可点（在新标签页打开该文件的差异，原页留在本列表）→ 行 Tooltip（叶子无子行，不会与别的行气泡叠加）
+    <Tooltip title={onOpenFile ? '打开该文件在本次提交里的差异对比（新标签页打开，本页留在列表上）' : undefined}>
       <Flex
         data-testid={`committed-file-${node.fileIndex ?? node.path}`}
         align="center"

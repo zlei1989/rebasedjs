@@ -813,7 +813,7 @@ export function BranchPanel({
             itemRender={(file) => (
               <Flex align="center" gap={8}>
                 <CommittedStatusTag status={file.status} />
-                <Tooltip title={`打开该文件的差异视图：当前工作树与 ${workingDiffData.branch} 的逐行对比`}>
+                <Tooltip title={`打开该文件的差异视图（新标签页，本弹窗留在文件清单上）：当前工作树与 ${workingDiffData.branch} 的逐行对比`}>
                   <Typography.Text
                     data-testid={`working-diff-file-${file.path}`}
                     style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}

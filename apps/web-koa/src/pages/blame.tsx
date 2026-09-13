@@ -3,11 +3,11 @@
  * → useBlame → ui BlameView（与 web-next 容器同构；repoId 取 useParams、返回导航用 useNavigate，而非 Next params/router）。
  * 查询串只作输入初始值，提交后不回写 URL（v1 简化，页内状态即来源）；
  * file 为空串时 useBlame 挂 null key 不发请求，页面渲染空态引导。
- * 行内联动：差异 → /diff?file&from=parents[0]&to=hash（根提交 → root=1）；历史 → /history?file；
+ * 行内联动：差异 → 新标签页打开 /diff?file&from=parents[0]&to=hash（根提交 → root=1）；历史 → /history?file；
  * 受影响（Show All Affected #34）→ useCommitFiles 条件拉取该提交全量变更文件 Modal（文件点击 → 该文件 diff）。
  */
 import { useBlame, useCommitFiles } from '@rebased/client';
-import { BlameView, EmptyState, PageShell } from '@rebased/ui';
+import { BlameView, EmptyState, PageShell, openInNewTab } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -86,11 +86,11 @@ export function RepoBlamePage(): React.ReactNode {
           error={error?.message}
           onOpenCommit={(hash) => navigate(`/repos/${repoId}?select=${hash}`)}
           onShowDiff={(hash, parents) => {
-            // 根提交（无父）→ root=1；其余 → from=父哈希、to=该提交
+            // 差异页在新标签页打开（原页留在溯源结果上）；根提交（无父）→ root=1；其余 → from=父哈希、to=该提交
             if (parents.length === 0) {
-              navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&root=1`);
+              openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&root=1`);
             } else {
-              navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&from=${parents[0]}&to=${hash}`);
+              openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&from=${parents[0]}&to=${hash}`);
             }
           }}
           onShowInHistory={(path) => navigate(`/repos/${repoId}/history?file=${encodeURIComponent(path)}`)}
@@ -101,13 +101,13 @@ export function RepoBlamePage(): React.ReactNode {
           affectedError={affectedError?.message}
           onCloseAffected={() => setAffectedHash('')}
           onOpenAffectedFile={(path) => {
-            // 受影响提交内该文件 diff：from=父哈希、to=该提交（根提交 → root=1；与行内「差异」同语义）
+            // 受影响提交内该文件 diff（同样新标签页打开）：from=父哈希、to=该提交（根提交 → root=1；与行内「差异」同语义）
             const entry = affectedEntry;
             if (entry !== undefined && entry !== null) {
               if (entry.parents.length === 0) {
-                navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&root=1`);
+                openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&root=1`);
               } else {
-                navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&from=${entry.parents[0]}&to=${entry.hash}`);
+                openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&from=${entry.parents[0]}&to=${entry.hash}`);
               }
             }
           }}

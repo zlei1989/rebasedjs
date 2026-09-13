@@ -5,12 +5,12 @@
  * （与 web-koa 容器同构；无页内输入，浏览式页面）。
  * 增量累积要点：SWR 以新 key（skip 变化）重取，新响应到达前 data 为 undefined——故以 firstLoaded 守卫首屏
  * （不渲染主体避免闪空）；响应按 hash 去重并入累积列表（服务端游标不重不漏，去重为防御性兜底）。
- * 文件点击（onOpenFile(path, hash)）→ diff 页 from=`${hash}~1`、to=hash（diff 端点已支持 from/to；
- * 提交的变更 = 该提交相对其父提交的对比，即 <hash>~1 → <hash>）。
+ * 文件点击（onOpenFile(path, hash)）→ 差异页在**新标签页**打开，from=父提交、to=hash（diff 端点已支持 from/to；
+ * 提交的变更 = 该提交相对其父提交的对比，即 <hash>~1 → <hash>；原页留在已提交列表上）。
  */
 import { useCommittedPage } from '@rebased/client';
 import type { CommittedEntry } from '@rebased/contracts';
-import { CommittedChangesPanel, PageShell } from '@rebased/ui';
+import { CommittedChangesPanel, PageShell, openInNewTab } from '@rebased/ui';
 import { Button, Tooltip, Typography } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
@@ -47,7 +47,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     setFirstLoaded(false);
   }, [repoId]);
   /**
-   * 文件点击 → diff 页：from=真实父提交（parents[0]，终审 Must-fix 2——固定 `<hash>~1` 对根提交无父会 128）、
+   * 文件点击 → 差异页在**新标签页**打开（原页留在已提交列表上）：from=真实父提交（parents[0]，终审 Must-fix 2——固定 `<hash>~1` 对根提交无父会 128）、
    * to=提交本身；根提交（无父）→ 仅带 root=1 标记，diff 页渲染「无父版本」提示行；
    * R 重命名文件（renameFrom 非空）附加原名——diff 端点只接受单文件路径，页面读 renameFrom 后显示提示行而非伪 diff
    */
@@ -66,7 +66,7 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     // #27 多文件 Prev/Next：同组文件列表（一提交的变更集）——DiffPage 页头切换
     const filePaths = entry?.files.map((f) => f.path) ?? [];
     if (filePaths.length > 1) params.set('files', JSON.stringify(filePaths));
-    router.push(`/repos/${repoId}/diff?${params.toString()}`);
+    openInNewTab(`/repos/${repoId}/diff?${params.toString()}`);
   };
   return (
     <PageShell gap={8}>

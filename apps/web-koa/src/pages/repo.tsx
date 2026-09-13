@@ -58,7 +58,7 @@ import {
   type UpdateBody,
   type UpdateOutcome,
 } from '@rebased/contracts';
-import { AuthDialog, BranchCompareView, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
+import { AuthDialog, BranchCompareView, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog, openInNewTab } from '@rebased/ui';
 import { Modal, message } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -500,7 +500,8 @@ export function RepoPage(): React.ReactNode {
         onCloseChanges={() => setChangesHash('')}
         onOpenChangedFile={(path) => {
           // #13：变更集内该文件 diff——from=父哈希、to=该提交（根提交 → root=1；与 BlameView「受影响」同语义）；
-          // #27：同组文件列表（该提交变更集）供 DiffPage 页头 Prev/Next
+          // #27：同组文件列表（该提交变更集）供 DiffPage 页头 Prev/Next；
+          // 差异页在新标签页打开（原页留在日志页的变更集弹窗上）
           const entry = changesEntry;
           if (entry !== undefined && entry !== null) {
             const params = new URLSearchParams({ file: path });
@@ -512,7 +513,7 @@ export function RepoPage(): React.ReactNode {
             }
             const filePaths = entry.files.map((f) => f.path);
             if (filePaths.length > 1) params.set('files', JSON.stringify(filePaths));
-            navigate(`/repos/${repoId}/diff?${params.toString()}`);
+            openInNewTab(`/repos/${repoId}/diff?${params.toString()}`);
           }
         }}
         onOpenSettings={() => navigate(`/repos/${repoId}/settings`)}

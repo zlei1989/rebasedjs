@@ -5,7 +5,7 @@
  * current 标记（纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
 import { useBranchAction, useBranches, useBranchWorkingDiff, useCheckout, useCheckoutRebase, useCheckoutUpdate, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
-import { BranchPanel, mergedCleanupCandidates, PageShell } from '@rebased/ui';
+import { BranchPanel, mergedCleanupCandidates, PageShell, openInNewTab } from '@rebased/ui';
 import { Button, Modal, Tooltip, message } from 'antd';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -157,11 +157,12 @@ export function RepoBranchesPage(): React.ReactNode {
         workingDiffError={workingDiffError?.message}
         onCloseWorkingDiff={() => setWorkingDiffBranch('')}
         onOpenWorkingDiffFile={(branch, path) => {
-          // #69 + #27：文件行 → DiffPage（?file=&from=<branch>）；同组文件清单供页头 Prev/Next
+          // #69 + #27：文件行 → 差异页在新标签页打开（原页留在分支工作树差异清单上）；
+          // ?file=&from=<branch>；同组文件清单供页头 Prev/Next
           const filePaths = workingDiffData?.files.map((f) => f.path) ?? [];
           const params = new URLSearchParams({ file: path, from: branch });
           if (filePaths.length > 1) params.set('files', JSON.stringify(filePaths));
-          navigate(`/repos/${repoId}/diff?${params.toString()}`);
+          openInNewTab(`/repos/${repoId}/diff?${params.toString()}`);
         }}
         tags={tags}
         acting={actingBranch || checkingOut || fixingForcePushed || rebaseCheckingOut || updatingCheckout}

@@ -26,7 +26,7 @@ import {
   useStashAction,
 } from '@rebased/client';
 import type { CommitBody, HunkStagingBody, StagingBody } from '@rebased/contracts';
-import { PageShell, StatusPage } from '@rebased/ui';
+import { PageShell, StatusPage, openInNewTab } from '@rebased/ui';
 import { Button, Modal, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
@@ -198,13 +198,14 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         onHunkStaging={onHunkStaging}
         hunkActing={hunkActing}
         onSelectPatch={(path, staged) => setPatchSel({ path, staged })}
-        // 跳既有 diff 页：按行所属分组带入 staged（已暂存行 → staged=1，否则页内默认工作区），
-        // 否则双击已暂存行会落到「工作区 vs HEAD」而看不到该行的暂存差异
+        // 差异页在新标签页打开：原页（变更列表）原地保留，核对完一个文件还能接着看下一个
+        // （原为 router.push 整页跳转，当前页被顶掉）；按行所属分组带入 staged（已暂存行 → staged=1，
+        // 否则页内默认工作区），否则双击已暂存行会落到「工作区 vs HEAD」而看不到该行的暂存差异
         onOpenDiff={(path, staged) =>
-          router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}${staged ? '&staged=1' : ''}`)
+          openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}${staged ? '&staged=1' : ''}`)
         }
-        // 三版本对比（HEAD/暂存/工作区三侧）：跳 diff 页 three=1 模式
-        onOpenThreeWay={(path) => router.push(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&three=1`)}
+        // 三版本对比（HEAD/暂存/工作区三侧）：新标签页打开 diff 页 three=1 模式（口径同上）
+        onOpenThreeWay={(path) => openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(path)}&three=1`)}
         // 一键忽略（仅未跟踪行渲染忽略按钮）：Modal.confirm 确认 → addIgnore（追加 /<path> 到 .gitignore）→
         // 重取 status 键使该文件从变更列表消失（ignore 键已由 useAddIgnore 回写，无需再管）
         onIgnore={(path) => {

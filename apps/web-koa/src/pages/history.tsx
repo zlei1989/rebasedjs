@@ -2,10 +2,11 @@
  * 文件历史页容器：?file= 查询串（入口通道）+ 页内文件路径输入 → useHistory → ui HistoryPanel
  * （与 web-next 容器同构；repoId 取 useParams、返回导航用 useNavigate）。
  * 查询串只作输入初始值，提交后不回写 URL（v1 简化）；file 为空串时 useHistory 挂 null key 不发请求。
- * 条目点击（onSelectCommit）→ 跳日志页 ?select=<hash>（LogPage 以该参数初始化选中提交）。
+ * 条目点击（onSelectCommit）→ 跳日志页 ?select=<hash>（LogPage 以该参数初始化选中提交）；
+ * 条目双击（onOpenDiff）→ 差异页在**新标签页**打开（原页留在历史列表上，见 ui openInNewTab）。
  */
 import { useHistory } from '@rebased/client';
-import { EmptyState, HistoryPanel, PageShell } from '@rebased/ui';
+import { EmptyState, HistoryPanel, PageShell, openInNewTab } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -74,11 +75,11 @@ export function RepoHistoryPage(): React.ReactNode {
           error={error?.message}
           onSelectCommit={(hash) => navigate(`/repos/${repoId}?select=${hash}`)}
           onOpenDiff={(hash, parents) => {
-            // 根提交（无父）→ root=1；其余 → from=父哈希、to=该提交
+            // 差异页在新标签页打开（原页留在历史列表上，可继续翻其它提交）；根提交（无父）→ root=1；其余 → from=父哈希、to=该提交
             if (parents.length === 0) {
-              navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&root=1`);
+              openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&root=1`);
             } else {
-              navigate(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&from=${parents[0]}&to=${hash}`);
+              openInNewTab(`/repos/${repoId}/diff?file=${encodeURIComponent(file)}&from=${parents[0]}&to=${hash}`);
             }
           }}
           onAnnotate={(hash) => navigate(`/repos/${repoId}/blame?file=${encodeURIComponent(file)}&rev=${hash}`)}
