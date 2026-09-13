@@ -31,7 +31,7 @@ export function logPageSkip(index: number): number {
 }
 
 /**
- * 按需累积拉取提交历史：GET /api/repos/:repoId/log?limit&skip&author&path，逐页追加直到「最早的一条」。
+ * 按需累积拉取提交历史：GET /api/repos/:repoId/log?limit&skip&author&path&all，逐页追加直到「最早的一条」。
  *
  * 做什么：把服务端 500 上限的分页拼成一条不断增长的列表 —— commits 为已加载页的拼接（按 hash 去重），
  *        hasMore 取最后一页的 hasMore，loadMore 追加下一页；页末 hasMore=false（即已到仓库第一条）后
@@ -42,9 +42,10 @@ export function logPageSkip(index: number): number {
  *        而容器显式 mutate() 走的另一条路径（SWR 内部 forceRevalidateAll = true）会把**所有已加载页**
  *        重取一遍，故「提交/变基后列表刷新」不受影响。
  */
-export function useLogPages(repoId: string, query?: { author?: string; path?: string }) {
+export function useLogPages(repoId: string, query?: { author?: string; path?: string; all?: boolean }) {
   const author = query?.author ?? '';
   const path = query?.path ?? '';
+  const all = query?.all === true;
   const { data, size, setSize, isLoading, error, mutate } = useSWRInfinite<LogPage>(
     (index, previousPage) => {
       // '' = 条件拉取关闭（无仓库）；上一页没满 = 已到最早的提交，不再要下一页
@@ -55,6 +56,7 @@ export function useLogPages(repoId: string, query?: { author?: string; path?: st
       params.set('skip', String(logPageSkip(index)));
       if (author !== '') params.set('author', author);
       if (path !== '') params.set('path', path);
+      if (all) params.set('all', 'true');
       return `/api/repos/${repoId}/log?${params.toString()}`;
     },
     getJson,

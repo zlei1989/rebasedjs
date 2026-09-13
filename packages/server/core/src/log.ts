@@ -67,6 +67,11 @@ export interface StreamLogOptions {
   path?: string;
   /** range 过滤（如 'master..topic' / 'topic...master'，git log <range> 语义——分支对比视图用） */
   range?: string;
+  /**
+   * 全分支日志（git log --all）：分支过滤的数据前提——被过滤掉的其他分支提交必须在数据里，
+   * 客户端才隐藏得掉它们、也才画得出虚线过滤边（设计 §2.2）。缺省 false = 仅 HEAD 可达（默认视图不变）。
+   */
+  all?: boolean;
   signal?: AbortSignal;
 }
 
@@ -108,6 +113,7 @@ export function isEmptyRepoLogError(err: unknown): boolean {
 /** 流式产出提交（逐条解析，不整库读入内存；分页用 --skip）；空仓（unborn HEAD）产出空序列而非抛错 */
 export async function* streamLog(repoPath: string, opts: StreamLogOptions = {}): AsyncIterable<CoreCommit> {
   const args = ['log', '--graph', '--date-order', `--format=${PREFIX_SEP}%H${FIELD_SEP}%h${FIELD_SEP}%P${FIELD_SEP}%an${FIELD_SEP}%ae${FIELD_SEP}%aI${FIELD_SEP}%D${FIELD_SEP}%B${RECORD_SEP}`];
+  if (opts.all) args.push('--all');
   if (opts.range) args.push(opts.range);
   if (opts.skip) args.push(`--skip=${opts.skip}`);
   if (opts.maxCount) args.push(`--max-count=${opts.maxCount}`);

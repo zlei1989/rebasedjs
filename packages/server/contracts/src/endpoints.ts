@@ -23,6 +23,12 @@ export const logQuerySchema = z.object({
   path: z.string().optional(),
   /** range 过滤（如 'src..main'，git log <range> 语义——分支对比视图用） */
   range: z.string().optional(),
+  /**
+   * 全分支日志（git log --all）。分支过滤激活时由容器置位：被过滤掉的其他分支提交必须在数据里，
+   * 客户端才能隐藏它们并画出虚线过滤边（设计 §2.2）。查询串布尔：z.coerce.boolean() 会把 'false'
+   * 当 true（Boolean('false')），故与 staged 同口径按枚举 + transform 解析。
+   */
+  all: z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]).optional(),
 });
 export type LogQuery = z.infer<typeof logQuerySchema>;
 

@@ -100,4 +100,28 @@ describe('log 原语', () => {
     for await (const c of streamLog(repo, { maxCount: 50 })) commits.push(c);
     expect(commits).toEqual([]);
   });
+
+  // 分支过滤的数据前提（设计 §2.2）：--all 让「未被选中的分支的提交」进入数据，才谈得上客户端隐藏它们。
+  it('streamLog all 选项产出其他分支独有提交（分支过滤数据前提）', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    commit(repo, 'a.txt', 'c1');
+    const base = execFileSync('git', ['-C', repo, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    execFileSync('git', ['-C', repo, 'checkout', '-q', '-b', 'side']);
+    commit(repo, 'b.txt', 'c2-side-only');
+    execFileSync('git', ['-C', repo, 'checkout', '-q', base]);
+    commit(repo, 'c.txt', 'c3-base-only');
+
+    // 默认（仅 HEAD 可达）：看不到 side 分支独有的 c2-side-only
+    const headOnly: string[] = [];
+    for await (const c of streamLog(repo, { maxCount: 20 })) headOnly.push(c.message);
+    expect(headOnly).toContain('c3-base-only');
+    expect(headOnly).not.toContain('c2-side-only');
+
+    // all：两个分支的提交都在
+    const all: string[] = [];
+    for await (const c of streamLog(repo, { maxCount: 20, all: true })) all.push(c.message);
+    expect(all).toContain('c3-base-only');
+    expect(all).toContain('c2-side-only');
+  });
 });
