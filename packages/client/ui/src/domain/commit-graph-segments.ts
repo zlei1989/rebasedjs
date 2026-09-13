@@ -158,6 +158,8 @@ export function buildRowGeometry(
           color: g.color,
           pts: [xa, ya, xb, yb],
           dashed: g.dashed,
+          // 命中语义随切片一起传下去：commit-graph 据此决定「点这条线要不要折叠/展开」
+          edge: { up: edge.fromRow, down: edge.toRow, ...(edge.kind === undefined ? {} : { kind: edge.kind }) },
         });
         // 切片是一条直线，x 的极值必在两端；取两端较大者即该切片在本行带内的 x 上界
         out[row]!.maxX = Math.max(out[row]!.maxX, xa, xb);

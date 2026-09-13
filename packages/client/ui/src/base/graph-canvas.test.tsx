@@ -1,5 +1,5 @@
-import { render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import type { LayoutRow } from '../graph-layout/types';
 import { GraphCanvas, laneCenterX, rowCenterY, type GraphNode } from './graph-canvas';
 import { buildRowGeometry } from '../domain/commit-graph-segments';
@@ -64,5 +64,52 @@ describe('GraphCanvas', () => {
       expect(circles[i]!.getAttribute('cx')).toBe(String(laneCenterX(row.lane, LANE)));
       expect(circles[i]!.getAttribute('cy')).toBe(String(rowCenterY(i, ROW)));
     });
+  });
+
+  // 图元命中（设计 §3.5）：线段叠一条透明命中带，圆点自身可点；命中带比线宽，解决 1px 线难点的问题
+  it('线段渲染透明命中带并派发 onSegmentClick', () => {
+    const onSegmentClick = vi.fn();
+    render(
+      // 外面套一层 <svg>：画布只画 SVG 元素（line/polyline/g/circle），直接挂在 HTML 根下会让
+      // React 按 HTML 命名空间创建它们并报「unrecognized tag」警告，噪声盖住真实失败信息
+      <svg>
+        <GraphCanvas
+          segments={[{ key: 's1', color: '#000', pts: [9, 12, 9, 36], dashed: true, edge: { up: 0, down: 2, kind: 'collapse' } }]}
+          nodes={[]}
+          rowHeight={24}
+          laneWidth={18}
+          onSegmentClick={onSegmentClick}
+        />
+      </svg>,
+    );
+    const hit = screen.getByTestId('graph-edge-hit-0-2');
+    expect(hit).toHaveAttribute('stroke', 'transparent');
+    fireEvent.click(hit);
+    expect(onSegmentClick).toHaveBeenCalledWith({ up: 0, down: 2, kind: 'collapse' });
+  });
+
+  it('圆点派发 onNodeClick / onNodeHover，highlighted 时画高亮环', () => {
+    const onNodeClick = vi.fn();
+    const onNodeHover = vi.fn();
+    render(
+      <svg>
+        <GraphCanvas
+          segments={[]}
+          nodes={[{ hash: 'h1', lane: 0, rowIndex: 0, color: '#123456', highlighted: true }]}
+          rowHeight={24}
+          laneWidth={18}
+          highlightColor="#ff0000"
+          onNodeClick={onNodeClick}
+          onNodeHover={onNodeHover}
+        />
+      </svg>,
+    );
+    fireEvent.click(screen.getByTestId('graph-node-h1'));
+    expect(onNodeClick).toHaveBeenCalledWith('h1');
+    // 用 mouseOver 而非 mouseEnter 触发 React 的 onMouseEnter：React 的 enter/leave 是由
+    // mouseover/mouseout 合成出来的，直接派发 mouseenter 在 jsdom 下不会走 React 的合成链路
+    fireEvent.mouseOver(screen.getByTestId('graph-node-h1'));
+    expect(onNodeHover).toHaveBeenCalledWith('h1');
+    expect(screen.getByTestId('graph-node-ring-h1')).toHaveAttribute('stroke', '#ff0000');
   });
 });

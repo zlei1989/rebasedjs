@@ -26,7 +26,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ConfigProvider, Flex, Listy, Tag, theme, Typography } from 'antd';
 import type { ThemeConfig } from 'antd';
 import type { CommitInfo } from '@rebased/contracts';
-import { buildLayout, compactLanes, type LayoutCommit } from '../graph-layout';
+import { buildLayout, compactLanes, applyGraphView, fragmentForEdge, linearFragmentAt, type CollapsedFragment, type LayoutCommit } from '../graph-layout';
 import { colorForRef } from '../graph-layout/color';
 import { GraphCanvas, laneCenterX } from '../base/graph-canvas';
 import { buildRowGeometry, laneCoveringX } from './commit-graph-segments';
@@ -43,6 +43,12 @@ export interface CommitGraphProps {
   showTags?: boolean;
   /** 选中行高亮（详情面板当前提交；`?select=<hash>` 深链与点击选中均经此呈现选中态） */
   selectedHash?: string | null;
+  /** 分支过滤选中的分支名；空/缺省 = 不过滤（视图与现状逐像素一致） */
+  branches?: string[];
+  /** 已折叠的线性链（受控）；缺省 = 无折叠 */
+  collapsed?: CollapsedFragment[];
+  /** 折叠状态变更（折叠/展开均经此回写）；缺省 = 图元命中不产生折叠 */
+  onCollapseChange?: (next: CollapsedFragment[]) => void;
   /**
    * 需要更早的提交时回调（按需加载：滚到接近底部，或已加载内容还填不满视口）。
    * 缺省不触发（= 已到最早的提交，没有下一页）。同一版数据只回调一次：追加出新数据后若仍未填满
@@ -57,6 +63,13 @@ export interface CommitGraphProps {
 
 const ROW_HEIGHT = 24;
 const LANE_WIDTH = 18;
+/**
+ * 空数组常量：`useMemo` 的依赖用的是数组**引用**，而调用方常传内联字面量（`[]`）或可选 prop 的缺省值——
+ * 缺省值若写成 `branches = []` 每次渲染都是新引用，会把下面这步全量布局重算在父组件每次渲染时都跑一遍
+ * （列表滚动时白白重算整图 lane 分配）。故缺省指向模块级常量。
+ */
+const EMPTY_BRANCHES: string[] = [];
+const EMPTY_COLLAPSED: CollapsedFragment[] = [];
 /**
  * 触底判定的余量（3 行）：滚到距底部 3 行以内就算「该要下一页了」，
  * 让下一页在用户真正撞到底之前就在路上，避免每次到底都要停一下再补。
@@ -187,6 +200,9 @@ export function CommitGraph({
   height = 480,
   showTags = false,
   selectedHash = null,
+  branches = EMPTY_BRANCHES,
+  collapsed = EMPTY_COLLAPSED,
+  onCollapseChange,
   onReachBottom,
 }: CommitGraphProps): React.ReactNode {
   // 日期列用主题次要文本色（原 #888 是暗色专用硬编码，明亮主题下对比不足）
@@ -195,7 +211,12 @@ export function CommitGraph({
     () => commits.map((c) => ({ hash: c.hash, parents: c.parents, refs: c.refs })),
     [commits],
   );
-  const rows = useMemo(() => compactLanes(buildLayout(layoutCommits)), [layoutCommits]);
+  // delegate 图 → 视图变换（过滤/折叠）→ 显示车道压实。
+  // applyGraphView 是渲染前唯一变换点：删隐藏行、裁边、重映射行号、注入虚线边（见 graph-layout/graph-view）。
+  // 注意**只以 view.rows 为准**做渲染决策：view.visible/hidden 在折叠态并不互补（非过滤态 visible 是全部
+  // delegate 行，而折叠区间行又进了 hidden），读它会把已折叠的中间行画出来。
+  const view = useMemo(() => applyGraphView(buildLayout(layoutCommits), branches, collapsed), [layoutCommits, branches, collapsed]);
+  const rows = useMemo(() => compactLanes(view.rows), [view]);
   // 每行要画的线段切片 + 本行图列必须覆盖的 x 上界（跨行长边由编译层按行边界切分，
   // 见 domain/commit-graph-segments：旧实现按「本行圆点所在 lane」定宽，跨 lane 的斜线会被视口裁断）
   const rowGeometry = useMemo(() => buildRowGeometry(rows, ROW_HEIGHT, LANE_WIDTH), [rows]);
@@ -207,6 +228,57 @@ export function CommitGraph({
   const listyTheme = useMemo(() => listyRowHeightTheme(fontHeight), [fontHeight]);
   // 按需加载的触发条件之一：滚到接近底部（几何只有滚动事件能拿到，故由 onScroll 上报）
   const [atBottom, setAtBottom] = useState(false);
+  // 悬停高亮的可见行号集合（线性链高亮：锚点所在链的全部节点）
+  const [highlight, setHighlight] = useState<Set<number>>(new Set());
+  // 过滤激活时图动作全部失效（对齐 Java FilteredController.performAction = null 与
+  // VisibleGraphImpl.isActionSupported 对 BUTTON_COLLAPSE 的判定）
+  const graphActionsEnabled = branches.length === 0 && onCollapseChange !== undefined;
+  /** 折叠/展开的可折叠链：hash 对 → 回写受控状态 */
+  const toggleCollapse = (fragment: CollapsedFragment, collapse: boolean): void => {
+    if (!graphActionsEnabled) return;
+    const exists = collapsed.some((f) => f.up === fragment.up && f.down === fragment.down);
+    if (collapse && exists) return;
+    if (!collapse && !exists) return;
+    onCollapseChange?.(collapse ? [...collapsed, fragment] : collapsed.filter((f) => !(f.up === fragment.up && f.down === fragment.down)));
+  };
+  /** 悬停锚点行 → 高亮其所在链的全部可见行；无链则清空高亮 */
+  const hoverChain = (anchorRow: number): void => {
+    if (!graphActionsEnabled) {
+      setHighlight(new Set());
+      return;
+    }
+    const fragment = linearFragmentAt(rows, anchorRow);
+    if (fragment === null) {
+      setHighlight(new Set());
+      return;
+    }
+    const startRow = rows.findIndex((r) => r.commit.hash === fragment.up);
+    const endRow = rows.findIndex((r) => r.commit.hash === fragment.down);
+    const next = new Set<number>();
+    for (let i = Math.min(startRow, endRow); i <= Math.max(startRow, endRow); i++) next.add(i);
+    setHighlight(next);
+  };
+  /**
+   * 图元悬停（对齐 Java MOUSE_OVER 的两个分支）：
+   *   - 普通边/圆点 → `getPartLongFragment` 取所在链，高亮整链；
+   *   - 虚线边     → 折叠边高亮其两端（LINEAR_EXPAND_CASE 的 `createSelectedAnswer(delegatedGraph, {up, down})`）；
+   *                过滤边不高亮（过滤态无图动作）。
+   */
+  const hoverEdge = (edge: { up: number; down: number; kind?: 'collapse' | 'filter' } | null): void => {
+    if (edge === null) {
+      setHighlight(new Set());
+      return;
+    }
+    if (edge.kind === 'collapse') {
+      setHighlight(new Set([edge.up, edge.down]));
+      return;
+    }
+    if (edge.kind === 'filter') {
+      setHighlight(new Set());
+      return;
+    }
+    hoverChain(edge.up);
+  };
   // 已触发过的数据版本（行数）：同一版数据只回调一次，避免「追加页回来 → 副作用重跑 → 再请求」的连环请求；
   // 数据变多后行数变化即视为新版本，若仍未填满视口就继续追加（这正是「一路加载到最早一条」的链）
   const reachedRowsRef = useRef<number | null>(null);
@@ -273,7 +345,12 @@ export function CommitGraph({
                 whiteSpace: 'nowrap',
                 backgroundColor: selected ? token.controlItemBgActive : undefined,
               }}
-              onClick={() => onSelect?.(commit.hash)}
+              onClick={(event) => {
+                // 命中图元时不选中该行（对齐 Java GraphCommitCellController.shouldSelectCell：
+                // 光标下有 print element 就返回 false）。用 closest 判 svg 内的 circle/polyline 命中带。
+                if ((event.target as Element).closest('circle, polyline[data-testid^="graph-edge-hit-"]') !== null) return;
+                onSelect?.(commit.hash);
+              }}
               onContextMenu={() => onContextMenu?.(commit.hash)}
             >
               {/*
@@ -293,9 +370,27 @@ export function CommitGraph({
                 >
                   <GraphCanvas
                     segments={geometry.segments}
-                    nodes={[{ hash: row.commit.hash, lane: row.lane, rowIndex: index, color: row.color }]}
+                    nodes={[{ hash: row.commit.hash, lane: row.lane, rowIndex: index, color: row.color, highlighted: highlight.has(index) }]}
                     rowHeight={ROW_HEIGHT}
                     laneWidth={LANE_WIDTH}
+                    highlightColor={token.colorPrimary}
+                    onNodeClick={() => {
+                      const fragment = linearFragmentAt(rows, index);
+                      if (fragment !== null) toggleCollapse(fragment, true);
+                    }}
+                    onNodeHover={(hash) => (hash === null ? setHighlight(new Set()) : hoverChain(index))}
+                    onSegmentClick={(edge) => {
+                      // 折叠虚线边 → 展开；过滤虚线边 → 无动作（对齐 Java 过滤态无图动作）；普通实线边 → 折叠其所在链
+                      if (edge.kind === 'filter') return;
+                      if (edge.kind === 'collapse') {
+                        const target = collapsed.find((f) => f.up === rows[edge.up]?.commit.hash && f.down === rows[edge.down]?.commit.hash);
+                        if (target !== undefined) toggleCollapse(target, false);
+                        return;
+                      }
+                      const fragment = fragmentForEdge(rows, edge.up, edge.down);
+                      if (fragment !== null) toggleCollapse(fragment, true);
+                    }}
+                    onSegmentHover={hoverEdge}
                   />
                 </svg>
               </div>

@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { buildLayout, type LayoutCommit } from '../graph-layout';
+import type { LayoutRow } from '../graph-layout/types';
 import { laneCenterX, rowCenterY } from '../base/graph-canvas';
 import { buildRowGeometry, laneCoveringX, type RowGeometry } from './commit-graph-segments';
 
@@ -185,5 +186,16 @@ describe('buildRowGeometry', () => {
     expect(bends(geometry)).toEqual([]);
     expect(geometry[1]!.maxX).toBe(laneCenterX(0, LANE));
     expect(geometry[0]!.maxX).toBe(laneCenterX(0, LANE));
+  });
+
+  it('切片的 edge 字段保留端点与来源（供图元命中）', () => {
+    const rows: LayoutRow[] = [
+      { commit: { hash: 'a', parents: ['b'], refs: [] }, lane: 0, edges: [{ fromLane: 0, toLane: 0, fromRow: 0, toRow: 1, type: 'D', kind: 'collapse' }], color: '#000000' },
+      { commit: { hash: 'b', parents: [], refs: [] }, lane: 0, edges: [], color: '#000000' },
+    ];
+    const geo = buildRowGeometry(rows, 24, 18);
+    const seg = geo[0].segments[0];
+    expect(seg.edge).toEqual({ up: 0, down: 1, kind: 'collapse' });
+    expect(seg.dashed).toBe(true);
   });
 });

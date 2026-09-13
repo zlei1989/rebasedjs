@@ -377,4 +377,96 @@ describe('CommitGraph', () => {
     // 未压实：s1 所在行的圆点在车道 2 → 74px；压实后至多 1 档 → 38px / 56px
     expect([...new Set(widths)].sort()).toEqual(['38px', '56px']);
   });
+
+  // 线性折叠（设计 §3.5）：点圆点折叠整条链、点虚线展开、且命中图元不改变选中提交
+  describe('线性折叠', () => {
+    const chain: CommitInfo[] = [
+      makeCommit({ hash: 'a', parents: ['b'], message: 'a' }),
+      makeCommit({ hash: 'b', parents: ['c'], message: 'b' }),
+      makeCommit({ hash: 'c', parents: ['d'], message: 'c' }),
+      makeCommit({ hash: 'd', parents: [], message: 'd' }),
+    ];
+
+    it('点击圆点折叠链：中间行消失，产生虚线边', () => {
+      const onCollapseChange = vi.fn();
+      render(<CommitGraph commits={chain} collapsed={[]} onCollapseChange={onCollapseChange} />);
+      fireEvent.click(screen.getByTestId('graph-node-a'));
+      expect(onCollapseChange).toHaveBeenCalledWith([{ up: 'a', down: 'd' }]);
+    });
+
+    it('受控折叠后只渲染两端行，并出现可命中的虚线边', () => {
+      render(<CommitGraph commits={chain} collapsed={[{ up: 'a', down: 'd' }]} onCollapseChange={() => {}} />);
+      expect(screen.getAllByTestId('commit-graph-row')).toHaveLength(2);
+      expect(screen.getByText('a')).toBeInTheDocument();
+      expect(screen.getByText('d')).toBeInTheDocument();
+      expect(screen.queryByText('b')).not.toBeInTheDocument();
+      expect(screen.getAllByTestId('graph-edge-hit-0-1')[0]).toBeInTheDocument();
+    });
+
+    it('点击折叠虚线边展开（回调收到空数组）', () => {
+      const onCollapseChange = vi.fn();
+      render(<CommitGraph commits={chain} collapsed={[{ up: 'a', down: 'd' }]} onCollapseChange={onCollapseChange} />);
+      fireEvent.click(screen.getAllByTestId('graph-edge-hit-0-1')[0]);
+      expect(onCollapseChange).toHaveBeenCalledWith([]);
+    });
+
+    // brief 的用例只覆盖「点圆点」与「点折叠虚线边」，这里补上第三种命中图元：普通实线边
+    // （走 fragmentForEdge 取边所在链，而不是圆点那条 linearFragmentAt 路径）
+    it('点击普通实线边折叠其所在链', () => {
+      const onCollapseChange = vi.fn();
+      render(<CommitGraph commits={chain} collapsed={[]} onCollapseChange={onCollapseChange} />);
+      // 未折叠时 a→b 这条实线的命中带（端点行号 0→1，该边在上下两行各有一片）
+      fireEvent.click(screen.getAllByTestId('graph-edge-hit-0-1')[0]);
+      expect(onCollapseChange).toHaveBeenCalledWith([{ up: 'a', down: 'd' }]);
+    });
+
+    it('命中图元不触发 onSelect（对齐 Java shouldSelectCell）', () => {
+      const onSelect = vi.fn();
+      const onCollapseChange = vi.fn();
+      render(<CommitGraph commits={chain} onSelect={onSelect} collapsed={[]} onCollapseChange={onCollapseChange} />);
+      fireEvent.click(screen.getByTestId('graph-node-a'));
+      expect(onSelect).not.toHaveBeenCalled();
+      // 行正文点击仍然选中
+      fireEvent.click(screen.getByText('b'));
+      expect(onSelect).toHaveBeenCalledWith('b');
+    });
+
+    it('悬停圆点高亮整条链的圆点（含端点）', () => {
+      render(<CommitGraph commits={chain} collapsed={[]} onCollapseChange={() => {}} />);
+      // mouseOver 触发 React 的 onMouseEnter（见 base/graph-canvas.test.tsx 同处注释）
+      fireEvent.mouseOver(screen.getByTestId('graph-node-b'));
+      expect(screen.getByTestId('graph-node-ring-a')).toBeInTheDocument();
+      expect(screen.getByTestId('graph-node-ring-d')).toBeInTheDocument();
+    });
+
+    it('无 onCollapseChange 时不折叠（缺省行为与现状一致）', () => {
+      render(<CommitGraph commits={chain} />);
+      fireEvent.click(screen.getByTestId('graph-node-a'));
+      expect(screen.getAllByTestId('commit-graph-row')).toHaveLength(4);
+    });
+  });
+
+  // 分支过滤（设计 §3.6）：过滤激活时折叠入口失效，图只留可达行
+  describe('分支过滤', () => {
+    const branchy: CommitInfo[] = [
+      makeCommit({ hash: 'a', parents: ['b'], refs: ['HEAD -> main'], message: 'a' }),
+      makeCommit({ hash: 'b', parents: ['c'], message: 'b' }),
+      makeCommit({ hash: 'c', parents: [], refs: ['side'], message: 'c' }),
+      makeCommit({ hash: 'x', parents: ['c'], refs: [], message: 'x' }),
+    ];
+
+    it('选中分支后只渲染可达行', () => {
+      render(<CommitGraph commits={branchy} branches={['side']} />);
+      // side 的锚点行 c(2) 及其父（无）→ 只剩 c
+      expect(screen.getAllByTestId('commit-graph-row')).toHaveLength(1);
+      expect(screen.getByText('c')).toBeInTheDocument();
+    });
+
+    it('过滤激活时点圆点不折叠', () => {
+      const onCollapseChange = vi.fn();
+      render(<CommitGraph commits={branchy} branches={['main']} onCollapseChange={onCollapseChange} />);
+      fireEvent.click(screen.getByTestId('graph-node-a'));
+      expect(onCollapseChange).not.toHaveBeenCalled();
+    });
+  });
 });
