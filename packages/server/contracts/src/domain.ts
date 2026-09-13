@@ -20,7 +20,7 @@ export interface RecentRepoInfo extends RepoInfo {
   branch: string | null;
   /** 路径是否仍可用（RecentProjectPanel.isPathValid：只看目录是否存在，不判是否仍是 git 仓库） */
   valid: boolean;
-  /** 头像色号 0..8（ProjectIconPalette.gradients 的下标）；按项目持久化，见 design.md §4.3 */
+  /** 头像色号 0..8（ProjectIconPalette.gradients 的下标）；按项目持久化，见 docs/pages-and-api-audit.md §4.1 */
   colorIndex: number;
 }
 

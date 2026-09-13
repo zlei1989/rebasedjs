@@ -86,6 +86,13 @@ describe('P1 端点 schema', () => {
       .toEqual({ limit: 10, skip: 20, author: '张三' });
   });
 
+  it('logQuery all 查询串三态：' + '\'false\' → false、\'true\' → true、缺省 → undefined（同 staged 口径）', () => {
+    expect(logQuerySchema.parse({ all: 'false' }).all).toBe(false);
+    expect(logQuerySchema.parse({ all: 'true' }).all).toBe(true);
+    // 缺省不带该键（optional 不落默认值）：容器未过滤时查询串里就没有 all
+    expect(logQuerySchema.parse({}).all).toBeUndefined();
+  });
+
   it('openRepoBody 要求非空 path', () => {
     expect(() => openRepoBodySchema.parse({ path: '' })).toThrow();
   });

@@ -82,8 +82,17 @@ export async function listRecentRepos(): Promise<RecentRepoInfo[]> {
     if (assigned) touched = true;
     return { repo, colorIndex };
   });
-  // 只在真的分配了新色号时写盘（对齐 Java getOrGenerateAssociatedColorIndex 的保存时机）
-  if (touched) saveConfig(config);
+  // 只在真的分配了新色号时写盘（对齐 Java getOrGenerateAssociatedColorIndex 的保存时机）。
+  // 写盘失败**吞掉**：色号簿记是装饰性的，而本函数是首页最近列表的入口端点——配置目录/文件暂时不可写
+  // （Windows 上 AV／同步进程造成的瞬时 EPERM/EBUSY 是本仓已知现实）时若让异常冒到路由层，整块最近
+  // 仓库列表会 500，为一次配色簿记付这个代价不合理。saveConfig 自身仍照常抛错（其它调用方依赖它）。
+  if (touched) {
+    try {
+      saveConfig(config);
+    } catch {
+      // 装饰性簿记：写盘失败不影响本次列表结果（下次进入会重新尝试分配该路径的色号）
+    }
+  }
   return Promise.all(
     withAvatar.map(async ({ repo, colorIndex }) => ({
       ...repo,

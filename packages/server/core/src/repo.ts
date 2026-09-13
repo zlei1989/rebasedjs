@@ -51,7 +51,9 @@ function parseHeadContent(content: string): string | null {
   const matched = /^ref:\s*(.+)$/.exec(text);
   if (matched === null) return null;
   const target = matched[1].trim();
-  return target === '' ? null : stripRefsPrefix(target);
+  // 先剥前缀再判空：`ref: refs/heads/` 剥完是空串，属本函数 JSDoc 的「其余 → null」，不是空分支名
+  const name = stripRefsPrefix(target);
+  return name === '' ? null : name;
 }
 
 /**

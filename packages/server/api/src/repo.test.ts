@@ -116,6 +116,25 @@ describe('repo 功能', () => {
     expect(listed[0]).toMatchObject({ id: 'gone', branch: null, valid: false });
   });
 
+  it('listRecentRepos 派生 branch/valid：路径存在但不是 git 仓库 → valid:true 且 branch:null', async () => {
+    // createTmpDir 只建空目录（0 次 git spawn）：无 .git ⇒ readHeadBranch 解析不出分支，
+    // 但目录存在 ⇒ valid:true（valid 只看目录存在性；是否仍是 git 仓库由 openRepo 时报 NOT_A_GIT_REPO）
+    const plainDir = createTmpDir('rebased-api-plain-');
+    dirs.push(plainDir);
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({
+        repos: [{ id: 'plain', path: plainDir, name: 'plain', openedAt: '2026-09-01T00:00:00.000Z' }],
+        settings: { logInEditor: true, recentRepoIds: ['plain'] },
+      }),
+    );
+
+    const listed = await listRecentRepos();
+
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ id: 'plain', branch: null, valid: true });
+  });
+
   it('getAppHomeDir 返回宿主用户主目录', () => {
     expect(getAppHomeDir()).toBe(homedir());
   });
