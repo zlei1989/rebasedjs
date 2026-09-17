@@ -5,14 +5,16 @@
  * current 标记（纯建删非当前分支不改 RepoStatus 字段，watcher 不产事件，见行内订阅注释）。
  */
 import { useBranchAction, useBranches, useBranchWorkingDiff, useCheckout, useCheckoutRebase, useCheckoutUpdate, useFetch, useForcePushedUpdate, useRepoEvents, useTags } from '@rebased/client';
-import { BranchPanel, mergedCleanupCandidates, PageShell, openInNewTab } from '@rebased/ui';
-import { Button, Modal, Tooltip, message } from 'antd';
+import { BranchPanel, mergedCleanupCandidates, PageShell, RepoTopNav, openInNewTab } from '@rebased/ui';
+import { Modal, message } from 'antd';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useRepoNav } from '../repo-nav';
 
 export function RepoBranchesPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   const { data: branches, mutate: mutateBranches } = useBranches(repoId);
   // 标签组（GitBranchesTreeSingleRepoModel tags 组语义）：分支面板底部「标签」卡片（行内检出 = detached）
   const { data: tags } = useTags(repoId);
@@ -93,14 +95,8 @@ export function RepoBranchesPage(): React.ReactNode {
   if (!branches) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="branches" 高亮分支图标 */}
+      <RepoTopNav {...nav} current="branches" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <BranchPanel
         key={repoId}

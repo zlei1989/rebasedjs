@@ -1,9 +1,13 @@
 /**
- * 差异页容器：useFileDiff（全文 FileVersions，主渲染路径）+ useDiffStream（同查询分块流，渐进渲染）+ useSettings 注入 ui
+ * 差异页容器：useHeldFileDiff（全文 FileVersions + 所属文件名，主渲染路径）+ useDiffStream（同查询分块流，渐进渲染）+ useSettings 注入 ui
  * （与 web-next 容器同构；repoId 取 useParams、file/from/to/renameFrom/root/files 取 useSearchParams，而非 Next params/searchParams）。
  * 三版本模式（?three=1，StatusPage 行「三版本」入口）：改用 useFileThreeWay（HEAD/暂存/工作区三侧）→ DiffPage threeWayVersions。
- * 服务端 diff 端点返回 FileVersions（Monaco 两侧全文），与 client useFileDiff 类型一致。
- * 分块流与全文同参（staged/from/to 透传）：全文未就绪且流已有文本时渲染 DiffStreamView（分块文本接入 Monaco，
+ * 服务端 diff 端点返回 FileVersions（Monaco 两侧全文），与 client useHeldFileDiff 类型一致。
+ * 取数用 useHeldFileDiff（全文 + 所属文件名成对）：翻文件 / 切 staged 时 SWR 先给 undefined，若据此改渲染
+ * 流式视图或空白，DiffPage 会连同 Monaco 编辑器一起卸载、全文到达后再重建；而 Monaco 在「销毁后很快重建」时
+ * 会抛 `AbstractContextKeyService has been disposed`（上游缺陷 microsoft/monaco-editor#4581，实测翻文件每次必现）。
+ * 故取数窗口里沿用上一份已就绪的 (file, versions)（文件名与内容同批换），首次进入无上一份时才走下面的流式分支。
+ * 分块流与全文同参（staged/from/to 透传）：全文未就绪且无上一份可顶、流已有文本时渲染 DiffStreamView（分块文本接入 Monaco，
  * P0 消化——见任务清单 §2.1），全文到达即切换标准 DiffPage；流错误在分块视图内呈现。
  * from/to 为可选成对查询参数：committed 浏览页打开某提交的变更（from=父提交、to=提交本身）时进入；
  * from/to 存在时覆盖「worktree 对比」语义（staged 开关仅 worktree 模式有意义，此时隐藏切换——终审 Must-fix 3）。
@@ -12,7 +16,7 @@
  * files 为可选 JSON 数组（#27 多文件 Prev/Next）：同组文件列表经 JSON.stringify 编码进查询串；切换文件保留
  * from/to/staged/three 等参数（renameFrom/root 为条目级属性，切换时清除）。
  */
-import { useDiffStream, useFileDiff, useFileThreeWay, useSettings } from '@rebased/client';
+import { useDiffStream, useFileThreeWay, useHeldFileDiff, useSettings } from '@rebased/client';
 import { DiffPage, DiffStreamView, PageShell } from '@rebased/ui';
 import { Typography } from 'antd';
 import { useMemo, useState } from 'react';
@@ -43,8 +47,9 @@ export function RepoDiffPage(): React.ReactNode {
   // staged 初值来自查询参数（StatusPage 行双击按该行所属分组带入 staged=1——三态映射的入口语义）；
   // 后续切换仍由页内 Segmented 驱动本地态，不回写 URL
   const [staged, setStaged] = useState(searchParams.get('staged') === '1');
-  const { data: versions, error } = useFileDiff(repoId, file, staged, isRoot ? undefined : from, isRoot ? undefined : to);
-  // 三版本数据（?three=1 时启用；与 useFileDiff 并存——SWR 键不同互不干扰）
+  // 差异主渲染数据：取数窗口里沿用上一份已就绪的 (file, versions)，DiffPage 不卸载 → Monaco 不重建（见文件头）
+  const { data: diff, error } = useHeldFileDiff(repoId, file, staged, isRoot ? undefined : from, isRoot ? undefined : to);
+  // 三版本数据（?three=1 时启用；与 useHeldFileDiff 并存——SWR 键不同互不干扰）
   const { data: threeWayVersions, error: threeWayError } = useFileThreeWay(repoId, isThreeWay ? file : '');
   // 分块订阅：与全文查询同参（渐进渲染，Ruling 6）；text/error 驱动 DiffStreamView
   const { text: streamText, error: streamError, connected: streamConnected } = useDiffStream(
@@ -73,16 +78,16 @@ export function RepoDiffPage(): React.ReactNode {
     if (!threeWayVersions) return null;
     return <DiffPage versions={{ before: '', after: '' }} threeWayVersions={threeWayVersions} file={file} staged={staged} />;
   }
-  // 全文未就绪：流已有文本 → 分块视图渐进渲染（分块文本接入 Monaco）；否则等待
-  if (!isRoot && !versions) {
+  // 全文未就绪且无上一份可顶（首次进入）：流已有文本 → 分块视图渐进渲染；否则等待
+  if (!isRoot && !diff) {
     return streamText !== '' ? (
       <DiffStreamView text={streamText} error={streamError} connected={streamConnected} />
     ) : null;
   }
   return (
     <DiffPage
-      versions={versions ?? { before: '', after: '' }}
-      file={file}
+      versions={diff?.versions ?? { before: '', after: '' }}
+      file={diff?.file ?? file}
       staged={staged}
       onToggleStaged={setStaged}
       renameFrom={renameFrom}

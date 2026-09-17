@@ -1,7 +1,8 @@
 /**
- * 差异页：文件路径头 + DiffViewer（默认并排、忽略空白开关默认不忽略、staged/工作区切换）。
- * UX 对齐 #4。ignoreWhitespace 为页面内部状态（默认 false，对齐 Java DEFAULT），切换时通知调用方；
- * staged 由调用方受控（影响服务端取数三态映射）。
+ * 差异页：文件路径头（含同组文件的「上一个 / 下一个」）+ DiffViewer（工具条选项各自记本机：
+ * 并排/行内、忽略空白、自动换行、空白字符、上下文行数；staged/工作区切换）。
+ * UX 对齐 #4。staged 由调用方受控（影响服务端取数三态映射）；ignoreWhitespace 与其它呈现选项
+ * 都是**显示偏好**，由 DiffViewer 自持并逐项落 localStorage（见 domain/diff-viewer 文件头）。
  * 三版本模式（threeWayVersions 提供时）：HEAD/暂存/工作区三侧两段对比（GitStageCompareThreeVersionsAction）。
  * 特殊模式（终审裁定）：
  * - renameFrom 非空（committed 浏览 R 重命名文件时容器经 ?renameFrom= 带入原名）：只渲染提示行，
@@ -9,11 +10,12 @@
  * - rootCommit（根提交无父版本）：from=<hash>~1 无父可解析，同样只渲染提示行；
  * - fromTo 为 true（定提交对比）：透传 DiffViewer 隐藏 staged/工作区切换（与 from/to 互斥，服务端 400）。
  */
-import { useState } from 'react';
 import type { FileThreeVersions, FileVersions } from '@rebased/contracts';
-import { Button, Flex, Tooltip, Typography } from 'antd';
+import { Flex, Typography } from 'antd';
 import { PageShell } from '../base/page-shell';
 import { DiffViewer } from '../domain/diff-viewer';
+import { FileNavButtons } from '../domain/file-nav-buttons';
+import { languageForPath } from '../domain/language';
 import { ThreeWayView } from './three-way-view';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
 
@@ -21,11 +23,11 @@ export interface DiffPageProps {
   versions: FileVersions;
   /** 三版本对比数据（HEAD/暂存/工作区）；提供时渲染三版本视图（与 versions 二选一） */
   threeWayVersions?: FileThreeVersions;
-  /** 当前对比文件路径（页头展示） */
+  /** 当前对比文件路径（页头展示，未显式传 language 时也用它推断语法高亮） */
   file: string;
   staged: boolean;
   onToggleStaged?: (staged: boolean) => void;
-  onToggleWhitespace?: (ignoreWhitespace: boolean) => void;
+  /** 显式语言 id；缺省按 file 扩展名推断（见 domain/language） */
   language?: string;
   /** 重命名原名（committed 页 R 状态文件打开时由容器注入）；非空时页面仅显示提示行 */
   renameFrom?: string;
@@ -41,63 +43,12 @@ export interface DiffPageProps {
   onNavigateFile?: (file: string) => void;
 }
 
-/** 多文件 Prev/Next 按钮（#27）：当前索引由 file 定位；到头/尾禁用；<2 个不渲染 */
-function FileNavButtons({
-  files,
-  file,
-  onNavigateFile,
-}: {
-  files: string[];
-  file: string;
-  onNavigateFile?: (file: string) => void;
-}): React.ReactNode {
-  if (files.length < 2 || onNavigateFile === undefined) return null;
-  const index = files.indexOf(file);
-  if (index < 0) return null; // 当前文件不在组内（如过期 URL）→ 不渲染导航
-  const prev = index > 0 ? files[index - 1] : undefined;
-  const next = index < files.length - 1 ? files[index + 1] : undefined;
-  return (
-    <Flex gap={8} align="center" data-testid="diff-file-nav">
-      {/* 到头/到尾时按钮禁用，禁用按钮不派发 hover → 在 Tooltip 与 Button 之间包一层 span 承接提示；
-          inline-flex 让 span 紧贴按钮，不改变这一行的布局尺寸 */}
-      <Tooltip title={prev === undefined ? '当前文件已是该组第一个，没有上一个可切' : '切到同组的上一个文件（保留当前对比模式）'}>
-        <span style={{ display: 'inline-flex' }}>
-          <Button
-            size="small"
-            disabled={prev === undefined}
-            data-testid="diff-prev-file"
-            onClick={() => prev !== undefined && onNavigateFile(prev)}
-          >
-            ‹ Prev
-          </Button>
-        </span>
-      </Tooltip>
-      <Typography.Text type="secondary">
-        {index + 1}/{files.length}
-      </Typography.Text>
-      <Tooltip title={next === undefined ? '当前文件已是该组最后一个，没有下一个可切' : '切到同组的下一个文件（保留当前对比模式）'}>
-        <span style={{ display: 'inline-flex' }}>
-          <Button
-            size="small"
-            disabled={next === undefined}
-            data-testid="diff-next-file"
-            onClick={() => next !== undefined && onNavigateFile(next)}
-          >
-            Next ›
-          </Button>
-        </span>
-      </Tooltip>
-    </Flex>
-  );
-}
-
 export function DiffPage({
   versions,
   threeWayVersions,
   file,
   staged,
   onToggleStaged,
-  onToggleWhitespace,
   language,
   renameFrom,
   rootCommit,
@@ -106,8 +57,9 @@ export function DiffPage({
   files,
   onNavigateFile,
 }: DiffPageProps): React.ReactNode {
-  // 忽略空白默认关（UX 对齐 #4：对齐 Java TextDiffSettingsHolder 默认不忽略）
-  const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+  // 语法高亮：容器通常只给文件路径，语言 id 在这里按扩展名推断（与 log-page 内联快照同一套口径）；
+  // 缺省 plaintext 时 diff 两侧只有单调文本色，等于没有高亮
+  const highlightLanguage = language ?? languageForPath(file);
   // 页面根：/repos/:repoId/diff 直接渲染本组件（无外层布局根），故由本组件持有密度（不传 density=compact）。
   // gap/padding 照抄既有值 8（PageShell 默认不落 style，不传会静默丢掉内距与行距）。
   return (
@@ -134,12 +86,7 @@ export function DiffPage({
             versions={versions}
             staged={staged}
             onToggleStaged={onToggleStaged}
-            ignoreWhitespace={ignoreWhitespace}
-            onToggleWhitespace={(v) => {
-              setIgnoreWhitespace(v);
-              onToggleWhitespace?.(v);
-            }}
-            language={language}
+            language={highlightLanguage}
             fromTo={fromTo}
             loader={loader}
           />

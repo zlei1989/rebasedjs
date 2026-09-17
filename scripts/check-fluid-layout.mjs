@@ -812,8 +812,12 @@ async function assertMonacoInternalScroll(page) {
 const SLOW_GATE_TIMEOUT = 60000;
 
 /**
- * 路由表 = web-next 全部 24 个页面（/ 首页 + /repos/:id 日志页 + 22 个子页），
- * 加两种「静态加载不产生」的日志页状态（?select= 选中提交、?compare= 分支对比）。
+ * 路由表 = web-next 全部 23 个页面（/ 首页 + /repos/:id 日志页 + 21 个子页；
+ * `/repos/:id/browse` 整页形态已删除——应用内没有入口，其能力由日志页就地快照栏承载），
+ * 加「静态加载不产生」的日志页状态（?select= 选中提交、?compare= 分支对比、
+ * ?browse= 就地快照栏的文件树 / ?browse=<路径> 就地快照栏的文件内容；
+ * 两个面板键 `browse` / `diff` 都是**键在即开、值承载定位**（空值 = 树/清单在前台，路径 = 该文件/该差异在前台）；
+ * 旧的 `?snap=<hash>` 与 `?file=` 只作只读兼容）。
  *
  * 两段式就绪门（`ready` + `content`）：
  *   - `ready`   = 页面壳/工具行出现（证明路由挂上了）；
@@ -835,7 +839,7 @@ const SLOW_GATE_TIMEOUT = 60000;
  *
  * `min`（内容级门的**命中数下限**）与 `gateTimeout`：
  *   `content` 命中 1 条就通过，仍可能是「一页只渲染出 22 个树节点里的 1 个」这类部分加载 ——
- *   故对**又大又与夹具无关**的列表给下限：browse 的树节点（实测 20）→ 10、console 的历史记录
+ *   故对**又大又与夹具无关**的列表给下限：就地快照栏的文件树节点（实测 20）→ 10、console 的历史记录
  *   （实测 100）→ 10、settings 的 git 配置行（实测 9，键集由代码里的 `CONFIG_KEYS` 决定，不随夹具变）→ 4。
  *   实测命中数记在每格的 `readyItems` 里，跑完还会做一次跨档一致性检查（只告警不判红）。
  *   其余是**单行级 / 跟着夹具走**的小列表（stashes / tags / patches / shelves / worktrees /
@@ -846,7 +850,7 @@ const SLOW_GATE_TIMEOUT = 60000;
  * **夹具耦合（必须知道的一件事）**：下面这些内容级门要求**夹具里真的有那些内容**，而
  * `rebased-smoke` 里的 stash / 未跟踪文件 / tag / patch / shelf / worktree / submodule 都是
  * **可变状态**（用户随时可能 drop 一个 stash、提交掉未跟踪文件、删掉 tag）：
- *   browse 的树节点、settings 的 git 配置、status 的变更行、stashes、tags、patches、shelves、
+ *   就地快照栏的文件树节点、settings 的 git 配置、status 的变更行、stashes、tags、patches、shelves、
  *   worktrees、submodules、console 的历史记录。
  * 夹具一旦被改动，这些格子会**如实判红**（提示「内容级就绪选择器未出现」），而不是静默跳过 ——
  * 这是有意的：那一格此时没有可量的数据，绿了才是错的。排查时先看夹具，不要先改门。
@@ -858,9 +862,17 @@ function routeCells(ctx) {
     { name: 'log', path: `/repos/${ctx.repo.id}`, ready: '[data-testid="commit-graph-row"]' },
     { name: 'log-select', path: `/repos/${ctx.repo.id}?select=${ctx.hash}`, ready: '[data-testid="commit-details"]' },
     { name: 'log-compare', path: `/repos/${ctx.repo.id}?compare=${ctx.branch}`, ready: '[data-testid="compare-title"]' },
-    // browse：split-side-host 只在 entries 到齐且非空时渲染（browse-panel.tsx：!entries || length===0 → EmptyState），
-    // 再要求文件树节点真的铺出来（nodes 由 entries 推导），把「树空了但宿主在」也挡住
-    { name: 'browse', path: `/repos/${ctx.repo.id}/browse?rev=${ctx.hash}`, ready: '[data-testid="split-side-host"]', content: '[data-testid="split-side-host"] .ant-tree-treenode', min: 10 },
+    // browse（`/repos/:id/browse` 整页形态）已按用户口径删除：该页在应用内没有任何入口
+    // （详情面板「浏览快照」开的是**就地快照栏**），故原 browse 那一格拆成下面两格，
+    // 覆盖接替它的就地快照栏（同样要量「树真的铺出来了」，不是只看标签栏在不在）。
+    // 开合参数是 `browse` 键（2026-09-17 起：键在即开、值承载定位；`?snap=<hash>` / `?file=` 只作旧链接兼容只读）
+    { name: 'log-snapshot', path: `/repos/${ctx.repo.id}?select=${ctx.hash}&browse=`, ready: '[data-testid="snapshot-tabs"]', content: '[data-testid="snapshot-tree-pane"] .ant-tree-treenode', min: 10, gateTimeout: SLOW_GATE_TIMEOUT },
+    // 就地快照栏的文件内容：FileTree 要逐级点开才能选中文件，URL 直给 `?browse=<路径>` 由容器开标签并激活
+    // （见 log-page 的「深链 ?browse=<路径>」口径）。内容级门用**路径栏**（`browse-content-path`）而不是
+    // Monaco 宿主：路径栏与文件标签页同帧挂上，而 `browse-code-editor` 要等 monaco 懒加载完才注入
+    // （live 实测：激活后一帧 monaco=0、稍后才 1）——等它会与「Monaco 还没加载完」纠缠，
+    // 门本身不该承担懒加载时序。
+    { name: 'log-snapshot-file', path: `/repos/${ctx.repo.id}?select=${ctx.hash}&browse=${q(ctx.file)}`, ready: '[data-testid="snapshot-tabs"]', content: '[data-testid="browse-content-path"]', min: 1, gateTimeout: SLOW_GATE_TIMEOUT },
     { name: 'blame', path: `/repos/${ctx.repo.id}/blame?file=${q(ctx.file)}`, ready: '[data-testid="blame-file"]' },
     { name: 'branches', path: `/repos/${ctx.repo.id}/branches`, ready: '[data-testid^="row-local-"]' },
     { name: 'committed', path: `/repos/${ctx.repo.id}/committed`, ready: '[data-testid="committed-entry-0"]' },
@@ -1520,7 +1532,11 @@ async function run(opts, pw, exe) {
               if (notReady === null && cell.interact !== undefined) await cell.interact(page);
               if (notReady === null && cell.verify !== undefined) extra = await cell.verify(page);
               if (notReady === null && cell.after !== undefined) extra = await cell.after(page);
-              if (notReady === null && (cell.name === 'browse' || cell.name === 'log-select')) {
+              // 栏宿主几何断言只对**两栏 SplitPane** 的格子跑（判据是 split-side-host/split-main-host，
+              // 见 assertPanes）：log-select = 日志｜详情。原先这条里还有 browse（整页两栏）——该页已删除；
+              // 接替它的就地快照栏是**三栏 ResizableColumns**（宿主是 resizable-pane-* / ant-splitter-bar），
+              // 不能套用这条断言，其几何只由页面级溢出与密度断言覆盖。
+              if (notReady === null && cell.name === 'log-select') {
                 extra = await assertPanes(page, width, collapseBelow);
               }
               // 按路由的密度断言与溢出断言**同一时刻、同一页面状态**下取样（interact 之后）：
@@ -1779,7 +1795,7 @@ async function runShots(opts, pw, exe) {
     ['log', `/repos/${ctx.repo.id}`],
     ['log-select', `/repos/${ctx.repo.id}?select=${ctx.hash}`],
     ['log-compare', `/repos/${ctx.repo.id}?compare=${ctx.branch}`],
-    ['browse', `/repos/${ctx.repo.id}/browse?rev=${ctx.hash}`],
+    ['log-snapshot', `/repos/${ctx.repo.id}?select=${ctx.hash}&browse=`],
     ['diff', `/repos/${ctx.repo.id}/diff?file=${q(ctx.file)}&from=${ctx.prevHash}&to=${ctx.hash}`],
     ['app-settings', '/settings'],
     ['settings', `/repos/${ctx.repo.id}/settings`],

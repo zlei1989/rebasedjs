@@ -8,15 +8,17 @@
  */
 import { useBranches, useMerge, useRepoEvents } from '@rebased/client';
 import type { MergeBody } from '@rebased/contracts';
-import { MergeDialog, PageShell } from '@rebased/ui';
+import { MergeDialog, PageShell, RepoTopNav } from '@rebased/ui';
 import { message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 import { useSWRConfig } from 'swr';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
   const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: branches, mutate: mutateBranches } = useBranches(repoId);
   const { trigger: merge, isMutating: merging } = useMerge(repoId);
   // 全局 mutate：conflicts 结果预填冲突列表缓存（与 useConflicts 同键，revalidate:false 防立即覆盖）
@@ -54,6 +56,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     // 否则同一弹窗从 /merge 进入是 antd 默认 14px、从 /conflicts 进入却是 12px（同一组件两种密度）。
     // PageShell 自身不渲染可见内容（无 padding/gap），不改变弹窗外观。
     <PageShell>
+      {/* 仓库顶栏导航（共用组件）：current="merge" 高亮合并图标——本页主体只有对话框，顶栏让空页有可见骨架 */}
+      <RepoTopNav {...nav} current="merge" />
       {/* key=repoId：同挂载实例切换仓库时强制重挂载，对话框内选择态随之重置 */}
       <MergeDialog key={repoId} open branches={branches} confirming={merging} onOk={onOk} onCancel={back} />
     </PageShell>

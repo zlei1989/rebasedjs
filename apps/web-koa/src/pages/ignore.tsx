@@ -5,14 +5,15 @@
  * 与组件「确认提交本身不复位」契约对应）；onCancel 关窗；confirming = isMutating。
  */
 import { useIgnore, useIgnoreTemplates, usePutIgnore } from '@rebased/client';
-import { IgnoreDialog, PageShell } from '@rebased/ui';
+import { IgnoreDialog, PageShell, RepoTopNav } from '@rebased/ui';
 import { Button, Tooltip, message } from 'antd';
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useRepoNav } from '../repo-nav';
 
 export function RepoIgnorePage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
-  const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   const { data: contents } = useIgnore(repoId);
   const { data: templates } = useIgnoreTemplates(repoId);
   const { trigger: putIgnore, isMutating: saving } = usePutIgnore(repoId);
@@ -29,14 +30,8 @@ export function RepoIgnorePage(): React.ReactNode {
   if (!contents) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="ignore" 高亮「更多」按钮（忽略在更多菜单内） */}
+      <RepoTopNav {...nav} current="ignore" />
       {/* alignSelf: 同「返回日志」——PageShell 不设 alignItems，直接子项会被拉成整行宽的填充条（本处是 primary 按钮，比链接更显眼）；就地收回内容宽 */}
       <Tooltip title="打开忽略规则编辑器：选 .gitignore 或 .git/info/exclude 编辑规则，确认后写盘">
         <Button style={{ alignSelf: 'flex-start' }} type="primary" data-testid="edit-ignore-button" onClick={() => setOpen(true)}>

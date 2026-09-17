@@ -11,6 +11,7 @@ import { Button, Flex, Input, Select, Tooltip, Typography } from 'antd';
 import { parseUnifiedDiff, hunkSides, type UnifiedHunk } from '@rebased/contracts';
 import { useState } from 'react';
 import { formatCommitDate } from './format';
+import { languageForPath } from './language';
 import { MonacoDiffView, type MonacoDiffLoader } from '../base/monaco-diff-view';
 
 /** 行级评论（新侧锚定）：line 为新侧文件行号；atIso 为 ISO 日期串（formatCommitDate 直接截取） */
@@ -27,6 +28,8 @@ export interface HunkDiffViewProps {
   patch: string;
   /** 文件状态（added/modified/removed/renamed）：0 hunk 时决定降级提示 */
   status: string;
+  /** 文件路径（只用于按扩展名推断语法高亮语言；缺省不高亮） */
+  path?: string;
   /** 该文件的行级评论（新侧锚定）：按 hunk 新侧行号范围挂靠渲染 */
   comments?: HunkComment[];
   /** 添加评论回调（line 为新侧文件行号，body 为输入内容）；提供时每个 hunk 块渲染添加行 */
@@ -51,6 +54,7 @@ function DegradedHint({ status }: { status: string }): React.ReactNode {
 function HunkBlock({
   hunk,
   index,
+  language,
   comments,
   adding,
   onAddComment,
@@ -58,6 +62,8 @@ function HunkBlock({
 }: {
   hunk: UnifiedHunk;
   index: number;
+  /** 语法高亮语言 id（由 HunkDiffView 按文件路径推断） */
+  language?: string;
   comments: HunkComment[];
   adding?: boolean;
   onAddComment?: (line: number, body: string) => void;
@@ -100,7 +106,7 @@ function HunkBlock({
         </Typography.Text>
       </Flex>
       <div style={{ height: Math.min(320, Math.max(lineCount * 19 + 20, 80)) }}>
-        <MonacoDiffView original={before} modified={after} options={{ readOnly: true }} loader={loader} />
+        <MonacoDiffView original={before} modified={after} language={language} options={{ readOnly: true }} loader={loader} />
       </div>
       <Flex vertical gap={8} style={{ marginTop: 8 }}>
         {comments.map((comment) => (
@@ -156,9 +162,11 @@ function HunkBlock({
   );
 }
 
-export function HunkDiffView({ patch, status, comments = [], onAddComment, adding, loader }: HunkDiffViewProps): React.ReactNode {
+export function HunkDiffView({ patch, status, path, comments = [], onAddComment, adding, loader }: HunkDiffViewProps): React.ReactNode {
   const hunks = parseUnifiedDiff(patch);
   if (hunks.length === 0) return <DegradedHint status={status} />;
+  // 语法高亮按文件扩展名推断（与 DiffPage / ThreeWayView 同一套口径）；不传 path 时退到 plaintext
+  const language = languageForPath(path);
   return (
     <Flex vertical gap={12}>
       {hunks.map((hunk, index) => (
@@ -166,6 +174,7 @@ export function HunkDiffView({ patch, status, comments = [], onAddComment, addin
           key={index}
           hunk={hunk}
           index={index}
+          language={language}
           loader={loader}
           adding={adding}
           onAddComment={onAddComment}

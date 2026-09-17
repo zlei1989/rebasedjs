@@ -2,19 +2,19 @@
 
 /**
  * 子模块页容器：useSubmodules + useUpdateSubmodules（同键回写）注入 ui SubmodulePanel
- * （与 web-koa 容器同构；repoId 取 Next params、返回导航用 useRouter）。
+ * （与 web-koa 容器同构；repoId 取 Next params、导航回调经 useRepoNav 装配）。
  * onUpdate 透传面板构造的请求体：行内 {name}；全量非递归 {}；全量递归 {recursive:true}（T5 裁定）。
- * 顶部返回按钮回日志页；「刷新」重取列表（mutate）；操作失败统一以服务端中文 message 提示。
+ * 仓库顶栏导航（RepoTopNav）取代「返回日志」链接；「刷新」重取列表（mutate）；操作失败统一以服务端中文 message 提示。
  */
 import { useSubmodules, useUpdateSubmodules } from '@rebased/client';
-import { PageShell, SubmodulePanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
-import { useRouter } from 'next/navigation';
+import { PageShell, RepoTopNav, SubmodulePanel } from '@rebased/ui';
+import { message } from 'antd';
 import { useEffect, use } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
-  const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: submodules, error: submodulesError, mutate: mutateSubmodules } = useSubmodules(repoId);
   const { trigger: updateSubmodules, isMutating: updating } = useUpdateSubmodules(repoId);
   // 操作失败统一以服务端中文 message 提示，避免未捕获 rejection（既有容器做法）
@@ -29,14 +29,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   if (!submodules) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="submodules" 高亮「更多」按钮（子模块在更多菜单内） */}
+      <RepoTopNav {...nav} current="submodules" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Checkbox 态随之重置 */}
       <SubmodulePanel
         key={repoId}

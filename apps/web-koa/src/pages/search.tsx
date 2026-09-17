@@ -6,14 +6,16 @@
  */
 import { useBranches, useCheckout, useSearch } from '@rebased/client';
 import type { SearchMode } from '@rebased/contracts';
-import { PageShell, SearchPanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
+import { PageShell, RepoTopNav, SearchPanel } from '@rebased/ui';
+import { message } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useRepoNav } from '../repo-nav';
 
 export function RepoSearchPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   // 已提交的搜索载荷：SearchPanel 的 q/mode 为其内部状态，经 onSearch 上抛后驱动 hook
   const [search, setSearch] = useState<{ q: string; mode: SearchMode } | null>(null);
   // 仓库切换（两端 SPA 同挂载实例复用）时清空搜索载荷（面板已随 key=repoId 重挂载，查询随之归零）
@@ -27,14 +29,8 @@ export function RepoSearchPage(): React.ReactNode {
   };
   return (
     <PageShell gap={8}>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="search" 高亮「更多」按钮（搜索在更多菜单内） */}
+      <RepoTopNav {...nav} current="search" />
       <SearchPanel
         key={repoId}
         onSearch={(q, mode) => setSearch({ q, mode })}

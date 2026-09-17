@@ -1,0 +1,84 @@
+/*
+ * 只读代码块样式（base/code-block 专用）。
+ * 两件事：① 双主题翻转（浅色在行内、深色在 --shiki-dark*，与 base/app-theme 的 data-theme 同一口径）；
+ * ② 补丁行底色与行首标记（由 shiki-lazy 输出的 .line[data-kind] / .diff-marker 承载）。
+ * 颜色刻意只取「底色/标记/行号灰」这类结构性着色，语法色一律来自高亮器本身，不在这里重复定义。
+ */
+
+.rebased-code-block {
+  /* 长行不折行：折行会让补丁的列对齐失真，横向滚动交给这个外壳 */
+  overflow-x: auto;
+}
+
+.rebased-code-pre {
+  margin: 0;
+  /* 内距为 0：底色与标记要贴着块的边缘，留白交给调用方容器 */
+  padding: 0;
+  font-family: monospace;
+  font-size: inherit;
+  line-height: 1.5;
+  /* 空白按 normal：行块 `.line` 是块级盒、自己负责行高与换行。
+     若这里用 pre，JSX 子元素之间的格式换行/缩进会被当成内容渲染——每个补丁行之间多一条空行
+     （布局效果靠 code-block.test.tsx 的「行之间不夹空行」守着：jsdom 不跑 CSS，故断言的是 DOM 结构）。 */
+  white-space: normal;
+  color: inherit;
+  background: transparent;
+}
+
+/* 深色主题：把每个 token 的颜色换成它自己的 --shiki-dark。
+   选择器按 token 自身的 `.code` 类取，而**不是**按 `[style*='--shiki-dark']` ——后者是脆弱侧写：
+   任何 style 里含该子串的元素都会命中（将来 shiki 若同时输出 `--shiki-light`，浅色也会被一起掀成深色）。 */
+[data-theme='dark'] .rebased-code-block .code {
+  color: var(--shiki-dark) !important;
+}
+
+/* 行块：块级 + 可收缩，补丁行底色才能占满整行 */
+.line {
+  display: block;
+  /* 行内空白（缩进、对齐空格）原样保留：这是代码块，行内空白属于内容 */
+  white-space: pre;
+  /* 空行占位：没有内联内容的行块高度为 0（浏览器不为空行生成行盒），
+     而补丁里的空行是真实的一行（`\ No newline` 附近、函数间空行很常见），塌掉会让行号与上下文错位。
+     1lh 跟随字号（字号由全站密度供给），下面的 em 值只作不识别 lh 时的兜底。 */
+  min-height: 1.5em;
+  min-height: 1lh;
+  padding-inline-start: 12px;
+  /* 行首标记用绝对定位挂在内容盒外，正文偏移与纯文本视图保持一致 */
+  position: relative;
+}
+
+/* 行首标记：固定在内容左沿之外，不参与文字流（正文偏移因此不受影响） */
+.diff-marker {
+  position: absolute;
+  inset-inline-start: 2px;
+  color: var(--rebased-patch-marker, #8c8c8c);
+  user-select: none;
+}
+
+/* 新增行：绿底 + 绿标记（颜色取 antd 语义色的淡色档，明暗两套底色分别给） */
+.line[data-kind='add'] {
+  background: rgba(82, 196, 26, 0.12);
+}
+
+.line[data-kind='remove'] {
+  background: rgba(255, 77, 79, 0.12);
+}
+
+.line[data-kind='add'] .diff-marker {
+  color: #52c41a;
+}
+
+.line[data-kind='remove'] .diff-marker {
+  color: #ff4d4f;
+}
+
+/* hunk 头（@@ … @@）：比正文重一档、给一点底色，视觉上把每个 hunk 分开 */
+.line[data-kind='hunk'] {
+  background: rgba(140, 140, 140, 0.16);
+}
+
+/* 文件头（diff --git / index / --- / +++）与 \ No newline 标记：弱化，不与正文争注意力 */
+.line[data-kind='header'],
+.line[data-kind='noNewline'] {
+  color: #8c8c8c;
+}

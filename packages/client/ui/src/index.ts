@@ -20,6 +20,8 @@ export { HunkDiffView, type HunkDiffViewProps } from './domain/hunk-diff-view';
 export { CommitDetailsPanel, type CommitDetailsPanelProps } from './domain/commit-details-panel';
 export { RepoPage, type RepoPageProps, type RepoListItem } from './composite/repo-page';
 export { LogPage, type LogPageProps } from './composite/log-page';
+export { RepoTopNav, type RepoTopNavProps, type RepoNavPage } from './composite/repo-top-nav';
+export { SnapshotTabs, type SnapshotTabsProps } from './composite/snapshot-tabs';
 export { DiffPage, type DiffPageProps } from './composite/diff-page';
 export {
   AppSettingsPage,
@@ -42,7 +44,12 @@ export { BranchPanel, mergedCleanupCandidates, type BranchPanelProps } from './c
 export { BranchCompareView, type BranchCompareViewProps } from './composite/branch-compare-view';
 export { BlameView, type BlameViewProps } from './composite/blame-view';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
-export { BrowsePanel, type BrowsePanelProps } from './composite/browse-panel';
+export {
+  SnapshotTreeColumn,
+  snapshotTreeNodes,
+  topLevelDirKeys,
+  type SnapshotTreeColumnProps,
+} from './composite/snapshot-tree-column';
 export { DiffStreamView, type DiffStreamViewProps } from './composite/diff-stream-view';
 export { ThreeWayView, type ThreeWayViewProps } from './composite/three-way-view';
 export {
@@ -94,4 +101,16 @@ export { PageShell, type PageShellProps } from './base/page-shell';
 export { Toolbar, type ToolbarProps } from './base/toolbar';
 export { EllipsisText, type EllipsisTextProps } from './base/ellipsis-text';
 export { SplitPane, type SplitPaneProps } from './base/split-pane';
+export { ResizableColumns, type ResizableColumnsProps, type ResizablePane } from './base/resizable-columns';
+export { CopyOnClick, type CopyOnClickProps } from './base/copy-on-click';
+export { copyToClipboard } from './base/clipboard';
+export { ReadonlyTextView, type ReadonlyTextViewProps } from './base/readonly-text-view';
+export {
+  CodeBlock,
+  PatchCodeBlock,
+  type CodeBlockProps,
+  type CodeBlockLoader,
+  type CodeBlockHighlighter,
+} from './base/code-block';
+export { decoratePatchLines, type PatchLine, type PatchLineKind } from './domain/highlight';
 export { openInNewTab } from './base/open-in-new-tab';

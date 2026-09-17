@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileVersions } from '@rebased/contracts';
+import type { MonacoDiffInnerProps } from '../base/monaco-diff-view';
 import { DiffPage } from './diff-page';
 
 const versions: FileVersions = { before: '旧内容', after: '新内容' };
@@ -9,7 +10,22 @@ const versions: FileVersions = { before: '旧内容', after: '新内容' };
 const stubLoader = (): Promise<{ default: () => React.ReactNode }> =>
   Promise.resolve({ default: () => <div>stub-diff-editor</div> });
 
+/** 记录编辑器收到的 props 的 stub loader（用于断言语言等透传字段） */
+function captureLoader(sink: Array<MonacoDiffInnerProps>): () => Promise<{ default: (props: MonacoDiffInnerProps) => React.ReactNode }> {
+  return () =>
+    Promise.resolve({
+      default: (props: MonacoDiffInnerProps) => {
+        sink.push(props);
+        return <div>stub-diff-editor</div>;
+      },
+    });
+}
+
 describe('DiffPage', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('渲染文件路径与 DiffViewer', async () => {
     render(<DiffPage versions={versions} file="src/app.ts" staged={false} loader={stubLoader} />);
     expect(screen.getByText('src/app.ts')).toBeInTheDocument();
@@ -25,21 +41,13 @@ describe('DiffPage', () => {
     expect(onToggleStaged).toHaveBeenCalledWith(true);
   });
 
-  it('忽略空白开关默认关闭，打开时触发 onToggleWhitespace(true)', () => {
-    const onToggleWhitespace = vi.fn();
-    render(
-      <DiffPage
-        versions={versions}
-        file="src/app.ts"
-        staged={false}
-        onToggleWhitespace={onToggleWhitespace}
-        loader={stubLoader}
-      />,
-    );
-    const toggle = screen.getByRole('switch');
+  it('忽略空白开关默认关闭，打开即切换并记进本机偏好（不再是页面状态）', () => {
+    render(<DiffPage versions={versions} file="src/app.ts" staged={false} loader={stubLoader} />);
+    const toggle = screen.getByTestId('diff-ignore-ws');
     expect(toggle).not.toBeChecked();
     fireEvent.click(toggle);
-    expect(onToggleWhitespace).toHaveBeenCalledWith(true);
+    expect(toggle).toBeChecked();
+    expect(window.localStorage.getItem('rebased.diff.ignoreWhitespace')).toBe('true');
   });
 
   it('传入 renameFrom 时渲染重命名提示行且不渲染伪 diff（monaco 视图缺席）', async () => {
@@ -80,6 +88,20 @@ describe('DiffPage', () => {
     expect(screen.queryByText('工作区')).not.toBeInTheDocument();
     expect(screen.queryByText('已暂存')).not.toBeInTheDocument();
     expect(await screen.findByText('stub-diff-editor')).toBeInTheDocument();
+  });
+
+  // 语法高亮：容器只给文件路径，语言 id 由本组件按扩展名推断后透传给 diff 视图（此前缺省 plaintext → 两侧无高亮）
+  it('未显式传 language 时按文件扩展名推断高亮语言；显式传入时以传入为准', async () => {
+    const captured: Array<MonacoDiffInnerProps> = [];
+    const loader = captureLoader(captured);
+    const { rerender } = render(<DiffPage versions={versions} file="src/app.ts" staged={false} loader={loader} />);
+    expect(await screen.findByText('stub-diff-editor')).toBeInTheDocument();
+    expect(captured.at(-1)?.language).toBe('typescript');
+    // 未收录的扩展名不猜语言：交给 monaco 退到 plaintext
+    rerender(<DiffPage versions={versions} file="notes.unknown-ext" staged={false} loader={loader} />);
+    expect(captured.at(-1)?.language).toBeUndefined();
+    rerender(<DiffPage versions={versions} file="src/app.ts" staged={false} language="python" loader={loader} />);
+    expect(captured.at(-1)?.language).toBe('python');
   });
 });
 

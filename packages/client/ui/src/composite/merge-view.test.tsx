@@ -49,6 +49,14 @@ describe('MergeView', () => {
     await waitFor(() => expect(screen.getAllByTestId('diff-editor')).toHaveLength(2));
   });
 
+  // 语法高亮：四个编辑器（上排两个 diff + 底部结果编辑）此前都没有 language（恒为无高亮纯文本）
+  it('按文件路径推断高亮语言并透传给全部编辑器', async () => {
+    render(<MergeView contents={CONTENTS} onSave={vi.fn()} loader={stubLoader} />);
+    await waitFor(() => expect(screen.getAllByTestId('diff-editor')).toHaveLength(2));
+    expect(editorProps.length).toBeGreaterThan(0);
+    expect(editorProps.map((p) => p.language)).toEqual(editorProps.map(() => 'typescript'));
+  });
+
   it('base 非空时上排为两个只读 diff：base→ours、base→theirs', async () => {
     render(<MergeView contents={CONTENTS} onSave={vi.fn()} loader={stubLoader} />);
     await waitFor(() => expect(screen.getAllByTestId('diff-editor')).toHaveLength(2));

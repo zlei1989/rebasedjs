@@ -26,14 +26,16 @@ import {
   useStashAction,
 } from '@rebased/client';
 import type { CommitBody, HunkStagingBody, StagingBody } from '@rebased/contracts';
-import { PageShell, StatusPage, openInNewTab } from '@rebased/ui';
+import { PageShell, RepoTopNav, StatusPage, openInNewTab } from '@rebased/ui';
 import { Button, Modal, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
   const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: status, mutate } = useRepoStatus(repoId);
   const { trigger: applyStaging } = useStaging(repoId);
   const { trigger: applyHunkStaging, isMutating: hunkActing } = useHunkStaging(repoId);
@@ -129,14 +131,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   if (!status) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="status" 高亮变更图标；取代原先的「返回日志」链接 */}
+      <RepoTopNav {...nav} current="status" />
       {/* key 含 repoId（切仓库强制重挂载）与 commitSeq（commit 成功清空提交框） */}
       <StatusPage
         key={`${repoId}-${commitSeq}`}

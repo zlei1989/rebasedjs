@@ -6,13 +6,14 @@
  * 远程列表自身不经 watcher 事件变化（远程配置不属于 refs/status 指纹）。
  */
 import { useFetch, useRemoteAction, useRemotes } from '@rebased/client';
-import { PageShell, RemotePanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
-import { useNavigate, useParams } from 'react-router-dom';
+import { PageShell, RemotePanel, RepoTopNav } from '@rebased/ui';
+import { message } from 'antd';
+import { useParams } from 'react-router-dom';
+import { useRepoNav } from '../repo-nav';
 
 export function RepoRemotesPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
-  const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   const { data: remotes, mutate: mutateRemotes } = useRemotes(repoId);
   const { trigger: remoteAction, isMutating: acting } = useRemoteAction(repoId);
   const { trigger: fetchTrigger, isMutating: fetching } = useFetch(repoId);
@@ -24,14 +25,8 @@ export function RepoRemotesPage(): React.ReactNode {
   if (!remotes) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="remotes" 高亮「更多」按钮（远程管理在更多菜单内） */}
+      <RepoTopNav {...nav} current="remotes" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <RemotePanel
         key={repoId}

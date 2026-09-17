@@ -1,18 +1,19 @@
 /**
  * 标签页容器：useTags + useTagAction 注入 ui TagPanel（与 web-next 容器同构；
  * repoId 取 useParams、返回导航用 useNavigate，而非 Next params/router）。
- * 顶部返回按钮回日志页；操作失败经 message.error 呈现（成功响应由 useTagAction 显式回写 tags 缓存）。
+ * 顶部仓库顶栏导航（RepoTopNav，共用组件）；操作失败经 message.error 呈现（成功响应由 useTagAction 显式回写 tags 缓存）。
  * 本页自订阅 events：外部 CLI 建/删/移动标签 → refs.changed → 重验证标签列表
  * （watcher 事件覆盖面：分支/标签/贮藏/远程引用的建删与移动均产 refs.changed）。
  */
 import { useRepoEvents, useTagAction, useTags } from '@rebased/client';
-import { PageShell, TagPanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
-import { useNavigate, useParams } from 'react-router-dom';
+import { PageShell, RepoTopNav, TagPanel } from '@rebased/ui';
+import { message } from 'antd';
+import { useParams } from 'react-router-dom';
+import { useRepoNav } from '../repo-nav';
 
 export function RepoTagsPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
-  const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   const { data: tags, mutate: mutateTags } = useTags(repoId);
   const { trigger: tagAction, isMutating: acting } = useTagAction(repoId);
   // 外部 CLI 建/删/移动标签 → refs.changed → 重验证标签列表刷新（标签面板自身操作已由 useTagAction 回写缓存）
@@ -25,14 +26,8 @@ export function RepoTagsPage(): React.ReactNode {
   if (!tags) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="tags" 高亮「更多」按钮（标签在更多菜单内） */}
+      <RepoTopNav {...nav} current="tags" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <TagPanel
         key={repoId}

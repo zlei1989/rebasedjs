@@ -8,10 +8,11 @@
  * Annotate Revision → /blame?file&rev=<hash>。
  */
 import { useHistory } from '@rebased/client';
-import { EmptyState, HistoryPanel, PageShell, openInNewTab } from '@rebased/ui';
+import { EmptyState, HistoryPanel, PageShell, RepoTopNav, openInNewTab } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({
   params,
@@ -23,6 +24,7 @@ export default function Page({
   const { repoId } = use(params);
   const { file: initialFile = '' } = use(searchParams);
   const router = useRouter();
+  const nav = useRepoNav(repoId);
   const [file, setFile] = useState(initialFile);
   const [draft, setDraft] = useState(initialFile);
   // 仓库切换（两端 SPA 同挂载实例复用）或查询串变更时重置输入与查询（useState 初始化器只在首挂载生效）
@@ -38,14 +40,8 @@ export default function Page({
   };
   return (
     <PageShell gap={8}>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="history" 高亮「更多」按钮（历史在更多菜单内） */}
+      <RepoTopNav {...nav} current="history" />
       <Flex gap={8}>
         <Tooltip title="输入文件路径（相对仓库根），回车列出该文件的提交历史">
           <Input

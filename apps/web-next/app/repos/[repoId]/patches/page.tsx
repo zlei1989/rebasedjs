@@ -2,18 +2,20 @@
 
 /**
  * 补丁页容器：usePatches + useCreatePatch/useApplyPatch/useDeletePatch/useImportPatchIntoShelf 注入 ui PatchPanel（与 web-koa 容器同构）。
- * 顶部返回按钮回日志页；操作失败统一 message.error（成功响应由 hooks 显式回写 patches/shelf/status 缓存键，无需额外刷新）；
+ * 仓库顶栏导航（RepoTopNav）取代「返回日志」链接；操作失败统一 message.error（成功响应由 hooks 显式回写 patches/shelf/status 缓存键，无需额外刷新）；
  * acting 并合四个 mutation 的 isMutating：任一进行中即禁用行按钮/创建按钮 loading。
  */
 import { useApplyPatch, useCreatePatch, useDeletePatch, useImportPatchIntoShelf, usePatches } from '@rebased/client';
-import { PageShell, PatchPanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
+import { PageShell, PatchPanel, RepoTopNav } from '@rebased/ui';
+import { message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
   const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: patches } = usePatches(repoId);
   const { trigger: createPatch, isMutating: creating } = useCreatePatch(repoId);
   const { trigger: applyPatch, isMutating: applying } = useApplyPatch(repoId);
@@ -27,14 +29,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   if (!patches) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="patches" 高亮「更多」按钮（补丁在更多菜单内） */}
+      <RepoTopNav {...nav} current="patches" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <PatchPanel
         key={repoId}

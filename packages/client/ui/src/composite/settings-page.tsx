@@ -26,9 +26,8 @@ import type {
 } from '@rebased/contracts';
 import { SettingsShell } from './settings-shell';
 
-/** 两个设置页共用的页面骨架 props：返回导航 + 互跳另一类设置页（互跳缺失会让人「进去出不来」） */
+/** 两个设置页共用的页面骨架 props：互跳另一类设置页（互跳缺失会让人「进去出不来」） */
 interface SettingsPageChromeProps {
-  onBack: () => void;
   /** 另一类设置页的打开回调；不传则不渲染互跳链接（如某些容器只有一类入口时） */
   onOpenOtherSettings?: () => void;
   /** 互跳链接禁用态：如打开应用设置时「最近仓库为空」——无从指定要配置哪个仓库 */
@@ -38,6 +37,8 @@ interface SettingsPageChromeProps {
 // ───────────────────────────────────── 应用（全局）设置 ─────────────────────────────────────
 
 export interface AppSettingsPageProps extends SettingsPageChromeProps {
+  /** 返回首页回调（应用设置不在仓库作用域内，无仓库顶栏导航，返回链接仍由本页承载） */
+  onBack: () => void;
   /** 应用设置；未就绪（undefined）时对应卡片显 Skeleton */
   settings?: SettingsState;
   /** 设置补丁回调（如 { logInEditor: false } / { theme: 'auto' } / { protectedBranchPatterns }） */
@@ -382,6 +383,11 @@ export interface RepoSettingsPageProps extends SettingsPageChromeProps {
   onSetGpgConfig?: (body: GpgConfigBody) => Promise<unknown> | void;
   /** GPG 保存请求进行中：Modal 确定 loading */
   gpgSaving?: boolean;
+  /**
+   * 返回日志回调；**已废弃入口**——仓库设置页的返回由容器渲染的仓库顶栏导航（RepoTopNav）承载，
+   * 保留此可选 prop 仅为向后兼容：注入时仍渲染「返回日志」链接（SettingsShell 的可选返回）。
+   */
+  onBack?: () => void;
 }
 
 /** 单个配置键行：生效值副文本 + local 覆盖输入 + 保存（值非空且与 localValue 不同才可点） */
@@ -550,6 +556,7 @@ export function RepoSettingsPage({
       crossTestId="app-settings-link"
       onCross={() => onOpenOtherSettings?.()}
     >
+      {/* 返回链接（onBack）缺省不渲染：返回日志由容器外层渲染的仓库顶栏导航（RepoTopNav）承载，这里只剩互跳 */}
       <Card title="Git 配置（仓库级）" size="small" data-testid="repo-config-card">
         {config ? (
           <Flex vertical gap={8}>

@@ -2,7 +2,7 @@
  * GitLab 面板页容器：useGitlabStatus（驱动面板提示卡：未检测远程/未配置令牌）+ useGitlabMrs（opened/merged
  * Tab，缺省 opened；裁定不做 all）+ 选中 MR 后的 detail/timeline/files 条件 hooks（iid 为 null 挂 null key
  * 不发请求）+ 五个 mutation 注入 ui GitLabPanel（与 web-next 容器同构；repoId 取 useParams、返回导航用 useNavigate）。
- * 顶部返回按钮回日志页；「刷新」按钮重取 mrs/detail/timeline/files 四键（照 P3-D console 页做法，
+ * 顶部仓库顶栏导航（RepoTopNav，共用组件）+ 设置入口；「刷新」按钮重取 mrs/detail/timeline/files 四键（照 P3-D console 页做法，
  * null key 的 mutate 为空转）；acting 并合五个 mutation 的 isMutating。
  * 新建 MR：Modal「确认即关+复位」（T5 裁定）——容器 onCreateMr 只 trigger + toast + 回写（hook 内已跨键
  * 前置插入 opened/all 列表），不要尝试关 Modal。
@@ -27,10 +27,11 @@ import {
   useSubmitGitlabReview,
 } from '@rebased/client';
 import { ServiceError } from '@rebased/contracts';
-import { GitLabPanel, PageShell } from '@rebased/ui';
+import { GitLabPanel, PageShell, RepoTopNav } from '@rebased/ui';
 import { Alert, Button, Flex, Tabs, Tooltip, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useRepoNav } from '../repo-nav';
 
 /** 页面级查询错误分类（ServiceError 由客户端 http 层解析生成） */
 const isAuthFailed = (err: unknown): boolean => err instanceof ServiceError && err.code === 'AUTH_FAILED';
@@ -39,6 +40,7 @@ const isRateLimited = (err: unknown): boolean => err instanceof ServiceError && 
 export function RepoGitlabPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   const { data: status, error: statusError } = useGitlabStatus(repoId);
   // opened/merged 两个 Tab（裁定：不做 all Tab，GitLab 完结态为 merged）；缺省 opened
   const [state, setState] = useState<'opened' | 'merged'>('opened');
@@ -92,14 +94,10 @@ export function RepoGitlabPage(): React.ReactNode {
   if (status === undefined) return null;
   return (
     <PageShell>
-      {/* 返回日志页 + 设置入口（#8：面板内 Settings 菜单入口语义） */}
-      <Flex gap={8}>
-        {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-        <Tooltip title="返回该仓库的提交日志页">
-          <Button type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-            返回日志
-          </Button>
-        </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="gitlab" 高亮「更多」按钮（GitLab 面板在更多菜单内） */}
+      <RepoTopNav {...nav} current="gitlab" />
+      {/* 设置入口（#8：面板内 Settings 菜单入口语义） */}
+      <Flex gap={8} style={{ alignSelf: 'flex-start' }}>
         <Tooltip title="打开应用设置：GitLab 令牌配在「账户」卡片（账户是应用级资源，对所有仓库生效）">
           <Button type="link" data-testid="gitlab-open-settings" onClick={() => navigate('/settings')}>
             设置

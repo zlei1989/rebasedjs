@@ -2,19 +2,19 @@
 
 /**
  * 远程页容器：useRemotes + useRemoteAction + useFetch 注入 ui RemotePanel（与 web-koa 容器同构）；
- * 顶部返回按钮回日志页；操作失败经 message.error 呈现（成功响应由 useRemoteAction 显式回写 remotes 缓存）。
+ * 仓库顶栏导航（RepoTopNav）取代「返回日志」链接；操作失败经 message.error 呈现（成功响应由 useRemoteAction 显式回写 remotes 缓存）。
  * 本页不自订阅 events：fetch/add 引起的 ahead/behind 与引用变化由事件推送驱动日志页刷新，
  * 远程列表自身不经 watcher 事件变化（远程配置不属于 refs/status 指纹）。
  */
 import { useFetch, useRemoteAction, useRemotes } from '@rebased/client';
-import { PageShell, RemotePanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
-import { useRouter } from 'next/navigation';
+import { PageShell, RemotePanel, RepoTopNav } from '@rebased/ui';
+import { message } from 'antd';
 import { use } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
-  const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: remotes, mutate: mutateRemotes } = useRemotes(repoId);
   const { trigger: remoteAction, isMutating: acting } = useRemoteAction(repoId);
   const { trigger: fetchTrigger, isMutating: fetching } = useFetch(repoId);
@@ -26,14 +26,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   if (!remotes) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="remotes" 高亮「更多」按钮（远程管理在更多菜单内） */}
+      <RepoTopNav {...nav} current="remotes" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <RemotePanel
         key={repoId}

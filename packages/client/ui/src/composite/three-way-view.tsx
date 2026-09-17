@@ -6,6 +6,7 @@
 import { Flex, Typography } from 'antd';
 import type { FileThreeVersions } from '@rebased/contracts';
 import { MonacoDiffView, type MonacoDiffLoader } from '../base/monaco-diff-view';
+import { languageForPath } from '../domain/language';
 
 export interface ThreeWayViewProps {
   versions: FileThreeVersions;
@@ -18,12 +19,15 @@ function CompareSegment({
   title,
   before,
   after,
+  language,
   loader,
   testId,
 }: {
   title: string;
   before: string;
   after: string;
+  /** 语法高亮语言 id（由 file 扩展名推断，见 ThreeWayView） */
+  language?: string;
   loader?: MonacoDiffLoader;
   testId: string;
 }): React.ReactNode {
@@ -42,13 +46,15 @@ function CompareSegment({
         ) : null}
       </Flex>
       <div data-testid={testId} style={{ flex: 1, minHeight: 120 }}>
-        <MonacoDiffView original={before} modified={after} options={{ readOnly: true }} loader={loader} />
+        <MonacoDiffView original={before} modified={after} language={language} options={{ readOnly: true }} loader={loader} />
       </div>
     </Flex>
   );
 }
 
 export function ThreeWayView({ versions, file, loader }: ThreeWayViewProps): React.ReactNode {
+  // 语法高亮按文件扩展名推断（与 DiffPage / log-page 内联快照同一套口径）
+  const language = languageForPath(file);
   return (
     <Flex vertical gap={12} style={{ height: '100%', padding: 8 }}>
       <Typography.Text strong>{file}（三版本对比）</Typography.Text>
@@ -56,6 +62,7 @@ export function ThreeWayView({ versions, file, loader }: ThreeWayViewProps): Rea
         title="HEAD → 暂存区（已暂存的变更）"
         before={versions.head}
         after={versions.staged}
+        language={language}
         loader={loader}
         testId="three-way-head-staged"
       />
@@ -63,6 +70,7 @@ export function ThreeWayView({ versions, file, loader }: ThreeWayViewProps): Rea
         title="暂存区 → 工作区（尚未暂存的变更）"
         before={versions.staged}
         after={versions.working}
+        language={language}
         loader={loader}
         testId="three-way-staged-working"
       />

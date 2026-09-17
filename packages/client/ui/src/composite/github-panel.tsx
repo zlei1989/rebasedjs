@@ -236,6 +236,7 @@ function FileRow({
             <HunkDiffView
               patch={file.patch}
               status={file.status}
+              path={file.path}
               loader={loader}
               comments={comments
                 .filter((c) => c.line !== null)

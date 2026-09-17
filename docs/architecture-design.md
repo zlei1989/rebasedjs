@@ -242,9 +242,9 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 
 | 层 | 组件 |
 |----|------|
-| base/ | **布局原语：`PageShell`、`Toolbar`、`EllipsisText`、`SplitPane` + 密度模块 `density.ts`/`density-context.tsx`（口径见 §6）+ 主题模块 `app-theme.tsx`（`useResolvedTheme`：偏好 → 实际明暗 + antd 配置 + `data-theme`，两个 app 共用，§5.23）**、`VirtualList`、`GraphCanvas`、`FileTree`、`MonacoDiffView`/`MonacoTextView`（`monaco-lazy` 懒加载 monaco-editor）、`EmptyState`、`OperationStatus` |
+| base/ | **布局原语：`PageShell`、`Toolbar`、`EllipsisText`、`SplitPane` + 密度模块 `density.ts`/`density-context.tsx`（口径见 §6）+ 主题模块 `app-theme.tsx`（`useResolvedTheme`：偏好 → 实际明暗 + antd 配置 + `data-theme`，两个 app 共用，§5.23）**、`VirtualList`、`GraphCanvas`、`FileTree`、`MonacoDiffView`/`MonacoTextView`（`monaco-lazy` 懒加载 monaco-editor）、`CodeBlock`/`PatchCodeBlock`（`shiki-lazy` 懒加载 shiki，只读代码片段高亮，与 Monaco 的分工见 §3.1）、`EmptyState`、`OperationStatus` |
 | domain/ | `CommitGraph`、`RepoStatusBar`、`CommitDetailsPanel`、`DiffViewer`（并排/行内 + staged/工作区切换 + 忽略空白开关）、`HunkDiffView`（PR/MR 行级 diff）、`DirectoryTree`、`CommittedStatus` |
-| composite/ | `RepoPage`、`LogPage`、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`BlameView`、`HistoryPanel`、`CommittedChangesPanel`、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BrowsePanel`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`AppSettingsPage`/`RepoSettingsPage`/`SettingsShell`（§5.23 设置页按作用域拆两页，外壳共用） |
+| composite/ | `RepoPage`、`LogPage`、`SnapshotTabs`（日志页就地快照栏的标签栏）、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`BlameView`、`HistoryPanel`、`CommittedChangesPanel`、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`AppSettingsPage`/`RepoSettingsPage`/`SettingsShell`（§5.23 设置页按作用域拆两页，外壳共用） |
 | graph-layout/ | 自 vcs-log/graph 移植的布局算法（纯函数，不 import React；`fixtures/java/` 为 Java testData 转制的行为等价夹具） |
 
 ### 2.6 框架层：web-next 与 web-koa
@@ -278,6 +278,7 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 |------------|---------|----------------|---------|
 | 通用控件（表格/树/表单/对话框/工具栏/弹窗/标签页） | Swing（JBTable/JBTree/JBPopup/JBDialog）+ Jewel（Compose Multiplatform） | antd（Table/Tree/Form/Modal/Menu/Tabs/Popover 等） | **不移植**：Swing/Compose 渲染模型与 React DOM 不通；antd 覆盖通用控件需求 |
 | 编辑器（语法高亮/diff/annotation gutter/inlay） | IntelliJ 自研编辑器（平台核心） | Monaco（`monaco-lazy`/`MonacoDiffView`/`MonacoTextView`） | **不移植**：Monaco 具备对应能力，替代 TextMate 插件的语法高亮职责 |
+| 只读代码**片段**（补丁预览的 hunk 正文 / 整份补丁） | 同上（IDEA 的 diff 预览即编辑器渲染） | Shiki（`base/code-block` → `base/shiki-lazy`） | **不移植**：这类块是「文本 → 带颜色 HTML」，没有编辑器语义需求；按块起 Monaco 实例的代价随 hunk 数线性增长（§6.4 的例外清单不含它） |
 | **VCS Log 图布局算法** | `platform/vcs-log/graph` + `graph-api`（`GraphLayoutBuilder`、`EdgePrintElementImpl` 等 + testData） | `ui/graph-layout/`（纯函数布局引擎） | **算法级移植**（已落地）：TS 重写算法，Java testData 转 vitest 夹具做行为等价测试；源码 Apache-2.0，移植保留版权声明 |
 | Git 专属复杂组件（交互式 rebase 编辑器、分支树、暂存区、冲突面板、提交对话框、Committed Changes 浏览器） | git4idea Swing 组件 | 自研 React 组件 + antd 组合 | **信息架构参照**：对话框字段结构、状态机、树模型分组维度逐项对照（见 3.2），不搬代码 |
 | 视觉风格（Darcula/IntelliJ LAF） | 平台 LAF 资源 | antd 主题变量（token + 紧凑密度） | 风格对齐：深色主题为默认，不强求像素级复刻 |
@@ -424,7 +425,7 @@ token: { fontSizeSM: 11 }   // 实效 fontSize / fontSizeSM / fontSizeLG = 12 / 
 | 例外 | 位置 | 为什么必须允许 | 断言口径 |
 |------|------|----------------|----------|
 | Monaco 编辑器 | `MonacoDiffView` / `MonacoTextView` / `HunkDiffView`（`github-panel` / `gitlab-panel` 展开差异） | 代码行不换行是编辑器语义；长行必须靠编辑器自己的横向滚动条可达。编辑器宿主（`.monaco-editor`）本身是**裁剪容器**（`scrollWidth == clientWidth`），溢出**不外泄**到文档；真正持有横向滚动区间的是它内部的 `.monaco-scrollable-element` | 四条同时成立：① 长行真实存在（`.view-lines` 宽 > 编辑器 `clientWidth`）；② 宿主 `scrollWidth <= clientWidth + 1`（裁剪，不外泄）；③ `.monaco-scrollable-element` 的 `scrollWidth > clientWidth`（**注意其值是 Monaco 的大滚动哨兵 16777216，不能当长行的度量**）；④ 拖动 Monaco 自己的横向滚动条滑块后内容真的位移 |
-| 长文本块 | `browse-panel` 的内容 `<pre>`、console / patch 预览等等宽文本块 | 等宽原文不折行，属于内容语义 | 这些块自身带 `overflow: auto`，滚动发生在块内 |
+| 长文本块 | console / 补丁预览等等宽文本块；含 `base/code-block`（`.rebased-code-block`：状态页补丁预览的 hunk 正文与整份补丁，无编辑器实例） | 等宽原文不折行，属于内容语义。`code-block` 另有一条**垂直**滚动：hunk 正文 `maxHeight 240`、整份补丁 `maxHeight 480`，长补丁在块内滚而不是把卡片撑长 | 这些块自身带 `overflow: auto`，滚动发生在块内。`code-block` 的行块 `.line { white-space: pre }` 保证行内空白与长行不折行，横向滚动区间由块自己持有（页面级断言仍须为 0） |
 | 浮层 / 弹窗包裹层（overlay） | antd 的 `.ant-modal-wrap`（所有 `Modal`：认证弹窗、重置弹窗、忽略配置、CRLF 三选、手动合并全屏 Modal 等），以及同为 `position: fixed` 的浮层容器 | 浮层是**页面之外**的一层，其定位基准是视口而不是文档流：`.ant-modal-wrap` 自带 `overflow: auto`，弹窗内容横向变宽时滚动发生在这层包裹容器里，**不会**传播成文档级横向滚动。这正是「弹窗内部溢出被包裹层吃掉」的机制 | 页面级断言（§6.5）对弹窗开口的格子只能证明「**弹窗背后的页面**不溢出」——`position: fixed` 的元素既不参与文档滚动宽的计算，也被越界元素清单刻意跳过。**弹窗内部**的横向溢出要用另一把尺子：`.ant-modal-wrap`（或 `.ant-modal`）自身的 `scrollWidth <= clientWidth + 1`。目前验收脚本只做了前者，后者列为未覆盖项（`docs/e2e-verification.md` §5.16④） |
 | 提交行的 refs 芯片列 | `domain/commit-graph.tsx` 的 `[data-testid="commit-graph-refs"]`（`flexShrink:0` + `maxWidth: 140` + `overflowX:'auto'` + `scrollbarWidth:'none'`） | 一条提交可能挂任意多个分支/标签芯片，列宽必须设上限才不让提交行被顶宽；超出上限时**在列内横向滚动**（不是裁剪 —— `overflow-x: auto` 会给用户滚动区间），滚动条被 CSS 隐藏（`scrollbarWidth: none`），靠滚轮/触控板横向手势可达 | 该列的 `scrollWidth` 可大于 `clientWidth`（列内滚动），但它是**固定上限的裁剪盒**：页面级断言仍为 0（列宽 ≤ 140px 不会把行顶宽）。**不以「列内是否真的滚得动」为断言**（滚动条被隐藏，等价断言不稳定），改由 `commit` 页的页面级溢出断言覆盖它的外泄风险 |
 

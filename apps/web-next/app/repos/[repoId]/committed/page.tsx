@@ -10,17 +10,17 @@
  */
 import { useCommittedPage } from '@rebased/client';
 import type { CommittedEntry } from '@rebased/contracts';
-import { CommittedChangesPanel, PageShell, openInNewTab } from '@rebased/ui';
-import { Button, Tooltip, Typography } from 'antd';
-import { useRouter } from 'next/navigation';
+import { CommittedChangesPanel, PageShell, RepoTopNav, openInNewTab } from '@rebased/ui';
+import { Typography } from 'antd';
 import { use, useEffect, useState } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 /** 分页步长（与服务端默认 limit 一致） */
 const PAGE_SIZE = 50;
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
-  const router = useRouter();
+  const nav = useRepoNav(repoId);
   const [skip, setSkip] = useState(0);
   const [entries, setEntries] = useState<CommittedEntry[]>([]);
   const [hasMore, setHasMore] = useState(true);
@@ -70,14 +70,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   };
   return (
     <PageShell gap={8}>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="committed" 高亮「更多」按钮（已提交在更多菜单内） */}
+      <RepoTopNav {...nav} current="committed" />
       {error ? (
         <Typography.Text type="danger" data-testid="committed-error">
           {error.message}

@@ -45,6 +45,8 @@ import type {
 } from '@rebased/contracts';
 import { EllipsisText } from '../base/ellipsis-text';
 import { PageShell } from '../base/page-shell';
+import { CodeBlock, PatchCodeBlock, type CodeBlockLoader } from '../base/code-block';
+import { languageForPath } from '../domain/language';
 
 export interface StatusPageProps {
   status: RepoStatus;
@@ -92,6 +94,8 @@ export interface StatusPageProps {
   onAmendSpecific?: (body: AmendSpecificBody) => void;
   /** CRLF 提示涉事文件（GitCrlfDialog 语义；容器提交时先重验证再判定）：非空时提交框渲染警告内联提示 */
   crlfFiles?: string[];
+  /** 补丁预览的代码高亮器注入点（缺省动态加载真实 Shiki）；与 DiffPage 的 loader 同一手法，测试传 stub */
+  codeBlockLoader?: CodeBlockLoader;
 }
 
 /** porcelain X 码（暂存区列）：M/A/D/R/C 视为已暂存 */
@@ -740,15 +744,23 @@ function PatchCard({
   previewStaged = false,
   onHunkStaging,
   hunkActing,
+  codeBlockLoader,
 }: {
   patch?: DiffFile;
   patchLoading?: boolean;
   previewStaged?: boolean;
   onHunkStaging?: (body: HunkStagingBody) => void;
   hunkActing?: boolean;
+  codeBlockLoader?: CodeBlockLoader;
 }): React.ReactNode {
   const [selected, setSelected] = useState<number[]>([]);
   const split = useMemo(() => (patch ? splitPatchHunks(patch.text) : null), [patch]);
+  /**
+   * 高亮语言：逐 hunk 与整份补丁都按**文件类型**推断（与 DiffPage/HunkDiffView/ThreeWayView 同一口径）。
+   * 推不出（无扩展名/未收录）退 `'diff'` 而不是 plaintext：补丁文本的 `@@` 头与 `+`/`-` 前缀
+   * 由 Monaco/Shiki 的 diff 语法着色，正是本视图最需要的那层信息。
+   */
+  const language = useMemo(() => languageForPath(patch?.path) ?? 'diff', [patch?.path]);
   // 文件或补丁文本变化时复位勾选：hunk 索引按当前 diff 编号（部分暂存后服务端重算编号，旧勾选会错位）
   useEffect(() => {
     setSelected([]);
@@ -862,35 +874,30 @@ function PatchCard({
                   </Flex>
                 ),
                 children: (
-                  <pre
-                    data-testid={`hunk-text-${hunk.index}`}
-                    style={{
-                      margin: 0,
-                      maxHeight: 240,
-                      overflow: 'auto',
-                      fontFamily: 'monospace',
-                      whiteSpace: 'pre',
-                    }}
-                  >
-                    {hunk.text}
-                  </pre>
+                  /* 逐 hunk 正文：只读代码块（Shiki 高亮 + diff 行底色）。
+                     `hunk-text-*` 这个 testid 原挂在 <pre> 上，现移到外层包裹 div——测试与冒烟脚本
+                     按 testid 取的是「这个 hunk 的正文区」，换渲染器不该改这个契约。 */
+                  <div data-testid={`hunk-text-${hunk.index}`}>
+                    <PatchCodeBlock
+                      patch={hunk.text}
+                      language={language}
+                      maxHeight={240}
+                      loader={codeBlockLoader}
+                    />
+                  </div>
                 ),
               }))}
             />
           </Flex>
         ) : (
-          <pre
-            data-testid="patch-text"
-            style={{
-              margin: 0,
-              maxHeight: 480,
-              overflow: 'auto',
-              fontFamily: 'monospace',
-              whiteSpace: 'pre',
-            }}
-          >
-            {patch.text}
-          </pre>
+          /* 整份补丁兜底（无 hunk 或无 hunk 操作回调）：同一套只读代码块，`diff` 语法着色
+             `@@` 头与 `+`/`-` 行（`diff --git`/`index` 这类文件头是普通文本，靠 `data-kind=header`
+             的弱化样式区分）。testid 沿用既有的 `patch-text`，但挂在**外层包裹**上：
+             里面的 CodeBlock 会在纯文本/高亮两个 testid 之间切换，外层 testid 才对测试与冒烟脚本稳定
+             （与逐 hunk 的 `hunk-text-*` 同一处理）。 */
+          <div data-testid="patch-text">
+            <CodeBlock code={patch.text} language={language} maxHeight={480} loader={codeBlockLoader} />
+          </div>
         )
       ) : (
         <Typography.Text type="secondary">点击文件查看补丁预览</Typography.Text>
@@ -926,6 +933,7 @@ export function StatusPage({
   amendTargets,
   onAmendSpecific,
   crlfFiles,
+  codeBlockLoader,
 }: StatusPageProps): React.ReactNode {
   const grouped = useMemo(() => groupChanges(status.entries), [status.entries]);
 
@@ -1182,6 +1190,7 @@ export function StatusPage({
             previewStaged={previewStaged}
             onHunkStaging={onHunkStaging}
             hunkActing={hunkActing}
+            codeBlockLoader={codeBlockLoader}
           />
         </Flex>
       </Flex>

@@ -7,14 +7,16 @@
  * 保存失败经 message.error 呈现，GPG 保存成功经 message.success 反馈。
  */
 import { useGpgConfig, useRepoConfig, useSetConfig, useSetGpgConfig } from '@rebased/client';
-import { RepoSettingsPage } from '@rebased/ui';
+import { RepoSettingsPage, RepoTopNav } from '@rebased/ui';
 import { message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
   const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: config } = useRepoConfig(repoId);
   const { trigger } = useSetConfig(repoId);
   // GPG 提交签名配置（GitGpgConfigDialog 语义；repo 级——commit.gpgsign/user.signingkey 写入仓库配置）
@@ -25,20 +27,23 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     void message.error(err instanceof Error ? err.message : String(err));
   };
   return (
-    <RepoSettingsPage
-      // key=repoId：SPA 同挂载实例切换仓库时强制重挂载，ConfigRow 行内输入 state 随之重置
-      key={repoId}
-      config={config}
-      onSetConfig={(key, value) => trigger({ key, value }).catch(onError)}
-      gpgConfig={gpgConfig}
-      onSetGpgConfig={(body) =>
-        setGpgConfig(body)
-          .then(() => void message.success('GPG 签名配置已保存'))
-          .catch(onError)
-      }
-      gpgSaving={gpgSaving}
-      onBack={() => router.push(`/repos/${repoId}`)}
-      onOpenOtherSettings={() => router.push('/settings')}
-    />
+    <>
+      {/* 仓库顶栏导航（共用组件）：current="settings" 高亮设置图标；「返回日志」由它承载（SettingsShell 只剩互跳） */}
+      <RepoTopNav {...nav} current="settings" />
+      <RepoSettingsPage
+        // key=repoId：SPA 同挂载实例切换仓库时强制重挂载，ConfigRow 行内输入 state 随之重置
+        key={repoId}
+        config={config}
+        onSetConfig={(key, value) => trigger({ key, value }).catch(onError)}
+        gpgConfig={gpgConfig}
+        onSetGpgConfig={(body) =>
+          setGpgConfig(body)
+            .then(() => void message.success('GPG 签名配置已保存'))
+            .catch(onError)
+        }
+        gpgSaving={gpgSaving}
+        onOpenOtherSettings={() => router.push('/settings')}
+      />
+    </>
   );
 }

@@ -5,14 +5,15 @@
  * restore 会回放变更到工作区——useShelfAction 只回写 shelves 键，容器在成功追加刷新 status 键（经全局 mutate 重取）。
  */
 import { useShelfAction, useShelves } from '@rebased/client';
-import { PageShell, ShelfPanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
-import { useNavigate, useParams } from 'react-router-dom';
+import { PageShell, RepoTopNav, ShelfPanel } from '@rebased/ui';
+import { message } from 'antd';
+import { useParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
+import { useRepoNav } from '../repo-nav';
 
 export function RepoShelvesPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
-  const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   const { data: shelves } = useShelves(repoId);
   const { trigger: shelfAction, isMutating: acting } = useShelfAction(repoId);
   const { mutate: mutateGlobal } = useSWRConfig();
@@ -24,14 +25,8 @@ export function RepoShelvesPage(): React.ReactNode {
   if (!shelves) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="shelves" 高亮「更多」按钮（搁置在更多菜单内） */}
+      <RepoTopNav {...nav} current="shelves" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <ShelfPanel
         key={repoId}

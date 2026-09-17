@@ -26,11 +26,26 @@ export function formatCommitDate(dateIso: string): string {
   return m ? `${m[1]} ${m[2]}` : dateIso;
 }
 
-/** 详情面板作者行：对齐 Java CommitDetailsPanel 的 "{0} on {1} at {2}" 格式 */
-export function formatAuthorLine(author: string, dateIso: string): string {
+/** 详情面板作者行的**时间部分**："2026-09-01 at 14:30"（无法解析时给原串，不猜） */
+export function formatAuthorTimestamp(dateIso: string): string {
   const [date, time] = formatCommitDate(dateIso).split(' ');
   if (date === undefined || time === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
-    return `${author} on ${dateIso}`;
+    return dateIso;
   }
-  return `${author} on ${date} at ${time}`;
+  return `${date} at ${time}`;
+}
+
+/** 详情面板作者行：对齐 Java CommitDetailsPanel 的 "{0} on {1} at {2}" 格式（日期不可解析时退化为 "{0} on {原串}"） */
+export function formatAuthorLine(author: string, dateIso: string): string {
+  return `${author} on ${formatAuthorTimestamp(dateIso)}`;
+}
+
+/**
+ * 作者标识（复制值口径）：`姓名 <邮箱>`，与 git 的 author 字段同形——
+ * 复制出来可直接喂 `git log --author=`、粘进 PR 或邮件头。
+ * 邮箱缺失（某些后端/夹具只给姓名）时只给姓名，不留下一个空的尖括号。
+ */
+export function formatAuthor(author: string, authorEmail?: string): string {
+  const email = authorEmail?.trim() ?? '';
+  return email === '' ? author : `${author} <${email}>`;
 }

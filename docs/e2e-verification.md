@@ -103,7 +103,7 @@
 | 28 | GitConsole | P3 | `/repos/:id/console` | 更多「控制台」 | F-145~F-146（2） | console | ✅ 2/2 |
 | 29 | QuickActionsMenu（等效聚合） | P2+ | 顶栏 5 按钮 + 更多菜单 18 项 | 顶栏按钮区 | F-147~F-148（2） | quick-actions | ✅ 2/2 |
 | 30 | SettingsPage（拆两页：应用设置 `/settings` + 仓库设置 `/repos/:id/settings`） | P1/P2 | `/settings` 与 `/repos/:id/settings` | 首页「设置」→ 应用设置；顶栏「设置」→ 仓库设置 | F-149~F-155（7，落点见 §4.30 顶部说明） | settings / app-settings | ✅ 7/7 |
-| 31 | BrowsePanel | P4 | `/repos/:id/browse?rev=` | 详情面板「浏览快照」 | F-156~F-159（4） | browse | ✅ 4/4 |
+| 31 | ~~BrowsePanel~~（整页已删除） | P4 | ~~`/repos/:id/browse?rev=`~~ | —— | F-156~F-159（4） | browse（历史图） | ✅ 4/4（历史记录；能力现由 LogPage 就地快照栏承载，见 §4.31/§4.32 与 §5.29⑥） |
 
 ---
 
@@ -183,14 +183,14 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-029 | Monaco DiffEditor（懒加载/行号/高亮/只读） | StatusPage 双击修改文件 → diff 页 | Monaco 渲染满高、行号+语法高亮、只读、vs-dark 暗色与应用一致 | ✅ | diff-page-01.png（状态页双击 `src/app.ts` → `/diff?file=src%2Fapp.ts`；`.monaco-diff-editor` 1424×818 满高、两侧编辑器均 `monaco-editor vs-dark`、body `#141414` 与应用暗色一致；decorations 5 插入 = CLI `git diff --stat` 的 `1 file changed, 5 insertions(+)`；只读口径见 `monaco-lazy.tsx:75` `readOnly:true` 与 `diff-viewer.tsx:142`） |
+| F-029 | Monaco DiffEditor（懒加载/行号/高亮/只读） | StatusPage 双击修改文件 → diff 页 | Monaco 渲染满高、行号+语法高亮、只读、vs-dark 暗色与应用一致 | ✅ | diff-page-01.png（状态页双击 `src/app.ts` → `/diff?file=src%2Fapp.ts`；`.monaco-diff-editor` 1424×818 满高、两侧编辑器均 `monaco-editor vs-dark`、body `#141414` 与应用暗色一致；decorations 5 插入 = CLI `git diff --stat` 的 `1 file changed, 5 insertions(+)`；只读口径见 `monaco-lazy.tsx:75` `readOnly:true` 与 `diff-viewer.tsx:142`）。**2026-09-16 复跑更正**：本行原写的「语法高亮」在此前各轮**并不成立**（两侧只有单调文本色，控制台持续报 `toUrl` TypeError；根因与修法见 P-30）。修复后实测 `proxyGateway` 仓 `…/diff?file=lib%2Fconvert%2Fstructured-output.js&from=e03b800f786dae1db3f368eccbe634bee107a233&to=aa995904ecc09786c45be8620d8f299e79eb4852`：`.monaco-diff-editor.side-by-side` 两侧已渲染、decorations **7 插入 / 5 删除**（= CLI `git show --stat` 的 `12 +++++-----`）、可见 token class **6 种**（`mtk1/5/6/7/8/9`，修复前恒为 1 种 `mtk1`）、页面控制台 **0 error / 0 warning** |
 | F-030 | 并排/行内切换 + 忽略空白 | 依次切换「行内」「忽略空白」开关 | 默认并排；行内切换生效；忽略空白后空白差异消失 | ✅ | diff-page-02.png（默认「并排」；为验证忽略空白，临时给 `src/app.ts` 第 2 行加 3 个行尾空格 → `git diff --stat` 变 6 插入/1 删除，页面 decorations 同步 `ins=6 del=1`；开「忽略空白」后变 `ins=5 del=0`（空白差异消失），切「行内」后单栏成对显示。取证后已把空格还原、`git diff --stat` 回到 5 insertions） |
 | F-031 | staged / 工作区切换（三态映射） | 切换 staged 开关 | staged 开 = HEAD vs 暂存区；关 = HEAD vs 工作区（CLI diff 互证） | ✅ | diff-page-03.png（状态页**双击「已暂存」组的 `src/util.ts`** → `/diff?file=src%2Futil.ts&staged=1`，右侧分段选中「已暂存」、4 处插入 = CLI `git diff --cached --stat`；同一文件切「工作区」→ 仍 4 处（HEAD vs 工作区，二者内容相同）；反向用 `src/app.ts` 实测：工作区模式 5 插入 = `git diff`，切「已暂存」→ 0 处 = `git diff --cached` 为空） |
 | F-032 | 任意两版本对比（from/to 成对） | CommittedChangesPanel 点文件 → `/diff?file&from=<父哈希>&to=<提交>` | 两侧正确 = 该提交 vs 其父提交 | ✅ | diff-page-04.png（已提交页选 `77e62c4` → 点 `src/app.ts` → `?file=src%2Fapp.ts&from=761961d…&to=77e62c4…`；左栏 6 行（= `git show 761961d:src/app.ts`）、右栏 7 行且含 `APP_VERSION`（= `git show 77e62c4:src/app.ts`），2 处插入；from/to 成对时「工作区/已暂存」分段隐藏（仅给 from 时仍显示，此时切「已暂存」会被服务端拒绝并在整页显示错误）） | |
 | F-033 | 新增/删除/重命名两侧渲染 | 打开 A/D/R 文件 diff | A 侧/D 侧缺失正确；R 显示 renameFrom | ✅ | diff-page-05.png（**D**：`docs/gone.md` 工作区删除 → 左栏 4 行全文/右栏空，4 删除装饰，页面无报错，API `{before: 4 行, after: ""}`——D-14 未见回归；**A**：`src/new-file.ts`（已暂存新增）→ 左栏空/右栏全文（API `before:""`）；**R**：已提交页点 `R docs/old-name.md → new-name.md` → `?renameFrom=docs%2Fold-name.md`，页面显示提示行「该变更涉及重命名：docs/old-name.md → docs/new-name.md（改名前的历史请到「历史」页查看）」且**不做伪 diff**（两侧 0 行）） | |
 | F-034 | unified diff 文本视图 | StatusPage 选中文件 → 行内补丁预览（`/diff/patch` 通道） | unified 文本正确渲染（`@@` 头 + +/- 行） | ✅ | diff-page-06.png（状态页选中 `src/app.ts` → 展开 hunk：正文为 `@@ -4,4 +4,9 @@ export const APP_VERSION = '1.0.0';` + 空格上下文行 + 5 个 `+` 行 + `\ No newline at end of file`，与 CLI `git diff` 逐行一致；通道实测 `GET …/diff/patch?file=src%2Fapp.ts&staged=false` → 200） | |
 | F-035 | 大 diff 分块流渲染（DiffStreamView） | 打开 `rebased-smoke-big` 大文件 diff → 等待全文 | 先语言 diff 只读渐进累积分块 → 全文到达切换标准视图 | ✅ | diff-page-07.png（大仓 `big.txt`：网络实测同时走 `…/diff?file=big.txt&staged=false` 与 `…/diff/stream?file=big.txt&staged=false`；流侧实收 **2 个 `diff.chunk` 帧**（16724 + 53320 字符，wire 75020 B）渐进累积，全文到达后切标准 Monaco diff 视图（620 行改写：左 `rewritten for large diff streaming` / 右 `working tree rewrite（大 diff 常驻）`）） | |
-| F-036 | word diff/同步滚动/折叠/上下文行数 | 逐一切换「空白字符/仅变更区」开关并滚动 | 词级高亮内建；双侧联动滚动；仅变更区 + 5 行上下文 | ✅ | diff-page-08.png（大仓 `big.txt`：词级高亮内建（44 `char-insert` + 44 `char-delete` 与行级装饰并存）；左栏滚到 2400px 后**两侧同显第 127~170 行**（联动滚动）；`hunks.txt` 上实测「折叠」默认开 + 「上下文 5 行」→ 可见行 1-10/30-41（11-29 收缩），切「上下文 2 行」→ 可见行 3-7/33-37（仅变更区 ±2）；「空白字符」切「空白显示」后可见空白符号） | |
+| F-036 | word diff/同步滚动/未变更区折叠（上下文行数） | 逐一切换「空白字符/上下文行数」选项并滚动 | 词级高亮内建；双侧联动滚动；未变更区只展开改动附近（默认 5 行上下文） | ✅ | diff-page-08.png（大仓 `big.txt`：词级高亮内建（44 `char-insert` + 44 `char-delete` 与行级装饰并存）；左栏滚到 2400px 后**两侧同显第 127~170 行**（联动滚动）；`hunks.txt` 上实测「上下文 5 行」→ 可见行 1-10/30-41（11-29 收缩），切「上下文 2 行」→ 可见行 3-7/33-37（仅变更区 ±2）；「空白字符」切「空白显示」后可见空白符号）。**2026-09-16 口径修订**：原先那个「折叠」勾选框（接 Monaco `folding`）已删除——本仓无折叠区提供者、实测无任何可见效果；未变更区折叠由「上下文行数」独占表达（见 §5.31 3.1） | |
 | F-037 | 三版本对比（本地/暂存/HEAD） | StatusPage 行「三版本」→ `/diff?three=1` | 两段对比（HEAD→暂存、暂存→工作区）；单维差异另段「无差异」 | ✅ | diff-page-09.png（`src/app.ts` 行「三版本」→ `?file=src%2Fapp.ts&three=1`：`three-way-head-staged` 段标「无差异」（该文件无暂存改动）、`three-way-staged-working` 段 5 处插入（= 工作区改动）；与 CLI（`git diff --cached` 空 / `git diff` 5 插入）一致） | |
 | F-038 | 与分支比较（hunk 应用/回退经 StatusPage 通道） | BranchPanel 行「比较」→ 日志页对比视图 | 双 range 双向提交差异视图正确（hunk 应用/回退通道见 F-042） | ✅ | diff-page-10.png（分支页 `diverge-test` 行「比较」→ `?compare=diverge-test`：视图标题「与分支 diverge-test 比较」，分区「分支独有」1 条 `3b0244b`、「当前独有」2 条 `8d65417`/`77e62c4`；与 CLI `rev-list --left-right --count master...diverge-test` = `2 1` 完全一致；当前分支 `master` 行「比较」按钮 `disabled`） | |
 
@@ -517,9 +517,11 @@
 | F-154 | GPG 专属配置对话框 | 「GPG 提交签名」卡片 → 「配置…」Modal → 勾选 + 密钥下拉 | 状态行正确；密钥下拉列 secret keys；无密钥 → Alert 禁启用；取消勾选仅写 false 不清 key（CLI config 互证） | ✅ | settings-06.png（卡片状态行「未启用 / commit.gpgsign 为 false/未设置」；Modal：启用勾选框 + 密钥下拉 + 说明「配置与 git config 同步（commit.gpgsign / user.signingkey）」；本机无 gpg CLI → API `keys:[]` → Alert「未找到可用的 gpg 密钥（gpg --list-secret-keys 无结果或 gpg 不可用…）」且**勾选框与密钥下拉均禁用**；「确 定」仍可点——「取消勾选 → 只写 false 不清 key」本身是合法操作）。CLI 实测「取消勾选仅写 false 不清 key」：先设 `commit.gpgsign=true` + `user.signingkey=DEADBEEF1234` → `PUT settings/gpg-config {"enabled":false}`（**不带 key**）→ 200 `{enabled:false, key:'DEADBEEF1234', keys:[]}`，CLI 复核 `commit.gpgsign=false` 而 `user.signingkey` **保留**；冒烟后已清掉该临时 key（另注：带 `key:''` 会被 schema 以 400 拒，等价语义须省略 key 字段） |
 | F-155 | 保护分支设置 | 卡片输入正则列表（含一个非法正则）→ 保存 | 非法标红禁保存；合法保存成功；联动：已发布到匹配远程分支的提交编辑 → 「不可重写」拦截提示 | ✅ | settings-07.png（**页面级取景**（应用设置页 `[data-testid="protected-branches-card"]`）：输入 `main` + `[unclosed` → 卡片内红字「非法正则：[unclosed」且「保 存」禁用）；settings-07b.png（**保护分支卡片特写**：同为非法态，红字与禁用的「保 存」清晰可辨；内容区是 antd `Input.TextArea`（testid `protected-patterns-input`），非 Monaco）；② 改为合法单条 `stash-branch-f083-r5b` → 保存成功，CLI `config.json` → `protectedBranchPatterns=["stash-branch-f083-r5b"]`；③ **联动实测**：对**已推送到 `origin/stash-branch-f083-r5b`** 的提交 `bf7794e`（`chore(remote): F-096 远端提交`）右键 → Reword Commit（`reword-message-input`）→ `POST commit-edit {"hash":"bf7794e…","action":"reword","message":"f155-reword-probe-should-be-blocked"}` → **400 `INVALID_QUERY`「目标提交已推送到受保护分支，不可重写」**，CLI 复核 `origin/stash-branch-f083-r5b` 仍 `bf7794e chore(remote): F-096 远端提交`（分毫未变）；settings-07c.png（右键菜单态，14 项）。冒烟后规则已清空（`patterns=[]`）。**夹具注**：本轮受保护模式取当前分支名 `stash-branch-f083-r5b`（`origin` 指向 `D:\zhanglei1120\Github\smoke-remote` 的裸仓），旧记录里的 `origin/master` / `761961d` 已随夹具推进失效 |
 
-### 4.31 BrowsePanel（slug `browse`；P4）
+### 4.31 BrowsePanel（slug `browse`；P4）——整页形态已删除（2026-09-16）
 
-- **入口**：LogPage 详情面板「浏览快照」→ `/repos/:id/browse?rev=<hash>`。
+> **页面删除说明**：本节的独立整页 `/repos/:id/browse?rev=` 已按用户口径删除（应用内没有任何入口；详情面板「浏览快照」开的是**就地快照栏**，唯一指向整页的「在新标签页打开」按钮也已删除）。下表的 4 行是**删除前的历史验证记录**（browse-01~04.png 仍在盘），能力本身原样保留在 LogPage 就地快照栏（见 §5.29 与其 ⑥）——文件树与只读内容视图共用同一 `SnapshotTreeColumn` / `ReadonlyTextView`，端点 `GET /browse`、`GET /browse/content` 未动。
+
+- **入口（删除前）**：LogPage 详情面板「浏览快照」→ `/repos/:id/browse?rev=<hash>`（现为就地展开 `?snap=<hash>`）。
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
@@ -587,7 +589,7 @@
 | 认证弹窗（推送被服务端 401 AUTH_FAILED → 容器开 AuthDialog） | 同上 | ✅ **仅**证明弹窗打开时「弹窗背后的页面」不溢出（弹窗内部另论，见下方口径说明与 ④） |
 | 重置弹窗（选中提交 → 「Reset 当前分支到此处」→ ResetDialog） | 同上 | ✅ 同上（页面级口径，**不含**弹窗内部） |
 | `EllipsisText` 悬停浮层（溢出必弹 + 内容=完整值；两个站点各测，正反两半都被实测到） | 同上 | ✅ |
-| 例外①：browse / log 两栏在 `collapseBelow` 以下纵向堆叠且各占满宽度、以上左右并排 | 同上（双向断言） | ✅ |
+| 例外①：log 两栏在 `collapseBelow` 以下纵向堆叠且各占满宽度、以上左右并排 | 同上（双向断言） | ✅ |
 | 例外②：Monaco 内容宽于编辑器和宿主不溢出 + 拖动其横向滚动条内容真位移 + 页面级仍为 0 | 同上 | ✅ |
 | web-koa 对等抽查（全部 24 路由 + 6 个状态，暗色） | 360 / 480 / 768 / 1024 / 1440 / 1920 | ✅ **192/192 格**（**Fix round 3 用当前脚本** `node scripts/check-fluid-layout.mjs --app=koa` 整轮重跑：0 格溢出、0 格重试、0 格未测量。早先那个 192/192 出自 Fix round 1 的脚本，与这次不是同一把尺子 —— 见 ③） |
 | **跳过**：conflicts 页的「冲突行」状态 | — | 跳过：需仓库停在冲突态；本轮不动共享夹具（用户可能正在使用），空态已断言。后续用 `rebased-smoke-conflict` 现造冲突态补测 |
@@ -712,6 +714,8 @@
 | P-26 | **运行环境的两次外部变化**：① **有并行会话在同一 `rebasedjs` 仓提交**（`b41ccaa chore: 收纳并行会话的在途改动（截图重拍/documents/冒烟脚本）`，19:45:32，把本轮当时已产出的截图一并入库；另有 `8af62ff`/`aa3e24f` 改 UI 控件尺寸）→ 本轮截图与文档改动会陆续进入仓库历史，工作区里可能残留未提交的图；② **dev 服务在 F-152 后被以分离进程重启**（cmd PID 11852，父进程已退；日志 `%TEMP%\rebased-dev-restart[2].log`）——重启会清空 exec 环形缓冲（F-145 的控制台证据必须在重启前取），且硬杀易触发 D-43 | 收尾账目以工作区实际文件为准（不依赖 git 状态）；若后续轮次需要干净基线，先确认无并行会话在写同一仓 |
 | P-27 | **两条截图自动化的实测坑（收尾批踩到，写进口径免得重复踩）**：① **`browser_hover('body')` 不能用来「把指针移开」**——body 中心可能正好压在 antd 帮助图标上，会把 Tooltip 拍进画面（`responsive-768-light-settings.png` 首次即中招并重拍）；可靠做法是 `page.mouse.move(1434, 892)`（右下角空白）并等 ~700ms。② **antd 是 v6.6.3：toast 根节点是 `.ant-message.ant-message-list.ant-message-top`，不存在 v5 的 `.ant-message-notice-content`**；按 v5 类名轮询会「10s 未命中但操作其实已成功」。可靠做法是**文本轮询 `document.body.innerText` 命中目标文案后立即截图**——实测「提交并推送」的 toast 在**点击后约 2.8 s** 才出现、停留约 3 s，窗口很窄 | 两条已并入 §1.2 的截图口径；后续批次一律「文本轮询 → 立即截图」+「鼠标移到右下角」 |
 | P-29 | **Turbopack 错误代码框的多字节 panic 会把整个 dev 服务带走**（2026-09-12 实测连续 4 次；即旧记录里的「E-01」）。链路：① 被编辑文件处于**瞬时错误态**（本次是 `apps/web-next/app/repos/[repoId]/settings/page.tsx` 作为 Server Component 却 import `useRouter`/客户端 hooks，缺 `'use client'`）；② Turbopack 为该诊断渲染代码框时命中 `next-code-frame` 的 Rust panic——`end byte index 93 is not a char boundary; it is inside '一' (bytes 91..94) of \`/** 树节点：title 为展示名… */\``；③ 进程以 `0xC0000409`（fail-fast）退出，`pnpm -r dev` 随即连带中止 web-koa（:3082）→ 用户侧表现为**整站突然打不开**。**取证特征**：日志里前面的请求全是 200，紧接着一条 `thread '<unnamed>' panicked at crates\next-code-frame\src\highlight.rs`，最后 `Exit status 3221226505`（**panic 会把真正的编译错误盖掉**，看不到错误正文） | ① **先拿到真实错误**：用 webpack 跑一次（`pnpm --filter @rebased/web-next dev -- --webpack`），错误正文照常打印（本次即据此定位到缺 `'use client'`）；② 修掉诊断本身（给该页补 `'use client'` 或把 hooks 下移到客户端子组件）后，Turbopack 不再产生该诊断、dev 稳定；③ 重启前若曾用 webpack 跑过，**必须删 `apps/web-next/.next` 再回到 Turbopack**，否则 webpack 与 Turbopack 的缓存混用会出现 `Cannot find module '../chunks/ssr/[turbopack]_runtime.js'`（各页 500）；④ 多会话共用一台机时先确认 :3081/:3082 归属再起（本次有一次重启因端口被另一会话的 dev 占用而 `EADDRINUSE` 失败）。**与 D-43 区分**：D-43 是 `.next` 缓存不一致导致的偶发嵌套 404（一级 200 + 二级 404），本条是「编译诊断 + 中文代码框」触发的**确定性**崩溃（全站不可达） |
+| P-30 | **「Monaco 语法高亮」在此前所有轮次里都是误判**（2026-09-16 定位并修复；不是文档笔误，是真缺陷）。链路：`monaco-editor` 的主入口把 json/css/html/typescript 四个「语言服务」一起装上，其中 typescript 服务挂在 `onLanguage('javascript')` 上——**打开任意 `.js`/`.ts` 文件**它就 `editor.createWebWorker()`，worker 侧再 `import('vs/language/typescript/tsWorker.js')`；而 ESM 构建里该 URL 由 `FileAccess.asBrowserUri()` → `moduleIdToUrl.toUrl()` 现算，`moduleIdToUrl` 是 AMD 版 `require.toUrl()` 的产物、ESM 里根本不存在 → 实参 undefined、控制台持续 `TypeError: Cannot read properties of undefined (reading 'toUrl')`（栈落在 `editorSimpleWorker.$loadForeignModule`）。即便绕开抛错，语言模块也不是打包产物、浏览器取不到。**此前两次「修」都押在 `globalThis._VSCODE_FILE_ROOT` 上**（先主线程设路径、再 Blob 包一层注入 worker 上下文），方向错了：那个全局只影响 `toUri` 走哪条分支，治不了「worker 侧要 import 一个不存在的模块」。**与高亮的因果**：已证实的只有事实层面的对应——关掉这四个语言服务后，同一页面同一文件的可高亮 token class 由 1 种变为 7 种（`.js`）/6 种（diff 页），控制台由持续报错变为 0 error；Monaco 内部为何会因此丢掉 basic-languages 的 Monarch 分词**没有逐行调试到**，此处只登记事实与修法，不编造机理。另一处独立缺口：`DiffPage`/`ThreeWayView`/`HunkDiffView`/`MergeView` 都不传 `language`，Monaco 退到 `plaintext`——即使 worker 正常，这几处也永远不会高亮 | 已修（`packages/client/ui`）：① `base/monaco-lazy.tsx` 按**语言服务**粒度关掉全部 worker 能力（`restrictModeFeatures` 遍历 css/less/scss/html/razor/handlebar/json/typescript/javascript 九个 defaults，逐个把 modeConfiguration 关掉，**只给 json 保留 `tokens`**——它的分词器在主线程跑，且 `basic-languages` 里没有 json）；高亮改由 `basic-languages` 的 Monarch（主线程）提供。② 四处视图按文件扩展名推断语言（`domain/language.ts` 的 `languageForPath`，与日志页内联快照同一套口径）：`DiffPage`、`ThreeWayView`、`HunkDiffView`（新增 `path` prop，github/gitlab 面板传入）、`MergeView`。③ 回归锁定：`monaco-lazy.test.tsx`（九个 defaults 的裁剪结果 + `getWorker` 装配）、`diff-page/three-way-view/hunk-diff-view/merge-view` 各自断言语言透传。**能力边界（写文档时注意）**：这条打包链路上 Monaco **不提供补全/诊断/悬浮/格式化等语言服务**，只做语法高亮——`docs/manual.md`、`docs/pages-and-api-audit.md` 里不要写「有补全/校验」。**浏览器实测**（:3081）：快照浏览 `.js` 43 行 7 种 token class、`.json` 4 种；diff 页 6 种；三处控制台均 **0 error / 0 warning** |
+| P-31 | **状态页「补丁预览」的代码高亮落地（2026-09-17，需求来自用户对 DOM47 `<pre data-testid="hunk-text-0">` 的标注）**。此前那两块是裸 `<pre>`：只有 `font-family: monospace`，`+`/`-`/`@@` 与代码本体一个色。**为什么不用 Monaco**（本仓既有口径）：这两块是**只读小片段**（一个 hunk 十几行、整份补丁几十行），按块起 `createDiffEditor` 的代价随 hunk 数线性增长；仓库里 `DiffPage`/`ReadonlyTextView`/`HunkDiffView` 要的是编辑器语义（行号、光标、横向滚动、并排 diff），保持 Monaco。**落地**：`base/shiki-lazy`（细粒度 `createHighlighterCore` + `createOnigurumaEngine(import('shiki/wasm'))`，11 种语法按需静态引入，双主题一次输出：浅色写 `color`、深色写 `--shiki-dark`，两者同在 `token.htmlStyle` 里）+ `base/code-block`（loader 注入点、未就绪先出纯文本、结果按 code/语言/行种类缓存、`maxHeight` 滚动外壳）+ `domain/highlight`（纯函数：行标注 `decoratePatchLines` 与 token→HTML `renderHighlightLines`）；`status-page` 的 hunk 正文与整份补丁兜底都换成它，语言按 `languageForPath(patch.path)` 推断、推不出退 `diff`；`hunk-text-*`/`patch-text` 两个既有 testid 移到外层包裹上，测试契约不变。**实测**（:3081 真实页面，`proxyGateway` 的未提交改动当夹具，验证后已 `git checkout` 还原）：同一 hunk 18 行、浅色 7 种 / 深色 7 种**不同的计算颜色**（`data-theme` 翻转生效）、增删行底色与 `.diff-marker` 前缀正确、**控制台 0 error**；`next build` 生产产物里 shiki 是独立懒加载 chunk **1378KB raw / 342KB gzip**（内含 wasm base64），构建 exit 0。**两处冒烟才暴露的坑**（已修 + 已加回归）：① 双主题下浅色**不在 `token.color`** 而整体在 `token.htmlStyle`，按 `color` 拼样式会写出 `color:undefined`（页面一片同色）——`renderHighlightLines` 单测守着；② `<pre>` 若用 `white-space: pre`，JSX 子元素之间的格式换行会被当内容渲染，每个补丁行之间多一条空行——改为 `.line { white-space: pre }` + `pre { white-space: normal }`，`code-block.test.tsx` 断言「行之间不夹文本节点」。**遗留**：本轮首次截图两次"落不了盘"，原因**不是工具缺陷、也不是访问被拒**，而是我的探针姿势错了：① 第一次截图时页面上**根本没有 `[data-testid="hunk-text-0"]`**（那时仓库工作区还是干净的，补丁预览无内容），工具按"元素不存在"报错；② 之后用**纯文件名**再拍，工具回报成功、文件也真的写进了它自己的允许根，而我按项目内相对路径去找，自然找不到。按 AGENT.md「MCP 浏览器」五步走一遍即解：传项目内绝对路径当探针 → 得到 `File access denied … Allowed roots: D:\…\deepseek-harness[\.playwright-mcp]` → 改用**纯文件名**落盘 → `Move-Item` 按绝对路径搬进 `docs/shots/`。 | 已改（`packages/client/ui`）：`src/base/shiki-lazy.tsx`、`src/base/code-block.tsx` + `code-block.css`、`src/domain/highlight.ts`、`src/composite/status-page.tsx`、`src/index.ts`；`@rebased/ui` 加依赖 `shiki@^4.4.3`。测试：`highlight.test.ts`（10）、`code-block.test.tsx`（8）、`status-page.test.tsx` 新增「补丁预览代码高亮」3 例；`pnpm --filter @rebased/ui test` 915 全绿、`typecheck` 通过。**注意**：`apps/web-koa` 的 `build`/`typecheck` 在本工作区**本来就是红的**（未提交的 `pages/repo.tsx` 引用了 `url-select.ts` 里不存在的 `withSnapParams`；另有 `PANEL_AGGREGATE`/`browseFilePath` 未定义），与本次改动无关，故 Vite 侧产物未单独复验——Shiki 的打包验证取自 `next build` 的真产物 || P-30 | **「Monaco 语法高亮」在此前所有轮次里都是误判**（2026-09-16 定位并修复；不是文档笔误，是真缺陷）。链路：`monaco-editor` 的主入口把 json/css/html/typescript 四个「语言服务」一起装上，其中 typescript 服务挂在 `onLanguage('javascript')` 上——**打开任意 `.js`/`.ts` 文件**它就 `editor.createWebWorker()`，worker 侧再 `import('vs/language/typescript/tsWorker.js')`；而 ESM 构建里该 URL 由 `FileAccess.asBrowserUri()` → `moduleIdToUrl.toUrl()` 现算，`moduleIdToUrl` 是 AMD 版 `require.toUrl()` 的产物、ESM 里根本不存在 → 实参 undefined、控制台持续 `TypeError: Cannot read properties of undefined (reading 'toUrl')`（栈落在 `editorSimpleWorker.$loadForeignModule`）。即便绕开抛错，语言模块也不是打包产物、浏览器取不到。**此前两次「修」都押在 `globalThis._VSCODE_FILE_ROOT` 上**（先主线程设路径、再 Blob 包一层注入 worker 上下文），方向错了：那个全局只影响 `toUri` 走哪条分支，治不了「worker 侧要 import 一个不存在的模块」。**与高亮的因果**：已证实的只有事实层面的对应——关掉这四个语言服务后，同一页面同一文件的可高亮 token class 由 1 种变为 7 种（`.js`）/6 种（diff 页），控制台由持续报错变为 0 error；Monaco 内部为何会因此丢掉 basic-languages 的 Monarch 分词**没有逐行调试到**，此处只登记事实与修法，不编造机理。另一处独立缺口：`DiffPage`/`ThreeWayView`/`HunkDiffView`/`MergeView` 都不传 `language`，Monaco 退到 `plaintext`——即使 worker 正常，这几处也永远不会高亮 | 已修（`packages/client/ui`）：① `base/monaco-lazy.tsx` 按**语言服务**粒度关掉全部 worker 能力（`restrictModeFeatures` 遍历 css/less/scss/html/razor/handlebar/json/typescript/javascript 九个 defaults，逐个把 modeConfiguration 关掉，**只给 json 保留 `tokens`**——它的分词器在主线程跑，且 `basic-languages` 里没有 json）；高亮改由 `basic-languages` 的 Monarch（主线程）提供。② 四处视图按文件扩展名推断语言（`domain/language.ts` 的 `languageForPath`，与日志页内联快照同一套口径）：`DiffPage`、`ThreeWayView`、`HunkDiffView`（新增 `path` prop，github/gitlab 面板传入）、`MergeView`。③ 回归锁定：`monaco-lazy.test.tsx`（九个 defaults 的裁剪结果 + `getWorker` 装配）、`diff-page/three-way-view/hunk-diff-view/merge-view` 各自断言语言透传。**能力边界（写文档时注意）**：这条打包链路上 Monaco **不提供补全/诊断/悬浮/格式化等语言服务**，只做语法高亮——`docs/manual.md`、`docs/pages-and-api-audit.md` 里不要写「有补全/校验」。**浏览器实测**（:3081）：快照浏览 `.js` 43 行 7 种 token class、`.json` 4 种；diff 页 6 种；三处控制台均 **0 error / 0 warning** |
 
 #### R1 夹具与流程纠偏（P-01~P-05；非产品缺陷，记入以免后续轮次重复踩坑）
 
@@ -1085,7 +1089,7 @@
 | amend 到…（指定历史提交） | 表单（页内下拉 + 提交按钮） | 状态页提交卡的 `amend-target-select` | `status-page-19b.png`（下拉已展开并选中「Amend chore(smoke): amend 目标探针 A（未发布）」，提交信息已填） | `status-page-19.png`（toast「已重写指定提交」+ 已暂存/工作区清零、下拉复位为占位符） | CLI：目标 `09f7974` 被重写为 **`6620ebd`**（subject 变为本次 amend 信息），其树同时含 `f-ui-amend-probe.txt`（原内容）与 `f-ui-amend-c.txt`（本次暂存内容）；原 B 提交随之重写为 `80b7e27`，链路 `80b7e27 → 6620ebd → 56d0e23`。**前置**：候选由 `GET /commit/amend-targets` 给出＝「未发布的非合并非 HEAD 提交」——夹具当时的提交都能从 origin 的探针分支到达（`--not --remotes` 为空），故先造两笔真正未发布的探针提交才出现候选 |
 | Fixup Commit（生成 fixup! 提交） | 表单（Modal，含确认语义） | 日志页提交行右键 →「Fixup Commit」 | `log-page-27b.png`（Modal「Fixup Commit：将以暂存内容创建 fixup! 提交并折入选中提交（历史将被重写）；无暂存内容请先在状态页暂存」） | `log-page-27.png`（首行出现 `fixup! chore(smoke): amend 头部探针 B（未发布）`） | CLI：新提交 **`65ecfbb fixup! chore(smoke): amend 头部探针 B（未发布）`**，其父即被指向的 `80b7e27`，暂存区随之清空，探测文件 `f-ui-fixup.txt` 已在该提交树中。**注**：首次确认时命中「仓库正忙（索引被其它 git 操作锁定）」瞬时提示（D-41 口径，CLI 与页面并发写索引），重取画面时提示已消失、提交已落地 |
 | Squash Commit（生成 squash! 提交） | 表单（Modal，含确认语义） | 日志页提交行右键 →「Squash Commit」 | `log-page-28b.png`（Modal「Squash Commit：将以暂存内容创建 squash! 提交并折入选中提交（历史将被重写）；无暂存内容请先在状态页暂存」） | `log-page-28.png`（顶部已无 `squash!`/`fixup!` 行，被折入的目标提交成为首行） | CLI：确认后**直接 autosquash 折入**——新 tip `f6f25d0`（subject 仍是「…B（未发布）」）的树含 `f-ui-squash.txt`（`HEAD~1` 不含），且上一轮的 `65ecfbb fixup!` 也一并被折入而**从历史消失**（`merge-base --is-ancestor 65ecfbb HEAD` 为假）；暂存区清空 |
-| 变更集（查看型对话卡） | 查看（Modal）+ 联动 | 提交详情面板「查看变更集」 | `log-page-29b.png`（Modal「变更集（f6f25d0）」列出 `A f-ui-amend-b.txt` / `A f-ui-fixup.txt` / `A f-ui-squash.txt`） | `log-page-29.png`（点其中 `f-ui-squash.txt` → `/diff?file=f-ui-squash.txt&from=6620ebd…&to=f6f25d0…&files=[…]`，Monaco 已渲染、3 行） | 本卡为**查看型**（无提交动作），故配对取「卡本体 + 点文件后的联动结果」；三条 `changes-file-*` 同属被折入的目标提交，顺带独立印证上一格的 autosquash 折入 |
+| 变更集（快照栏标签 + 逐文件差异） | 查看（快照栏标签）+ 联动 | 提交详情面板「查看变更集」 | `log-page-33b.png`（快照栏标签栏三族并存：「文件（136）」/「变更集（2）」/差异标签；清单给出提交主题 + `M README.md` / `M docs/superpowers/specs/2026-09-15-multi-protocol-inbound-design.md`；详情面板「查看变更集」呈选中态；**全程无弹窗**） | `log-page-33.png`（点清单里 `…design.md` → **同一标签栏**开差异标签并激活：路径栏 = 该路径 + 「与父提交对比」，行内 Monaco diff 已渲染） | **CLI 互证**：`git -C D:\…\proxyGateway show --name-status dd5c9b77` 恰好同 2 个 `M` 文件（列表与仓库事实一致）。**形态断言**：页面无 `role=dialog`——变更集 Modal 已删除，改为标签。**粘性 + 剪枝**（同轮实测）：切到 `a3433b81`（变更集 2 文件）→「变更集（2）」标签保留、内容换成新提交的；其差异标签 `lib/convert/responses-to-chat.js` **不在新变更集里 → 自动关掉**；再切到 `83f6052`（变更集只有 `README.md`）→ 在 `dd5c9b77` 打开的 `README.md` 差异标签**保留并按新提交重算**（仍为激活标签、Monaco 已渲染）。**根提交降级**：`?select=e74f624`（该仓根提交）→「变更集（7）」；点 `app.js` 只给提示行、Monaco 未渲染，且网络面板 **0 条 `/diff` 请求**（无父版本不发请求）。**开关**：再点一次「查看变更集」→ 变更集标签与差异标签一并消失、按钮回默认态。**刷新边界**：变更集/差异标签不进地址栏，刷新后回到「文件（N）」标签 |
 | 删除该文件（冲突整侧解决） | 二次确认（Popconfirm） | 冲突页 `deleted-by-them.txt` 行「删除该文件」 | `conflicts-07b.png`（「确认以删除解决该冲突？」） | `conflicts-07.png`（冲突文件 4→3，该行消失） | CLI（本轮同一流程收官后复核）：`deleted-by-them.txt` 已从工作区移除、最终未进入合并结果；同轮其余三项为 `shared.txt`=master 侧、`both-added.txt`=feature 版本 |
 | 手动合并（MergeView 保存） | 表单（全屏 Modal，Monaco 三栏） | 冲突页 `manual-merge.txt` 行「手动合并」 | `conflicts-08b.png`（Modal 三栏：当前分支 / 合并来源 / 合并结果；结果栏已改为 `line1 master` / `line2 feature` / `line3 resolved-by-hand`） | `conflicts-08.png`（点「保 存」后 Modal 关闭、冲突文件 3→2） | CLI：`manual-merge.txt` 落盘内容与结果栏**逐行一致**（`line1 master` / `line2 feature` / `line3 resolved-by-hand`），该路径脱离未合并 |
 | 完成合并（登记既有配对） | 结果态 + 提交 | 冲突页底部「完成合并」 | `conflicts-04.png`（冲突文件（0）、「完成合并」可点） | `conflicts-04b.png`（自动回日志页） | **既有图配对（登记）**；本轮复跑：合并提交 `cbddab3 Merge branch 'feature'`（旧记录 `aa621c1` / `ec1320f` 系历史重写前） |
@@ -1157,7 +1161,7 @@
 | `branch-compare-view` | `diff-page-10.png`（`?compare=diverge-test` 双 range 对比视图）、`branch-06.png`（分支页「比较」入口与「当前」分支禁用态） |
 | `blame-view` | `blame-01…04.png`（注解列表 / 三联动 / 受影响文件 / `previousLineno` 边界）；根 testid `blame-file` / `blame-line-N` / `blame-hash-N` 实测在盘 |
 | `committed-changes-panel` | `committed-01…03.png`（提交列表分页 50→100 / 目录树 / 与 diff 页联动）；根 testid `committed-entry-N` / `committed-load-more` 实测在盘 |
-| 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `BrowsePanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复 |
+| 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复（原 `BrowsePanel` 已随整页形态删除） |
 
 ### 5.28 折叠 / 分支过滤 / 最近仓库项 冒烟（Task 8，2026-09-13）
 
@@ -1250,5 +1254,308 @@
 | 主题切换的**就地**跟随（不重新挂载页面） | 主题开关在 `/settings`，切完回首页是重新挂载；未构造「停留首页时 `data-theme` 变化」的用户路径 | T3 修复轮已用 `MutationObserver` 订阅 + 单测锁死；如需 live 复证，可用 `auto` 偏好 + 改系统明暗触发 |
 | web-koa SPA（`:5173`）对等抽查三块 | 本轮按 `AGENT.md` 冒烟口径以 web-next `:3081` 为被测端；`:3082` 只做了 API 侧互证（`/api/repos`、`/log?all=true`） | 需要时按 §1.1 的对等抽查口径补跑 |
 | 折叠态与「按需加载」的交互 | 观察到大仓折叠后仍会继续追加更早提交、链两端按 hash 重算仍成立（`fragmentsToRows` 现算行号），但本轮**未**把它当用例系统取证 | 可在下一轮补「折叠后滚到底 → 追加页进来 → 折叠仍成立」一条 |
+
+### 5.29 日志页就地快照栏标签页化 冒烟（2026-09-16）
+
+> **触发**：把日志页就地快照栏的「文件树」「文件内容」两栏**合并成一条标签栏**（新增 `packages/client/ui/src/composite/snapshot-tabs.tsx`；四栏 → 三栏 `日志｜详情｜快照`；随之删掉「显示/隐藏文件树」开关、跨栏通栏与 `ResizableColumns.header`）。在真实服务里按用户路径逐项走查。
+> **夹具**：`D:\zhanglei1120\Coding\proxyGateway`（本机最近仓库，非 rebasedjs 自身）；浏览版本 `9eb03b7897e92e3218eaf561916b432c1677474d`（页面短名 `9eb03b7`，作者 `zhanglei1120`，2026-09-16 11:09 提交）。仓内 `HEAD` 已是 `69e8568`——快照栏看的是**历史版本**，与工作区无关，符合只读语义。
+> **服务**：web-next `:3081`（会话内已在跑的 Next dev + HMR；改动全在 `packages/client/ui`，热更即生效，未重启服务）。
+> **口径**：浏览器侧全只读（未提交/检出/改文件）；本轮**改了 `packages/client/ui`**，故证据含一条「改前缺陷 → 改后复验」（见 1.5）。
+> **视口**：统一 `browser_resize(1440×900)`；明亮主题抽查走 `/settings` 切主题后回同一深链。
+
+**① 范围清单（逐项）**
+
+| # | 范围项 | 结论 | 判据（浏览器 DOM / 画面） | 互证（CLI） |
+|---|--------|------|---------------------------|-------------|
+| 1.1 | 展开快照栏 = **三栏**（日志｜详情｜快照），两条分隔条 | ✅ | `[data-pane-key]` = `log / details / snapshot`；`.ant-splitter-bar` 恰 **2** 条；未展开时 `[data-testid="snapshot-tabs"]` 不存在 | — |
+| 1.2 | 标签栏第一个标签是「文件（112）」：带文件夹图标、**没有关闭按钮**；版本 chip 常驻标签栏右端 | ✅ | `.ant-tabs-tab` 文本 = `文件（112）`；该 tab 内 `.ant-tabs-tab-remove` 为 `null`；`[data-testid="snapshot-tree-rev"]` = `9eb03b7` | `git ls-tree -r 9eb03b7 \| wc -l` = **112**（与标签里的 N 逐字一致） |
+| 1.3 | 树在第一个标签页内，且**第一层目录自动展开** | ✅ | `[data-testid="snapshot-tree-pane"]` 含 `README`-同级行；前 12 行 = `bin / start.sh / stop.sh / docs / plans / superpowers / 语音合成.md / 语音识别.md / lib / convert / protocol / response` | 该版本根目录条目 = `ls-tree 9eb03b7` 首层（目录聚合后目录在前、同级按名排序） |
+| 1.4 | 树里点文件 → 开成**新文件标签**并把 `?file=` 写回地址栏 | ✅ | 点 `bin/start.sh` → 标签变 `文件（112）\| start.sh`、`location.search` 末尾 = `&file=bin%2Fstart.sh`（点前后 URL 逐字对比） | `git ls-tree -r 9eb03b7 --name-only` 命中 `bin/start.sh` |
+| 1.5 | **多标签**并存（4 个），且同一时刻**只有激活标签页可见** | ✅（改前 ❌ → 已修） | 4 个标签 `文件（112）/ config.js / start.sh / access-log.js`；`.ant-tabs-content` 共 4 个、`offsetParent !== null` 的恰 **1** 个；隐藏页 `style.display === ''`（隐藏由 antd 的 `.ant-tabs-content-hidden` 负责） | — |
+| 1.6 | 切回已开过的标签：**立即出内容**（不闪加载态），编辑器实例按标签保留 | ✅ | 切回 `config.js`：激活页内 `.ant-spin` = `false`、正文宿主 767px、可见行 41 行；`document.querySelectorAll('.monaco-editor').length` = **3**（三个文件各一个实例，另有 1 个树标签页无编辑器） | 内容与 `git show 9eb03b7:<path>` 逐字一致（见 ③） |
+| 1.7 | 关闭**非当前**标签：只从标签栏移除，不动容器选中 | ✅ | 关 `start.sh`：标签 3 → 2、`?file=` 仍是 `lib%2Fconfig.js`、`.monaco-editor` 3 → 1（该标签页随之卸载）、控制台无新增错误 | — |
+| 1.8 | 关闭**当前**标签：切到相邻标签；关掉最后一个 → 回「文件」标签并清空 `?file=` | ✅ | 关 `config.js`（当时唯一文件标签）：URL 里 `file=` 整段消失、激活标签回到 `文件（112）`、`.monaco-editor` = 0、树可见（`snapshot-tree-pane` 有尺寸） | — |
+| 1.9 | 点「文件」标签：回到树，并让容器清空 `?file=` | ✅ | 点 `snapshot-tree-title` 后 `location.search` 只剩 `?select=…&snap=…`（`file=` 被清掉）、激活标签 = `文件（112）` | 与容器既有 toggle 口径一致（同路径再点即收起，未新增契约） |
+| 1.10 | 深链 `?snap=&file=` 刷新/直达：开该文件标签并激活、树逐级展开、内容就绪 | ✅ | 直达该深链后：标签 = `文件（112）\| config.js`、激活 = `config.js`、路径栏 = `lib/config.js`、Monaco 465–768px 满高、控制台 **0 error** | 版本与文件都在该 rev（`ls-tree` 命中） |
+| 1.11 | 高度契约：标签页与正文吃满快照栏（不再按内容长高） | ✅（改前 ❌ → 已修） | `.ant-tabs-body-holder` = `.ant-tabs-body` = 激活标签页 = **797px**；正文宿主 **768px**；`monaco-editor` 767px；快照栏 `scrollWidth === clientWidth`（无横向溢出） | 改前实测同一页面：holder 495 / body 与标签页 **35** / 编辑器宿主 **5**（高度退化成内容高） |
+| 1.12 | 分隔条仍可拖、宽度仍落库（键沿用合栏前那一个） | ✅ | 拖第二条分隔条左移 120px：`details 320 → 200`、`snapshot 783 → 994`、`log` 弹性（246 不变）；编辑器宽随之 994；`localStorage` = `contentWidth: "994"`、`detailsWidth: "200"` | — |
+| 1.13 | 明暗主题各成立（正文、路径栏分隔线、编辑器主题） | ✅ | `/settings` 切「明亮」后回同一深链：`data-theme=light`、`body` 背景 `rgb(255,255,255)`、Monaco 类从 `vs-dark` 变 `vs`、正文 767px 满高；切回「暗色」复原 | — |
+| 1.14 | 页面控制台 | ✅（正常路径 0 error） | 深链直达、开标签、切标签、关标签这些路径上控制台 **0 error**；仅 dev 下**新开**文件标签时偶发一条 Monaco `Canceled: Canceled`（根因与处置见 ⑤） | — |
+
+**② 操作路径（点击 / 输入序列）**
+
+1. 探针：`browser_take_screenshot` 直接落 `D:\zhanglei1120\Github\deepseek-harness\.playwright-mcp\shots\<名>.png`（在允许根内，未被拒）→ 收尾 `Copy-Item` 搬进 `docs/shots/` → `Get-FileHash` 登记。
+2. 深链直达 `/repos/bc52b542…?select=9eb03b7…&snap=9eb03b7…&file=lib%2Fconfig.js` → 等选中提交经有界补页恢复（本仓要拉数页，约 20s）→ 断言标签 / 三栏 / 几何。
+3. 点「文件（112）」标签 → 点树里 `bin/start.sh` → 回点「文件（112）」标签 → 点 `lib/access-log.js` → 断言 4 标签 / 4 个标签页 / 仅 1 个可见 / 3 个编辑器。
+4. 点 `config.js` 标签 → 断言无 Spin、路径栏与 URL 同步。
+5. 点 `start.sh` 标签的 `×`（非当前）→ 点 `config.js` 标签的 `×`（当前，且是最后一个）→ 断言回「文件」标签 + `?file=` 清空。
+6. `page.mouse` 拖第二条 `.ant-splitter-bar` 左移 120px → 读三栏宽度与 `localStorage`。
+7. `/settings` → 「界面主题 → 明亮」→ 回同一深链 → 截图 `theme-log-snapshot-light.png` → 再切回「暗色」复原（并清掉本轮为取证临时改过的三处栏宽偏好键）。
+
+**③ 证据（浏览器状态 + CLI 输出互证）**
+
+- **标签总数互证**：`git -C D:\zhanglei1120\Coding\proxyGateway ls-tree -r 9eb03b7897e92e3218eaf561916b432c1677474d | wc -l` → **112**；页面标签 = `文件（112）`。
+- **文件都在该版本里**：`ls-tree -r <rev> --name-only` 命中 `bin/start.sh`、`lib/config.js`、`lib/access-log.js`。
+- **内容逐字互证**：`git show 9eb03b7:lib/access-log.js` 首行 = `/** 访问日志：把请求体与响应结果逐行写入专用 JSONL 文件。`，页面正文第 1 行同文；第 15 行 = `import path from "node:path";`，页面第 15 行同文。`git show 9eb03b7:lib/config.js` 含 `import { toArray, toObject, toString } from "./utils.js";`，与页面正文一致。
+- **高度契约原文**（改后）：`{holder:{h:797}, body:{h:797}, pane:{h:797}, editorHost:{h:768}}`；改前同页：`{holder:{h:495}, body:{h:35}, pane:{h:35}, editorHost:{h:5}}`。
+- **多标签/可见性原文**：`tabs=[文件（112）, config.js, start.sh, access-log.js]`、`paneCount=4`、`visiblePaneCount=1`、`monacoEditors=3`、隐藏页 `display=''`。
+- **落库原文**：拖前 `{log:246, details:320, snapshot:874}` + `{contentWidth:"874", detailsWidth:"320", treeWidth:"369"}`；拖后 `{log:246, details:200, snapshot:994}` + `{contentWidth:"994", detailsWidth:"200", treeWidth:"369"}`。
+- **CLI 复核工作区未被触碰**：全程只读，未执行任何写操作；`git -C <夹具> status --porcelain` 与冒烟前的改动一致（本轮未引入新条目）。
+
+**④ 截图账目（4 张，均落 `docs/shots/`）**
+
+| 截图 | 内容（最终正确效果） | SHA256（前 16 位） |
+|------|----------------------|--------------------|
+| `log-snapshot-01.png` | 深链直达 `?snap&file=lib/config.js`（1440×900，暗色）：标签 `文件（112）\| config.js`、右端版本 chip `9eb03b7`、路径栏 `lib/config.js` + 复制/新标签页、正文满高 | `496871B7A2D3ADD1` |
+| `log-snapshot-02.png` | 多标签（同视口，暗色）：`文件（112）\| config.js \| start.sh \| access-log.js`，激活 `access-log.js`——**只显示一份正文**（改前缺陷态是三份上下叠成一列，本张为改后复拍） | `B603F49C03A70E48` |
+| `log-snapshot-03.png` | 停在「文件（112）」标签：整栏是这一版的文件树（第一层 `bin/docs/lib/test` 已展开），无关闭按钮、版本 chip 仍在 | `1B2149639302C6F0` |
+| `theme-log-snapshot-light.png` | 明亮主题下的同一深链：正文黑字白底、路径栏分隔线与标签栏取亮色 token、Monaco 切 `vs` | `8CA0CDAA47DFE427` |
+
+**⑤ 未覆盖项与后续计划**
+
+| 未覆盖项 | 原因 | 处置建议 |
+|----------|------|----------|
+| dev 下新开文件标签偶发 `Canceled: Canceled` | 栈顶为 React StrictMode 的 effect 双调用（`doubleInvokeEffectsOnFiber`）→ `base/monaco-lazy.tsx` 的 `PlainEditor` 清理里销毁 model / editor，Monaco 内部 Delayer 取消时抛错。**真实卸载路径（关标签、切文件）实测 0 error**；生产构建无双调用，不涉功能 | 属既有 Monaco 包装（本轮未改该文件）。若要消音，可在清理里用 try/catch 包住销毁（或改成先 `setModel(null)` 再销毁），建议与 Monaco 包装那一笔一起做 |
+| 树的子模块/链接徽标、二进制提示、加载/错误占位 | 这些口径由 `SnapshotTreeColumn` / `ReadonlyTextView` 原样复用（本轮未改其行为），已由既有单测覆盖；live 本轮未逐项重拍 | 需要证据时沿用 §4.31 的 `browse-*` 历史图（那一页本身已删除，见 §5.29⑥）；日志页快照栏的 live 证据见 5.29 本体 |
+| web-koa SPA（`:5173`）对等抽查 | 本轮按 `AGENT.md` 以 web-next `:3081` 为被测端；两端 `LogPage` 是同一 ui 组件、props 同形 | 需要时按 §1.1 对等抽查口径补跑 |
+| 遗留 localStorage 键 `rebased.log.treeWidth` | 文件树不再是独立栏，该键已无读取方（值原样留在用户浏览器里） | 不清理：清它需要额外 `removeItem` 代码，收益为零；快照栏宽度**沿用** `rebased.log.contentWidth`，老用户的宽度设置原样继承 |
+| 本轮附带修复（与快照栏行为无关） | 工作区改动前 `pnpm typecheck` 红、`commit-details-panel.test.tsx` 2 条红：面板根节点未转发 `style`/`data-testid`、作者行缺 `data-testid="author-line"`、主题行的加粗元素被 `CopyOnClick` 的 span 包在外层 | 已一并修好：根节点转发 `style`/`data-testid`、作者行容器补 testid、`<Text strong>` 换到 `CopyOnClick` 内层。`pnpm typecheck` 全绿、`commit-details-panel.test.tsx` 18/18 |
+
+**⑥ 后续用户口径修订（2026-09-16，取代上表 1.2 与 ④ 中对应描述）**
+
+| 修订项 | 新口径 | 落点 |
+|--------|--------|------|
+| 版本 chip（上表 1.2 / 截图 01、03 中的 `snapshot-tree-rev`） | **删除**：标签栏右端不再显示版本短名；在哪一版由详情面板与地址栏 `?snap=` 表达 | `composite/snapshot-tabs.tsx` 去掉 `tabBarExtraContent`；`log-page` 不再传 `rev`/`revTitle`/`browseRevTitle` |
+| 文件标签路径栏的「在新标签页打开」（导出图标，`browse-open-tab`） | **删除**：路径栏只留「复制全文」 | `base/readonly-text-view.tsx` 的 `ReadonlyTextActions` 去掉 `ExportOutlined` 按钮；`log-page` 去掉 `onOpenBrowseInNewTab`，两端容器同步去掉该接线 |
+| **整页快照浏览页 `/repos/:id/browse`** | **整页删除**（2026-09-16 用户口径）：该页在应用内没有任何入口——上一条删掉导出按钮后，最后一个指向它的链接也没了；详情面板「浏览快照」开的是**就地快照栏**（`?snap=`）。树与内容视图原样保留 | 删除 `apps/web-koa/src/pages/browse.tsx`（含 `main.tsx` 路由）、`apps/web-next/app/repos/[repoId]/browse/page.tsx`、ui `composite/browse-panel.tsx` 的 `BrowsePanel`（连同其单测）；`SnapshotTreeColumn`/`snapshotTreeNodes`/`topLevelDirKeys` 迁到 `composite/snapshot-tree-column.tsx`；`GET /browse`、`GET /browse/content` 与 client hooks **保留**（快照栏消费，另被 `scripts/check-fluid-layout.mjs` 用来挑夹具文件）。几何度量随之把 `browse` 那一格换成 `log-snapshot` / `log-snapshot-file` 两格 |
+| 顶栏「首页」链接 + 仓库名文本 | 合并成 **antd 面包屑**「首页 / 仓库名」：首页是可点的一级（回欢迎屏），仓库名是当前页（末级不可点） | `composite/log-page.tsx` 顶栏 `[data-testid="log-topbar"]` 左侧改用 `Breadcrumb`（`data-testid="log-breadcrumb"`）；`log-go-home` 落在面包屑第一级的 `Typography.Link` 上 |
+
+> 说明：上述三项属**用户明确指定的界面口径变更**（不是缺陷修复），故不重拍 5.29 的既有截图；三张图里仍能看到旧 chip 与旧导出按钮，以本节为准。行为侧已由单测锁定：`snapshot-tabs.test.tsx`（无 chip / 无导出按钮）、`readonly-text-view.test.tsx`（只剩复制全文）、`log-page.test.tsx`（面包屑两级 + 首页回调）。
+
+> **几何测量脚本随之更新（`scripts/check-fluid-layout.mjs`，未重跑矩阵）**：路由表里 `browse` 一格（`/repos/:id/browse?rev=`）已删除，换成 `log-snapshot`（`?select=&snap=`，就绪门 `snapshot-tabs` + 内容门 `[data-testid="snapshot-tree-pane"] .ant-tree-treenode` ≥ 10）与 `log-snapshot-file`（再加 `?file=`，内容门 `browse-content-path` —— **刻意不用 Monaco 宿主**：它要等懒加载，门不该承担加载时序）两格；截图页清单同样把 `browse` 换成 `log-snapshot`；`assertPanes` 那条「两栏宿主」例外断言只留给 `log-select`（就地快照栏是**三栏 ResizableColumns**，宿主是 `resizable-pane-*`，套不上 `split-*-host` 判据）。因此每主题的路由/状态格从 33 变 34，**上表 ②③⑤ 里的 396/384 格是脚本更新前的历史记账**，下一轮重跑会得到 408 格 —— 数字变了不代表回归，先看格数对不上还是断言红。
+
+**⑦ 代码审查后的修复与复验（2026-09-16 晚，同一轮）**
+
+对 `snapshot-tabs.tsx` 做了一轮只读审查（另起 agent，独立上下文），按结论修掉两条会静默产生用户可见错误的缺陷，并清理本次合并留下的死代码/过期注释：
+
+| 修复项 | 问题（审查发现） | 落点 |
+|--------|------------------|------|
+| 标签键命名空间 | 树标签键是保留字面量 `'files'`，而**仓库根真有个叫 `files` 的文件**时会撞键：React 重复 key、点该文件名被当成点「文件」标签（反而清空 `?file=`），**这个文件永远打不开** | 文件标签键改为 `path:` + 路径（`fileTabKey`/`pathOfFileTabKey`），与树键天然隔离；新增用例「根目录真有名为 files 的文件」 |
+| 关标签的接管判据 | 只比 `activeKey`：用户点「文件」标签后容器那次 URL 回写还没落地时，关掉那个「容器仍选中」的标签会留下**标签没了、树里仍高亮、URL 仍指着它**的死状态（再点该文件是 toggle，得点两次才回来） | 判据改为 `key !== activeKey && path !== selectedPath` 才提前 return；关闭时一并丢弃该路径的内容副本；新增用例「偏差态：容器还没清 ?file= 时切到树，再关掉那个文件标签也要接管选中」 |
+| 文案 | 「切回该标签页即可查看内容」在**当前激活**标签上也可能出现（组件不保证容器一定在拉它） | 改为中性文案「内容尚未加载 / 再点一次树里的这个文件名即可重新获取」 |
+| 死代码 | `MIN_CONTENT_CHARS`（合栏后零消费者）、`estimateCharWidth`（唯一调用点恒传 `undefined`，实测分支是死的） | 删掉两者，保留并补注释 `FALLBACK_CHAR_WIDTH`；`log-page` 直接用它折算默认宽 |
+| 过期注释 | `resizable-columns.tsx`（四栏 / Layout(Header+Content) / 文件树栏例）、`browse-panel.tsx`（两栏通栏）、`readonly-text-view.tsx`（顶部通栏）、`commit-details-panel.tsx`（关闭文件树与内容两栏）、`log-page.tsx`（展开快照即隐去作者/日期列——与「宽度驱动」自相矛盾） | 逐处改为合栏后的口径 |
+
+- **复验（流水线）**：`pnpm --filter @rebased/ui format` 干净；`pnpm typecheck` 七包全绿；`pnpm --filter @rebased/ui test` → **71 文件 / 874 用例全绿**（含新增的 4 条边界用例）。
+- **复验（真实浏览器，:3081 新开标签页，不打扰用户所在页）**：深链 `?snap=&file=lib/config.js` → 点「文件（112）」→ 点 `bin/stop.sh` → 标签变 `文件（112）| config.js | stop.sh`、激活 `stop.sh`、正文 24 行满高、可见标签页恰 1 个；点 `stop.sh` 的 `×` → 邻标签接管、`?file=` 自动改为 `lib%2Fconfig.js`。`path:` 键空间下开/切/关全链路正常。
+- **留待后续（本轮明确不改，供决策）**：
+  - 容器仍把**短 hash** 传给 `browseRev`（`apps/*/…repo*.tsx`），它现在只当标签栏重挂载键用；两个提交共享 7 位前缀时不会复位（概率极低）。建议改传完整 rev。
+  - `LOG_WISH_WIDTH`（`log-page.tsx`）在**本次改动之前**就已只剩注释引用（HEAD 里没有它，属在途那一笔的遗留），未动。
+  - 手写 `padding: '4px 8px'`（路径栏）：沿用合栏前通栏的写法（与栏内 8px 对齐），未改成 token；`renderedPaneKeys.current` 在 render 期赋值（3 栏恒定，无实际风险）同理。
+  - `snapshots` 副本随关标签删除，但未给 `openPaths` 设上限（编辑器式多标签不设上限是产品口径；SWR 侧本来就缓存了同一批正文）。
+
+### 5.30 变更集由 Modal 改为快照栏标签（含逐文件差异标签）冒烟（2026-09-16）
+
+> **触发**：用户口径——详情面板「查看变更集」不再弹对话框，改为快照栏标签栏里的「变更集（N）」标签；清单里点文件**在同一标签栏**开差异标签（原行为是「在新浏览器标签页打开差异页」）。追加两条口径：① 变更集标签**粘性**——换提交时标签保留、内容自动换成新提交的变更集；② 已开差异标签**保留，但只在路径仍属于新变更集时才继续看**（不在里面的自动关掉）。
+> **夹具**：`D:\zhanglei1120\Coding\proxyGateway`（同 §5.29）。主用例提交 `dd5c9b77`（2 个 `M` 文件）；粘性/剪枝用 `a3433b81`（2 文件）与 `83f6052`（仅 `README.md`）；根提交降级用 `e74f624`（该仓根提交，7 个 `A` 文件）。
+> **服务**：web-next `:3081`（会话内已在跑的 Next dev + HMR；改动落在 `packages/client/ui` 与 `packages/client/client`，`transpilePackages` 直编源码，热更即生效，未重启服务）。
+> **口径**：浏览器侧全只读（未提交/检出/改文件）；视口 `1528×782`（沿用会话内既有窗口，未 resize）。
+
+**① 范围清单（逐项）**
+
+| # | 范围项 | 结论 | 判据（浏览器 DOM / 画面） | 互证（CLI / 网络） |
+|---|--------|------|---------------------------|--------------------|
+| 1.1 | 点「查看变更集」**不弹对话框**，改为快照栏标签 | ✅ | `document.querySelector('[role="dialog"]')` = `null`（同类断言全程 5 次均为 null）；快照栏随之展开（地址栏追加 `&snap=dd5c9b77…`） | — |
+| 1.2 | 标签栏出现「变更集（N）」，N = 该提交变更文件数 | ✅ | `.ant-tabs-tab` = `文件（136）` + `变更集（2）`（激活）；清单两行 = `M README.md`、`M docs/superpowers/specs/2026-09-15-multi-protocol-inbound-design.md` | `git show --name-status dd5c9b77` = 同 2 个 `M` 文件（逐字一致） |
+| 1.3 | 点清单里的文件 → **同一标签栏**开差异标签并激活；不跳页、不新开浏览器标签页 | ✅ | 点 `…design.md` → 标签 = `文件（136）｜变更集（2）｜2026-09-15-multi-protocol-inbound-design.md`（激活）；`location.href` 不变（仍是日志页 `?select=&snap=`，未跳到 `/diff`） | 差异请求发向 `GET /api/repos/:id/diff?file=…&from=<父>&to=dd5c9b77…`（同源 XHR，非导航） |
+| 1.4 | 差异正文是**真 diff**（Monaco 行内、路径栏写明对比两端） | ✅ | 路径栏 = 该路径 + 「与父提交对比」；`.monaco-diff-editor` 已渲染；呈现方式默认落在「行内」（窄栏口径），「并排」可切 | 与 `git show dd5c9b77 -- <path>` 的改动位置一致（画面第 553–571 行改动区） |
+| 1.5 | **粘性**：换选中提交时变更集标签保留、内容换成新提交的 | ✅ | `dd5c9b77` → 点提交行 `a3433b81`：「变更集（2）」仍在（激活）且清单变成 `lib/convert/responses-to-chat.js` / `test/responses-to-chat.test.js`；再切 `83f6052` → 「变更集（1）」= `README.md` | `git show --name-status a3433b81 / 83f6052` 分别与两个清单逐字一致 |
+| 1.6 | **剪枝**：已开差异标签只在路径仍属新变更集时保留 | ✅ | 在 `dd5c9b77`/`a3433b81` 打开的 `lib/convert/responses-to-chat.js` 差异标签，切到 `83f6052` 后**自动消失**；而在 `dd5c9b77` 打开的 `README.md` 差异标签切到 `83f6052` 后**保留且仍是激活标签**，正文按新提交重算（Monaco 已渲染） | 两个提交的 `--name-only` 分别含/不含这两个路径 |
+| 1.7 | **根提交降级**：无父版本不发请求、只给提示行 | ✅ | `?select=e74f624&snap=e74f624`（根提交）→ 「变更集（7）」；点 `app.js` → `[data-testid="changes-diff-root-hint"]` 存在、`.monaco-diff-editor` = 0 | **网络面板 0 条 `/diff` 请求**（`file` 空串挂 null key + 无父版本不取数）；`git show --name-status e74f624` = 7 个 `A` 文件 |
+| 1.8 | 按钮是**开关**：开着时呈选中态，再点一次收起整族 | ✅ | 打开后 `[data-testid="open-changes"]` 含 `ant-btn-primary`；再点一次 → 变更集标签与差异标签一并消失、只剩 `文件（145）`、按钮回 `ant-btn-default` | — |
+| 1.9 | 刷新边界：变更集/差异标签不进地址栏 | ✅ | 同一深链刷新后标签只剩 `文件（136）`（快照栏本身仍由 `?snap=` 恢复），需要重新点「查看变更集」 | 与 §4.31 边界条一致（深链只有 `?snap=` / `?file=`） |
+| 1.10 | 页面控制台 | ✅（0 业务 error） | 全程仅 1 条 `favicon.ico` 404（既有噪声，与功能无关）；无 React key/受控告警 | — |
+
+**② 操作路径（点击 / 输入序列）**
+
+1. 深链 `/repos/bc52b542…?select=dd5c9b77…`（先只带选中，不带 `snap`）→ 等选中提交经有界补页恢复（本仓 309 提交，约 10s）。
+2. 点详情面板「查看变更集」→ 断言无 `role=dialog`、快照栏展开、`变更集（2）` 标签激活且清单与 `git show --name-status` 一致 → 截图 `log-page-33b.png`。
+3. 点清单里 `docs/superpowers/specs/2026-09-15-multi-protocol-inbound-design.md` → 断言差异标签激活、路径栏与「与父提交对比」、Monaco 行内 diff 已渲染、`location.href` 未变 → 截图 `log-page-33.png`。
+4. 点提交行 `a3433b81`（图里第 5 行）→ 断言变更集标签保留且换成新提交的清单；再点 `83f6052`（第 4 行）→ 断言 `responses-to-chat.js` 差异标签被剪掉、`README.md` 差异标签保留。
+5. 先点「查看变更集」收起，再点一次重新打开 → 断言按钮 primary / default 两态与标签族开合一致。
+6. 深链 `?select=e74f624…&snap=e74f624…`（根提交）→ 点「查看变更集」→ 点 `app.js` → 断言根提示行、无 Monaco、网络面板无 `/diff` 请求。
+7. 同一深链刷新 → 断言回到 `文件（N）` 标签（变更集标签不还原）。
+8. 截图：`page.screenshot({ path: './<名>.png' })`（Playwright 服务工作目录 `D:\zhanglei1120\Github\deepseek-harness\`，**不是** `.playwright-mcp\`）→ `Copy-Item` 搬进 `docs/shots/` 并按 `log-page-<NN>` 续号 → `Get-FileHash` 登记，临时图删除。
+
+**③ 证据（浏览器状态 + CLI / 网络互证）**
+
+- **形态断言原文**：`{ tabs: ["文件（7）","变更集（7）","app.js"], active: ["app.js"], rootHintCount: 1, renameHintCount: 0, monacoCount: 0, dialogCount: 0, diffRequests: [] }`（根提交一轮；`diffRequests` 是 `page.on('request')` 抓的同源 `/diff` 请求数）。
+- **主用例形态原文**：`{ tabs: ["文件（136）","变更集（2）"], active: ["变更集（2）"], dialog: false }`；点文件后 `{ active: ["2026-09-15-multi-protocol-inbound-design.md"], diffPath: "docs/superpowers/specs/2026-09-15-multi-protocol-inbound-design.md" }`。
+- **剪枝原文**：`83f6052` 一轮 `{ tabs: ["文件（145）","变更集（1）","README.md"], active: ["README.md"], changesetPaneTitle: "变更集（1）", hasMonacoDiff: true }` —— 差异标签只剩 `README.md`（`responses-to-chat.js` 已剪掉）。
+- **CLI 互证**：`git -C D:\zhanglei1120\Coding\proxyGateway show --name-status` 逐提交核对——`dd5c9b77` 2 个 `M`、`a3433b81` 2 个 `M`、`83f6052` 1 个 `M`、`e74f624`（根）7 个 `A`；页面标签名里的 N 与四个数字**逐个相等**。
+- **工作区未被触碰**：全程只读（未提交/检出/改文件）；`git status --porcelain` 与冒烟前一致。
+
+**④ 截图账目（2 张，均落 `docs/shots/`）**
+
+| 截图 | 内容（最终正确效果） | SHA256（前 16 位） |
+|------|----------------------|--------------------|
+| `log-page-33.png` | **最终效果**（1528×782，暗色）：标签 `文件（136）｜变更集（2）｜2026-09-15-multi-protocol-inbound-design.md`，激活差异标签；路径栏 = 路径 + 「与父提交对比」；呈现方式「行内」选中；Monaco 行内 diff 渲染改动区（553–571 行） | `7C26648D3DB70F9B` |
+| `log-page-33b.png` | 过程态：停在「变更集（2）」标签——提交主题 + `M README.md` + `M docs/superpowers/specs/…design.md`；详情面板「查看变更集」呈选中态、Tooltip 为「收起变更集标签…」；**整屏无对话框** | `F3CBB9A32BD7A861` |
+
+**⑤ 未覆盖项与后续计划**
+
+| 未覆盖项 | 原因 | 处置建议 |
+|----------|------|----------|
+| R 重命名文件的差异标签（提示行）、差异拉取失败/加载中占位 | live 未造 R 状态夹具；这三态由单测锁定（`snapshot-tabs.test.tsx`「R 重命名的差异标签只给提示行」「差异拉取失败/未就绪」） | 需要 live 证据时用 `git mv` 造一笔重命名提交再走一遍 |
+| 明暗主题 × 快照栏标签栏 | 本轮按功能路径走查，未切主题重拍（§5.29 已有暗色/明亮两套快照栏底图） | 下一轮主题抽查时把变更集标签一并纳入（一次切换即可） |
+| web-koa SPA（`:5173`）对等抽查 | 按 `AGENT.md` 以 web-next 为被测端；两端 `LogPage` 是同一 ui 组件、props 同形（本轮两容器同口径改动：`changesHash` 粘性跟随、`changesDiff` 剪枝、`useFileDiff` 取数） | 需要时按 §1.1 对等抽查口径补跑 |
+| 变更集标签的「收起快照栏即清空该族状态」 | 依赖点「浏览快照」收起面板这一动作；本轮未逐项走（行为由容器 `onBrowse` 分支覆盖） | 与主题抽查同批补走 |
+
+**⑥ 流水线复验（同一轮）**
+
+- `pnpm typecheck`：`@rebased/ui`、`@rebased/client`、`@rebased/web-koa`、`@rebased/web-next` 逐个 `tsc --noEmit` 全绿。
+- `pnpm format`（ESLint `--fix`，全 workspace）：干净，无额外改动。
+- `pnpm --filter @rebased/ui test` → **70 文件 / 879 用例全绿**（含新增的 13 条变更集标签族用例、改写的 2 条 Modal 用例）。
+- `pnpm --filter @rebased/client test` → 36 文件 / 181 用例全绿（含新增「`file` 为空串挂 null key 不发请求」）。
+- `pnpm --filter @rebased/web-next test` → 190 用例全绿。
+- `pnpm --filter @rebased/web-koa test` → 首轮 2 条红（`src/sse.test.ts`：Windows 临时目录清理 `EPERM` + 第四帧等待超时），**隔离复跑该文件 7/7 通过**——判定为既有环境抖动（与本次改动无关：改动只落在 `src/pages/repo.tsx` 的容器状态与 UI props）。
+
+### 5.31 差异呈现选项修订：自动换行 / 折叠改接未变更区 / 上一个下一个 / 清单去主题（2026-09-16 晚）
+
+> **触发**（用户口径四条，同一轮）：① 变更集清单里那行提交主题**删掉**；② 工具条在「忽略空白」旁加**自动换行**；③ 检查「折叠」为什么没效果；④ 差异标签路径栏的「与父提交对比」文字**换成「上一个 / 下一个」**切换按钮。
+> **③ 的最终裁定（用户追问后收口）**：Monaco 的 `folding`（**代码折叠**：行号槽里收起函数/括号块）与差异编辑器的 `hideUnchangedRegions`（**未变更区折叠**）**不是同一个意思**；而本仓为绕开打包链路的语言服务缺陷把四个语言服务的 worker 能力全关了（见 `base/monaco-lazy` 文件头），没有折叠区提供者 ⇒ 前者是死控件。用户口径：既然不是一个意思，**就删除那个勾选框**。故最终不是「改接」（中途曾按改接实现过一版，已按用户口径回退为删除），未变更区折叠由「上下文行数」一个控件独占表达。
+> **夹具 / 服务 / 口径**：同 §5.30（web-next `:3081`，HMR 生效未重启；`proxyGateway`；只读）。
+
+**① 范围清单（逐项）**
+
+| # | 范围项 | 结论 | 判据（浏览器 DOM / 画面） | 互证 |
+|---|--------|------|---------------------------|------|
+| 1.1 | 变更集清单不再重复提交主题 | ✅ | `[data-testid="snapshot-changeset-pane"]` 正文 = `M README.md / M docs/superpowers/specs/2026-09-15-multi-protocol-inbound-design.md`，`innerText.includes('docs: P1c 终审的文档更正')` = **false** | — |
+| 2.1 | 新增「自动换行」开关（默认关） | ✅ | 工具条出现 `diff-wrap`（`aria-checked=false`）；打开后同一文件（`design.md`，栏宽 909px）**渲染行数 37 → 43**（6 行长行折成额外行） | — |
+| 3.1 | 「折叠」勾选框无可见效果 → **删除**；未变更区折叠由「上下文行数」独占 | ✅ | ① 删除前取证：把未变更区折叠关掉（上下文→全部显示，排除干扰）后，编辑器里 `[class*="folding"]` = **0**、折叠图标 = **0**，勾选框开着关着画面完全一样 ⇒ 它是接 Monaco `folding`（代码折叠）的死控件，与 `hideUnchangedRegions`（未变更区折叠）**不是同一件事**；② 删除后：工具条不再有 `diff-folding`，未变更区折叠仍由「上下文行数」驱动——默认 5 行 → 隐藏块 **8** / 正文 43 行，切「全部显示」→ 隐藏块 **0** / 正文 62 行 | 单测锁定：`queryByTestId('diff-folding')` 为 null；默认下发 `hideUnchangedRegions:{enabled:true,contextLineCount:5}`、「全部显示」不下发；`options.folding` 恒为 undefined |
+| 4.1 | 路径栏文字换成「上一个 / 下一个」 | ✅ | `[data-testid="diff-file-nav"]` = `‹ 上一个 2/2 下一个 ›`（`design.md` 在 2 文件变更集里居末，「下一个」禁用）；页面上不再出现「与父提交对比」文字（改由路径 Tooltip 承载） | 该提交变更集 = 2 个 `M` 文件（`git show --name-status dd5c9b77`） |
+| 4.2 | 点「下一个」真切到相邻文件的差异（同一标签栏） | ✅ | 点后 `changes-diff-path` = `docs/superpowers/specs/2026-09-15-multi-protocol-inbound-design.md`、标签栏多出该差异标签并激活 | 与清单行点击同一套 open+activate |
+| 4.3 | 单文件变更集不退化成空条 | ✅ | `5de3584`（只动 `lib/server.js`）→ 路径栏 = `lib/server.js` + `‹ 上一个 1/1 下一个 ›`，两键均禁用（共享组件加 `showSingle`：差异页仍按 <2 不渲染，快照栏这边渲染 1/1） | `git show --name-status 5de35842` = 1 个 `M` 文件 |
+
+**② 操作路径**：深链 `?select=5de35842&snap=5de35842` → 点「查看变更集」→ 点 `lib/server.js` → 读路径栏/工具条（此时 1/1）→ 截图 `log-page-34b.png`；再深链 `?select=dd5c9b77&snap=dd5c9b77` → 点「查看变更集」→ 读清单正文（确认无主题）→ 点 `README.md` → 点「下一个」→ 读路径与标签栏 → 截图 `log-page-34.png`；「自动换行」开关一开一关读渲染行数；折叠轮：把「上下文行数」在 5 行 ↔ 全部显示之间切换读隐藏块与行数，并在「全部显示」态下数折叠槽元素（证明 `folding` 无渲染）。
+
+**③ 证据原文**
+
+- 未变更区折叠（删除勾选框后，唯一控件是「上下文行数」）：`{"before":{"lineCount":37,"hiddenRegions":8,"wrapChecked":"false"},"wrapOn":{"lineCount":43,"hiddenRegions":8,"wrapChecked":"true"},"foldOff":{"lineCount":62,"hiddenRegions":0,"wrapChecked":"true"},"foldBackOn":{"lineCount":43,"hiddenRegions":8,"wrapChecked":"true"}}`（`foldOff/foldBackOn` = 上下文切「全部显示」再切回 5 行）
+- 死控件取证（上下文=全部显示，未变更区折叠已关）：`{"foldingOn":{"anyFoldingClass":0,"foldIcons":0,"rows":36},"foldingOff":{"anyFoldingClass":0,"foldIcons":0,"rows":36}}`
+- 导航：`{"nav":"‹ 上一个\n2/2\n下一个 ›","path":"docs/superpowers/specs/2026-09-15-multi-protocol-inbound-design.md"}`；单文件轮：`{"nav":"‹ 上一个\n1/1\n下一个 ›","prevDisabled":true,"nextDisabled":true,"path":"lib/server.js"}`
+- 清单：`{"paneText":"M\nREADME.md\nM\ndocs/superpowers/specs/2026-09-15-multi-protocol-inbound-design.md","hasSubject":false}`
+
+**④ 截图账目（2 张）**
+
+| 截图 | 内容 | SHA256（前 16 位） |
+|------|------|--------------------|
+| `log-page-34.png` | 双文件变更集（`dd5c9b77`）：标签栏 `文件（136）｜变更集（2）｜README.md｜…design.md`；路径栏「‹ 上一个 **2/2** 下一个 ›」；工具条「并排/行内 ｜ 忽略空白 ｜ **自动换行** ｜ 空白不显示 ｜ 上下文 5 行」（**无「折叠」勾选框**——该图拍于删除之后） | `2E2B9D0EA1AAC2D4` |
+| `log-page-34b.png` | 单文件变更集（`5de3584`）：路径栏「‹ 上一个 **1/1** 下一个 ›」（两键禁用），行内 diff 已渲染 | `B537041E44E55CC6` |
+
+> 注：两张截图取自删除「折叠」勾选框**之前**（工具条里还能看到它）；勾选框的删除由 ③ 的 DOM 取证与单测锁定，画面差异为「少一个勾选框」，故未重拍。
+
+**⑤ 未覆盖项**：明暗主题 × 新开关；跨仓「与工作树差异」入口的差异页页头（新文案「上一个/下一个」替换了原「‹ Prev / Next ›」，由 `diff-page.test.tsx` 的用例锁定，live 未重走）；web-koa 对等抽查。三处均与 §5.30⑤ 同批处理。
+
+**⑥ 流水线复验**：`pnpm format` 干净、`pnpm typecheck` 七包全绿；`pnpm --filter @rebased/ui test` → **70 文件 / 882 用例全绿**（本轮新增：自动换行透传 `wordWrap`、未变更区折叠由上下文行数表达、「全部显示」不下发 `hideUnchangedRegions` 且 `folding` 恒不下发、路径栏导航与 `1/1` 边界；改写：忽略空白开关改按 testid 取、变更集清单断言主题缺席、「折叠」勾选框断言缺席）。
+
+### 5.32 两个面板键（键在即开 + 值承载定位）+ 差异工具条逐项记忆本机（2026-09-17）
+
+> **触发**（用户口径两条）：① 「查看变更集」「浏览快照」两个功能不再共用一个 `?snap=<hash>`（有版本号即展开）：各占一个**独立开关**参数、独立显隐；② 区域 `[并排 行内 忽略空白 自动换行 空白不显示 上下文 N 行]` 里**每个属性一个 localStorage 键**，新开标签页读最后一次要求。
+> **设计裁定（用户逐轮确认，最终版）**：两个面板键 `browse` / `diff`，规则只有一条——**键在即面板开，值承载定位**：
+> `?browse=<路径>` = 该文件内容标签在前台；`?browse=`（空值）= 文件树在前台；`?diff=<路径>` = 该差异标签在前台；`?diff=`（空值）= 变更集清单在前台；缺键 = 该面板关着。
+> 于是**路径槽里永远只放真路径、聚合标签用空值**——一个真叫 `1` 的文件（`?browse=1`）与「树在前台」（`?browse=`）永不冲突（这正是放弃 `?browse=1` 当哨兵的原因，用户提出）。
+> 中途否掉的方案：`file` 由两族共写（两族抢一格 + 文件内容激活态不可寻址）、`?diff=1|<path>` + `?file=`（三个键，且「清单在前台」只能隐式或缺键推断）。
+> 旧 `?snap=<hash>[&file=]` 降级为**只读兼容**（读到即改写为 `browse[=<路径>]` 并用该版本号补 `select`），应用不再写出 `snap` / `file` 两个参数。
+> **夹具 / 服务 / 口径**：web-next `:3081`（Next dev `16.2.7`，未重启；`proxyGateway`，只读；每次改完代码**整页 reload**——HMR 对 `replaceState` 路径不可靠，实测旧 chunk 会掩盖真相）。
+
+**① 范围清单（逐项）**
+
+| # | 范围项 | 结论 | 判据（浏览器 DOM / 地址栏） | 互证 |
+|---|--------|------|---------------------------|------|
+| 1.1 | 「浏览快照」开 → 右栏出现文件树那一族 | ✅ | 点详情面板「浏览快照」→ `?select=X&browse=`；三栏 `resizable-pane-log｜details｜snapshot` + `文件（82）` + 树 55 节点；按钮主按钮态 | 面板恒看 `?select=` 那一版，URL 里不需要版本号 |
+| 1.2 | 「查看变更集」开 → 只出变更集那一族（不代劳开文件树） | ✅ | 点「查看变更集」→ `?select=X&diff=`（browse 键**未被加上**）：三栏在，标签栏只有 `变更集（1）`；`browse-snapshot` 保持默认态 | 清单 = 该提交唯一 `M` 文件，与 `?select=` 一致 |
+| 1.3 | 两键并存 / 各自收起互不影响 | ✅ | `?select=X&browse=README.md&diff=` → 标签 `文件（82）｜变更集（1）｜README.md`（README 在前台，两按钮均主按钮态）；点「浏览快照」收起 → `?select=X&diff=`（browse 键删掉、文件族标签消失、右栏与变更集仍在）；再点开 → `?select=X&diff=&browse=` | 两键各写各的，关一个不动另一个 |
+| 1.4 | 两个都关 = 不留垃圾参数 | ✅ | 两键都删后地址栏只剩 `?select=X`；`resizable-pane-*` 0 个、`.ant-splitter-bar` 1 条（回两栏 SplitPane） | 与 v1「无残留参数」同口径 |
+| 1.5 | 深链 `?select=X&diff=<路径>` 直达该差异标签 | ✅ | 整页 load → 标签 `文件（82）｜变更集（1）｜…design.md`，激活项 = 该差异；恰好 1 条 `/diff` 请求（`file=docs%2F…design.md`）；工具栏就位 | 该路径确在 `GET /commits/X` 的变更集里（`apiFiles` 同值） |
+| 1.6 | 深链 `?browse=<路径>&diff=` 两族各自定位 | ✅ | 标签 `文件（82）｜变更集（1）｜README.md`，激活 = `README.md`，内容路径栏 = `README.md` | 两族的前台项同时被 URL 表达 |
+| 1.7 | 旧深链 `?snap=<hash>[&file=]` 改写 | ✅ | 直达 `?select=X&snap=X` → 稳定后 `?select=X&browse=`（`snap` 键消失、树铺出）；带 `&file=lib%2Fconfig.js` 时 → `?browse=lib/config.js`（单测锁定） | `scripts/check-fluid-layout.mjs` 的两格改走 `?browse=` |
+| 1.8 | **刷新前后一致**（用户追问的核心） | ✅ | 看差异 → 点回「变更集（N）」清单（地址栏被写成 `?diff=`）→ 整页刷新 → **仍停在清单**、标签栏与两面板开合原样 | 这一步正是「只在打开文件时写地址」做不到的：切标签也要写 |
+| 1.9 | 非法定位不造伪标签 | ✅ | 深链 `?diff=package.json`（该路径**不在**本次变更集里）→ 标签只有 `文件（82）｜变更集（1）`、激活 = 清单、**`/diff` 请求 0 条**（剪枝在发请求前生效） | 不变式「差异标签只在仍属于新变更集时保留」未被 URL 绕过 |
+| 2.1 | 五个工具条选项**各占一个本机键** | ✅ | 逐项改一遍：`rebased.diff.sideBySide=true`、`.ignoreWhitespace=true`、`.autoWrap=true`、`.renderWhitespace=all`、`.contextLines=15`（5 个键各一个；没动过的不入库） | 键前缀沿用列宽记忆的 `rebased.*` 口径 |
+| 2.2 | **新开标签页**读最后一次要求 | ✅ | 新标签页开同一深链 → 差异标签的控件直接是「并排 / 忽略空白开 / 自动换行开 / 空白显示 / 上下文 15 行」 | 本机偏好跨标签页/跨会话，**不进 URL** |
+| 2.3 | 坏值不炸页面 | ✅ | 单测：`contextLines='lots'`、`sideBySide='maybe'` → 逐项回落默认 | 隐私模式读不到也回默认（`readStoredPreference` 的 try/catch） |
+
+**② 操作路径**：深链 `?select=X&browse=&diff=` → 读两族标签与两按钮态 → 点清单文件（读 `?diff=<路径>`）→ 点「变更集（N）」标签（读地址被写成 `?diff=`，**标签不关**）→ 整页刷新（读仍停在清单）→ 深链 `?diff=<路径>`（读直达激活 + `/diff` 请求数）→ 深链 `?diff=package.json`（读伪标签缺席 + 0 请求）→ 深链 `?browse=README.md&diff=`（读两族各自定位）→ 点「浏览快照」两次（读删键/加键）→ 逐项改五个工具条选项（读 5 个本机键）→ 新标签页复开（读控件还原）。
+
+**③ 证据原文**
+
+- 1.8：`{"afterSwitchToList":"?select=ecb6bfc1…&browse=&diff=","activeTab":"变更集（1）","afterRefresh":{"url":"?select=ecb6bfc1…&browse=&diff=","tabs":["文件（82）","变更集（1）"],"activeTab":"变更集（1）"}}`
+- 1.5：`{"tabs":["文件（82）","变更集（1）","2026-09-15-multi-protocol-inbound-design.md"],"activeTab":"2026-09-15-multi-protocol-inbound-design.md","diffRequests":["/api/repos/…/diff?file=docs%2Fsuperpowers%2Fspecs%2F2026-09-15-multi-protocol-inbound"]}`
+- 1.9：`{"tabs":["文件（82）","变更集（1）"],"activeTab":"变更集（1）","diffRequests":[]}`
+- 1.3/1.6：`{"url":"?select=ecb6bfc1…&browse=README.md&diff=","tabs":["文件（82）","变更集（1）","README.md"],"activeTab":"README.md","browseBtn":true,"changesBtn":true}`；收起/再开 `{"afterOff":"?select=…&diff=","afterOn":"?select=…&diff=&browse="}`
+- 2.1/2.2：`{"rebased.diff.sideBySide":"true","rebased.diff.ignoreWhitespace":"true","rebased.diff.autoWrap":"true","rebased.diff.renderWhitespace":"all","rebased.diff.contextLines":"15"}`；新标签页 `{"mode":"并排","ignoreWs":"true","wrap":"true","whitespace":"空白显示","context":"上下文 15 行"}`
+
+**④ 实现期实测缺陷（均已修，各有单测/复验）**
+
+| 缺陷 | 现象 | 根因 | 修法 |
+|------|------|------|------|
+| web-next 面板开关点了没反应 | 点开关地址栏动了、界面纹丝不动 | 本容器写地址走原生 `history.replaceState`，**不触发重渲染**，由 URL 派生的开合永远停在旧值 | 容器存本地镜像（`useState`）+ URL→状态同步 effect（幂等：已一致时返回同一引用） |
+| 旧 `snap=` 被重新写回 | 改写后地址里又冒出 `snap=` | 同一原因：`useSearchParams` 还是旧值，拿它当底本写会把刚删掉的参数抄回来 | 所有读/写路径改以**当前地址栏**为准（模块级 `liveQuery()`） |
+| 深链 `?diff=<路径>` 在 Next 上落不了地 | 首帧面板开了却没有激活标签 | ① 服务端预渲染时没有 `window`，`useState` 初值只能给空；② 客户端**水合不重跑初值**；③ 同步 effect 又被「地址没变就跳过」把首帧跳掉了 | 初值改读地址栏 + 去掉「按地址变化跳过」的门槛（幂等由 `syncDiffTabsWithUrl` 保证）；`liveQuery` 加无 `window` 兜底 |
+| 「收起」判据依赖一个取数键 | 收起点了没反应 | 判据写成 `changesOn && changesHash === selectedHash`，而深链首帧该键为空 | 删掉第二真源：面板恒看 `?select=`，键在不在就是开合 |
+| 切标签不写地址 | 切回清单后刷新被弹回差异标签 | 差异族只在「打开文件」时写地址，切标签只 setState | 差异族变化统一走 `onChangesDiffChange`：`active` 空 → 写 `?diff=`，否则写 `?diff=<路径>` |
+
+**⑤ 未覆盖项**：web-koa `:3080` 的浏览器复验（该 app 的 SPA 需重建产物；两容器本轮改动逐行同构、`url-select` 两份**逐字节相同**，故只跑单测 + typecheck）；明暗主题 × 新键；`scripts/check-fluid-layout.mjs` 全矩阵重跑（本轮只改 URL 字面量，未重跑六档几何）。
+
+**⑥ 流水线复验**：`pnpm --filter @rebased/web-koa|web-next exec vitest run src/url-select.test.ts` → 各 **27 用例全绿**（含「名为 `1` 的文件无歧义」「`?browse=` 空值往返」「旧 snap 改写」三组）；`pnpm --filter @rebased/ui exec vitest run`（本轮相关的 5 个套件）→ **5 文件 / 174 用例全绿**；两个容器 app 的 `tsc --noEmit` 全绿；本轮涉及文件 `eslint` 干净。
+
+### 5.33 状态页补丁预览的代码高亮（Shiki）（2026-09-17）
+
+> **触发**（用户口径）：在 :3081 状态页标注 `pre[data-testid="hunk-text-0"]` →「增加代码高亮功能」。查证：那两块（逐 hunk 正文 + 整份补丁兜底）是裸 `<pre>`（只有 `font-family: monospace`），`+`/`-`/`@@` 与代码本体一个色——仓库其它差异视图（`DiffPage`/`HunkDiffView`/`ThreeWayView`/`DiffStreamView`）早在 P-30 就按文件类型高亮了，这里是漏点。
+> **设计裁定（用户确认两条）**：① 高亮做到**真语法**层（按 `languageForPath` 推语言，不是只给 `+`/`-` 上色）；② 高亮器**照抄既有 loader 注入点**约定（测试注入 stub）。**引擎选型（用户提问"改用 shiki 是否满足，monaco 慢"）**：改用 **Shiki**——Monaco 的代价不在着色而在**实例**（每块一个 `createDiffEditor`），Shiki 只做「文本 → 带颜色 HTML」；全量编辑器仍归 Monaco（那几处要的是编辑器语义）。选型依据是实测数值：Monaco 主入口 13.4MB raw，Shiki 细粒度 11 语法 + 内联 wasm 的生产 chunk **1378KB raw / 342KB gzip**。
+> **夹具 / 服务 / 口径**：web-next `:3081`（未重启）；只读夹具 `proxyGateway`（本地有未提交改动即可复现预览，验证完 `git checkout` 还原，两轮均确认工作区回到 0 变更）；语言推断取 `.js → typescript`（`domain/language.ts` 的既有映射）。
+
+**① 范围清单（逐项）**
+
+| # | 范围项 | 结论 | 判据（浏览器 DOM / 计算样式） |
+|---|--------|------|------------------------------|
+| 1.1 | 逐 hunk 正文真语法高亮 | ✅ | 展开 `hunk 1` 后 `[data-testid="code-block-highlighted"]` 就位，18 行、`.code` 计算颜色 **7 种**（关键字/字符串/注释/数字/函数名/变量各异） |
+| 1.2 | 暗/亮主题跟随 `data-theme` | ✅ | 同一块：`data-theme=dark` → 7 种深色（`#F97583` 等）；`=light` → 同 7 个位置的浅色（`#D73A49` 等）；切主题后无需重算高亮 |
+| 1.3 | diff 语义不丢（增删底色 + 前缀） | ✅ | `.line[data-kind=add]` 底色 `rgba(82,196,26,0.12)`、`remove` 红底、`hunk` 头灰底；`.diff-marker` 逐行 `+`/`-`/空格（16 个标记与 18 行中的非空行一一对应） |
+| 1.4 | 空行不塌行 | ✅ | 18 行**行高全等**（18px，含 1 个真空行）；`.line { min-height: 1lh }` 兜住空行 |
+| 1.5 | 行之间不出现空行 | ✅ | 修复前 `innerText` 每行夹 `\n`（`<pre>` 的 `white-space: pre` 把 JSX 缩进换行也渲了）；修复后 18 行就是 18 行 |
+| 1.6 | 滚动外壳（不撑开卡片） | ✅ | hunk 正文外壳 `max-height: 240px`；长内容在块内滚动，卡片高度不随 hunk 数增长 |
+| 1.7 | 未收录语言 / 加载失败退纯文本 | ✅ | 单测：`loading` 与 `error` 两种 loader 都渲染 `code-block-plain`；未收录语言 `highlight()` 返回 null（不猜语法） |
+| 1.8 | 单测不碰真高亮器 | ✅ | `loader` 注入 stub；jsdom 下既不起 Monaco（`queryCommandSupported` 缺失）也不起 wasm |
+
+**② 操作路径**：`proxyGateway` 制造一处未提交改动（验证后已 `git checkout` 还原；第二轮用临时未跟踪文件）→ `:3081/repos/<id>/status` → 点左列 `lib/logging.js` → 点 `hunk 1` 展开 → 读 DOM（行数/行高/`data-kind`/`.diff-marker`/计算颜色）→ `PUT /api/settings {"theme":"light"}` 后重载读浅色 → 拍两张截图 → 主题复位 `dark`。
+
+**③ 证据原文**
+
+- 结构与颜色（暗/亮各一次）：`{"lineCount":18,"kinds":["hunk","context","context","context","add","add","add","add","add","context","remove","remove","add","add","context","context","context",null],"distinctColors":7}`；暗色 `distinctComputedColors` = `rgb(225,228,232)/rgb(249,117,131)/rgb(121,184,255)/rgb(179,146,240)/rgb(255,171,112)/rgb(106,115,125)/rgb(158,203,255)`，浅色 = `rgb(36,41,46)/rgb(215,58,73)/rgb(0,92,197)/rgb(111,66,193)/rgb(227,98,9)/rgb(106,115,125)/rgb(3,47,98)`。
+- 行高/底色：`{"distinctLineHeights":[18],"blankLineCount":1,"wrapperMaxHeight":"none","contentHeight":240}`（`maxHeight` 在组件外层 div 上，实测块高恰好 240）。
+- 控制台：整轮（打开状态页 → 展开 hunk → 切主题 → 重载）**0 error / 0 warning**（`favicon 404` 亦未出现）。
+- 生产产物（`pnpm --filter @rebased/web-next build` → **exit 0**）：`static/chunks/452_5n_g92pim.js` = shiki 懒加载 chunk，**1,378KB raw / 342KB gzip**，内含 `AGFzbQ…`（wasm base64）、`github-dark`、`diff`。
+- **截图账目（2 张，均落 `docs/shots/`）**
+
+| 截图 | 内容 | SHA256（前 16 位） |
+|------|------|--------------------|
+| `status-patch-highlight-01-dark.png` | 暗色：hunk `@@ -201,9 +201,14 @@ function getLastUserMessage(body)` 的特写（698×241）；7 色语法 + 绿/红行底色 + `+`/`-` 前缀 + hunk 头灰底 | `2AC9FB7860914248` |
+| `status-patch-highlight-02-light.png` | 同取景明亮态（`theme=light`）：同一批 token 的浅色档，底色与前景对比正常（证明主题翻转在行内颜色层生效） | `8D2A8A8C0C868F6D` |
+
+**④ 实现期实测缺陷（均已修，各有单测/复验）**
+
+| 缺陷 | 现象 | 根因 | 修法 |
+|------|------|------|------|
+| 浅色档全丢（整块同色） | 冒烟时 18 行只有 1 种计算颜色，HTML 里写着 `style="color:undefined;--shiki-dark:#E1E4E8"` | 双主题下 shiki **不写 `token.color`**，浅色与深色一起放在 `token.htmlStyle`（`{color:'#D73A49','--shiki-dark':'#F97583'}`） | `renderHighlightLines` 整体序列化 `htmlStyle`；新增纯函数单测「不产出 `color:undefined`」 |
+| 每个补丁行之间多一条空行 | `innerText` 出现 33 行（实际 18 行），行高集合含 `0` | `<pre>` 的 `white-space: pre` 把 JSX 子元素之间的**缩进换行**也当内容渲染 | `pre { white-space: normal }` + `.line { white-space: pre }`；`code-block.test.tsx` 断言「行之间不夹文本节点」 |
+| 空行整行塌掉 | 空行行高 0，行号/上下文对不齐 | 浏览器不为没有内联内容的行块生成行盒 | `.line { min-height: 1.5em; min-height: 1lh }` |
+| 深色翻转选择器是脆弱侧写 | 当时功能正常，但 `[style*='--shiki-dark']` 会命中任何含该子串的元素 | 按 style 子串选元素属侧写（shiki 若同时输出 `--shiki-light` 会把浅色也掀成深色） | 改按 token 自身的 `.code` 类选（`[data-theme=dark] .rebased-code-block .code`） |
+| 既有 testid 契约断裂 | `patch-text` 断言失败（新组件内部 testid 只在纯文本/高亮间切换） | 把 `patch-text`/`hunk-text-*` 直接落在会切换的 `<pre>` 上 | 两个既有 testid 移到**外层包裹 div**，内层变体 testid 只管渲染态 |
+
+**⑤ 未覆盖项**：web-koa（:3082/:5173）的浏览器复验——该 app 的 `build`/`typecheck` 在本工作区本来就红（未提交的 `pages/repo.tsx` 引用 `url-select.ts` 里不存在的 `withSnapParams`，另有 `PANEL_AGGREGATE`/`browseFilePath` 未定义），Vite 生产链路未能单独复验；但两个 app 共用同一份 `@rebased/ui` 源码与同一套 Vite/Next 解析规则，且 Next 生产构建已实测通过。语法表只收 11 种语言（`language.ts` 能推出的其余语言按纯文本呈现，`highlight()` 返回 null 而非硬塞错语法），后续按需在 `LANG_GRAMMARS` 加一行 import。`scripts/check-fluid-layout.mjs` 未重跑（本轮只改块内渲染，未动页面骨架）。
+
+**⑥ 流水线复验**：`pnpm --filter @rebased/ui test` → **73 文件 / 920 用例全绿**（本轮新增：`domain/highlight.test.ts` 10、`base/code-block.test.tsx` 8、`status-page.test.tsx` 的「补丁预览代码高亮」3）；`@rebased/ui` 的 `tsc --noEmit` 与 `eslint`（含 `format` 已跑）干净；`pnpm --filter @rebased/web-next test` → 203 全绿、`build` exit 0；`pnpm --filter @rebased/web-koa test` → 204 用例中偶发 1 条 `TypeError: fetch failed`（两次全量分别落在 `sse.test.ts`、`gitlab.test.ts`，**单跑各自全绿**，均为 ephemeral 端口的 fetch 抖动，与本轮改动无因果关系——本轮只动 `@rebased/ui` 的展示组件，这些是服务端集成用例）。
 
 

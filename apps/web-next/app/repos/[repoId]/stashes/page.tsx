@@ -2,21 +2,21 @@
 
 /**
  * 贮藏页容器：useStashes + useStashAction + useStashUnstashAs + useStashDiff + useBranches 注入 ui StashPanel（与 web-koa 容器同构）；
- * 顶部返回按钮回日志页；操作失败经 message.error 呈现（成功响应由各 hook 显式回写缓存）；
+ * 仓库顶栏导航（RepoTopNav）取代「返回日志」链接；操作失败经 message.error 呈现（成功响应由各 hook 显式回写缓存）；
  * Unstash As 会检出目标分支 → 成功后重验证 status 键（branch/headHash 变化）；
  * 本页自订阅 events：外部 CLI 保存/应用/弹出贮藏时工作区 entries 变化 → repo.state-changed → 重验证贮藏列表
  * （纯 drop/建删不改 RepoStatus 字段时 watcher 不产事件，见行内订阅注释）。
  */
 import { useBranches, useStashAction, useStashDiff, useStashes, useStashUnstashAs, useRepoEvents } from '@rebased/client';
-import { PageShell, StashPanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
-import { useRouter } from 'next/navigation';
+import { PageShell, RepoTopNav, StashPanel } from '@rebased/ui';
+import { message } from 'antd';
 import { use, useState } from 'react';
 import { useSWRConfig } from 'swr';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
-  const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: stashes, mutate: mutateStashes } = useStashes(repoId);
   const { trigger: stashAction, isMutating: acting } = useStashAction(repoId);
   // Unstash As：mutation 响应回写 stashes；成功后还需重验证 status（目标分支检出改变了 branch/HEAD）
@@ -38,14 +38,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   if (!stashes) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="stashes" 高亮贮藏图标 */}
+      <RepoTopNav {...nav} current="stashes" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <StashPanel
         key={repoId}

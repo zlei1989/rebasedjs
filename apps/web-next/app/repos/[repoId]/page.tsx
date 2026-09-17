@@ -19,6 +19,8 @@
 import {
   useAbortOperation,
   useBranchAction,
+  useBrowseContent,
+  useBrowseTree,
   useCherryPick,
   useCheckout,
   useGithubStatus,
@@ -28,6 +30,7 @@ import {
   useBranches,
   useCommitEdit,
   useCommitFiles,
+  useFileDiff,
   useLogPage,
   useLogPages,
   useLogStream,
@@ -60,19 +63,35 @@ import {
   type UpdateBody,
   type UpdateOutcome,
 } from '@rebased/contracts';
-import { AuthDialog, BranchCompareView, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog, openInNewTab } from '@rebased/ui';
+import { AuthDialog, BranchCompareView, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
 import { Modal, message } from 'antd';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useSWRConfig } from 'swr';
 import { mergeLogCommits } from '../../../src/log-merge';
-import { readParam, readSelect, withSelectParam } from '../../../src/url-select';
+import { diffTabsFromUrl, isLegacySnapshotUrl, PANEL_AGGREGATE, readBrowse, readBrowsePath, readChanges, readParam, readSelect, syncDiffTabsWithUrl, withBrowsePanel, withChangesPanel, withMigratedSnapshot, withSelectParam, withoutBrowsePanel, withoutChangesPanel } from '../../../src/url-select';
 
 /**
  * 恢复 URL 选中项的自动补页上限：页大小阶梯 50→100→200→400→500（见 useLogPages），
  * 6 页 ≈ 最早 1750 条提交。到上限即放弃（陈旧 hash 不把整个历史翻到底），代价是该提交仍不可见。
  */
 const SELECT_RESTORE_MAX_PAGES = 6;
+
+/** 面板定位的三种意图：路径 = 该路径在前台；`PANEL_AGGREGATE`（null）= 开着但聚合标签在前台；'skip' = 这个键不动 */
+type PanelIntent = string | typeof PANEL_AGGREGATE | 'skip';
+
+/**
+ * **当前地址栏**的查询串。本页所有写路径都走原生 `history.replaceState`，而它**不会**触发重渲染、
+ * `useSearchParams` 也要等下一次导航才同步——中间这段时间里 `currentQuery` 是旧值：
+ *   · 拿它当**写**的底本，会把刚被改写掉的参数又抄回来（实测：旧深链改写去掉的 `snap=` 被「查看变更集」写了回去）；
+ *   · 拿它当**读**的初值，深链首帧会读到空（实测：`?browse=a.ts` 首帧面板开了却没有激活标签）。
+ * 故读与写都以本函数为准（`window.location` 在 replaceState 之后立刻就是新值）。
+ * 放在模块级（而不是组件体内）是为了让 `useState` 初值也能用它——组件体内声明会撞上暂时性死区。
+ * 无 window（SSR 预渲染）时给空串：本页是客户端组件但首帧仍会在服务端跑一遍，
+ * 那时对地址的判断只能落空（useSearchParams 在服务端同样给不出查询串），水合后由同步 effect 补齐。
+ */
+const liveQuery = (): URLSearchParams =>
+  typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
 
 export default function Page({
   params,
@@ -87,6 +106,26 @@ export default function Page({
   const currentQuery = useSearchParams();
   const pathname = usePathname();
   const selectedHash = readSelect(currentQuery);
+  // === 就地面板：两个**独立开关**（详情面板「浏览快照」/「查看变更集」）===
+  // 真源在 URL，且**键在即开、值承载定位**（见 src/url-select.ts）：`browse` 键在 = 文件树那一族开，
+  // `diff` 键在 = 变更集那一族开；值为路径 = 该文件/该差异在前台，值为空 = 聚合标签（树 / 清单）在前台。
+  // 两者互不代劳，但共用一条右栏（LogPage 任一为真即渲染右栏）。两个面板看的都是 selectedHash 那一版，
+  // 故 URL 里不再需要版本号参数（原 `?snap=<hash>` / `?file=` 只作只读兼容，见下面的旧链接改写）。
+  // **本容器再存一份本地镜像**（web-koa 那边不需要，react-router 的 setSearchParams 自带重渲染）：
+  // Next 这边写地址走原生 history.replaceState（见 onSelectCommit 的取舍），它**不会**触发重渲染，
+  // useSearchParams 要等下一次导航才更新——只用 URL 派生的话，点开关改了地址而界面纹丝不动（实测）。
+  // 下面的同步 effect 负责反向（浏览器前进/后退、外部改地址）时把镜像拉回 URL，故不会两边漂。
+  // 初值读**当前地址栏**而不是 useSearchParams：深链首帧它可能还不同步（实测：`?browse=a.ts` 首帧读到空，
+  // 于是面板开了却没有激活标签）。liveQuery 定义在下面，函数声明提升故可先引用。
+  const [browseOn, setBrowseOn] = useState(() => readBrowse(liveQuery()));
+  const [changesOn, setChangesOn] = useState(() => readChanges(liveQuery()));
+  // 三态 → 两态的容器内翻译：`?browse=`（开着但停在树上）就是「没有选中的文件」，与「关着」一样给 undefined
+  const browsePath = readBrowsePath(liveQuery());
+  const browseSelectedFile = browsePath === undefined || browsePath === null ? undefined : browsePath;
+  /** 最近一次已知的地址：同步 effect 用它区分「地址真的变了」与「我们自己刚写的那次」 */
+  const lastQueryRef = useRef(currentQuery.toString());
+  // 旧深链改写（`?snap=<hash>`）：一次性把地址换成新形态（browse[=<路径>]，并沿用那个版本号做选中提交）
+  const legacySnapRef = useRef(false);
   const router = useRouter();
   // 过滤/按需分页（P2 收取）：author/path 过滤（文本即滤，对齐 Java）；分页走 useLogPages 的累积页
   // （页大小 50→100→200→400→500 阶梯，skip 逐页累加），滚到列表底部自动追加下一页，
@@ -160,9 +199,106 @@ export default function Page({
   const [openDialog, setOpenDialog] = useState<'pull' | 'push' | 'update' | null>(null);
   // Push up to Commit（#17）：行右键「Push up to Commit」→ 打开 PushDialog 并预置目标提交 hash；null=普通推送
   const [pushUpToHash, setPushUpToHash] = useState<string | null>(null);
-  // 查看变更集（#13 LogPage → DiffPage 直达）：变更集 Modal 受控键（非空 → 条件拉取该提交全量变更文件）
-  const [changesHash, setChangesHash] = useState('');
-  const { data: changesEntry, isLoading: changesLoading, error: changesError } = useCommitFiles(repoId, changesHash);
+  // 查看变更集（#13）：不再是 Modal，而是右栏标签栏里的「变更集（N）」标签——这里是它**看哪一版**的取数键。
+  // 开关真源是 URL 的 `?diff=1`（changesOn）；**没有单独的「变更集 hash」状态**：两个面板看的都是
+  // 当前选中的提交（`?select=`），开关本身只是一个布尔，故「哪个提交的变更集」= selectedHash，
+  // 由 URL 直接派生（容器不再存第二份，刷新/前进后退/换提交都自动对齐）。
+  // 深链 `?select=X&diff=1` 因此不需要额外的 hash 参数；开关开着而选中项未就位时取数为空串（挂 null key 不发请求）。
+  const effectiveChangesHash = changesOn ? selectedHash ?? '' : '';
+  const { data: changesEntry, isLoading: changesLoading, error: changesError } = useCommitFiles(repoId, effectiveChangesHash);
+  // 变更集里的差异标签族（受控）：**必须活在容器里**——标签栏在换提交时会被 key 重挂载（文件树标签据此复位，
+  // 旧路径在新版本里未必存在），只有容器持有的这份状态才能让已开差异标签跨过那次重挂载，
+  // 再由下面的剪枝按新提交的变更集收敛。
+  // 初值取 `?diff=<路径>`（深链直达某个差异标签时首帧就激活它）——「已打开」在 URL 里表达不出来
+  // （那是会话态），故只把**前台项**那一格补进 open：这样标签栏里真的有这个标签可激活，
+  // 也不会出现「active 指着一个没开的标签」这种自相矛盾的状态。
+  const [changesDiff, setChangesDiff] = useState<{ open: string[]; active: string }>(() => diffTabsFromUrl(liveQuery()));
+  // 差异取数两端：以**当前提交的父提交**为 from、当前提交为 to（与差异页定提交对比同口径）；
+  // 根提交没有父版本（changesParent 为 undefined）→ 不发请求，标签内只给提示行。
+  // entry.hash === effectiveChangesHash 的判据：SWR 换键那一拍可能还挂着上一提交的数据，不能拿去当取数参数。
+  const changesEntryReady = changesEntry !== undefined && changesEntry !== null && changesEntry.hash === effectiveChangesHash;
+  const changesParent = changesEntryReady ? changesEntry.parents[0] : undefined;
+  const {
+    data: changesDiffVersions,
+    isLoading: changesDiffLoading,
+    error: changesDiffError,
+  } = useFileDiff(
+    repoId,
+    changesDiff.active !== '' && changesParent !== undefined ? changesDiff.active : '',
+    false,
+    changesParent,
+    changesEntry?.hash,
+  );
+  /**
+   * 差异标签剪枝（用户口径：换提交时差异标签**保留**，但只在路径仍属于新变更集时才继续看）：
+   * 新提交的变更集到位后把已开差异标签收敛到「本次也动过」的那些，路径不在里面的自动关掉——
+   * 否则会留下一条「标签还在、看的却是上一版差异」的假标签；被剪掉的恰是激活项时清空激活项
+   * （标签栏回落到「变更集」标签，由 ui 的兜底逻辑落位）。
+   */
+  useEffect(() => {
+    const entry = changesEntry;
+    if (entry === undefined || entry === null || entry.hash !== effectiveChangesHash) return;
+    const allowed = new Set(entry.files.map((f) => f.path));
+    setChangesDiff((prev) => {
+      const open = prev.open.filter((p) => allowed.has(p));
+      const active = prev.active !== '' && allowed.has(prev.active) ? prev.active : '';
+      return open.length === prev.open.length && active === prev.active ? prev : { open, active };
+    });
+  }, [changesEntry, effectiveChangesHash]);
+  // 就地面板的数据源：树跟**选中提交**走（两个面板看的是同一版），空串自动挂 null key 不发请求。
+  // 真源是 URL（`?browse[=<路径>]` / `?diff[=<路径>]`）；写地址走 replaceState（见 writePanels）。
+  const { data: browseTree, isLoading: browseTreeLoading, error: browseTreeError } = useBrowseTree(repoId, selectedHash ?? '');
+  const { data: browseContent, isLoading: browseContentLoading, error: browseContentError } = useBrowseContent(repoId, selectedHash ?? '', browseSelectedFile ?? '');
+  /**
+   * 写地址一律以**当前地址栏**为底本（见模块级 liveQuery）：不能拿 useSearchParams 给的 currentQuery，
+   * replaceState 之后它还是旧值，会把刚改写掉的参数抄回来。
+   */
+  /** 面板定位的三种意图：路径 = 该路径在前台；`PANEL_AGGREGATE`（null）= 开着但聚合标签在前台；'skip' = 这个键不动 */
+  const applyPanel = (query: URLSearchParams, panel: 'browse' | 'diff', intent: PanelIntent): URLSearchParams => {
+    if (intent === 'skip') return query;
+    return panel === 'browse' ? withBrowsePanel(query, intent) : withChangesPanel(query, intent);
+  };
+  /** 关掉某个面板（删键） */
+  const closePanel = (panel: 'browse' | 'diff'): void => {
+    const qs = (panel === 'browse' ? withoutBrowsePanel(liveQuery()) : withoutChangesPanel(liveQuery())).toString();
+    lastQueryRef.current = qs;
+    if (panel === 'browse') setBrowseOn(false);
+    else setChangesOn(false);
+    window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
+  };
+  /**
+   * 写两个面板进地址：replaceState 而非 router.replace（选中提交那条链路同理，见 onSelectCommit）——
+   * 开合与切标签都不产生新的浏览步骤，不该把浏览器历史塞满。
+   * 同时更新本地镜像并记下这次写入（同步 effect 据此放行，不把刚写的地址再读回来一次）。
+   */
+  const writePanels = (nextBrowse: PanelIntent, nextChanges: PanelIntent): void => {
+    let next = applyPanel(liveQuery(), 'browse', nextBrowse);
+    next = applyPanel(next, 'diff', nextChanges);
+    const qs = next.toString();
+    lastQueryRef.current = qs;
+    if (nextBrowse !== 'skip') setBrowseOn(nextBrowse !== undefined);
+    if (nextChanges !== 'skip') setChangesOn(nextChanges !== undefined);
+    window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
+  };
+  /**
+   * URL → 镜像的反向同步：浏览器前进/后退、外部改地址（含 Next 把 replaceState 并入路由状态那一拍）、
+   * **以及首帧的深链**（`useSearchParams` 在 Next 的首次渲染里可能还是空的，故不能只在 useState 初值里读 URL）
+   * 都从这里回到界面。只认「地址真的变了」——写地址那一路已把 lastQueryRef 推到新值，不会被自己覆盖。
+   */
+  useEffect(() => {
+    // 底本优先用**当前地址栏**（见模块级 liveQuery）：useSearchParams 在首帧可能还是空的，而地址栏早就是真值。
+    // **不按「地址变没变」来跳过**：首帧那次也必须跑——服务端预渲染时没有 window，useState 初值只能给空，
+    // 而客户端水合不会重跑初值（实测：深链 `?diff=<路径>` 在 Next 上永远落不了地）。
+    // 幂等由被调方保证：syncDiffTabsWithUrl 已一致时返回同一个引用、state 相同值不触发重渲染；
+    // 下面两个布尔镜像同理（同值 setState 是 no-op）。
+    const effective = liveQuery();
+    lastQueryRef.current = effective.toString();
+    setBrowseOn(readBrowse(effective));
+    setChangesOn(readChanges(effective));
+    // 差异定位同样从 URL 回来：路径 → 开成激活标签（已开则只切过去）；空值 → 回清单但**保留已开标签**
+    // （标签族里的 `open` 是会话态，地址栏只表达「哪个在前台」，不该因为回清单就把标签关掉）
+    setChangesDiff((prev) => syncDiffTabsWithUrl(prev, effective));
+  }, [currentQuery]);
   // 认证重试回路状态：待重试的原操作 + 认证目标 host；null 表示 AuthDialog 关闭
   const [authRetry, setAuthRetry] = useState<{ host: string; retry: () => Promise<unknown> } | null>(null);
   // 状态推送（干净提交也使 headHash 变化 → 触发此回调）：回写 status 缓存 + 重验证日志快照 + 重订阅流（新提交出现在新流顶部）；
@@ -187,6 +323,9 @@ export default function Page({
     },
   });
   const { data: repos } = useRecentRepos();
+  // 上一个 repoId：跨仓库复位 effect 靠它区分「首挂载」（不清 URL 参数——深链/刷新要保住快照栏）
+  // 与「真的换了仓库」（必须清掉上一个仓库的 snap/file）
+  const previousRepoIdRef = useRef<string | null>(null);
   // stream.error 一次性呈现（Task 7 终审 deferred 接通）：error 置位即断开订阅，effect 仅触发一次
   useEffect(() => {
     if (streamError) void message.error(streamError);
@@ -205,8 +344,54 @@ export default function Page({
   // 地址栏，其间行不高亮、详情面板不出现）；原生写法由 Next 的 History API 集成同步进 useSearchParams，
   // 无网络往返。其余查询参数经 withSelectParam 原样保留（?select= 被覆盖）。
   const onSelectCommit = (hash: string): void => {
-    const qs = withSelectParam(currentQuery, hash).toString();
+    // 面板开着时跟着换到新提交（详情面板展示的与树/变更集看的必须是同一版，否则出现「面板写着 A、树里是 B」），
+    // 并落回**文件树**（聚合标签）：同一路径在新版本里未必存在，指着它就等于让内容栏显示上一版的旧文本。
+    // 关着时不碰 browse 键（加上键 = 替用户把面板打开，是「互不代劳」的反面）。
+    // 底本取当前地址栏（见 liveQuery）：连点两行时 useSearchParams 还停在上一拍。
+    let next = withSelectParam(liveQuery(), hash);
+    if (browseOn) next = withBrowsePanel(next, PANEL_AGGREGATE);
+    const qs = next.toString();
+    lastQueryRef.current = qs;
     window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
+  };
+  /**
+   * 「浏览快照」开关（详情面板按钮）：开着再点即收起。它**只管自己这一族标签**（文件树 + 文件内容）——
+   * 变更集那一族不受它影响；两族共用一条右栏，故变更集开着时收起文件树，右栏仍在（栏内只剩变更集标签）。
+   */
+  const onBrowse = (): void => {
+    // 开着 → 关（删 browse 键）；关着 → 开且落在文件树上（聚合标签）。diff 键一律不动（互不代劳）
+    if (browseOn) closePanel('browse');
+    else writePanels(PANEL_AGGREGATE, 'skip');
+  };
+  /**
+   * 「查看变更集」开关（详情面板按钮）：开着再点即收起（含其差异标签）。
+   * 打开时看的就是**当前选中的提交**（`effectiveChangesHash` 由 URL 派生），故深链 `?select=X&diff=`
+   * 也能直接落在 X 的变更集清单上。
+   */
+  const onOpenChanges = (): void => {
+    if (changesOn) {
+      closePanel('diff');
+      setChangesDiff({ open: [], active: '' });
+      return;
+    }
+    // 关闭态 → 开，且落在**变更集清单**（聚合标签）上；browse 键不动（两开关互不代劳）
+    writePanels('skip', PANEL_AGGREGATE);
+  };
+  /** 关闭变更集标签（标签栏上的 ×）：整个变更集标签族收摊（清单 + 已开差异标签），并写回 URL */
+  const onCloseChanges = (): void => {
+    closePanel('diff');
+    setChangesDiff({ open: [], active: '' });
+  };
+  /**
+   * 差异标签族变化（切标签 / 开关标签 / 剪枝回落）——**同时把定位写回地址栏**：
+   * `?diff=<路径>` = 该差异在前台，`?diff=` = 变更集清单在前台。
+   * 这一步是「刷新前后看到的一致」的全部关键：只在「打开文件」时写地址是不够的，
+   * 用户切回清单、在已打开的差异标签之间来回切都改变前台项，不写的话刷新就会弹回最后写过的那个差异。
+   * 只动 `diff` 键，`browse` 键原样保留（两个面板互不代劳）。
+   */
+  const onChangesDiffChange = (next: { open: string[]; active: string }): void => {
+    setChangesDiff(next);
+    writePanels('skip', next.active === '' ? PANEL_AGGREGATE : next.active);
   };
   // 恢复 URL 选中项（刷新/深链场景）：目标提交可能不在已加载窗口内（首屏只拉 50 条）——有界补页把它拉进来。
   // 判据用 REST 快照 pageCommits 而非合并后的 commits：补页只改变快照，流式合并出现的瞬时子集
@@ -468,12 +653,47 @@ export default function Page({
     setResetTarget(null);
     setAuthRetry(null);
     setUpdateOutcome(null);
-    setChangesHash('');
+    // 变更集「看哪一版」由 URL 派生，这里只需清空差异标签族（开关与选中项由下面的地址改写负责）
+    setChangesDiff({ open: [], active: '' });
     setAuthor('');
     setPath('');
     setBranchFilter([]);
     resetLogPages();
+    // 就地面板是 URL 真源，故这里改写地址而不是清状态：树与变更集都按 repoId + 选中提交拉，
+    // 留着上一个仓库的面板定位会先闪一帧「上一个仓库的视图」再报错。
+    // 两点必须注意（都踩过）：
+    //   ① 参数从 **window.location** 读，不用 useSearchParams —— Next 首次 hydration 时它还不同步，
+    //      读到 null 会把刚深链进来的 ?browse= 当场抹掉（实测：地址栏里的参数在 50ms 内消失）；
+    //   ② 只在 repoId **真的变化**时清，首挂载不清 —— 否则深链/刷新同样保不住参数。
+    if (previousRepoIdRef.current !== null && previousRepoIdRef.current !== repoId) {
+      const live = liveQuery();
+      if (live.has('browse') || live.has('diff') || live.has('file') || live.has('snap')) {
+        // 旧形态先规范化（把 snap/file 收成新的面板键），再统一把两个面板键删掉
+        const qs = withoutChangesPanel(withoutBrowsePanel(withMigratedSnapshot(live))).toString();
+        lastQueryRef.current = qs;
+        setBrowseOn(false);
+        setChangesOn(false);
+        window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
+      }
+    }
+    previousRepoIdRef.current = repoId;
   }, [repoId]);
+  /**
+   * 旧深链改写（一次性）：`?snap=<hash>[&file=]` 是「面板开合用版本号的有无表达」时期的写法，
+   * 现在读到就换成新形态（`browse[=<路径>]`，并以那个版本号补上选中提交）——
+   * 旧书签/旧文档里的链接落在同一视图上。
+   * 判据与底本都取**当前地址栏**：replaceState 之后 useSearchParams 还是旧值，
+   * 「地址里还有没有旧参数」只能由地址本身回答（ref 只作防抖，避免改写落地前反复触发）。
+   */
+  useEffect(() => {
+    if (legacySnapRef.current || !isLegacySnapshotUrl(liveQuery())) return;
+    legacySnapRef.current = true;
+    const qs = withMigratedSnapshot(liveQuery()).toString();
+    lastQueryRef.current = qs;
+    // 旧链接的语义就是「面板开着」：镜像一并置位（replaceState 不会重渲染，光写地址界面不会动）
+    setBrowseOn(true);
+    window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
+  }, [currentQuery, pathname]);
   // 状态未就绪前不渲染主体（加载态壳层后续任务再补）
   if (!status) return null;
   // 分支对比视图（?compare=<branch>）：双 range 查询就绪前不渲染（compareA/B 为 null key 条件拉取）
@@ -511,33 +731,51 @@ export default function Page({
         onUndoCommit={onUndoCommit}
         undoCommitting={undoCommitting}
         onResetHere={onResetHere}
-        onBrowse={(hash) => router.push(`/repos/${repoId}/browse?rev=${hash}`)}
-        onOpenChanges={setChangesHash}
-        changesHash={changesHash}
+        // 两个开关各自的回调（详情面板按钮）：都只切换**自己那一个** URL 参数，互不代劳
+        onBrowse={() => onBrowse()}
+        // 「浏览快照」开关开着时右栏出现文件树那一族标签（「文件（N）」+ 树里点开的文件标签）
+        browseOpen={browseOn}
+        // browseRev 只作标签栏的**重挂载键**（换版本即复位已打开的文件标签），不参与取数
+        browseRev={selectedCommit?.shortHash ?? ''}
+        browseEntries={browseTree?.entries}
+        browseLoading={browseTreeLoading}
+        browseError={browseTreeError?.message}
+        {...(browseSelectedFile === undefined ? {} : { browseSelectedPath: browseSelectedFile })}
+        browseContent={browseContent}
+        browseContentLoading={browseSelectedFile !== undefined && browseContentLoading}
+        browseContentError={browseContentError?.message}
+        // 树里点文件（或标签栏要求改选中）：写 `browse=<路径>`；同路径再点 = 回**文件树**（聚合标签，写 `browse=`）
+        onSelectBrowseFile={(file) => {
+          if (!browseOn) return; // 文件树关着：这一族标签不存在，容器不该为它写参数
+          writePanels(browseSelectedFile === file ? PANEL_AGGREGATE : file, 'skip');
+        }}
+        onOpenChanges={() => onOpenChanges()}
+        /* 变更集面板的开合真源是 `diff` 键在不在（URL）；hash 用 effectiveChangesHash 兜底
+           （面板开着而选中项未落位时按当前选中的提交取数） */
+        changesHash={changesOn ? effectiveChangesHash : ''}
         changesEntry={changesEntry}
         changesLoading={changesLoading}
         changesError={changesError?.message}
-        onCloseChanges={() => setChangesHash('')}
-        onOpenChangedFile={(path) => {
-          // #13：变更集内该文件 diff——from=父哈希、to=该提交（根提交 → root=1；与 BlameView「受影响」同语义）；
-          // #27：同组文件列表（该提交变更集）供 DiffPage 页头 Prev/Next；
-          // 差异页在新标签页打开（原页留在日志页的变更集弹窗上）
-          const entry = changesEntry;
-          if (entry !== undefined && entry !== null) {
-            const params = new URLSearchParams({ file: path });
-            if (entry.parents.length === 0) {
-              params.set('root', '1');
-            } else {
-              params.set('from', entry.parents[0]);
-              params.set('to', entry.hash);
-            }
-            const filePaths = entry.files.map((f) => f.path);
-            if (filePaths.length > 1) params.set('files', JSON.stringify(filePaths));
-            openInNewTab(`/repos/${repoId}/diff?${params.toString()}`);
-          }
-        }}
+        // 开关的「开」态：变更集面板开着，且看的就是当前选中的这个提交
+        changesActive={changesOn && effectiveChangesHash === selectedCommit?.hash}
+        onCloseChanges={onCloseChanges}
+        // 变更集清单里点文件：开成同一标签栏里的差异标签（已开则只切过去）——不再新开浏览器标签页。
+        // 走 onChangesDiffChange 同一条路：切标签要写回地址栏（`?diff=<路径>`）
+        onOpenChangedFile={(path) =>
+          onChangesDiffChange({
+            open: changesDiff.open.includes(path) ? changesDiff.open : [...changesDiff.open, path],
+            active: path,
+          })
+        }
+        changesDiff={changesDiff}
+        onChangesDiffChange={onChangesDiffChange}
+        changesDiffVersions={changesDiffVersions}
+        // 未就绪与「在飞」同屏：变更集还没拉到、或差异还在路上，标签内都只表达「还没好」
+        changesDiffLoading={changesDiff.active !== '' && (!changesEntryReady || changesDiffLoading)}
+        changesDiffError={changesDiffError?.message}
         onOpenSettings={() => router.push(`/repos/${repoId}/settings`)}
         onGoHome={() => router.push('/')}
+        onOpenLog={() => router.push(`/repos/${repoId}`)}
         onOpenStatus={() => router.push(`/repos/${repoId}/status`)}
         onOpenBranches={() => router.push(`/repos/${repoId}/branches`)}
         onOpenMerge={() => router.push(`/repos/${repoId}/merge`)}

@@ -14,7 +14,6 @@ import './index.css';
 import { ReposPage } from './pages';
 import { AppSettingsPage } from './pages/app-settings';
 import { RepoBlamePage } from './pages/blame';
-import { RepoBrowsePage } from './pages/browse';
 import { RepoBranchesPage } from './pages/branches';
 import { RepoCommittedPage } from './pages/committed';
 import { RepoConflictsPage } from './pages/conflicts';
@@ -59,7 +58,6 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<ReposPage />} />
         <Route path="/settings" element={<AppSettingsPage />} />
         <Route path="/repos/:repoId" element={<RepoPage />} />
-        <Route path="/repos/:repoId/browse" element={<RepoBrowsePage />} />
         <Route path="/repos/:repoId/blame" element={<RepoBlamePage />} />
         <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
         <Route path="/repos/:repoId/committed" element={<RepoCommittedPage />} />

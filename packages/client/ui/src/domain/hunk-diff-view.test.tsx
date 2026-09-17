@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { HunkDiffView } from './hunk-diff-view';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
 
-/** 测试 stub loader：捕获每个 MonacoDiffView 的 original/modified */
+/** 测试 stub loader：捕获每个 MonacoDiffView 的 original/modified/language */
 function makeStubLoader() {
-  const seen: { original: string; modified: string }[] = [];
+  const seen: { original: string; modified: string; language?: string }[] = [];
   const loader: MonacoDiffLoader = async () => ({
     default: (props) => {
-      const inner = props as { original: string; modified: string };
+      const inner = props as { original: string; modified: string; language?: string };
       seen.push(inner);
       return <div data-testid="stub-diff">{inner.original}||{inner.modified}</div>;
     },
@@ -31,6 +31,20 @@ describe('HunkDiffView', () => {
     expect(seen[1]).toMatchObject({ original: 'keep 10\nkeep 12\nkeep 13\n', modified: 'keep 10\nadd 11\nkeep 12\nkeep 13\n' });
     expect(screen.getByText('@@ -1,5 +1,5 @@')).toBeInTheDocument();
     expect(screen.getByText('fn bar()')).toBeInTheDocument();
+  });
+
+  // 语法高亮：逐 hunk 的 diff 视图此前不传 language（恒为无高亮纯文本），现按文件路径推断
+  it('按 path 推断高亮语言并透传给每个 hunk；不传 path 时不猜语言', async () => {
+    const withPath = makeStubLoader();
+    const { unmount } = render(<HunkDiffView patch={PATCH} status="modified" path="src/a.ts" loader={withPath.loader} />);
+    expect(await screen.findAllByTestId('stub-diff')).toHaveLength(2);
+    expect(withPath.seen.map((item) => item.language)).toEqual(['typescript', 'typescript']);
+    unmount();
+
+    const withoutPath = makeStubLoader();
+    render(<HunkDiffView patch={PATCH} status="modified" loader={withoutPath.loader} />);
+    expect(await screen.findAllByTestId('stub-diff')).toHaveLength(2);
+    expect(withoutPath.seen.map((item) => item.language)).toEqual([undefined, undefined]);
   });
 
   it('单 hunk 单块（块编号 0）', async () => {

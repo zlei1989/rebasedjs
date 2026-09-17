@@ -2,21 +2,21 @@
 
 /**
  * 工作树页容器：useWorktrees + 三 mutation（create/remove/prune，均同键回写）注入 ui WorktreePanel
- * （与 web-koa 容器同构；repoId 取 Next params、返回导航用 useRouter）。
+ * （与 web-koa 容器同构；repoId 取 Next params、导航回调经 useRepoNav 装配）。
  * WorktreePanel currentPath = repoPath（useRecentRepos 中该仓库的注册路径——与服务端 getRepoById 同源；
  * 「当前」标记为与列表主工作树 path 的字符串相等判定，8.3 短路径/斜杠形态差异可能使标记不命中——见任务报告）。
  * 按容器裁定：onRemove 单参不带 force（工作树有未合并变更时先处理，force 仅终端使用）。
- * 顶部返回按钮回日志页；「刷新」重取列表（mutate）；操作失败统一以服务端中文 message 提示。
+ * 仓库顶栏导航（RepoTopNav）取代「返回日志」链接；「刷新」重取列表（mutate）；操作失败统一以服务端中文 message 提示。
  */
 import { useCreateWorktree, usePruneWorktrees, useRecentRepos, useRemoveWorktree, useWorktrees } from '@rebased/client';
-import { PageShell, WorktreePanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
-import { useRouter } from 'next/navigation';
+import { PageShell, RepoTopNav, WorktreePanel } from '@rebased/ui';
+import { message } from 'antd';
 import { useEffect, use } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
-  const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: worktrees, error: worktreesError, mutate: mutateWorktrees } = useWorktrees(repoId);
   const { trigger: createWorktree, isMutating: creating } = useCreateWorktree(repoId);
   const { trigger: removeWorktree, isMutating: removing } = useRemoveWorktree(repoId);
@@ -37,14 +37,8 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   if (!worktrees) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="worktrees" 高亮「更多」按钮（工作树在更多菜单内） */}
+      <RepoTopNav {...nav} current="worktrees" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <WorktreePanel
         key={repoId}

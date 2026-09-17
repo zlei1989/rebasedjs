@@ -2,17 +2,18 @@
 
 /**
  * 溯源页容器：?file=[&rev=] 查询串（入口通道：历史页「Annotate Revision」带 rev）+ 页内文件路径输入
- * → useBlame → ui BlameView（与 web-koa 容器同构；repoId 取 Next params、返回导航用 router）。
+ * → useBlame → ui BlameView（与 web-koa 容器同构；repoId 取 Next params、仓库顶栏导航（RepoTopNav）取代「返回日志」链接）。
  * 查询串只作输入初始值，提交后不回写 URL（v1 简化，页内状态即来源）；
  * file 为空串时 useBlame 挂 null key 不发请求，页面渲染空态引导。
  * 行内联动：差异 → 新标签页打开 /diff?file&from=parents[0]&to=hash（根提交 → root=1）；历史 → /history?file；
  * 受影响（Show All Affected #34）→ useCommitFiles 条件拉取该提交全量变更文件 Modal（文件点击 → 该文件 diff）。
  */
 import { useBlame, useCommitFiles } from '@rebased/client';
-import { BlameView, EmptyState, PageShell, openInNewTab } from '@rebased/ui';
+import { BlameView, EmptyState, PageShell, RepoTopNav, openInNewTab } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 export default function Page({
   params,
@@ -24,6 +25,7 @@ export default function Page({
   const { repoId } = use(params);
   const { file: initialFile = '', rev: initialRev = '' } = use(searchParams);
   const router = useRouter();
+  const nav = useRepoNav(repoId);
   const [file, setFile] = useState(initialFile);
   const [draft, setDraft] = useState(initialFile);
   const [rev, setRev] = useState(initialRev);
@@ -48,14 +50,8 @@ export default function Page({
   };
   return (
     <PageShell gap={8}>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="blame" 高亮「更多」按钮（溯源在更多菜单内） */}
+      <RepoTopNav {...nav} current="blame" />
       <Flex gap={8}>
         <Tooltip title="输入文件路径（相对仓库根），回车查看内容">
           <Input

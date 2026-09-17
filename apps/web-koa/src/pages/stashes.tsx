@@ -6,15 +6,16 @@
  * （纯 drop/建删不改 RepoStatus 字段时 watcher 不产事件，见行内订阅注释）。
  */
 import { useBranches, useStashAction, useStashDiff, useStashes, useStashUnstashAs, useRepoEvents } from '@rebased/client';
-import { PageShell, StashPanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
+import { PageShell, RepoTopNav, StashPanel } from '@rebased/ui';
+import { message } from 'antd';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
+import { useRepoNav } from '../repo-nav';
 
 export function RepoStashesPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
-  const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   const { data: stashes, mutate: mutateStashes } = useStashes(repoId);
   const { trigger: stashAction, isMutating: acting } = useStashAction(repoId);
   // Unstash As：mutation 响应回写 stashes；成功后还需重验证 status（目标分支检出改变了 branch/HEAD）
@@ -36,14 +37,8 @@ export function RepoStashesPage(): React.ReactNode {
   if (!stashes) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="stashes" 高亮贮藏图标 */}
+      <RepoTopNav {...nav} current="stashes" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <StashPanel
         key={repoId}

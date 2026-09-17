@@ -41,6 +41,15 @@ export interface CommitGraphProps {
   height?: number;
   /** tag chips 开关（默认 false，对齐 Java VcsLogApplicationSettings.showTagNames） */
   showTags?: boolean;
+  /**
+   * 是否渲染作者列（默认 true）。
+   * 关掉即整列消失、腾出的宽度归主题列——日志页展开文件快照栏后列表被挤窄时用它
+   * （168px 的作者列表在窄列表里只能显示几个字，不如让位给提交主题）。
+   * 注意是**不渲染**而不是「渲染成空列」：空列仍占 144px，就失去了让位的意义。
+   */
+  showAuthor?: boolean;
+  /** 是否渲染日期列（默认 true）。语义与不渲染理由同 showAuthor */
+  showDate?: boolean;
   /** 选中行高亮（详情面板当前提交；`?select=<hash>` 深链与点击选中均经此呈现选中态） */
   selectedHash?: string | null;
   /** 分支过滤选中的分支名；空/缺省 = 不过滤（视图与现状逐像素一致） */
@@ -199,6 +208,8 @@ export function CommitGraph({
   onContextMenu,
   height = 480,
   showTags = false,
+  showAuthor = true,
+  showDate = true,
   selectedHash = null,
   branches = EMPTY_BRANCHES,
   collapsed = EMPTY_COLLAPSED,
@@ -436,13 +447,26 @@ export function CommitGraph({
                   <RefChips refs={commit.refs} showTags={showTags} />
                 </span>
               </Flex>
-              <span style={{ width: 144, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author}</span>
-              <Typography.Text
-                type="secondary"
-                style={{ width: 128, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
-              >
-                {formatCommitDate(commit.dateIso)}
-              </Typography.Text>
+              {/* 作者/日期两列可按需省略（日志页展开快照栏、列表被挤窄时）：
+                  条件渲染而非置空——空列照旧占 144/128px，让位就无从谈起。
+                  两列都省略时说明区（本行唯一可伸缩项）独自吃掉整行宽度。 */}
+              {showAuthor ? (
+                <span
+                  data-testid="commit-graph-author"
+                  style={{ width: 144, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                >
+                  {commit.author}
+                </span>
+              ) : null}
+              {showDate ? (
+                <Typography.Text
+                  data-testid="commit-graph-date"
+                  type="secondary"
+                  style={{ width: 128, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                >
+                  {formatCommitDate(commit.dateIso)}
+                </Typography.Text>
+              ) : null}
             </div>
           );
         }}

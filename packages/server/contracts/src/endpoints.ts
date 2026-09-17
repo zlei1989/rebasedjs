@@ -318,7 +318,7 @@ export type BlameQuery = z.infer<typeof blameQuerySchema>;
 /** 文件历史查询：file 必填（git log --follow 跟随重命名） */
 export const historyQuerySchema = z.object({ file: z.string().min(1) });
 
-/** 历史快照浏览（BrowsePanel）查询：rev 为任意 tree-ish（提交/分支/标签） */
+/** 历史快照浏览查询：rev 为任意 tree-ish（提交/分支/标签）。消费方：日志页就地快照栏（?snap=） */
 export const browseQuerySchema = z.object({ rev: z.string().min(1) });
 
 /** 历史快照文件内容查询：rev 为 tree-ish；file 为该版本内相对路径（必填） */

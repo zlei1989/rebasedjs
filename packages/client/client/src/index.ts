@@ -12,7 +12,15 @@ export {
   useRepoStatus,
 } from './repos';
 export { LOG_FIRST_PAGE, LOG_MAX_PAGE, logPageSize, logPageSkip, useLogPage, useLogPages, useLogStream } from './log';
-export { useBranchWorkingDiff, useFileDiff, useDiffStream, useDiffPatch, useFileThreeWay } from './diff';
+export {
+  useBranchWorkingDiff,
+  useFileDiff,
+  useHeldFileDiff,
+  useDiffStream,
+  useDiffPatch,
+  useFileThreeWay,
+  type HeldFileDiff,
+} from './diff';
 export { useBlame } from './blame';
 export { useHistory } from './history';
 export { useBrowseTree, useBrowseContent } from './browse';

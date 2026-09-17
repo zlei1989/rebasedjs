@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { FileThreeVersions } from '@rebased/contracts';
+import type { MonacoDiffInnerProps } from '../base/monaco-diff-view';
 import { ThreeWayView } from './three-way-view';
 
 const VERSIONS: FileThreeVersions = { head: 'v1\n', staged: 'v2\n', working: 'v3\n' };
@@ -18,6 +19,21 @@ describe('ThreeWayView', () => {
     expect(await screen.findAllByText('stub-diff-editor')).toHaveLength(2);
     expect(screen.getByTestId('three-way-head-staged')).toBeInTheDocument();
     expect(screen.getByTestId('three-way-staged-working')).toBeInTheDocument();
+  });
+
+  // 语法高亮：容器只给文件路径，两段的高亮语言都由本组件按扩展名推断（此前两段都是无高亮的纯文本）
+  it('按文件扩展名推断高亮语言并透传给两段', async () => {
+    const captured: Array<MonacoDiffInnerProps> = [];
+    const captureLoader = (): Promise<{ default: (props: MonacoDiffInnerProps) => React.ReactNode }> =>
+      Promise.resolve({
+        default: (props: MonacoDiffInnerProps) => {
+          captured.push(props);
+          return <div>stub-diff-editor</div>;
+        },
+      });
+    render(<ThreeWayView versions={VERSIONS} file="src/a.ts" loader={captureLoader} />);
+    expect(await screen.findAllByText('stub-diff-editor')).toHaveLength(2);
+    expect(captured.map((props) => props.language)).toEqual(['typescript', 'typescript']);
   });
 
   // 冒烟 F-037：单维差异时另一段两侧相同，须显式标注「无差异」（否则空 diff 易被误读为加载中）

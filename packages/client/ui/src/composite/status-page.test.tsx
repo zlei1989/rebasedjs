@@ -1,7 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChangeEntry, ChangelistView, RepoStatus } from '@rebased/contracts';
 import { groupByChangelist, groupChanges, StatusPage } from './status-page';
+import type { CodeBlockLoader } from '../base/code-block';
+import type { PatchLine } from '../domain/highlight';
 
 /** 测试状态工厂：补全 RepoStatus 必填字段，仅注入 entries */
 function makeStatus(entries: ChangeEntry[]): RepoStatus {
@@ -763,5 +765,81 @@ describe('StatusPage 页级动作（Create Patch / Shelve / Stash / Annotate / H
     expect(screen.queryByTestId('create-patch-unstaged')).not.toBeInTheDocument();
     expect(screen.queryByTestId('action-shelve')).not.toBeInTheDocument();
     expect(screen.queryByTestId('action-stash')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 补丁预览的代码高亮：真高亮器跑不了（jsdom 起不了 shiki 的 wasm），故只断言**接线**——
+ * 语言有没有按文件扩展名推断出来、hunk 文本有没有带上行元数据、整份补丁兜底有没有走同一套。
+ * 真着色由浏览器冒烟覆盖（见 docs/e2e-verification.md）。
+ */
+describe('StatusPage 补丁预览代码高亮', () => {
+  /** 桩高亮器：记录每次请求，返回可辨认标记 */
+  function makeCodeBlockLoader(): {
+    loader: CodeBlockLoader;
+    requests: { code: string; language: string; lines?: PatchLine[] }[];
+  } {
+    const requests: { code: string; language: string; lines?: PatchLine[] }[] = [];
+    return {
+      requests,
+      loader: () =>
+        Promise.resolve({
+          highlight: (req: { code: string; language: string; lines?: PatchLine[] }) => {
+            requests.push(req);
+            return Promise.resolve(`<span>${req.language}</span>`);
+          },
+        }),
+    };
+  }
+
+  it('逐 hunk 块走代码块且语言按扩展名推断（.ts → typescript）', async () => {
+    const { loader, requests } = makeCodeBlockLoader();
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'src/a.ts', text: PATCH_TEXT }}
+        onHunkStaging={vi.fn()}
+        codeBlockLoader={loader}
+      />,
+    );
+    // hunk 正文在折叠面板里：展开后 CodeBlock 才挂载（高亮是懒加载的，不该为收起的块付代价）
+    fireEvent.click(screen.getByText('hunk 1'));
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    const hunkRequest = requests[0];
+    expect(hunkRequest.language).toBe('typescript');
+    // 行元数据随请求发出：`@@` 头 / 新增 / 删除 / 上下文 都在
+    expect(new Set(hunkRequest.lines?.map((line) => line.kind))).toEqual(new Set(['hunk', 'context', 'remove', 'add']));
+    // 高亮就绪后逐 hunk 正文换成高亮渲染（同一块内，testid 不变）
+    expect(await screen.findByTestId('code-block-highlighted')).toBeInTheDocument();
+    expect(screen.getByTestId('hunk-text-0')).toContainElement(screen.getByTestId('code-block-highlighted'));
+  });
+
+  it('整份补丁兜底（无 hunk 操作回调）同一个 loader，语言仍按文件推断', async () => {
+    const { loader, requests } = makeCodeBlockLoader();
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'a.md', text: '@@ -1 +1 @@\n-old\n+new' }}
+        codeBlockLoader={loader}
+      />,
+    );
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    expect(requests[0].language).toBe('markdown');
+    expect(screen.getByTestId('patch-text')).toBeInTheDocument();
+  });
+
+  it('未传 codeBlockLoader 时补丁预览仍渲染纯文本（不阻塞预览）', () => {
+    render(
+      <StatusPage
+        status={makeStatus([])}
+        {...makeHandlers()}
+        patch={{ path: 'a.ts', text: '@@ -1 +1 @@\n-old\n+new' }}
+      />,
+    );
+    const patchText = screen.getByTestId('patch-text');
+    expect(patchText).toHaveTextContent('@@ -1 +1 @@');
+    expect(patchText).toHaveTextContent('+new');
   });
 });

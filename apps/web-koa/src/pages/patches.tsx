@@ -5,13 +5,15 @@
  * acting 并合四个 mutation 的 isMutating：任一进行中即禁用行按钮/创建按钮 loading。
  */
 import { useApplyPatch, useCreatePatch, useDeletePatch, useImportPatchIntoShelf, usePatches } from '@rebased/client';
-import { PageShell, PatchPanel } from '@rebased/ui';
-import { Button, Tooltip, message } from 'antd';
+import { PageShell, PatchPanel, RepoTopNav } from '@rebased/ui';
+import { message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useRepoNav } from '../repo-nav';
 
 export function RepoPatchesPage(): React.ReactNode {
   const { repoId = '' } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
+  const nav = useRepoNav(repoId);
   const { data: patches } = usePatches(repoId);
   const { trigger: createPatch, isMutating: creating } = useCreatePatch(repoId);
   const { trigger: applyPatch, isMutating: applying } = useApplyPatch(repoId);
@@ -25,14 +27,8 @@ export function RepoPatchesPage(): React.ReactNode {
   if (!patches) return null;
   return (
     <PageShell>
-      {/* 返回日志页 */}
-      {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-      {/* alignSelf: PageShell 刻意不设 alignItems，直接子项会被拉成整行宽、文字居中；就地收回内容宽（保持紧凑左对齐链接观感，原语契约不动） */}
-      <Tooltip title="返回该仓库的提交日志页">
-        <Button style={{ alignSelf: 'flex-start' }} type="link" onClick={() => navigate(`/repos/${repoId}`)}>
-          返回日志
-        </Button>
-      </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="patches" 高亮「更多」按钮（补丁在更多菜单内） */}
+      <RepoTopNav {...nav} current="patches" />
       {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载，面板内 Modal/确认态随之重置 */}
       <PatchPanel
         key={repoId}

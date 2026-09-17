@@ -12,6 +12,7 @@ import type { ConflictContents } from '@rebased/contracts';
 import { MonacoDiffView } from '../base/monaco-diff-view';
 import type { MonacoEditorInnerProps, MonacoLazyLoader } from '../base/monaco-lazy';
 import { PageShell } from '../base/page-shell';
+import { languageForPath } from '../domain/language';
 
 /** 3-way 合并视图 props（见文件头说明） */
 export interface MergeViewProps {
@@ -49,6 +50,8 @@ function Pane({ title, action, children }: { title: string; action?: ReactNode; 
 
 export function MergeView({ contents, onSave, saving = false, loader = defaultLoader }: MergeViewProps): ReactNode {
   const { path, base, ours, theirs } = contents;
+  // 语法高亮按文件扩展名推断（与 DiffPage / ThreeWayView 同一套口径），四个 Monaco 实例共用
+  const language = languageForPath(path);
   // 合并结果编辑内容：初始 ours ?? base ?? theirs ?? ''；切换冲突文件时重置为新文件的初始值
   const [edited, setEdited] = useState(() => ours ?? base ?? theirs ?? '');
   useEffect(() => {
@@ -64,19 +67,19 @@ export function MergeView({ contents, onSave, saving = false, loader = defaultLo
         {base !== null ? (
           <>
             <Pane title="当前分支">
-              <MonacoDiffView original={base} modified={ours ?? ''} options={{ readOnly: true }} loader={loader} />
+              <MonacoDiffView original={base} modified={ours ?? ''} language={language} options={{ readOnly: true }} loader={loader} />
             </Pane>
             <Pane title="合并来源">
-              <MonacoDiffView original={base} modified={theirs ?? ''} options={{ readOnly: true }} loader={loader} />
+              <MonacoDiffView original={base} modified={theirs ?? ''} language={language} options={{ readOnly: true }} loader={loader} />
             </Pane>
           </>
         ) : (
           <>
             <Pane title="当前分支">
-              <MonacoEditorLazy value={ours ?? ''} readOnly loader={loader} />
+              <MonacoEditorLazy value={ours ?? ''} language={language} readOnly loader={loader} />
             </Pane>
             <Pane title="合并来源">
-              <MonacoEditorLazy value={theirs ?? ''} readOnly loader={loader} />
+              <MonacoEditorLazy value={theirs ?? ''} language={language} readOnly loader={loader} />
             </Pane>
           </>
         )}
@@ -96,7 +99,7 @@ export function MergeView({ contents, onSave, saving = false, loader = defaultLo
             故在 Tooltip 与编辑器之间包一层 span：display:block + height:100% 保持原有「撑满面板」的布局 */}
         <Tooltip title="合并结果编辑器：直接改文本解决冲突，改完点右上「保存」写回文件（Ctrl+Z 可撤销输入）">
           <span style={{ display: 'block', height: '100%' }}>
-            <MonacoEditorLazy value={edited} onChange={setEdited} loader={loader} />
+            <MonacoEditorLazy value={edited} language={language} onChange={setEdited} loader={loader} />
           </span>
         </Tooltip>
       </Pane>

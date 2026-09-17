@@ -1,10 +1,10 @@
 /**
- * 日志页：顶栏（仓库名 + RepoStatusBar + OperationStatus + 变更/分支/合并/贮藏/设置入口 + 「更多」下拉）+ CommitGraph + 右侧 CommitDetailsPanel。
+ * 日志页：顶栏（抽为共用组件 RepoTopNav：**面包屑「首页 / 仓库名」** + RepoStatusBar + OperationStatus + 日志/变更/分支/合并/贮藏/设置入口 + 「更多」下拉）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  * 合并中（operation.kind==='merge'）时顶栏在操作条旁追加「去解决冲突」链接（onOpenConflicts 注入才渲染）。
- * 顶栏收敛：五个页面导航按钮保留为主按钮区；P3-C 只读浏览（溯源/历史/已提交/搜索）与远程相关操作
+ * 顶栏收敛：页面导航按钮（日志/变更/分支/合并/贮藏/设置）为主按钮区；P3-C 只读浏览（溯源/历史/已提交/搜索）与远程相关操作
  * （拉取/推送/更新项目/远程管理）及 P3-D 四入口（补丁/搁置/控制台/忽略）及 GitHub/GitLab 面板
- * 收进「更多」Dropdown，
+ * 收进「更多」Dropdown（以上均在 RepoTopNav 内装配），
  * 仅在容器注入对应回调时出现对应菜单项，
  * 回调全缺省时不渲染「更多」按钮。
  * 按需加载：hasMore 为真且未在加载时，把 onLoadMore 作为 CommitGraph 的 onReachBottom 注入
@@ -21,18 +21,19 @@
  * 注意：传给 CommitGraph 的 branches/collapsed 必须是**引用稳定**的数组——`filters?.branches ?? []`
  * 每次渲染都是新引用，会让图的全量布局重算在父组件每次渲染时白跑（见 EMPTY_BRANCHES）。
  */
-import { BranchesOutlined, DiffOutlined, InboxOutlined, MergeOutlined, MoreOutlined, RollbackOutlined, SettingOutlined } from '@ant-design/icons';
-import { Alert, Button, Col, Dropdown, Flex, Input, Modal, Popconfirm, Row, Skeleton, Space, Switch, Tooltip, Typography, theme } from 'antd';
+import { Button, Dropdown, Flex, Input, Modal, Skeleton, Switch, Tooltip, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
-import type { CommitInfo, CommittedEntry, OperationState, RepoStatus } from '@rebased/contracts';
-import { OperationStatus } from '../base/operation-status';
+import type { BrowseContent, BrowseEntry, CommitInfo, CommittedEntry, FileVersions, OperationState, RepoStatus } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { PageShell } from '../base/page-shell';
+import { ResizableColumns, restoreWidthsToAvailable, type ResizablePane } from '../base/resizable-columns';
 import { SplitPane } from '../base/split-pane';
-import { RepoStatusBar } from '../domain/repo-status-bar';
+import { FALLBACK_CHAR_WIDTH } from '../base/readonly-text-view';
+import { copyToClipboard } from '../base/clipboard';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
-import { CommittedStatusTag } from '../domain/committed-status';
+import { SnapshotTabs } from './snapshot-tabs';
+import { RepoTopNav } from './repo-top-nav';
 import { buildLayout, collapseAllFragments, type CollapsedFragment, type LayoutCommit } from '../graph-layout';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -41,6 +42,78 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
  * 写成 `?? []` 会让每次渲染产生新引用，进而让 CommitGraph 的全量图布局重算在父组件每次渲染时白跑。
  */
 const EMPTY_BRANCHES: string[] = [];
+
+/* === 就地快照栏（浏览快照）的列宽契约 ===
+ * 三栏：提交日志 | 提交详情 | 快照（文件树与文件内容已合并为**一条标签栏**，见 composite/snapshot-tabs）。
+ * 下面这些数字是**初值与夹紧范围**，不是写死的宽度——用户拖过之后以用户值为准（见 useStoredWidth）。 */
+/**
+ * 三列（提交日志 / 提交详情 / 快照）的**统一拖拽下限**（用户口径：都改成 80px）。
+ * 注意 80px 是「还能拖到多窄」的硬下限，不是默认宽度——默认宽度仍是各列自己的 default。
+ * 详情面板在 80px 下按钮会换行、文字会省略，属可接受的极端态（用户明确要求这个下限）。
+ */
+const MIN_COLUMN_PX = 80;
+/** 提交日志栏：弹性（吃剩余），但被压到这个下限就不再让位（用户口径：与详情/快照统一为 80px） */
+const LOG_MIN_WIDTH = MIN_COLUMN_PX;
+/**
+ * 日志栏的「希望宽度」：它实际多宽由 base/resizable-columns 按容器实测宽度反算（原语才知道容器多宽），
+ * 此处只给一个足够大的值让它在正常窗口下不被压缩。**不落库**——弹性列的绝对宽存下来换个窗口就失配。
+ */
+const LOG_WISH_WIDTH = 900;
+/** 详情面板默认/夹紧宽度：340 是既有 320 放不下「Reset 当前分支到此处」一行的问题宽度 */
+const DETAILS_WIDTH = {
+  default: 340,
+  min: MIN_COLUMN_PX,
+  max: 560,
+  /** 展开快照栏时自动收到的宽度（用户口径：不能更小、可任意更大） */
+  whenBrowsing: 320,
+};
+/**
+ * 提交日志栏里作者/日期两列的显隐阈值（px）：**按本栏实测宽度**切换。
+ * 512 是用户口径；两列合计 272px，栏宽不到 512 时它们各自只剩几个字，不如让位给提交主题。
+ */
+const AUTHOR_COLUMN_MIN_WIDTH = 512;
+/** 快照栏默认宽度（字符数）：沿用原「文件内容栏 100 字符」的观感，换到标签页后正文宽度不变 */
+const SNAPSHOT_DEFAULT_CHARS = 100;
+/**
+ * 快照栏的**拖拽下限**（px）：仅保证不塌成 0，往上不设限（用户口径「文件内容区域的拖拽不要有限制」）。
+ * 语义从「至少 70 字符」放宽到「约 30 字符」——70 字符那条下限（≈548px）会吃掉三栏预算的三分之一，
+ * 导致日志栏永远到不了 512、作者/日期列再也显示不出来（实测）。正文本身可横向滚动，故窄一点只是要多滚。
+ */
+const SNAPSHOT_MIN_PX = 240;
+/** 快照栏宽度上限（px）：再高也只是多留白，反而把日志栏挤没 */
+const SNAPSHOT_MAX_WIDTH = 1200;
+
+/**
+ * 列宽记忆：把用户拖出来的宽度存进 localStorage，跨刷新与面板开合保留。
+ * 为什么不是「仅本次会话」：调列宽是**一次性的个人偏好**，刷新就回默认等于每次都要重调一遍。
+ * 读写都夹紧：存量值可能来自旧版本的范围、也可能被手改过，越界一律夹回，不让它把布局撑坏。
+ */
+function useStoredWidth(key: string, def: number, min: number, max: number): [number, (next: number) => void] {
+  const [width, setWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return def;
+    try {
+      const raw = window.localStorage.getItem(key);
+      const parsed = raw === null ? Number.NaN : Number(raw);
+      return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : def;
+    } catch {
+      // 隐私模式/禁用存储：读不到就用默认值，不影响功能
+      return def;
+    }
+  });
+  const update = useCallback(
+    (next: number) => {
+      const clamped = Math.min(max, Math.max(min, Math.round(next)));
+      setWidth(clamped);
+      try {
+        window.localStorage.setItem(key, String(clamped));
+      } catch {
+        // 写不进去（配额/禁用）：本次会话内的宽度仍然生效
+      }
+    },
+    [key, min, max],
+  );
+  return [width, update];
+}
 
 /** 日志过滤条件（受控：容器持有，变更即重查快照；为空时才是默认全量视图） */
 export interface LogFilters {
@@ -68,6 +141,8 @@ export interface LogPageProps {
   onOpenSettings?: () => void;
   /** 回首页（欢迎屏）入口回调（File→Close Project 语义）；缺省不渲染「首页」链接 */
   onGoHome?: () => void;
+  /** 日志页入口回调（顶栏「日志」按钮，跨页导航回本页用）；缺省不渲染该按钮 */
+  onOpenLog?: () => void;
   /** 变更（状态页）入口回调；缺省不渲染变更按钮 */
   onOpenStatus?: () => void;
   /** 分支页入口回调；缺省不渲染分支按钮 */
@@ -128,22 +203,66 @@ export interface LogPageProps {
   onCherryPick?: (hash: string) => void;
   /** 透传给 CommitDetailsPanel 的「还原」回调；缺省详情面板不渲染该按钮 */
   onRevert?: (hash: string) => void;
-  /** 透传给 CommitDetailsPanel 的「浏览快照」回调（选中提交 → /browse?rev=）；缺省详情面板不渲染该按钮 */
+  /** 透传给 CommitDetailsPanel 的「浏览快照」回调（选中提交 → 打开/收起就地快照栏）；缺省详情面板不渲染该按钮 */
   onBrowse?: (hash: string) => void;
-  /** 透传给 CommitDetailsPanel 的「查看变更集」回调（#13 LogPage → DiffPage 直达：全量变更文件 Modal）；缺省不渲染该按钮 */
+  /**
+   * 「浏览快照」开关（受控，真源在容器：URL 的 `browse=1`）：为真时右栏里出现**文件树那一族**标签
+   * （「文件（N）」文件树 + 树里点开的文件内容标签）。与变更集开关（`changesHash` 非空）**互不代劳**——
+   * 只开变更集时右栏照样出现，只是没有文件树标签（见下面布局分支）。
+   * 缺省 false：布局与未引入快照栏之前逐像素一致（两栏：日志 + 详情）。
+   */
+  browseOpen?: boolean;
+  /** 快照栏的目标版本（只作**标签栏重挂载键**：换版本即复位已打开的文件标签；不再展示短名） */
+  browseRev?: string;
+  /** 该版本的平铺文件条目（容器经 useBrowseTree 拉取） */
+  browseEntries?: BrowseEntry[];
+  /** 文件树加载中 */
+  browseLoading?: boolean;
+  /** 文件树错误信息 */
+  browseError?: string;
+  /** 当前选中文件路径（受控；对应的标签页由快照标签栏打开并激活） */
+  browseSelectedPath?: string;
+  /** 选中文件内容（容器经 useBrowseContent 拉取；只给当前选中的那一份） */
+  browseContent?: BrowseContent;
+  /** 文件内容加载中 */
+  browseContentLoading?: boolean;
+  /** 文件内容错误信息 */
+  browseContentError?: string;
+  /** 树里点文件：路径相同 = 收起内容（容器据此清空选中）；目录不触发（FileTree 只对叶子回调）。
+   *  快照标签栏切/关标签也走这条回调（换文件传新路径；回文件树传当前路径即收起）。 */
+  onSelectBrowseFile?: (path: string) => void;
+  /** 透传给 CommitDetailsPanel 的「查看变更集」回调（#13 LogPage → 变更集标签：开/关该提交的变更集标签）；缺省不渲染该按钮 */
   onOpenChanges?: (hash: string) => void;
-  /** 变更集 Modal 受控打开键（容器经 useCommitFiles 条件拉取；'' = 关闭） */
+  /**
+   * 变更集标签受控打开键（容器经 useCommitFiles 条件拉取；'' = 没有该标签）。
+   * 它同时就是「查看变更集」这个开关的**开合真源**（容器由 URL 的 `diff=1` 派生）：非空 → 右栏出现
+   * 「变更集（N）」标签与差异标签，空 → 那一族整族不存在。与 browseOpen **互不代劳**，
+   * 但两者**共用一条右栏**——任一为「开」即渲染右栏（见下面布局分支）。
+   */
   changesHash?: string;
-  /** 变更集 Modal 数据（容器条件拉取；null 未就绪 → loading 态） */
+  /** 变更集标签数据（容器条件拉取；null 未就绪 → 加载态） */
   changesEntry?: CommittedEntry | null;
   /** 变更集拉取中 */
   changesLoading?: boolean;
   /** 变更集拉取错误信息 */
   changesError?: string | null;
-  /** 关闭变更集 Modal（容器清空 hash 停止拉取） */
+  /** 变更集标签开着（且就是这个提交）：详情面板按钮呈开关的「开」态 */
+  changesActive?: boolean;
+  /** 关闭变更集标签（容器清空 hash 并收起该族差异标签） */
   onCloseChanges?: () => void;
-  /** 变更集文件行点击（#13：容器据此导航该文件 diff——from=父哈希、to=该提交；根提交降级容器定） */
+
+  /** 变更集清单里点某个文件（#13：容器把它开成快照栏里的差异标签，from=父提交、to=该提交） */
   onOpenChangedFile?: (path: string) => void;
+  /** 差异标签族（受控，容器持有：换提交重挂载标签栏后仍存活，并按新提交变更集剪枝） */
+  changesDiff?: { open: string[]; active: string };
+  /** 差异标签族变化（切/关标签） */
+  onChangesDiffChange?: (next: { open: string[]; active: string }) => void;
+  /** 当前激活差异文件的两版全文（容器经 useFileDiff 只给这一份） */
+  changesDiffVersions?: FileVersions;
+  /** 当前激活差异拉取中 */
+  changesDiffLoading?: boolean;
+  /** 当前激活差异错误信息 */
+  changesDiffError?: string;
   /** 过滤条件（受控）；与 onFiltersChange 同传时渲染过滤输入行 */
   filters?: LogFilters;
   /** 过滤变更回调（输入去首尾空白后上抛；清空 = 空对象） */
@@ -194,6 +313,7 @@ export function LogPage({
   abortingOperation,
   onOpenSettings,
   onGoHome,
+  onOpenLog,
   onOpenStatus,
   onOpenBranches,
   onOpenMerge,
@@ -225,13 +345,29 @@ export function LogPage({
   onCherryPick,
   onRevert,
   onBrowse,
+  browseOpen,
+  browseRev,
+  browseEntries,
+  browseLoading,
+  browseError,
+  browseSelectedPath,
+  browseContent,
+  browseContentLoading,
+  browseContentError,
+  onSelectBrowseFile,
   onOpenChanges,
   changesHash,
   changesEntry,
   changesLoading,
   changesError,
+  changesActive,
   onCloseChanges,
   onOpenChangedFile,
+  changesDiff,
+  onChangesDiffChange,
+  changesDiffVersions,
+  changesDiffLoading,
+  changesDiffError,
   filters,
   onFiltersChange,
   branchOptions,
@@ -296,12 +432,6 @@ export function LogPage({
     observer.observe(host);
     graphObserverRef.current = observer;
   }, []);
-  /**
-   * 「更多」菜单是否展开：展开期间抑制触发按钮的气泡。
-   * 原因（浏览器实测）：按钮在页面顶部，气泡会被 antd 翻到下方，正好压住菜单顶部若干项——
-   * elementFromPoint 命中的是气泡容器，菜单项既出不了高亮也出不了自己的气泡。
-   */
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   // Reword 提交信息输入（GitSingleCommitEditingAction 语义：message 必填——Modal 预填当前主题）
   const [rewordHash, setRewordHash] = useState<string | null>(null);
   const [rewordMessage, setRewordMessage] = useState('');
@@ -372,52 +502,6 @@ export function LogPage({
     // 不做「非空才带上」的条件展开：空串就是「清空该键」的载荷（容器按 `f.author ?? ''` 处理）。
     onFiltersChange?.({ ...filters, author, path });
   };
-  // 「更多」菜单项：仅装配容器注入回调的入口（P3-C 只读浏览 溯源/历史/已提交/搜索 + 本地操作 变基/标签
-  // + 远程操作 拉取/推送/更新项目/远程管理 + P3-D 补丁/搁置/控制台/忽略）；全缺省时连「更多」按钮都不渲染
-  const moreItems = [
-    ...(onOpenBlame ? [{ key: 'blame', label: <Tooltip title="打开逐行溯源视图：查看每一行的最后修改者与提交"><span>溯源</span></Tooltip> }] : []),
-    ...(onOpenHistory ? [{ key: 'history', label: <Tooltip title="打开该文件的提交历史：只看改动过它的记录"><span>历史</span></Tooltip> }] : []),
-    ...(onOpenCommitted ? [{ key: 'committed', label: <Tooltip title="按提交逐条浏览已提交的变更：左侧提交列表，右侧该提交的文件目录树"><span>已提交</span></Tooltip> }] : []),
-    ...(onOpenSearch ? [{ key: 'search', label: <Tooltip title="在整个仓库历史中按提交信息、作者或文件内容检索"><span>搜索</span></Tooltip> }] : []),
-    ...(onOpenRebase ? [{ key: 'rebase', label: <Tooltip title="打开变基对话框：把当前分支的提交重新应用到指定基底（会重写提交哈希）"><span>变基</span></Tooltip> }] : []),
-    ...(onOpenTags ? [{ key: 'tags', label: <Tooltip title="打开标签管理页：查看、创建或删除仓库标签"><span>标签</span></Tooltip> }] : []),
-    ...(onOpenPull ? [{ key: 'pull', label: <Tooltip title="从远程拉取最新提交并合入当前分支"><span>拉取</span></Tooltip> }] : []),
-    ...(onOpenPush ? [{ key: 'push', label: <Tooltip title="把当前分支的本地提交推送到远程跟踪分支"><span>推送</span></Tooltip> }] : []),
-    ...(onOpenUpdate ? [{ key: 'update', label: <Tooltip title="按配置的同步策略从远程更新当前分支（合并或变基）"><span>更新项目</span></Tooltip> }] : []),
-    ...(onOpenRemotes ? [{ key: 'remotes', label: <Tooltip title="管理远程仓库：查看、新增、编辑或删除远程地址"><span>远程管理</span></Tooltip> }] : []),
-    ...(onOpenPatches ? [{ key: 'patches', label: <Tooltip title="补丁工具：把改动导出为补丁文件，或把补丁应用到工作区"><span>补丁</span></Tooltip> }] : []),
-    ...(onOpenShelves ? [{ key: 'shelves', label: <Tooltip title="搁置区：临时存放未完成的改动，之后可取出恢复"><span>搁置</span></Tooltip> }] : []),
-    ...(onOpenConsole ? [{ key: 'console', label: <Tooltip title="打开 Git 控制台：在当前仓库直接执行 git 命令并查看输出"><span>控制台</span></Tooltip> }] : []),
-    ...(onOpenIgnore ? [{ key: 'ignore', label: <Tooltip title="编辑忽略规则：把选中的文件或目录加入 .gitignore，之后不再视为未跟踪变更"><span>忽略</span></Tooltip> }] : []),
-    // GitHub 面板：仅在容器检测到 GitHub 远程（githubAvailable）且注入导航回调时渲染（对齐 Java 检测到远程才显示工具窗口）
-    ...(onOpenGithub !== undefined && githubAvailable ? [{ key: 'github', label: <Tooltip title="打开 GitHub 面板：查看该仓库关联的 PR、议题与动态"><span>GitHub 面板</span></Tooltip> }] : []),
-    // GitLab 面板：与 GitHub 面板项并排、各自检测（容器经 useGitlabStatus 判定 gitlabAvailable）
-    ...(onOpenGitlab !== undefined && gitlabAvailable ? [{ key: 'gitlab', label: <Tooltip title="打开 GitLab 面板：查看该仓库关联的 MR、议题与动态"><span>GitLab 面板</span></Tooltip> }] : []),
-    // 工作树/子模块：恒渲染（无可用性门——本域无外部依赖，任何仓库可达；子模块空态在页面内承载）
-    ...(onOpenWorktrees ? [{ key: 'worktrees', label: <Tooltip title="管理工作树：查看并新增或删除同一仓库的多个检出目录"><span>工作树</span></Tooltip> }] : []),
-    ...(onOpenSubmodules ? [{ key: 'submodules', label: <Tooltip title="管理子模块：查看状态、初始化或更新嵌套仓库"><span>子模块</span></Tooltip> }] : []),
-  ];
-  /** 「更多」菜单点击分发：按 key 调对应入口回调 */
-  const onMoreClick = (key: string): void => {
-    if (key === 'blame') onOpenBlame?.();
-    else if (key === 'history') onOpenHistory?.();
-    else if (key === 'committed') onOpenCommitted?.();
-    else if (key === 'search') onOpenSearch?.();
-    else if (key === 'rebase') onOpenRebase?.();
-    else if (key === 'tags') onOpenTags?.();
-    else if (key === 'pull') onOpenPull?.();
-    else if (key === 'push') onOpenPush?.();
-    else if (key === 'update') onOpenUpdate?.();
-    else if (key === 'remotes') onOpenRemotes?.();
-    else if (key === 'patches') onOpenPatches?.();
-    else if (key === 'shelves') onOpenShelves?.();
-    else if (key === 'console') onOpenConsole?.();
-    else if (key === 'ignore') onOpenIgnore?.();
-    else if (key === 'github') onOpenGithub?.();
-    else if (key === 'gitlab') onOpenGitlab?.();
-    else if (key === 'worktrees') onOpenWorktrees?.();
-    else if (key === 'submodules') onOpenSubmodules?.();
-  };
   // 分支过滤菜单项：本地/远程两组 + 「全选」/「清空」。用 Dropdown 的 items 承载复选态（勾选用 label 前缀 ✔ 表达，
   // 因为 antd Menu 的选中态是单选语义，不适合多选；前缀是唯一不引入自绘控件的做法）
   const branchGroups = useMemo(() => {
@@ -471,209 +555,201 @@ export function LogPage({
   // 是否允许「按需加载下一页」：还有更早的提交、当前没有请求在飞、且容器注入了加载回调。
   // 三者缺一即不注入 onReachBottom（回调节点缺省 = CommitGraph 不再触发触底加载），
   // 这也是「加载中不重复请求」的闸门——触底是持续状态，回调若一直在就会连发。
-  const canLoadMore = hasMore === true && loadingMore !== true && onLoadMore !== undefined;
-  const graphArea = (
-    <>
-      {/* 空列表：首屏还在拉取时先给加载态，只有确实加载完且为空才说「暂无提交」——
+  const canLoadMore = hasMore === true && loadingMore !== true && onLoadMore !== undefined;  // === 就地快照栏的三栏宽度 ===
+  // 两栏（详情/快照）的宽度是**用户偏好**，落 localStorage；日志栏是弹性列——它的宽度恒等于
+  // 「容器实测宽 − 其余两栏 − 两条分隔条」，故它既不落库（绝对宽换个窗口就失配）、也不参与拖拽
+  // （用户永远不会把它拖成把别的栏挤出屏幕的宽度）。容器实测宽由原语经 onAvailableChange 上报，
+  // 拿到后把偏好**按比例还原**到当前可用宽（见 restoreWidthsToAvailable）。
+  const [detailsPref, setDetailsPref] = useStoredWidth('rebased.log.detailsWidth', DETAILS_WIDTH.default, DETAILS_WIDTH.min, DETAILS_WIDTH.max);
+  /* 快照栏默认宽按**字符数**折算成像素（首帧/jsdom 量不到实测字符宽，故直接用兜底常量，
+     无需异步等待）。localStorage 键沿用合栏前的 `rebased.log.contentWidth`：它一直是
+     「这一栏多宽」这一个偏好，键名没变就等于老用户的宽度设置原样继承（改名只会让所有人的栏宽悄悄回到默认）。 */
+  const snapshotDefaultWidth = Math.round(SNAPSHOT_DEFAULT_CHARS * FALLBACK_CHAR_WIDTH);
+  const [snapshotPref, setSnapshotPref] = useStoredWidth(
+    'rebased.log.contentWidth',
+    snapshotDefaultWidth,
+    SNAPSHOT_MIN_PX,
+    Math.max(SNAPSHOT_MAX_WIDTH, snapshotDefaultWidth),
+  );
+  // 容器实测宽度（原语经 onAvailableChange 上报）：首帧为 0（还没量到），此时按偏好原样渲染，
+  // 量到之后触发一次按比例的还原。
+  const [columnsAvailable, setColumnsAvailable] = useState(0);
+  /* 提交日志栏的**实测**宽度（原语经 onPaneWidthChange 上报，拖动过程中实时更新）。
+     作者/日期两列按它切换显隐（阈值见 AUTHOR_COLUMN_MIN_WIDTH），而不是按「是否展示文件树」——
+     那是我之前的实现，用户口径明确要求改为跟着宽度走。首帧为 0（还没量到）时两列不渲染，
+     量到后一次到位；为避免这一拍造成「先窄后宽」的跳动，用落库的偏好先兜底。 */
+  const [logPaneWidth, setLogPaneWidth] = useState(0);
+  const onPaneWidthChange = (key: string, width: number): void => {
+    if (key === 'log') setLogPaneWidth(width);
+  };
+  /** 复制全文的一次性反馈（按钮在文件标签的路径栏、文案在正文区，故状态由本页持有）；到期清空，避免常驻 */
+  const [snapshotCopyHint, setSnapshotCopyHint] = useState<string | null>(null);
+  const copyHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copyHintTimerRef.current !== null) clearTimeout(copyHintTimerRef.current);
+  }, []);
+  const onCopyBrowseContent = (): void => {
+    void copyToClipboard(browseContent?.content ?? '').then((ok) => {
+      setSnapshotCopyHint(ok ? '已复制全文' : '复制失败：浏览器未授予剪贴板权限');
+      if (copyHintTimerRef.current !== null) clearTimeout(copyHintTimerRef.current);
+      copyHintTimerRef.current = setTimeout(() => setSnapshotCopyHint(null), 1500);
+    });
+  };
+  // 几何契约（不含内容）——还原宽度要用 min/max/默认值，与下方渲染用的是同一份。
+  // 日志栏标 flexible：它的宽度由 Splitter 补剩余空间（**不给 `size`**），故它的 width 值不参与计算
+  // 打开快照时把「提交日志」与「提交详情」**自动收到 320**（不更小；用户仍可手动拖更大）：
+  //   · 详情栏是固定宽的栏，直接把它设到 320；
+  //   · 日志栏是弹性列（宽度 = 可用宽 − 其余各栏），把详情收到 320 后它自然跟着收窄，无需另设。
+  // 只在**打开的那一刻**收（依赖 browseOpen 的翻转），不是每次渲染都压回去——
+  // 否则用户手动拖宽日志栏会被下一次渲染立刻抹掉。
+  const shrinkRequestedRef = useRef(false);
+  useEffect(() => {
+    if (browseOpen !== true) {
+      shrinkRequestedRef.current = false;
+      return;
+    }
+    if (shrinkRequestedRef.current) return;
+    shrinkRequestedRef.current = true;
+    setDetailsPref(DETAILS_WIDTH.whenBrowsing);
+  }, [browseOpen, setDetailsPref]);
+  const widthPanes: Pick<ResizablePane, 'key' | 'width' | 'min' | 'max' | 'flexible'>[] = [
+    { key: 'log', width: 0, min: LOG_MIN_WIDTH, max: Number.MAX_SAFE_INTEGER, flexible: true },
+    { key: 'details', width: detailsPref, min: DETAILS_WIDTH.min, max: DETAILS_WIDTH.max },
+    { key: 'snapshot', width: snapshotPref, min: SNAPSHOT_MIN_PX, max: Math.max(SNAPSHOT_MAX_WIDTH, snapshotDefaultWidth) },
+  ];
+  // 偏好 → 当前可用宽下的实际宽度：够宽时原样，不够时按比例（栏间观感保持不变）
+  const paneWidths = restoreWidthsToAvailable(
+    widthPanes.map((p) => p.width),
+    widthPanes,
+    columnsAvailable,
+    widthPanes.length - 1,
+  );
+  /**
+   * 两条分隔条拖完后的宽度回写。
+   * **按 key 定位，不能按下标**：栏数会随「是否展开快照栏」在 2 与 3 之间切换，`next` 的**下标会整体前移**。
+   * 早先按下标解构（`const [, nextDetails, nextTree, nextContent] = next`），栏数变化时宽度会被写进**别的栏**的
+   * 偏好里（内容宽度污染树的偏好），而对应的偏好永不更新、每帧被 `restoreWidthsToAvailable` 按旧值重算，
+   * 拖动时相邻两栏就一起晃（实测 log 497→461、details 320→385、content 783→754）。
+   */
+  const onPaneWidthsChange = (next: number[]): void => {
+    // 下标 → key 的映射按**当前实际渲染的栏序**取（与传给 Splitter 的 panes 同源），故栏的增删不会错位
+    const orderedKeys = renderedPaneKeys.current;
+    for (let i = 0; i < next.length; i++) {
+      const key = orderedKeys[i];
+      const width = next[i];
+      if (key === undefined || width === undefined || !Number.isFinite(width)) continue;
+      if (key === 'details' && width !== detailsPref) setDetailsPref(width);
+      else if (key === 'snapshot' && width !== snapshotPref) setSnapshotPref(width);
+      // 日志栏（弹性列）的宽度由可用宽与其余各栏决定，**刻意丢弃**
+    }
+  };
+  /** 当前渲染的栏序（键名）：在下方构造 panes 时写入，供拖动回写按下标查 key */
+  const renderedPaneKeys = useRef<string[]>([]);
+  const graphArea = (    <>
+    {/* 空列表：首屏还在拉取时先给加载态，只有确实加载完且为空才说「暂无提交」——
           否则首屏拉取期间（实测可达数秒）会把「在加载」误呈现成「这个仓库没有提交」 */}
-      {commits.length === 0 ? (
-        initialLoading === true ? (
-          <Skeleton active />
-        ) : (
-          /* 空仓（unborn HEAD，如刚 init）与过滤无命中：显式空态——否则整片空白无法区分「在加载」与「没有提交」 */
-          <EmptyState title="暂无提交" description="该仓库还没有任何提交，或当前过滤条件没有匹配结果" />
-        )
+    {commits.length === 0 ? (
+      initialLoading === true ? (
+        <Skeleton active />
       ) : (
-        /* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
+      /* 空仓（unborn HEAD，如刚 init）与过滤无命中：显式空态——否则整片空白无法区分「在加载」与「没有提交」 */
+        <EmptyState title="暂无提交" description="该仓库还没有任何提交，或当前过滤条件没有匹配结果" />
+      )
+    ) : (
+    /* 行右键菜单（Java Vcs.Log.ContextMenu 组）：菜单项按 menuHash 组装，右键行记录 hash；
            antd Dropdown trigger=contextMenu 自动定位光标处并阻止浏览器默认菜单 */
-        <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
-          {/* 宿主 div：height:100% 承接两栏布局分给它的可用空间（SplitPane 主区，或未选中提交时
+      <Dropdown trigger={['contextMenu']} menu={{ items: menuItems, onClick: onMenuClick }}>
+        {/* 宿主 div：height:100% 承接两栏布局分给它的可用空间（SplitPane 主区，或未选中提交时
               独占满宽），并把实测高度经 graphHostRef 交给 CommitGraph —— 图区高度因此随窗口与相邻
               元素自适应。刻意保留这层真实 div：下拉（右键菜单）需要一个能接 ref 的宿主节点 */}
-          <div ref={graphHostRef} data-testid="log-graph-host" style={{ height: '100%' }}>
-            <CommitGraph
-              commits={commits}
-              height={graphHeight}
-              onSelect={onSelectCommit}
-              onContextMenu={setMenuHash}
-              showTags={showTags}
-              selectedHash={selectedCommit?.hash ?? null}
-              // 折叠/分支过滤三项受控 props：本页是唯一真源（工具栏按钮与图元命中改的是同一份状态）。
-              // 三项都传 ⇒ 图的交互面（图元点击折叠、虚线边展开、悬停链高亮）才真正激活；
-              // 过滤态下 branches 非空，图内 graphActionsEnabled=false，高亮与折叠一并失效（Java 语义，勿解耦）
-              branches={filterBranches}
-              collapsed={collapsed}
-              onCollapseChange={setCollapsed}
-              // 按需加载：滚到列表底部（或内容还填不满视口）时自动追加下一页，直到最早的一条进来。
-              // 正在加载时不注入（回调缺省即不再触发）——避免同一页被连点/触底撞出两次请求
-              {...(canLoadMore ? { onReachBottom: onLoadMore } : {})}
-            />
-          </div>
-        </Dropdown>
-      )}
-    </>
+        <div ref={graphHostRef} data-testid="log-graph-host" style={{ height: '100%' }}>
+          <CommitGraph
+            commits={commits}
+            height={graphHeight}
+            onSelect={onSelectCommit}
+            onContextMenu={setMenuHash}
+            showTags={showTags}
+            // 快照栏展开时隐去作者/日期两列（把宽度让给提交主题）——两列合计 272px，
+            // 日志栏被挤到 300~400px 时它们各自只剩几个字，信息价值远低于主题
+            // 作者/日期两列按**本栏实测宽度**切换（阈值 AUTHOR_COLUMN_MIN_WIDTH），
+            // 不再看「是否展示文件树」：那条口径已作废（用户明确要求改成宽度驱动）。
+            // 实测值拖动过程中实时更新，故拖到阈值时会当场显隐，不用松手。
+            showAuthor={logPaneWidth === 0 || logPaneWidth >= AUTHOR_COLUMN_MIN_WIDTH}
+            showDate={logPaneWidth === 0 || logPaneWidth >= AUTHOR_COLUMN_MIN_WIDTH}
+            selectedHash={selectedCommit?.hash ?? null}
+            // 折叠/分支过滤三项受控 props：本页是唯一真源（工具栏按钮与图元命中改的是同一份状态）。
+            // 三项都传 ⇒ 图的交互面（图元点击折叠、虚线边展开、悬停链高亮）才真正激活；
+            // 过滤态下 branches 非空，图内 graphActionsEnabled=false，高亮与折叠一并失效（Java 语义，勿解耦）
+            branches={filterBranches}
+            collapsed={collapsed}
+            onCollapseChange={setCollapsed}
+            // 按需加载：滚到列表底部（或内容还填不满视口）时自动追加下一页，直到最早的一条进来。
+            // 正在加载时不注入（回调缺省即不再触发）——避免同一页被连点/触底撞出两次请求
+            {...(canLoadMore ? { onReachBottom: onLoadMore } : {})}
+          />
+        </div>
+      </Dropdown>
+    )}
+  </>
   );
+  // 选中提交：三元分支里的收窄传不进 JSX 数组字面量（TS 在回调/数组元素里会重新读取 props 类型），
+  // 故显式断言一次。注意 selectedCommit 是**可选** prop：未传时是 undefined 而不是 null，
+  // 判空必须用真值判断（下方三元即为真值判断）——写成 `=== null` 会把 undefined 直接送进详情面板，
+  // 实测整页在 CommitDetailsPanel 读 commit.refs 时崩溃（81 个既有用例同时红）。
+  const activeCommit = selectedCommit as CommitInfo | null | undefined;
   // 页面根：PageShell 自带纵向 Flex + width:100% + minWidth:0 + height:100%（并施加紧凑密度）。
   // LogPage 是路由根（两端容器均以裸 fragment 直接渲染它），故密度归本页所有——不传 density 即默认 compact。
   // 原根节点既无 gap 也无 padding，故这里都不传（PageShell 默认不落 style，传了会凭空新增间距）。
   return (
     <PageShell>
-      {/* 顶栏两端布局：Grid（Row/Col）负责「左信息区 ←→ 右操作区」两端分布，Space 负责两侧组内间距。
-          为什么不再用 `marginLeft:auto` 逐个占位：那是「凑」出右端，可选按钮一多，每个按钮都要按
-          「前面还有哪个按钮会渲染」重算一遍条件（原代码里那串 `onOpenStatus || onOpenBranches || …` 就是）；
-          改成两端容器后左右各自成组，右端位置与按钮渲染条件彻底解耦。
-          注意两点：
-          1) Row/Col 从 'antd' 顶层具名导入；`Grid` 这个具名导出在 antd 6.6.3 运行时只有 useBreakpoint
-             （`es/grid/index.js` 只 default 出 { useBreakpoint }，Col/Row 是**具名**导出），在它上面解构 Row/Col 会拿到 undefined。
-          2) Row 默认 flexWrap='wrap'，且 Col 默认 `flex: 0 0 auto`（不收缩）——左侧必须显式给
-             flex:'1 1 auto' + minWidth:0 才能被压缩（否则撑开 Row 把操作区挤到第二行）。 */}
-      <Row
-        data-testid="log-topbar"
-        align="middle"
-        justify="space-between"
-        style={{ borderBottom: `1px solid ${token.colorSplit}` }}
-      >
-        {/* 左侧信息区：首页入口 + 仓库名 + 分支状态条 + 进行中操作条；整体可收缩（窄屏优先压缩这一侧） */}
-        <Col style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', minWidth: 0 }}>
-          {/* size={16} 承接原手写 gap 16（两项的列间距）；Space 默认 align="center" 与原 items 垂直居中一致 */}
-          <Space size={16} style={{ minWidth: 0 }}>
-            {/* 回首页（File→Close Project 语义）：顶栏最左「首页」链接；仅容器注入回调时渲染 */}
-            {onGoHome ? (
-              <Tooltip title="回到首页欢迎屏：关闭当前仓库视图，不改动仓库里的任何内容">
-                <Button type="link" size="small" data-testid="log-go-home" onClick={onGoHome}>
-                  首页
-                </Button>
-              </Tooltip>
-            ) : null}
-            {/* minWidth:0 让长仓库名可被压缩并走 ellipsis，而不是把右端操作挤出屏幕；行内边距与字号交 antd（原手写 padding/fontWeight） */}
-            <Typography.Text strong ellipsis={{ tooltip: repoName }} style={{ minWidth: 0 }}>
-              {repoName}
-            </Typography.Text>
-            <RepoStatusBar status={status} />
-            {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
-            {operation && onAbortOperation ? (
-              <OperationStatus operation={operation} onAbort={onAbortOperation} aborting={abortingOperation} />
-            ) : null}
-            {/* 「去解决冲突」链接：仅合并进行中（operation.kind==='merge'）且容器注入导航回调时渲染，
-                跟在操作条旁；base 组件 OperationStatus 不背导航职责，故由本层自行渲染 */}
-            {operation?.kind === 'merge' && onOpenConflicts ? (
-              <Tooltip title="打开冲突解决页：逐个文件处理合并冲突，解决完再提交以结束合并">
-                <Button type="link" size="small" onClick={onOpenConflicts}>
-                  去解决冲突
-                </Button>
-              </Tooltip>
-            ) : null}
-          </Space>
-        </Col>
-        {/* 右侧操作区：撤销/变更/分支/合并/贮藏/设置/更多 七个入口，靠 justify="space-between" 贴右端 */}
-        <Col style={{ flexShrink: 0 }}>
-          <Space size={4}>
-            {/* 撤销最近提交：Popconfirm 确认后回调（保留改动到暂存区，等价 reset --soft HEAD~1） */}
-            {onUndoCommit ? (
-              <Popconfirm
-                title="将撤销最近提交并保留改动到暂存区"
-                okText="确定"
-                cancelText="取消"
-                onConfirm={onUndoCommit}
-              >
-                {/* Tooltip 必须放在 Popconfirm 内侧：放外侧会截断 Popconfirm 的点击触发链，确认气泡就不再出现 */}
-                <Tooltip title="回退最近一次提交并保留全部改动到暂存区（等价 reset --soft HEAD~1），提交记录会少一笔">
-                  <Button
-                    aria-label="撤销最近提交"
-                    type="text"
-                    size="small"
-                    icon={<RollbackOutlined />}
-                    loading={undoCommitting}
-                  />
-                </Tooltip>
-              </Popconfirm>
-            ) : null}
-            {/* 变更入口（状态页）：在设置按钮旁、靠右对齐；仅在容器注入导航回调时渲染 */}
-            {onOpenStatus ? (
-              <Tooltip title="打开变更页：查看工作区与暂存区的文件改动，逐个文件对照差异">
-                <Button
-                  aria-label="变更"
-                  type="text"
-                  size="small"
-                  icon={<DiffOutlined />}
-                  onClick={onOpenStatus}
-                />
-              </Tooltip>
-            ) : null}
-            {/* 分支入口：排在变更与设置之间 */}
-            {onOpenBranches ? (
-              <Tooltip title="打开分支页：查看本地/远程分支并执行新建、检出、合并等操作">
-                <Button
-                  aria-label="分支"
-                  type="text"
-                  size="small"
-                  icon={<BranchesOutlined />}
-                  onClick={onOpenBranches}
-                />
-              </Tooltip>
-            ) : null}
-            {/* 合并入口：排在分支与设置之间 */}
-            {onOpenMerge ? (
-              <Tooltip title="打开合并页：把选定的分支或提交并入当前分支">
-                <Button
-                  aria-label="合并"
-                  type="text"
-                  size="small"
-                  icon={<MergeOutlined />}
-                  onClick={onOpenMerge}
-                />
-              </Tooltip>
-            ) : null}
-            {/* 贮藏入口：排在合并与设置之间 */}
-            {onOpenStashes ? (
-              <Tooltip title="打开贮藏页：把未提交的改动暂存起来，或把已有贮藏重新应用回工作区">
-                <Button
-                  aria-label="贮藏"
-                  type="text"
-                  size="small"
-                  icon={<InboxOutlined />}
-                  onClick={onOpenStashes}
-                />
-              </Tooltip>
-            ) : null}
-            {/* 设置入口 */}
-            {onOpenSettings ? (
-              <Tooltip title="打开仓库设置：该仓库的 git 配置（local）与 GPG 提交签名（应用级项在首页「设置」）">
-                <Button
-                  aria-label="设置"
-                  type="text"
-                  size="small"
-                  icon={<SettingOutlined />}
-                  onClick={onOpenSettings}
-                />
-              </Tooltip>
-            ) : null}
-            {/* 「更多」Dropdown：远程相关操作（拉取/推送/更新项目/远程管理）的收敛入口，跟在设置按钮之后 */}
-            {moreItems.length > 0 ? (
-              <Dropdown
-                trigger={['click']}
-                onOpenChange={setMoreMenuOpen}
-                menu={{ items: moreItems, onClick: ({ key }) => onMoreClick(key) }}
-              >
-                {/* Tooltip 放在 Dropdown 内侧：Dropdown 需要直接包裹真实控件才能接住点击触发 */}
-                <Tooltip
-                  title="更多功能：只读浏览（溯源/历史/已提交/搜索）、本地操作与远程操作统一收在这里"
-                  open={moreMenuOpen ? false : undefined}
-                >
-                  <Button aria-label="更多" type="text" size="small" icon={<MoreOutlined />} />
-                </Tooltip>
-              </Dropdown>
-            ) : null}
-          </Space>
-        </Col>
-      </Row>
+      {/* 顶栏：抽为共用组件 RepoTopNav（除欢迎屏外的所有仓库页共用，见 composite/repo-top-nav.tsx）。
+          本页注入日志页专属内容（状态条/操作条/撤销最近提交/「去解决冲突」）与对话框类「更多」项（拉取/推送/更新项目/变基），
+          current 固定为 'log'——日志图标高亮。布局细节（两端分布/面包屑/图标按钮）的口径见该组件注释。 */}
+      <RepoTopNav
+        repoName={repoName}
+        current="log"
+        status={status}
+        operation={operation}
+        onAbortOperation={onAbortOperation}
+        abortingOperation={abortingOperation}
+        onUndoCommit={onUndoCommit}
+        undoCommitting={undoCommitting}
+        onGoHome={onGoHome}
+        onOpenLog={onOpenLog}
+        onOpenStatus={onOpenStatus}
+        onOpenBranches={onOpenBranches}
+        onOpenMerge={onOpenMerge}
+        onOpenStashes={onOpenStashes}
+        onOpenSettings={onOpenSettings}
+        onOpenPull={onOpenPull}
+        onOpenPush={onOpenPush}
+        onOpenUpdate={onOpenUpdate}
+        onOpenRemotes={onOpenRemotes}
+        onOpenRebase={onOpenRebase}
+        onOpenTags={onOpenTags}
+        onOpenConflicts={onOpenConflicts}
+        onOpenBlame={onOpenBlame}
+        onOpenHistory={onOpenHistory}
+        onOpenCommitted={onOpenCommitted}
+        onOpenSearch={onOpenSearch}
+        onOpenPatches={onOpenPatches}
+        onOpenShelves={onOpenShelves}
+        onOpenConsole={onOpenConsole}
+        onOpenIgnore={onOpenIgnore}
+        onOpenGithub={onOpenGithub}
+        githubAvailable={githubAvailable}
+        onOpenGitlab={onOpenGitlab}
+        gitlabAvailable={gitlabAvailable}
+        onOpenWorktrees={onOpenWorktrees}
+        onOpenSubmodules={onOpenSubmodules}
+      />
       {/* 过滤/分页行：仅容器同时注入过滤回调时渲染（过滤受控，Enter/失焦提交防每击键重查）；
           容器只做「横排 + token 分隔线」的布局宿主，行内边距交页面栅格（不手调）；
           窄屏（≤768）允许换行，避免输入框/开关被压成竖排文字 */}
       {onFiltersChange !== undefined ? (
         <div
           data-testid="log-filter-row"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', flexWrap: 'wrap', borderBottom: `1px solid ${token.colorSplit}` }}
         >
           <Tooltip title="按作者过滤提交：支持姓名或邮箱片段，回车或失焦才生效">
             <Input
@@ -701,6 +777,19 @@ export function LogPage({
               onBlur={applyFilters}
             />
           </Tooltip>
+          {/* 分支过滤弹窗：仅容器同时注入可选项与过滤回调时渲染 */}
+          {branchOptions !== undefined && branchOptions.length > 0 && onFiltersChange !== undefined ? (
+            <Dropdown
+              trigger={['click']}
+              menu={{ items: branchFilterItems, onClick: ({ key }) => onBranchFilterClick(key) }}
+            >
+              <Tooltip title="按分支过滤提交图：只保留所选分支可达的提交，其余提交不显示">
+                <Button size="small" data-testid="log-branch-filter">
+                  分支过滤{filterBranches.length > 0 ? `（${filterBranches.length}）` : ''}
+                </Button>
+              </Tooltip>
+            </Dropdown>
+          ) : null}
           {/* tag chips 显示开关（对齐 Java VcsLogApplicationSettings.showTagNames：分支 chips 恒显、tag 默认关可开） */}
           <Flex align="center" gap={4} style={{ whiteSpace: 'nowrap' }}>
             <Tooltip title="在提交行上显示 tag 标签 chip：开启后能看到每个提交被打了哪些标签">
@@ -746,19 +835,6 @@ export function LogPage({
               </Tooltip>
             </>
           ) : null}
-          {/* 分支过滤弹窗：仅容器同时注入可选项与过滤回调时渲染 */}
-          {branchOptions !== undefined && branchOptions.length > 0 && onFiltersChange !== undefined ? (
-            <Dropdown
-              trigger={['click']}
-              menu={{ items: branchFilterItems, onClick: ({ key }) => onBranchFilterClick(key) }}
-            >
-              <Tooltip title="按分支过滤提交图：只保留所选分支可达的提交，其余提交不显示">
-                <Button size="small" data-testid="log-branch-filter">
-                  分支过滤{filterBranches.length > 0 ? `（${filterBranches.length}）` : ''}
-                </Button>
-              </Tooltip>
-            </Dropdown>
-          ) : null}
           {/* 降级提示（设计 §7 风险 1）：过滤激活时数据源是 --all 且仍可分页，某个选中分支的 tip
               可能尚未加载 —— 此时它会暂时不可见。按需加载会继续追加直到最早一条，故这里只作说明，
               不做「无匹配」之类的断言（那会把「还在加载」说成「没有」）。
@@ -791,36 +867,138 @@ export function LogPage({
           ) : null}
         </div>
       ) : null}
-      {/* 两栏：主区（提交图）+ 右侧详情面板（320）；未选中提交时退化为主区独占满宽 */}
-      {selectedCommit ? (
-        <SplitPane
-          sidePosition="end"
-          sideWidth={320}
-          side={
-            /* 分隔线是侧栏自身的视觉分隔（SplitPane 只做布局、不画线），故保留在调用点；
-               宽度 320 / flexShrink:0 / 内部滚动均已由 SplitPane 的侧栏宿主承担，此处不再重复。
-               minHeight:100% 让这层盒子至少撑满侧栏宿主（分隔线因此对齐整栏高度，而不是只画到
-               提交信息的高度为止）；用 minHeight 而非 height：详情内容比一栏更高时盒子随之长高，
-               线仍覆盖全部内容，不会在滚动到底部后中断 */
-            <div data-testid="commit-details" style={{ minHeight: '100%', borderLeft: `1px solid ${token.colorSplit}` }}>
-              <CommitDetailsPanel
-                commit={selectedCommit}
-                onResetHere={onResetHere}
-                onCherryPick={onCherryPick}
-                onRevert={onRevert}
-                onBrowse={onBrowse}
-                onOpenChanges={onOpenChanges}
-                onSelectCommit={onSelectCommit}
-              />
-            </div>
-          }
-        >
-          {graphArea}
-        </SplitPane>
-      ) : (
-        /* 未选中提交：不渲染侧栏宿主，主区独占满宽（盒子几何与 SplitPane 的主区宿主一致） */
+      {/* 两栏/三栏：主区（提交图）+ 右侧详情面板；任一开关（浏览快照 / 查看变更集）打开时插入**快照栏**。
+          快照栏 = 两个功能共用的**标签栏**（composite/snapshot-tabs）：
+          「浏览快照」开 → 有「文件（N）」文件树标签，树里点开的文件各占一个内容标签；
+          「查看变更集」开 → 有「变更集（N）」标签，清单里点开的文件各占一个差异标签。两族各由自己的开关显隐。
+          列宽：两条分隔条各调整其**左邻**那一栏（日志 | 详情 | 快照），详情/快照的宽度记 localStorage；
+          日志栏是弹性列，实际宽由原语按容器宽反算（见 LOG_WISH_WIDTH 与 base/resizable-columns）。
+          未选中提交时退化为主区独占满宽（盒子几何与 SplitPane 的主区宿主一致）。 */}
+      {/* 两栏/三栏形态：
+            · 未选中提交 → 主区独占满宽；
+            · 选中但两个开关都关 → 两栏：日志主区 + 详情侧栏（antd Splitter）；
+            · 选中且任一开关打开 → 三栏：日志 | 详情 | 快照（其内按开关决定有哪几族标签）。
+          作者/日期两列的显隐由日志栏**实测宽度**决定（阈值 AUTHOR_COLUMN_MIN_WIDTH），与开关无关。 */}
+      {activeCommit === null || activeCommit === undefined ? (
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' }}>{graphArea}</div>
-      )}
+      ) : (() => {
+        // 收窄一次类型：下面各分支都在「已选中提交」的前提下，故这里把它固化成非空常量
+        const commit = activeCommit;
+        /** 提交详情栏：两个分支共用（同一个提交、同一份回调），故只写一次 */
+        const detailsPanel = (
+          <CommitDetailsPanel
+            commit={commit}
+            onResetHere={onResetHere}
+            onCherryPick={onCherryPick}
+            onRevert={onRevert}
+            onBrowse={onBrowse}
+            // 「浏览快照」按钮的选中态跟**自己的开关**走（不再恒真——右栏也可能是只开了变更集）
+            browseActive={browseOpen === true}
+            onOpenChanges={onOpenChanges}
+            changesActive={changesActive === true}
+            onSelectCommit={onSelectCommit}
+            data-testid="commit-details"
+            style={{ minHeight: '100%' }}
+          />
+        );
+        /** 快照栏（两个功能共用的标签栏）：显隐由两个开关各自传给 SnapshotTabs，这里只管装配 */
+        const snapshotPane = (
+          <SnapshotTabs
+            /* key = 版本：换提交即重挂载标签区（旧标签的路径在新版本里未必存在，
+               沿用容器 onSelectCommit「换版本就清空 ?file=」的既有口径），展开态随之回到文件树 */
+            key={browseRev ?? ''}
+            // 「浏览快照」开关：关着时栏内不出现文件树那一族标签（与下面变更集那一族互不代劳）
+            browseTree={browseOpen === true}
+            entries={browseEntries}
+            loading={browseLoading}
+            error={browseError}
+            selectedPath={browseSelectedPath}
+            content={browseContent}
+            contentLoading={browseContentLoading}
+            contentError={browseContentError}
+            onSelectFile={onSelectBrowseFile}
+            /* 切/关标签 → 容器改选中：换文件就写新的 ?file=；回文件树就用既有 toggle 语义清空
+               （容器约定：同路径再点即收起，见 onSelectBrowseFile 的 props 注释），
+               故这里不必给容器加新契约。 */
+            onActivateTab={(path) => {
+              if (path === null) {
+                if (browseSelectedPath !== undefined) onSelectBrowseFile?.(browseSelectedPath);
+              } else if (path !== browseSelectedPath) onSelectBrowseFile?.(path);
+            }}
+            onCopyAll={onCopyBrowseContent}
+            copyHint={snapshotCopyHint}
+            /* 变更集（#13）：Modal 已改为标签栏里的一个标签——「查看变更集」开着且该提交有 hash 时出现
+               「变更集（N）」标签，点清单里的文件在同一栏开它的差异标签（容器持有 open/active） */
+            changeset={
+              changesHash === undefined || changesHash === ''
+                ? null
+                : { entry: changesEntry, loading: changesLoading, error: changesError }
+            }
+            onCloseChangeset={onCloseChanges}
+            onOpenChangedFile={onOpenChangedFile}
+            diffTabs={changesDiff}
+            onDiffTabsChange={onChangesDiffChange}
+            diffVersions={changesDiffVersions}
+            diffLoading={changesDiffLoading}
+            diffError={changesDiffError}
+          />
+        );
+        // 两个开关都关（浏览快照关 + 变更集无 hash）：右栏不渲染，回到两栏
+        if (browseOpen !== true && (changesHash === undefined || changesHash === '')) {
+          return (
+            <SplitPane
+              sidePosition="end"
+              sideWidth={detailsPref}
+              side={<div style={{ minHeight: '100%', padding: 8, overflow: 'auto' }}>{detailsPanel}</div>}
+            >
+              {graphArea}
+            </SplitPane>
+          );
+        }
+        renderedPaneKeys.current = ['log', 'details', 'snapshot'];
+        const panes: ResizablePane[] = [
+          {
+            key: 'log',
+            label: '提交日志',
+            content: graphArea,
+            width: 0,
+            min: DETAILS_WIDTH.min,
+            max: Number.MAX_SAFE_INTEGER,
+            flexible: true,
+          },
+          {
+            key: 'details',
+            label: '提交详情',
+            content: detailsPanel,
+            width: paneWidths[1] ?? detailsPref,
+            min: DETAILS_WIDTH.min,
+            max: Number.MAX_SAFE_INTEGER,
+            /* 详情栏是**可长内容**（提交正文、分支/tag chips、操作按钮换行），必须自己滚：
+               原语宿主的默认 `overflow: hidden` 会把它裁掉——实测正文长的提交看不到底部内容、
+               也没有任何滚动条（提交详情溢出缺陷）。这里覆写为 `auto` + 留一点内边距。
+               内边距给宿主而不是给面板：面板的 padding 已被用户口径改成 0（贴边），
+               故留白归栏宿主，面板自身保持 padding: 0。 */
+            style: { overflow: 'auto', padding: 8 },
+          },
+          {
+            key: 'snapshot',
+            label: '快照',
+            content: snapshotPane,
+            width: paneWidths[2] ?? snapshotPref,
+            min: SNAPSHOT_MIN_PX,
+            max: Number.MAX_SAFE_INTEGER,
+            style: { padding: 0 },
+          },
+        ];
+        return (
+          <ResizableColumns
+            onWidthsChange={onPaneWidthsChange}
+            onAvailableChange={setColumnsAvailable}
+            onPaneWidthChange={onPaneWidthChange}
+            panes={panes}
+          />
+        );
+      })()}
       {/* 行右键 Modal：从此处新建分支（创建+检出语义由容器经 checkout newBranch 承载）/ 新建标签（附注可选） */}
       <Modal
         title="从此处新建分支"
@@ -911,46 +1089,6 @@ export function LogPage({
             onChange={(e) => setRewordMessage(e.target.value)}
           />
         </Tooltip>
-      </Modal>
-      {/* 查看变更集（#13 LogPage → DiffPage 直达）：选中提交的全量变更文件 Modal——行点击 → 该文件
-          diff（from=父哈希、to=该提交；根提交降级由容器定）；数据由容器经 useCommitFiles 条件拉取 */}
-      <Modal
-        title={`变更集（${changesEntry?.shortHash ?? (changesHash === undefined || changesHash === '' ? '' : changesHash.slice(0, 7))}）`}
-        open={changesHash !== undefined && changesHash !== ''}
-        okText="关闭"
-        // 只有一个「关闭」键：走 footer 语义（同 stash-panel），不再用内联样式藏取消键
-        footer={(_, { OkBtn }) => <OkBtn />}
-        onOk={onCloseChanges}
-        onCancel={onCloseChanges}
-      >
-        {changesLoading ? (
-          <Skeleton active />
-        ) : changesError !== undefined && changesError !== null ? (
-          <Alert type="error" showIcon title={changesError} />
-        ) : changesEntry === undefined || changesEntry === null ? (
-          <Typography.Text type="secondary">暂无变更文件</Typography.Text>
-        ) : (
-          <Flex vertical gap={8}>
-            <Typography.Text type="secondary">
-              {changesEntry.subject}
-            </Typography.Text>
-            {changesEntry.files.map((file) => (
-              <Flex key={`${file.status}-${file.path}`} align="center" gap={8}>
-                <CommittedStatusTag status={file.status} />
-                <Tooltip title="查看该文件的差异（新标签页打开，本弹窗留在变更集上）：以本提交与其父提交为两端">
-                  <Typography.Text
-                    data-testid={`changes-file-${file.path}`}
-                    style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
-                    ellipsis
-                    onClick={() => onOpenChangedFile?.(file.path)}
-                  >
-                    {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
-                  </Typography.Text>
-                </Tooltip>
-              </Flex>
-            ))}
-          </Flex>
-        )}
       </Modal>
     </PageShell>
   );

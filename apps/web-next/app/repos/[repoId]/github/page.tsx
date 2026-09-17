@@ -4,7 +4,7 @@
  * GitHub 面板页容器：useGithubStatus（驱动面板提示卡：未检测远程/未配置令牌）+ useGithubPrs（open/closed
  * Tab，缺省 open）+ 选中 PR 后的 detail/timeline/files/review-comments 条件 hooks（number 为 null 挂 null key 不发请求）
  * + 五个 mutation 注入 ui GitHubPanel（与 web-koa 容器同构）。
- * 顶部返回按钮回日志页；「刷新」按钮重取 prs/detail/timeline/files/review-comments 五键（照 P3-D console 页做法，
+ * 仓库顶栏导航（RepoTopNav）取代「返回日志」链接；「刷新」按钮重取 prs/detail/timeline/files/review-comments 五键（照 P3-D console 页做法，
  * null key 的 mutate 为空转）；acting 并合五个 mutation 的 isMutating。
  * 错误处理：页面级查询错误按裁定分派——prs AUTH_FAILED →「GitHub 认证失败」提示卡 + 去设置链接；
  * RATE_LIMITED → 限流提示；其余（含 detail/timeline/files 查询失败与 mutation 失败）toast。
@@ -26,10 +26,11 @@ import {
   useSubmitGithubReview,
 } from '@rebased/client';
 import { ServiceError } from '@rebased/contracts';
-import { GitHubPanel, PageShell } from '@rebased/ui';
+import { GitHubPanel, PageShell, RepoTopNav } from '@rebased/ui';
 import { Alert, Button, Flex, Tabs, Tooltip, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, use } from 'react';
+import { useRepoNav } from '../../../../src/repo-nav';
 
 /** 页面级查询错误分类（ServiceError 由客户端 http 层解析生成） */
 const isAuthFailed = (err: unknown): boolean => err instanceof ServiceError && err.code === 'AUTH_FAILED';
@@ -38,6 +39,7 @@ const isRateLimited = (err: unknown): boolean => err instanceof ServiceError && 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
   const router = useRouter();
+  const nav = useRepoNav(repoId);
   const { data: status, error: statusError } = useGithubStatus(repoId);
   // open/closed 两个 Tab（裁定：不做 all Tab）；缺省 open
   const [state, setState] = useState<'open' | 'closed'>('open');
@@ -90,14 +92,10 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   if (status === undefined) return null;
   return (
     <PageShell>
-      {/* 返回日志页 + 设置入口（#8：面板内 Settings 菜单入口语义） */}
-      <Flex gap={8}>
-        {/* 一对一 Tooltip：说明去向（只加包裹，导航逻辑不动） */}
-        <Tooltip title="返回该仓库的提交日志页">
-          <Button type="link" onClick={() => router.push(`/repos/${repoId}`)}>
-            返回日志
-          </Button>
-        </Tooltip>
+      {/* 仓库顶栏导航（共用组件）：current="github" 高亮「更多」按钮（GitHub 面板在更多菜单内） */}
+      <RepoTopNav {...nav} current="github" />
+      {/* 设置入口（#8：面板内 Settings 菜单入口语义） */}
+      <Flex gap={8} style={{ alignSelf: 'flex-start' }}>
         <Tooltip title="打开应用设置：GitHub 令牌配在「账户」卡片（账户是应用级资源，对所有仓库生效）">
           <Button type="link" data-testid="github-open-settings" onClick={() => router.push('/settings')}>
             设置
