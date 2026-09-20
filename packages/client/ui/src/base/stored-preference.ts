@@ -57,7 +57,10 @@ export function parseBoolean(raw: string): boolean | null {
 /**
  * 数值偏好的状态（列宽这类「夹在区间里的整数」）：与 useStoredPreference 同一套读写口径，
  * 额外把值**夹紧到 [min, max] 并取整**——存量值可能来自旧版本的范围、也可能被手改过，
- * 越界一律夹回，不让它把布局撑坏（原 log-page 的私有 useStoredWidth 逐字搬来，行为不变）。
+ * 越界一律夹回，不让它把布局撑坏。
+ * **回退值（seed）同样参与夹紧**：读不到 / 无存量值 / 解析失败 / 存储不可用时给出的是 clamp(seed)，
+ * 不是 seed 原值——调用方传越界 seed 时落到的是边界值（列宽只认区间内的整数）；
+ * seed 落在区间内时与原 log-page 的私有实现完全一致。
  */
 export function useStoredWidth(
   key: string,

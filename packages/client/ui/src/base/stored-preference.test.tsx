@@ -69,6 +69,16 @@ describe('useStoredWidth（数值偏好：夹紧 + 取整 + 坏值回落）', ()
     expect(result.current[0]).toBe(240);
   });
 
+  it('seed 越界：回退值同样夹紧，初值落到下界（不是 seed 原值）', () => {
+    const { result } = renderHook(() => useStoredWidth('rebased.blame.edgeSeed', 10, 80, 480));
+    expect(result.current[0]).toBe(80);
+  });
+
+  it('seed 越界：回退值同样夹紧，初值落到上界（不是 seed 原值）', () => {
+    const { result } = renderHook(() => useStoredWidth('rebased.blame.edgeSeed', 9999, 80, 480));
+    expect(result.current[0]).toBe(480);
+  });
+
   it('存量值越界（旧版本范围 / 被手改）：读回时夹紧', () => {
     window.localStorage.setItem('rebased.blame.treeWidth', '9999');
     const { result } = renderHook(() => useStoredWidth('rebased.blame.treeWidth', 240, 80, 480));
