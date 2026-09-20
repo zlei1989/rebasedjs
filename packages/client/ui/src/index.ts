@@ -51,6 +51,7 @@ export {
   type ChangesHints,
 } from './composite/blame-state';
 export { BlameAnnotateTable, type BlameAnnotateTableProps } from './composite/blame-annotate-table';
+export { BlameChangePane, type BlameChangePaneProps, type BlameDiffChannel } from './composite/blame-change-pane';
 export { BlameCommitsColumn, type BlameCommitsColumnProps } from './composite/blame-commits-column';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
 export {
