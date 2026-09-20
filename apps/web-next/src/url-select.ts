@@ -1,7 +1,7 @@
 /**
  * 日志页「选中提交 + 两个就地面板」的 URL 读写规则。真源一律是 URL——
  * 刷新、复制链接、前进/后退都回到同一视图，容器不再另持一份 state（两份状态必然在某个时序上不一致）。
- * （与 web-next src/url-select.ts 同构；apps 间互禁边界故各持一份。）
+ * （与 web-koa src/url-select.ts 同构；apps 间互禁边界故各持一份。）
  * 入参允许两种形态：web-koa 的 URLSearchParams，web-next 的 searchParams 记录（值可能是数组）。
  *
  * 共三个参数，其中两个是**各自独立的就地面板键**（用户口径：两个功能独立开关显隐、互不代劳）：

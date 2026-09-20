@@ -239,7 +239,7 @@ export function CommittedChangesPanel({
     /* 根是**纵向列容器**（页面级 composite 根），故按 Ruling P15(b) 迁 PageShell —— 它带来的
        width:100% / minWidth:0 正是本文件此前唯一缺失的那件「防顶宽」机制。
        传 density="default"：本组件被两端 app 页面容器嵌入（committed.tsx / committed/page.tsx 均为
-       紧凑 PageShell），密度归宿主，这里只豁免、不重复施加（与 status-page / blame-view 同形）。
+       紧凑 PageShell），密度归宿主，这里只豁免、不重复施加（与 status-page 同形）。
        gap/padding 照抄迁移前的值（8 / 16）；PageShell 默认不落 style，不传会静默丢掉内距。 */
     <PageShell density="default" gap={8} padding={16}>
       {entries.length === 0 ? (

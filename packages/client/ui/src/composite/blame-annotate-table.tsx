@@ -6,7 +6,8 @@
  * 工作区未提交行由 git 给出全 0 伪哈希（core 的边界口径），它不是真实提交：
  * 标注「未提交」且**不可点**（点了会把 0000… 写进 ?select=，日志页拿着它选不中任何提交）。
  * 代码正文逐行渲染，不迁 Listy：行要按等宽字体与行号定宽严格对齐，列表行容器会把它切成一条条「列表项」
- * （与既有 blame-view 的口径一致）。纯受控：数据与回调由容器注入。
+ * （同页的中栏「提交记录」清单与「受影响文件」清单走 Listy，是因为它们是同质条目列表；注解行不是）。
+ * 纯受控：数据与回调由容器注入。
  */
 import { Flex, Spin, theme, Typography } from 'antd';
 import type { BlameLine } from '@rebased/contracts';
