@@ -2,12 +2,18 @@
 
 /**
  * 溯源页容器（三栏工作台）：与 web-koa 容器**同构**（同一份 URL 真源 `?file=&select=&view=`、同五个 hook、
- * 同一批出口语义与降级判据），差异只在 Next 专有的三处：
- * ① 写地址用原生 `history.replaceState` 而不是 `router.replace`——后者是一次 soft navigation，
- *    每次点击都要往服务端取一次 RSC 载荷（实测 322ms 才落到地址栏），原生写法由 Next 的 History API 集成
- *    同步进 useSearchParams，无网络往返（与 app/repos/[repoId]/page.tsx 的既有口径一致）；
- * ② `useSearchParams` 要等下一次导航才同步，故文件/右栏标签/选中提交三份**本地镜像**负责点击后的即时反馈；
- * ③ 首帧（服务端预渲染）没有 window，故镜像初值与同步 effect 都以**当前地址栏**（liveQuery）为准。
+ * 同一批出口语义与降级判据），差异只在 Next 专有的**三处机制**与**三项平台写法**：
+ * 机制① 写地址用原生 `history.replaceState` 而不是 `router.replace`——后者是一次 soft navigation，
+ *   每次点击都要往服务端取一次 RSC 载荷（实测 322ms 才落到地址栏），原生写法由 Next 的 History API 集成
+ *   同步进 useSearchParams，无网络往返（与 app/repos/[repoId]/page.tsx 的既有口径一致）；
+ * 机制② `useSearchParams` 要等下一次导航才同步，故文件/右栏标签/选中提交三份**本地镜像**负责点击后的即时反馈；
+ * 机制③ 旧 `?rev=` 规范化并进「挂载即跑」的同步 effect（koa 那边是独立 effect）。
+ * 平台写法：真导航用 `router.push`、不再用 `searchParams` prop、`liveQuery()` 只作**写地址的底本**。
+ * 镜像初值取**确定性空值**（''/'changes'/null）而**不是**读地址栏，理由只有一条：`liveQuery()` 在服务端
+ * 预渲染时恒为空参数，初值一旦读它，SSR 那一帧（无 window）与客户端 hydration 首帧（有 window）就会渲染出
+ * 不同 HTML → React 报 `Hydration failed`（控制者实测：`:3091` 硬加载 `?file=AGENT.md`，受控 `Input` 的
+ * `disabled` 与三栏子树两侧都不一致）。水合一致性优先于「首帧就带内容」：深链交给下面那条**无条件**
+ * 同步 effect 从地址栏补齐，最终仍落到同一视图。
  * 取数（全部既有端点，无新增）：左树 useBrowseTree(HEAD) / 中栏 useHistory(--follow) /
  * 选中提交变更集 useCommitFiles（父提交与三种降级判据的唯一来源，也供受影响弹窗同键缓存共享）/
  * 右栏三标签各按激活项条件拉取——非激活标签传空字符串挂 null key，不发请求（design §3.2）。
@@ -41,12 +47,40 @@ import {
 } from '../../../../src/url-select';
 
 /**
- * **当前地址栏**的查询串：服务端渲染时没有 window，给空串（水合后由同步 effect 从地址栏补齐）。
- * 读与写都以它为准——`useSearchParams` 在 replaceState 之后仍是旧值，拿它作写的底本会把刚改写掉的参数抄回来。
- * 放在模块级（而不是组件体内）是为了让 `useState` 初值也能用它——组件体内声明会撞上暂时性死区。
+ * **当前地址栏**的查询串，只作**写地址的底本**：`useSearchParams` 在 replaceState 之后仍是旧值，
+ * 拿它作底本会把刚改写掉的参数抄回来。读界面状态那一路（首帧深链/前进后退）由下面无条件跑的同步 effect
+ * 从本函数取真值。放在模块级（而不是组件体内）是为了让 effect 与写路径共用同一份读数——
+ * 组件体内声明会撞上暂时性死区。服务端预渲染时没有 window：给空串，此时无人读它
+ * （首帧镜像取确定性空值，不读地址栏——见文件头的水合一致性说明）。
  */
 const liveQuery = (): URLSearchParams =>
   typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
+
+/** 三份镜像（file/view/urlHash）的写入器：两个写路径据此落值，省得各写一遍 setState 四连 */
+interface QueryMirrors {
+  file: (value: string) => void;
+  view: (value: BlameViewKey) => void;
+  hash: (value: string | null) => void;
+}
+
+/** 地址 → 镜像：把一份查询串里的三个真源值抄进三份镜像（**不动地址**，供反向同步用） */
+function adoptQuery(next: URLSearchParams, set: QueryMirrors): void {
+  set.file(readBlameFile(next));
+  set.view(readBlameView(next));
+  set.hash(readSelect(next));
+}
+
+/**
+ * 唯一的写地址出口：抄镜像 + `replaceState`（两者必须成对——漏抄一处，镜像就与地址漂开）。
+ * 为什么 effect 里不直接调容器内的 `write`：`write` 每次渲染都是新函数，当依赖项会让 effect 每帧重跑
+ * （koa 那边为同一件事把规范化那条路单独写了一遍）；更要紧的是 effect 的**首件事**是「地址 → 镜像」的
+ * 只读同步，不能顺手把当前地址原样再写一遍——那会在 replaceState → currentQuery → effect 之间自激。
+ */
+function applyQuery(next: URLSearchParams, pathname: string, set: QueryMirrors): void {
+  adoptQuery(next, set);
+  const qs = next.toString();
+  window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
+}
 
 export default function Page({ params }: { params: Promise<{ repoId: string }> }): React.ReactNode {
   const { repoId } = use(params);
@@ -54,36 +88,26 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   const pathname = usePathname();
   const nav = useRepoNav(repoId);
   const currentQuery = useSearchParams();
-  // 三份本地镜像（见文件头 ②③）：初值取当前地址栏，写地址时同步更新，地址变化时由下面的 effect 拉回
-  const [file, setFile] = useState<string>(() => readBlameFile(liveQuery()));
-  const [view, setView] = useState<BlameViewKey>(() => readBlameView(liveQuery()));
-  const [urlHash, setUrlHash] = useState<string | null>(() => readSelect(liveQuery()));
+  // 三份本地镜像（见文件头机制②）：初值一律**确定性空值**——SSR 与客户端 hydration 首帧必须由构造保证
+  // 一致（不得出现任何读 window / 读地址栏的分支），深链与前进后退由下面无条件跑的同步 effect 补齐；
+  // 写地址时同步更新
+  const [file, setFile] = useState<string>('');
+  const [view, setView] = useState<BlameViewKey>('changes');
+  const [urlHash, setUrlHash] = useState<string | null>(null);
   /** 写地址：replaceState（不产生浏览步骤，也不该把浏览器历史塞满）+ 同步三份镜像；底本一律取当前地址栏 */
-  const write = (next: URLSearchParams): void => {
-    const qs = next.toString();
-    setFile(readBlameFile(next));
-    setView(readBlameView(next));
-    setUrlHash(readSelect(next));
-    window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
-  };
+  const write = (next: URLSearchParams): void =>
+    applyQuery(next, pathname, { file: setFile, view: setView, hash: setUrlHash });
   // 地址 → 镜像的反向同步：首帧深链、浏览器前进/后退、外部改地址（依赖 currentQuery 变化触发；
   // 写地址那一路已把镜像推到新值，同值 setState 是 no-op，不会互相打架）。
   // 底本用 liveQuery 而不是 currentQuery：水合那一拍 useSearchParams 可能还是空的，而地址栏早就是真值。
   useEffect(() => {
     const effective = liveQuery();
-    setFile(readBlameFile(effective));
-    setView(readBlameView(effective));
-    setUrlHash(readSelect(effective));
+    const set: QueryMirrors = { file: setFile, view: setView, hash: setUrlHash };
+    adoptQuery(effective, set);
     // 旧 `?rev=` 一次性规范化（读到即改写；改写后地址里不再有 rev，条件自然不再成立——写地址那一路不走这里，
     // 故不存在与新形态互写；应用自己也不再写出 rev）
     const normalized = normalizeBlameQuery(effective);
-    if (normalized.toString() !== effective.toString()) {
-      const qs = normalized.toString();
-      setFile(readBlameFile(normalized));
-      setView(readBlameView(normalized));
-      setUrlHash(readSelect(normalized));
-      window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
-    }
+    if (normalized.toString() !== effective.toString()) applyQuery(normalized, pathname, set);
   }, [currentQuery, repoId, pathname]);
   // 输入框草稿：URL 的 file 变化（深链/前进后退/树里点文件）时跟随；只作编辑态，提交才写 URL
   const [draft, setDraft] = useState(file);
