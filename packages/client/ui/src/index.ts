@@ -42,7 +42,6 @@ export { GitHubPanel, type GitHubPanelProps } from './composite/github-panel';
 export { GitLabPanel, type GitLabPanelProps } from './composite/gitlab-panel';
 export { BranchPanel, mergedCleanupCandidates, type BranchPanelProps } from './composite/branch-panel';
 export { BranchCompareView, type BranchCompareViewProps } from './composite/branch-compare-view';
-export { BlameView, type BlameViewProps } from './composite/blame-view';
 export {
   changesHints,
   isEntryReady,
