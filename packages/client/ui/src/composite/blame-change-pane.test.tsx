@@ -85,6 +85,7 @@ describe('BlameChangePane 操作条（选中提交级出口）', () => {
     renderPane({ hash: '', entry: null, changes: {}, latest: {}, annotate: {} });
     expect(screen.getByText('暂无提交可查看')).toBeInTheDocument();
     expect(screen.queryByTestId('blame-pane-actions')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('blame-view-changes')).not.toBeInTheDocument();
   });
 });
 
@@ -112,6 +113,8 @@ describe('BlameChangePane 降级提示行（不做伪 diff）', () => {
   it('根提交：标签1 给提示行', () => {
     renderPane({ entry: makeEntry({ hash: 'aaaaaa1', parents: [] }), changes: {} });
     expect(screen.getByTestId('blame-changes-root-hint')).toBeInTheDocument();
+    // 提示行优先于数据状态：changes 未给数据，但提示行在就绝不退化成加载态或伪 diff
+    expect(screen.queryByTestId('blame-changes-loading')).not.toBeInTheDocument();
   });
 
   it('重命名：标签1 给「旧 → 新」提示行', () => {
@@ -120,12 +123,24 @@ describe('BlameChangePane 降级提示行（不做伪 diff）', () => {
       changes: {},
     });
     expect(screen.getByTestId('blame-changes-rename-hint')).toHaveTextContent('src/old.ts');
+    expect(screen.queryByTestId('blame-changes-loading')).not.toBeInTheDocument();
+  });
+
+  it('重命名但原名为空串：不误报重命名提示行，落回正常差异视图', () => {
+    renderPane({
+      entry: makeEntry({ hash: 'aaaaaa1', files: [{ path: 'src/app.ts', status: 'R', renameFrom: '' }] }),
+    });
+    expect(screen.queryByTestId('blame-changes-rename-hint')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('blame-changes-loading')).not.toBeInTheDocument();
+    // versions 已给且无降级标记 → DiffViewer 的工具条在（正常差异视图，而不是提示行）
+    expect(screen.getByTestId('diff-ignore-ws')).toBeInTheDocument();
   });
 
   it('该提交里没有这个路径：标签1 与标签2 都给提示行（而不是两个空文档）', () => {
     const entry = makeEntry({ hash: 'aaaaaa1', files: [{ path: 'other.ts', status: 'M' }] });
     const { rerender } = renderPane({ entry, changes: {} });
     expect(screen.getByTestId('blame-changes-missing-hint')).toBeInTheDocument();
+    expect(screen.queryByTestId('blame-changes-loading')).not.toBeInTheDocument();
     rerender(
       <BlameChangePane
         file="src/app.ts"
@@ -140,6 +155,7 @@ describe('BlameChangePane 降级提示行（不做伪 diff）', () => {
       />,
     );
     expect(screen.getByTestId('blame-latest-missing-hint')).toBeInTheDocument();
+    expect(screen.queryByTestId('blame-latest-loading')).not.toBeInTheDocument();
   });
 
   it('变更集未就绪：不误报提示行，按加载态呈现', () => {

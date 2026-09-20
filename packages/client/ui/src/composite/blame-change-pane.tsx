@@ -160,13 +160,27 @@ export function BlameChangePane({
           </Tooltip>
         ))}
       </Flex>
-      <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
+      {/* 高度契约（两层，缺一层就退化成「内容多高就多高」；与 composite/snapshot-tabs 同一份，那边为这个坑付过代价）：
+          ① `.ant-tabs-body-holder` 被 antd 的 `flex: auto` 撑到剩余高度，但**它是普通块盒**——
+             故 `.ant-tabs-body` 上的 `flex: 1` 是惰性的，必须用 `height: 100%` 去解析 holder 的高度；
+          ② `.ant-tabs-body` 是纵向 flex，标签页本体给 `flex: 1` 吃满。
+          少了这层，各标签包裹层与 DiffViewer 的 `height: 100%`、monaco 容器的 `height: 100%` 全部落到
+          auto 高度祖先上（monaco 子元素是绝对定位）→ 编辑器拿到零高盒子，注解区的 `overflow: auto` 也永不滚动。
+          注意 `styles.content` **逐标签页**生效且只能给尺寸、不能给 display（非激活标签页靠 antd 的
+          `.ant-tabs-content-hidden{display:none}` 隐藏，行内 display 会把它盖掉、把所有标签页摊成一列）。
+          外层与 Tabs 都只给 flex、不给固定 px 高度：右栏高度由宿主（Task 7 的弹性栏）决定。 */}
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Tabs
           size="small"
           activeKey={view}
           onChange={(key) => onViewChange?.(key as BlameViewKey)}
           items={items}
-          style={{ height: '100%' }}
+          style={{ flex: 1, minHeight: 0, minWidth: 0 }}
+          styles={{
+            root: { display: 'flex', flexDirection: 'column', minHeight: 0 },
+            body: { height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' },
+            content: { flex: 1, minHeight: 0 },
+          }}
         />
       </div>
       {onShowAffected === undefined ? null : (
