@@ -146,11 +146,11 @@
 | rebase | `repos/:id/rebase`、`rebase/todo`、`rebase/interactive`、`autosquash`、`commit-edit` | POST/GET/POST/POST/POST | 变基 onto / todo 读取 / 交互式执行 / auto-squash（fixup!·squash! 折入）/ 单提交编辑直通（reword/drop/squash/fixup） | RebaseDialog（内嵌 LogPage）+ 日志行右键 | ✅ |
 | pick | `repos/:id/cherry-pick`、`revert` | POST | 摘樱桃 / 还原 | LogPage 详情面板按钮 | ✅ |
 | tag | `repos/:id/tags` | GET/POST | 标签列表 / create(含附注)/delete/push/pushAll/deleteRemote | TagPanel | ✅ |
-| blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`） | BlameView | ✅ |
+| blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`） | BlameWorkbench（`blame-workbench.tsx`） | ✅ |
 | history | `repos/:id/history` | GET | 文件历史（`--follow`） | HistoryPanel | ✅ |
 | browse | `repos/:id/browse`、`repos/:id/browse/content` | GET ×2 | 指定版本文件树 / 单文件内容（二进制标记） | LogPage 就地快照栏（`?browse=<路径\|空>`，键在即开、值承载定位）、`scripts/check-fluid-layout.mjs` 选夹具文件 | ✅ |
 | committed | `repos/:id/committed` | GET | 已提交变更分页浏览 | CommittedChangesPanel | ✅ |
-| commits | `repos/:id/commits/:hash` | GET | 单提交全量变更文件（Show All Affected） | BlameView | ✅ |
+| commits | `repos/:id/commits/:hash` | GET | 单提交全量变更文件（Show All Affected） | BlameWorkbench（操作条「受影响」弹窗） | ✅ |
 | search | `repos/:id/search` | GET | 提交搜索（grep/pickaxe） | SearchPanel | ✅ |
 | patch | `repos/:id/patches`、`patches/create`、`patches/apply`、`patches/delete`、`patches/:name/import-shelf` | GET + 4×POST | 补丁列表 / 创建（四态：工作区/暂存/提交区间/**勾选文件**）/ 应用（check 先行）/ 删除 / 导入搁置 | PatchPanel、StatusPage（创建补丁入口） | ✅ |
 | shelf | `repos/:id/shelves` | GET/POST | 搁置列表 / save/restore/drop | ShelfPanel | ✅ |
