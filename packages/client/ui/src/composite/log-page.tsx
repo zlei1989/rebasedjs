@@ -28,6 +28,7 @@ import { EmptyState } from '../base/empty-state';
 import { PageShell } from '../base/page-shell';
 import { ResizableColumns, restoreWidthsToAvailable, type ResizablePane } from '../base/resizable-columns';
 import { SplitPane } from '../base/split-pane';
+import { useStoredWidth } from '../base/stored-preference';
 import { FALLBACK_CHAR_WIDTH } from '../base/readonly-text-view';
 import { copyToClipboard } from '../base/clipboard';
 import { CommitGraph } from '../domain/commit-graph';
@@ -82,38 +83,6 @@ const SNAPSHOT_DEFAULT_CHARS = 100;
 const SNAPSHOT_MIN_PX = 240;
 /** 快照栏宽度上限（px）：再高也只是多留白，反而把日志栏挤没 */
 const SNAPSHOT_MAX_WIDTH = 1200;
-
-/**
- * 列宽记忆：把用户拖出来的宽度存进 localStorage，跨刷新与面板开合保留。
- * 为什么不是「仅本次会话」：调列宽是**一次性的个人偏好**，刷新就回默认等于每次都要重调一遍。
- * 读写都夹紧：存量值可能来自旧版本的范围、也可能被手改过，越界一律夹回，不让它把布局撑坏。
- */
-function useStoredWidth(key: string, def: number, min: number, max: number): [number, (next: number) => void] {
-  const [width, setWidth] = useState<number>(() => {
-    if (typeof window === 'undefined') return def;
-    try {
-      const raw = window.localStorage.getItem(key);
-      const parsed = raw === null ? Number.NaN : Number(raw);
-      return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : def;
-    } catch {
-      // 隐私模式/禁用存储：读不到就用默认值，不影响功能
-      return def;
-    }
-  });
-  const update = useCallback(
-    (next: number) => {
-      const clamped = Math.min(max, Math.max(min, Math.round(next)));
-      setWidth(clamped);
-      try {
-        window.localStorage.setItem(key, String(clamped));
-      } catch {
-        // 写不进去（配额/禁用）：本次会话内的宽度仍然生效
-      }
-    },
-    [key, min, max],
-  );
-  return [width, update];
-}
 
 /** 日志过滤条件（受控：容器持有，变更即重查快照；为空时才是默认全量视图） */
 export interface LogFilters {
