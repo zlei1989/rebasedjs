@@ -4,18 +4,18 @@
  *  hash 短名徽标可点击（onOpenCommit 可选——点开 LogPage 选中该提交，容器接线）。
  *  行内联动（对照 gutter 右键动作，Web 以行内按钮承载）：「差异」→ onShowDiff(hash)（DiffPage from/to）、
  *  「历史」→ onShowInHistory(file)（HistoryPanel）、「受影响」→ Show All Affected（#34）：
- *  打开该提交全量变更文件 Modal（对照平台「Paths affected in <revision>」对话框——ChangeListViewerDialog，
- *  数据由容器经 useCommitFiles 条件拉取，本组件只受控渲染）。纯受控（file/lines/loading/error）；
- *  ui 不调接口，数据与回调由调用方容器注入。
- *  列表/Listy 边界：Modal 内的「受影响文件清单」是同质条目的列表 → 走 antd Listy（6.6.0 起）；
+ *  打开该提交全量变更文件弹窗（对照平台「Paths affected in <revision>」对话框——ChangeListViewerDialog，
+ *  弹窗实现已提为 composite/affected-files-modal；数据由容器经 useCommitFiles 条件拉取，本组件只受控渲染）。
+ *  纯受控（file/lines/loading/error）；ui 不调接口，数据与回调由调用方容器注入。
+ *  列表/Listy 边界：「受影响文件清单」是同质条目的列表 → 在 affected-files-modal 内走 antd Listy（6.6.0 起）；
  *  溯源正文行（blame-line-*，等宽字体代码行）是代码正文渲染而非条目列表，保持手写行不迁 Listy。
  */
-import { Button, Flex, Listy, Modal, Spin, Tooltip, Typography } from 'antd';
+import { Button, Flex, Spin, Tooltip, Typography } from 'antd';
 import type { BlameLine, CommittedEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { PageShell } from '../base/page-shell';
-import { CommittedStatusTag } from '../domain/committed-status';
 import { formatCommitDate } from '../domain/format';
+import { AffectedFilesModal } from './affected-files-modal';
 
 export interface BlameViewProps {
   file: string;
@@ -127,97 +127,6 @@ function BlameRow({
         {line.content}
       </Typography.Text>
     </Flex>
-  );
-}
-
-/** 受影响文件行：状态徽标 + （重命名时原名 →）+ 路径；点击 → onOpenAffectedFile(path)（缺省只读） */
-function AffectedFileRow({
-  file,
-  index,
-  onOpenFile,
-}: {
-  file: CommittedEntry['files'][number];
-  index: number;
-  onOpenFile?: (path: string) => void;
-}): React.ReactNode {
-  return (
-    /* 整行可点（未注入 onOpenFile 时为只读行）：行内边距已移除，改用 Listy 行容器的 antd 默认；
-       代价是那圈内边距落在包装 div 上、不属本元素命中区
-       （Listy 无 onItemClick，无法两全；已由用户裁定接受）。下边框/悬停底色交给 Listy 行容器。
-       行**不挂 Tooltip**（本次产品口径：行不挂气泡，行内按钮/图标的气泡保留） */
-    <Flex
-      data-testid={`affected-file-${index}`}
-      align="center"
-      gap={8}
-      style={{ cursor: onOpenFile ? 'pointer' : undefined }}
-      onClick={() => onOpenFile?.(file.path)}
-    >
-      <CommittedStatusTag status={file.status} />
-      {file.renameFrom ? (
-        <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
-          {file.renameFrom} →
-        </Typography.Text>
-      ) : null}
-      <Typography.Text style={{ flex: 1, minWidth: 0 }} ellipsis>
-        {file.path}
-      </Typography.Text>
-    </Flex>
-  );
-}
-
-/** 受影响文件 Modal（Show All Affected #34）：提交元信息头 + 全量文件清单（antd Listy）；loading/error/空态分派 */
-function AffectedFilesModal({
-  hash,
-  entry,
-  loading,
-  error,
-  onClose,
-  onOpenFile,
-}: {
-  hash: string;
-  entry?: CommittedEntry | null;
-  loading?: boolean;
-  error?: string | null;
-  onClose?: () => void;
-  onOpenFile?: (path: string) => void;
-}): React.ReactNode {
-  return (
-    <Modal
-      title={`受影响文件（${entry?.shortHash ?? hash.slice(0, 7)}）`}
-      open={hash !== ''}
-      footer={null}
-      width={720}
-      onCancel={onClose}
-    >
-      {loading ? (
-        <Spin data-testid="affected-loading" />
-      ) : error ? (
-        <Typography.Text type="danger" data-testid="affected-error">
-          {error}
-        </Typography.Text>
-      ) : entry === null || entry === undefined || entry.files.length === 0 ? (
-        entry !== null && entry !== undefined && entry.parents.length > 1 ? (
-          /* 合并提交：git log--name-status 默认不展开 merge 变更（与 CommittedChangesPanel 同语义提示） */
-          <EmptyState title="合并提交" description="git 对合并提交默认不列出文件变更；请到日志页查看合并结果" />
-        ) : (
-          <EmptyState title="该提交无文件变更" />
-        )
-      ) : (
-        <Flex vertical>
-          <Typography.Text type="secondary">
-            {entry.subject} · {entry.author} · {formatCommitDate(entry.dateIso)}
-          </Typography.Text>
-          {/* 文件清单走 antd Listy（6.6.0 起的列表组件）：行容器/下边框/悬停底色由组件负责，
-              调用方只给数据与行内容。行内边距走 antd 默认（不再手调）。 */}
-          <Listy
-            items={entry.files}
-            // 提交内文件路径唯一（git name-status 逐路径一条），故以 path 作行键
-            rowKey={(file) => file.path}
-            itemRender={(file, index) => <AffectedFileRow file={file} index={index} onOpenFile={onOpenFile} />}
-          />
-        </Flex>
-      )}
-    </Modal>
   );
 }
 
