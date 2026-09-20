@@ -31,7 +31,6 @@ export type RepoNavPage =
   | 'settings'
   | 'blame'
   | 'history'
-  | 'committed'
   | 'search'
   | 'tags'
   | 'remotes'
@@ -50,7 +49,6 @@ export type RepoNavPage =
 const MORE_MENU_PAGES: ReadonlySet<RepoNavPage> = new Set([
   'blame',
   'history',
-  'committed',
   'search',
   'tags',
   'remotes',
@@ -77,7 +75,6 @@ const PAGE_NAMES: Record<RepoNavPage, string> = {
   settings: '设置',
   blame: '溯源',
   history: '历史',
-  committed: '已提交',
   search: '搜索',
   tags: '标签',
   remotes: '远程管理',
@@ -116,8 +113,6 @@ export interface RepoTopNavProps {
   onOpenBlame?: () => void;
   /** 文件历史页入口回调；缺省时「更多」菜单不含历史项 */
   onOpenHistory?: () => void;
-  /** 已提交变更浏览页入口回调；缺省时「更多」菜单不含已提交项 */
-  onOpenCommitted?: () => void;
   /** 提交搜索页入口回调；缺省时「更多」菜单不含搜索项 */
   onOpenSearch?: () => void;
   /** 拉取对话框入口回调（日志页容器持有对话框）；缺省时「更多」菜单不含拉取项 */
@@ -180,7 +175,6 @@ export function RepoTopNav({
   onOpenSettings,
   onOpenBlame,
   onOpenHistory,
-  onOpenCommitted,
   onOpenSearch,
   onOpenPull,
   onOpenPush,
@@ -240,7 +234,6 @@ export function RepoTopNav({
   const moreItems = [
     ...(onOpenBlame ? [{ key: 'blame', label: <Tooltip title="打开逐行溯源视图：查看每一行的最后修改者与提交"><span>溯源</span></Tooltip> }] : []),
     ...(onOpenHistory ? [{ key: 'history', label: <Tooltip title="打开该文件的提交历史：只看改动过它的记录"><span>历史</span></Tooltip> }] : []),
-    ...(onOpenCommitted ? [{ key: 'committed', label: <Tooltip title="按提交逐条浏览已提交的变更：左侧提交列表，右侧该提交的文件目录树"><span>已提交</span></Tooltip> }] : []),
     ...(onOpenSearch ? [{ key: 'search', label: <Tooltip title="在整个仓库历史中按提交信息、作者或文件内容检索"><span>搜索</span></Tooltip> }] : []),
     ...(onOpenRebase ? [{ key: 'rebase', label: <Tooltip title="打开变基对话框：把当前分支的提交重新应用到指定基底（会重写提交哈希）"><span>变基</span></Tooltip> }] : []),
     ...(onOpenTags ? [{ key: 'tags', label: <Tooltip title="打开标签管理页：查看、创建或删除仓库标签"><span>标签</span></Tooltip> }] : []),
@@ -264,7 +257,6 @@ export function RepoTopNav({
   const onMoreClick = (key: string): void => {
     if (key === 'blame') onOpenBlame?.();
     else if (key === 'history') onOpenHistory?.();
-    else if (key === 'committed') onOpenCommitted?.();
     else if (key === 'search') onOpenSearch?.();
     else if (key === 'rebase') onOpenRebase?.();
     else if (key === 'tags') onOpenTags?.();
@@ -422,7 +414,7 @@ export function RepoTopNav({
             >
               {/* Tooltip 放在 Dropdown 内侧：Dropdown 需要直接包裹真实控件才能接住点击触发 */}
               <Tooltip
-                title="更多功能：只读浏览（溯源/历史/已提交/搜索）、本地操作与远程操作统一收在这里"
+                title="更多功能：只读浏览（溯源/历史/搜索）、本地操作与远程操作统一收在这里"
                 open={moreMenuOpen ? false : undefined}
               >
                 <Button

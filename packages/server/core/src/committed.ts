@@ -1,7 +1,9 @@
 /**
- * committed 原语：git log --name-status 提交浏览分页（历史提交及其变更文件）。
+ * committed 原语：git log --name-status 单提交变更清单（Show All Affected 语义）。
+ * 历史：本文件原含「已提交变更分页浏览」（committedPage）——该页（CommittedChangesPanel）已撤除，
+ * 分页原语随之删除；保留下来的 commitFiles 仍是日志页变更集标签的数据源，解析规则一并沿用。
  *
- * 输出布局（实测 git 2.47）：`--format=%H%x00%h%x00%s%x00%an%x00%aI%x00%P` 每提交一节——
+ * 输出布局（实测 git 2.47）：`--format=%H%x00%h%x00%s%x00%an%x00%aI%x00%P` 每个提交一节——
  * 格式行（含 NUL）在前，其后若干 name-status 文件行（`status\tpath` 或 `R100\told\tnew`），
  * 节间以空行分隔。文件行不含 NUL，故按行切分后「含 NUL = 提交头行、不含 = 文件行」可唯一区分
  * （subject 由 %s 保证无换行/NUL；%P 父哈希空格分隔，根提交为空串）。
@@ -117,26 +119,8 @@ function parseCommitted(stdout: string): CoreCommittedEntry[] {
 }
 
 /**
- * 提交浏览分页（git log --name-status；limit/skip 均为逐提交粒度，文件行随提交节聚合）。
- * hasMore 试探法：一次取 limit+1 条——超过 limit 即有后续页，返回前 limit 条。
- * --skip/--max-count 是 git 内置逐提交游标，越界时自然返回空无异常。
- */
-export async function committedPage(
-  cwd: string,
-  opts: { limit: number; skip: number },
-): Promise<{ entries: CoreCommittedEntry[]; hasMore: boolean }> {
-  const { stdout } = await runGit(
-    ['log', '--name-status', `--format=${COMMITTED_FORMAT}`, `--skip=${opts.skip}`, `--max-count=${opts.limit + 1}`],
-    { cwd },
-  );
-  const all = parseCommitted(stdout);
-  return { entries: all.slice(0, opts.limit), hasMore: all.length > opts.limit };
-}
-
-/**
  * 单提交文件清单（Show All Affected 语义：git log -1 --name-status <hash>）。
- * 复用 COMMITTED_FORMAT/parseCommitted（与分页同源解析）；merge 提交与分页同语义
- * （git 对 --name-status 的 merge 提交默认不展开变更，空文件列表由消费方提示）。
+ * merge 提交：git 对 --name-status 的 merge 提交默认不展开变更，空文件列表由消费方提示。
  * hash 有效性由调用方预检（api 层 verifyCommitish）；无效 hash 的 git exit 128 原样透出。
  */
 export async function commitFiles(cwd: string, hash: string): Promise<CoreCommittedEntry> {

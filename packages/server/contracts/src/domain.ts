@@ -355,8 +355,6 @@ export interface CommittedEntry {
   parents: string[];
   files: { path: string; status: CommittedFileStatus; renameFrom?: string }[];
 }
-/** Committed Changes 分页视图：hasMore 表示存在后续页 */
-export interface CommittedPage { entries: CommittedEntry[]; hasMore: boolean; }
 
 /** 分支 vs 工作树差异文件条目（git diff <ref> --name-status；R/C 含 renameFrom） */
 export interface DiffFileEntry {

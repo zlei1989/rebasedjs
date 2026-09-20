@@ -757,7 +757,6 @@ export function RepoPage(): React.ReactNode {
         onOpenTags={() => navigate(`/repos/${repoId}/tags`)}
         onOpenBlame={() => navigate(`/repos/${repoId}/blame`)}
         onOpenHistory={() => navigate(`/repos/${repoId}/history`)}
-        onOpenCommitted={() => navigate(`/repos/${repoId}/committed`)}
         onOpenSearch={() => navigate(`/repos/${repoId}/search`)}
         onOpenPatches={() => navigate(`/repos/${repoId}/patches`)}
         onOpenShelves={() => navigate(`/repos/${repoId}/shelves`)}

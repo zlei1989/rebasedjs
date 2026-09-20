@@ -765,14 +765,6 @@ describe('LogPage', () => {
     expect(onOpenHistory).toHaveBeenCalledTimes(1);
   });
 
-  it('传入 onOpenCommitted 时「更多」菜单含已提交项，点击触发回调', async () => {
-    const onOpenCommitted = vi.fn();
-    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenCommitted={onOpenCommitted} />);
-    await openMoreMenu();
-    fireEvent.click(screen.getByText('已提交'));
-    expect(onOpenCommitted).toHaveBeenCalledTimes(1);
-  });
-
   it('传入 onOpenSearch 时「更多」菜单含搜索项，点击触发回调', async () => {
     const onOpenSearch = vi.fn();
     render(<LogPage repoName="alpha" status={status} commits={commits} onOpenSearch={onOpenSearch} />);
@@ -781,12 +773,11 @@ describe('LogPage', () => {
     expect(onOpenSearch).toHaveBeenCalledTimes(1);
   });
 
-  it('未传四入口回调时「更多」菜单不含溯源/历史/已提交/搜索项', async () => {
+  it('未传三入口回调时「更多」菜单不含溯源/历史/搜索项', async () => {
     render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={() => {}} />);
     await openMoreMenu();
     expect(screen.queryByText('溯源')).not.toBeInTheDocument();
     expect(screen.queryByText('历史')).not.toBeInTheDocument();
-    expect(screen.queryByText('已提交')).not.toBeInTheDocument();
     expect(screen.queryByText('搜索')).not.toBeInTheDocument();
   });
 

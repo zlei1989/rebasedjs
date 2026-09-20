@@ -1,7 +1,8 @@
 /**
- * web-koa blame/history/browse/committed/search 端点集成测试（拆分自 app.test.ts）。
+ * web-koa blame/history/browse/search 端点集成测试（拆分自 app.test.ts）。
  * 职责：blame（行归属/previousLineno）、history（--follow 重命名）、browse（树/内容/二进制标记）、
- * committed（分页/父哈希透传）、search（grep/pickaxe）、commits/:hash 端点形状与错误映射断言。
+ * search（grep/pickaxe）、commits/:hash 端点形状与错误映射断言。
+ * （原 committed 分页端点的用例随该页撤除而删；父哈希等断言在 commits/:hash 用例里仍覆盖。）
  * 拆分原因：原单文件 app.test.ts（171 用例）约 242s，是测试提速瓶颈；按 describe 拆成 11 个文件，
  * 由 vitest 多 worker 并行执行。
  * 隔离：每文件独立 startServer（ephemeral 端口）；每用例独立 REBASED_CONFIG_DIR（空注册表）；
@@ -35,7 +36,7 @@ afterEach(async () => {
   await cleanupDirs();
 });
 
-describe('web-koa blame/history/browse/committed/search 端点', () => {
+describe('web-koa blame/history/browse/search 端点', () => {
   /** 本组用例 git 进程密集（多提交/重命名/搜索遍历），统一放宽用例超时 */
   const RIG_TIMEOUT = 120000;
 
@@ -111,37 +112,6 @@ describe('web-koa blame/history/browse/committed/search 端点', () => {
     }
   });
 
-  it('committed 端点：默认全量 200 hasMore false；limit=1 分页 hasMore true；skip 越界空页', { timeout: RIG_TIMEOUT }, async () => {
-    const { repoId, repoPath } = registerRepo();
-    makeLocalCommit(repoPath, 'b.txt', 'two\n', 'second');
-    makeLocalCommit(repoPath, 'c.txt', 'three\n', 'third');
-
-    const fullRes = await fetch(`${base}/api/repos/${repoId}/committed`);
-    expect(fullRes.status).toBe(200);
-    const full = (await fullRes.json()) as { entries: Array<{ subject: string; author: string; parents: string[]; files: Array<{ path: string; status: string }> }>; hasMore: boolean };
-    expect(full.entries).toHaveLength(3);
-    expect(full.hasMore).toBe(false);
-    // 最新在前：entries[0] 为 third 提交且变更文件集正确
-    expect(full.entries[0]).toMatchObject({ subject: 'third', author: 'Test User' });
-    expect(full.entries[0].files).toEqual([{ path: 'c.txt', status: 'A' }]);
-    expect(full.entries[1].subject).toBe('second');
-    expect(full.entries[1].files).toEqual([{ path: 'b.txt', status: 'A' }]);
-    // %P 父哈希透传：非根提交单父；根提交（init）无父 → []（容器据此降级根提交 diff，终审 Must-fix 2）
-    expect(full.entries[0].parents).toHaveLength(1);
-    expect(full.entries[0].parents[0]).toMatch(/^[0-9a-f]{40}$/);
-    expect(full.entries[2].parents).toEqual([]);
-
-    const pageRes = await fetch(`${base}/api/repos/${repoId}/committed?limit=1`);
-    const page = (await pageRes.json()) as typeof full;
-    expect(page.entries).toHaveLength(1);
-    expect(page.hasMore).toBe(true);
-
-    const beyondRes = await fetch(`${base}/api/repos/${repoId}/committed?limit=1&skip=3`);
-    const beyond = (await beyondRes.json()) as typeof full;
-    expect(beyond.entries).toHaveLength(0);
-    expect(beyond.hasMore).toBe(false);
-  });
-
   it('search 端点：grep 命中提交信息、pickaxe 命中内容增量、无命中空数组，均 200', { timeout: RIG_TIMEOUT }, async () => {
     const { repoId, repoPath } = registerRepo();
     makeLocalCommit(repoPath, 'fix.txt', 'patch\n', 'fix: repair the bug');
@@ -197,12 +167,11 @@ describe('web-koa blame/history/browse/committed/search 端点', () => {
     }
   });
 
-  it('未注册 repoId：blame/history/committed/search 返回 404 REPO_NOT_FOUND', async () => {
+  it('未注册 repoId：blame/history/search 返回 404 REPO_NOT_FOUND', async () => {
     const blameRes = await fetch(`${base}/api/repos/nope/blame?file=a.txt`);
     const historyRes = await fetch(`${base}/api/repos/nope/history?file=a.txt`);
-    const committedRes = await fetch(`${base}/api/repos/nope/committed`);
     const searchRes = await fetch(`${base}/api/repos/nope/search?q=x`);
-    for (const res of [blameRes, historyRes, committedRes, searchRes]) {
+    for (const res of [blameRes, historyRes, searchRes]) {
       expect(res.status).toBe(404);
       expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
     }

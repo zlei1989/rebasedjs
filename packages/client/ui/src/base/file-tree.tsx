@@ -2,7 +2,7 @@
  * 文件树基础组件：antd Tree 的受控选择包装（纯展示，不调接口）。
  * 目录行点击 = 展开/收起（切换语义）；叶子行点击 = onSelect(key)。
  * 初始展开键仅首挂载生效——调用方以 key（如 rev）强制重挂载刷新初始态。
- * 复用场景：SnapshotTreeColumn（日志页就地快照栏的「文件（N）」标签页）与 CommittedChangesPanel 目录树。
+ * 复用场景：SnapshotTreeColumn（日志页就地快照栏的「文件（N）」标签页）的目录树。
  * 不带 Tooltip：交互语义自解释（目录有展开箭头、叶子悬停高亮），常驻说明反而挡视线。
  */
 import { Tree } from 'antd';

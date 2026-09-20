@@ -9,12 +9,15 @@
  *   清单只承担「这次动了哪些文件、点谁看差异」。
  * 两个降级与差异页同口径（不做伪 diff，只给提示行）：根提交没有父版本；R 重命名两侧文件名不同，
  *   单文件并行对比会误读成「全新增」。
+ * 清单的空态也各有话说（随 CommittedChangesPanel 撤页并入）：合并提交（files 空且 parents>1，git 默认
+ *   不展开 merge 的变更）给「合并提交」说明并指向同栏的文件树；其余空清单给「该提交无文件变更」。
  * 纯展示：不调接口、不碰 URL，数据与动作全部由容器经 props 给（装配见 composite/snapshot-tabs）。
  */
-import { Alert, Flex, Skeleton, Spin, Tooltip, Typography, theme } from 'antd';
+import { Alert, Flex, Skeleton, Spin, Typography, theme } from 'antd';
 import type { CommittedEntry, FileVersions } from '@rebased/contracts';
 import type { ReactNode } from 'react';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
+import { EmptyState } from '../base/empty-state';
 import { CommittedStatusTag } from '../domain/committed-status';
 import { DiffViewer } from '../domain/diff-viewer';
 import { FileNavButtons } from '../domain/file-nav-buttons';
@@ -37,21 +40,30 @@ export function ChangesetList({ entry, loading, error, onOpenFile }: ChangesetLi
   if (entry === undefined || entry === null) {
     return <Typography.Text type="secondary">暂无变更文件</Typography.Text>;
   }
+  /* 两个降级空态（原 CommittedChangesPanel 右栏的口径，随该页并到本清单）：
+     git log --name-status 默认不展开 merge 提交的变更，空清单在合并提交上是**正常**的，
+     直接留白会被读成「这个提交什么都没改」；无父版本的合并结果要看树，故指向同栏的「浏览快照」。
+     非合并提交的空清单（--allow-empty 之类）同样要有话说。 */
+  if (entry.files.length === 0) {
+    return entry.parents.length > 1 ? (
+      <EmptyState title="合并提交" description="git 对合并提交默认不列出文件变更；合并结果可在「浏览快照」的文件树里查看" />
+    ) : (
+      <EmptyState title="该提交无文件变更" />
+    );
+  }
   return (
     <Flex vertical gap={8}>
       {entry.files.map((file) => (
         <Flex key={`${file.status}-${file.path}`} align="center" gap={8}>
           <CommittedStatusTag status={file.status} />
-          <Tooltip title="在同一标签栏打开该文件的差异：以本提交与其父提交为两端">
-            <Typography.Text
-              data-testid={`changes-file-${file.path}`}
-              style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
-              ellipsis
-              onClick={() => onOpenFile?.(file.path)}
-            >
-              {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
-            </Typography.Text>
-          </Tooltip>
+          <Typography.Text
+            data-testid={`changes-file-${file.path}`}
+            style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
+            ellipsis
+            onClick={() => onOpenFile?.(file.path)}
+          >
+            {file.renameFrom !== undefined ? `${file.renameFrom} → ${file.path}` : file.path}
+          </Typography.Text>
         </Flex>
       ))}
     </Flex>

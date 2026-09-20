@@ -875,7 +875,6 @@ function routeCells(ctx) {
     { name: 'log-snapshot-file', path: `/repos/${ctx.repo.id}?select=${ctx.hash}&browse=${q(ctx.file)}`, ready: '[data-testid="snapshot-tabs"]', content: '[data-testid="browse-content-path"]', min: 1, gateTimeout: SLOW_GATE_TIMEOUT },
     { name: 'blame', path: `/repos/${ctx.repo.id}/blame?file=${q(ctx.file)}`, ready: '[data-testid="blame-file"]' },
     { name: 'branches', path: `/repos/${ctx.repo.id}/branches`, ready: '[data-testid^="row-local-"]' },
-    { name: 'committed', path: `/repos/${ctx.repo.id}/committed`, ready: '[data-testid="committed-entry-0"]' },
     { name: 'history', path: `/repos/${ctx.repo.id}/history?file=${q(ctx.file)}`, ready: '[data-testid="history-entry-0"]' },
     { name: 'search', path: `/repos/${ctx.repo.id}/search`, ready: '[data-testid^="branch-quick-"]' },
     // merge：整页只有一个**常驻打开**的 Modal（背景文档为空），就绪点即弹窗内的分支选择器。

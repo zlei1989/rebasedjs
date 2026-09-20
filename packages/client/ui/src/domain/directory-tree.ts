@@ -1,6 +1,6 @@
 /**
  * 目录树构建纯函数：平铺路径列表 → 嵌套 FileTreeNode（目录节点聚合、目录在前字母序）。
- * 供 SnapshotTreeColumn（日志页就地快照栏的 ls-tree 平铺条目）与 CommittedChangesPanel 目录树共用；
+ * 供 SnapshotTreeColumn（日志页就地快照栏的 ls-tree 平铺条目）建树，与 base/file-tree 的目录树呈现配套；
  * 键即完整路径（git 路径恒以 / 分隔）。节点 selectable 恒为 true——目录行点击的
  * 「展开/收起」语义由 FileTree 的 onSelect 分派（目录不进入选中态），调用方可按条目形态覆写叶子。
  *

@@ -9,9 +9,9 @@
  * 故取数窗口里沿用上一份已就绪的 (file, versions)（文件名与内容同批换），首次进入无上一份时才走下面的流式分支。
  * 分块流与全文同参（staged/from/to 透传）：全文未就绪且无上一份可顶、流已有文本时渲染 DiffStreamView（分块文本接入 Monaco，
  * P0 消化——见任务清单 §2.1），全文到达即切换标准 DiffPage；流错误在分块视图内呈现。
- * from/to 为可选成对查询参数：committed 浏览页打开某提交的变更（from=父提交、to=提交本身）时进入；
+ * from/to 为可选成对查询参数：打开某提交相对其父提交的变更（from=父提交、to=提交本身）时进入；
  * from/to 存在时覆盖「worktree 对比」语义（staged 开关仅 worktree 模式有意义，此时隐藏切换——终审 Must-fix 3）。
- * renameFrom 为可选重命名原名（committed 页 R 状态文件附加）：透传 ui DiffPage 显示提示行（不做伪 diff）。
+ * renameFrom 为可选重命名原名（R 状态文件附加）：透传 ui DiffPage 显示提示行（不做伪 diff）。
  * root=1（根提交无父版本）：透传 ui DiffPage 显示提示行；不传 from/to（to-only 会被端点 XOR 校验拒绝）。
  * files 为可选 JSON 数组（#27 多文件 Prev/Next）：同组文件列表经 JSON.stringify 编码进查询串；切换文件保留
  * from/to/staged/three 等参数（renameFrom/root 为条目级属性，切换时清除）。
@@ -63,7 +63,7 @@ export function RepoDiffPage(): React.ReactNode {
   useSettings();
   // 缺 file 或数据未就绪时不渲染主体
   if (!file) return null;
-  // 加载失败显式呈现（如 committed 打开路径损坏等端点 GIT_ERROR）；根提交提示行不依赖数据，跳过错误分支
+  // 加载失败显式呈现（如路径损坏等端点 GIT_ERROR）；根提交提示行不依赖数据，跳过错误分支
   const loadError = isThreeWay ? threeWayError : error;
   // 错误态也要有**密度归属**：本分支在 DiffPage/DiffStreamView 之前提前返回，若不自己带一层
   // PageShell，这一页会整页落回 antd 默认 14px（与该路由正常态的 12px 不一致）

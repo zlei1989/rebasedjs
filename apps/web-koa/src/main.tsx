@@ -15,7 +15,6 @@ import { ReposPage } from './pages';
 import { AppSettingsPage } from './pages/app-settings';
 import { RepoBlamePage } from './pages/blame';
 import { RepoBranchesPage } from './pages/branches';
-import { RepoCommittedPage } from './pages/committed';
 import { RepoConflictsPage } from './pages/conflicts';
 import { RepoConsolePage } from './pages/console';
 import { RepoGithubPage } from './pages/github';
@@ -60,7 +59,6 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/repos/:repoId" element={<RepoPage />} />
         <Route path="/repos/:repoId/blame" element={<RepoBlamePage />} />
         <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
-        <Route path="/repos/:repoId/committed" element={<RepoCommittedPage />} />
         <Route path="/repos/:repoId/history" element={<RepoHistoryPage />} />
         <Route path="/repos/:repoId/search" element={<RepoSearchPage />} />
         <Route path="/repos/:repoId/merge" element={<RepoMergePage />} />

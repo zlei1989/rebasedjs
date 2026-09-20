@@ -23,7 +23,7 @@ function entryBadge(entry: BrowseEntry): React.ReactNode {
 }
 
 /**
- * ls-tree 条目 → FileTree 节点：目录聚合走 buildDirectoryTree（与 CommittedChangesPanel 同源），
+ * ls-tree 条目 → FileTree 节点：目录聚合走 buildDirectoryTree，
  * 叶子按条目形态覆写 selectable 与标题徽标（子模块不可选中、blob 可选中、符号链接只标注）。
  */
 export function snapshotTreeNodes(entries: BrowseEntry[]): FileTreeNode[] {

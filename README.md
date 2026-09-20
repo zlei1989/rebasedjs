@@ -25,9 +25,9 @@
 | 维度 | 终态 |
 |------|------|
 | 功能域 | **36/36** ✅：repo / status / log / diff / settings / operation / reset / staging / changelist / commit / branch / checkout / merge / stash / conflict / config / auth / rebase（含交互式）/ cherry-pick / revert / tag / remote / update / blame / history / committed / search / patch / shelf / console / ignore / github / gitlab / worktree / submodule / browse |
-| 操作页面/面板 | **31/31**：29 ✅ + 2 🟡 等效（CommitDialog → StatusPage 内嵌提交框；QuickActionsMenu → 顶栏 +「更多」菜单 + 操作条，均为定案形态） |
-| 接口 | **103 路径 / 118 方法**，两端完全对称；无死接口、无半使用接口 |
-| 契约 | zod schema 71、领域类型 99、SSE 事件 6 种、错误码 12 定义（9 实际产生 / 3 预留） |
+| 操作页面/面板 | **31/31**：29 ✅ + 2 🟡 等效（CommitDialog → StatusPage 内嵌提交框；QuickActionsMenu → 顶栏 +「更多」菜单 + 操作条，均为定案形态）；其中 BrowsePanel 与 CommittedChangesPanel 的整页形态已按用户口径撤除，能力分别并入日志页的就地快照栏与变更集标签 |
+| 接口 | **102 路径 / 117 方法**，两端完全对称；无死接口、无半使用接口 |
+| 契约 | zod schema 70、领域类型 98、SSE 事件 6 种、错误码 12 定义（9 实际产生 / 3 预留） |
 | 导航边 | 106 条：93 ✅（含等效边）+ 1 🟡 + 8 ➖ + 4 ❌（明确不做）—— **❌ 可做缺口 0** |
 
 首页最近仓库列表项（分支后缀 / 首字母头像 / 失效标记）与日志页线性折叠、分支过滤均已落地，用法见手册 §4.1 / §4.2。

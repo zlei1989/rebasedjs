@@ -1,8 +1,9 @@
 /**
- * web-next blame/history/committed/search 路由测试：注解、文件历史（--follow）、提交列表/单提交变更与搜索。
+ * web-next blame/history/commits/search 路由测试：注解、文件历史（--follow）、单提交变更与搜索。
  * 拆分自原 routes.test.ts 的 'web-next blame/history/committed/search 路由' describe：
  * 原单文件 194s 是测试提速瓶颈，按 describe 拆成多文件后由 vitest 多 worker 并行。
  * 测试体逐字保留；环境隔离与仓库夹具见 ./testing/routes-helpers。
+ * （原 committed 分页端点的用例随该页撤除而删——父哈希透传等断言在 commits/:hash 用例里仍覆盖。）
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -10,7 +11,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { GET as getBlame } from '../app/api/repos/[repoId]/blame/route';
 import { GET as getHistory } from '../app/api/repos/[repoId]/history/route';
-import { GET as getCommitted } from '../app/api/repos/[repoId]/committed/route';
 import { GET as getCommitFilesRoute } from '../app/api/repos/[repoId]/commits/[hash]/route';
 import { GET as getSearch } from '../app/api/repos/[repoId]/search/route';
 import { cleanupTestEnv, ctx, lastRepoPath, makeLocalCommit, registerRepo, setupTestEnv } from './testing/routes-helpers';
@@ -23,7 +23,7 @@ afterEach(() => {
   cleanupTestEnv();
 });
 
-describe('web-next blame/history/committed/search 路由', () => {
+describe('web-next blame/history/commits/search 路由', () => {
   /** 本组用例 git 进程密集（多提交/重命名/搜索遍历），统一放宽用例超时 */
   const RIG_TIMEOUT = 120000;
 
@@ -62,37 +62,6 @@ describe('web-next blame/history/committed/search 路由', () => {
     expect(body[0].hash).toMatch(/^[0-9a-f]{40}$/);
     expect(body[0].author).toBe('Test User');
     expect(typeof body[0].dateIso).toBe('string');
-  });
-
-  it('committed 端点：默认全量 200 hasMore false；limit=1 分页 hasMore true；skip 越界空页', { timeout: RIG_TIMEOUT }, async () => {
-    const repoId = registerRepo();
-    makeLocalCommit('b.txt', 'two\n', 'second');
-    makeLocalCommit('c.txt', 'three\n', 'third');
-
-    const fullRes = await getCommitted(new Request(`http://localhost/api/repos/${repoId}/committed`), ctx(repoId));
-    expect(fullRes.status).toBe(200);
-    const full = await fullRes.json();
-    expect(full.entries).toHaveLength(3);
-    expect(full.hasMore).toBe(false);
-    // 最新在前：entries[0] 为 third 提交且变更文件集正确
-    expect(full.entries[0]).toMatchObject({ subject: 'third', author: 'Test User' });
-    expect(full.entries[0].files).toEqual([{ path: 'c.txt', status: 'A' }]);
-    expect(full.entries[1].subject).toBe('second');
-    expect(full.entries[1].files).toEqual([{ path: 'b.txt', status: 'A' }]);
-    // %P 父哈希透传：非根提交单父；根提交（init）无父 → []（容器据此降级根提交 diff，终审 Must-fix 2）
-    expect(full.entries[0].parents).toHaveLength(1);
-    expect(full.entries[0].parents[0]).toMatch(/^[0-9a-f]{40}$/);
-    expect(full.entries[2].parents).toEqual([]);
-
-    const pageRes = await getCommitted(new Request(`http://localhost/api/repos/${repoId}/committed?limit=1`), ctx(repoId));
-    const page = await pageRes.json();
-    expect(page.entries).toHaveLength(1);
-    expect(page.hasMore).toBe(true);
-
-    const beyondRes = await getCommitted(new Request(`http://localhost/api/repos/${repoId}/committed?limit=1&skip=3`), ctx(repoId));
-    const beyond = await beyondRes.json();
-    expect(beyond.entries).toHaveLength(0);
-    expect(beyond.hasMore).toBe(false);
   });
 
   it('commits/:hash 端点：单提交全量变更文件 200；无效 hash 400 INVALID_REF；未注册 repoId 404', { timeout: RIG_TIMEOUT }, async () => {
@@ -162,12 +131,11 @@ describe('web-next blame/history/committed/search 路由', () => {
     }
   });
 
-  it('未注册 repoId：blame/history/committed/search 返回 404 REPO_NOT_FOUND', async () => {
+  it('未注册 repoId：blame/history/search 返回 404 REPO_NOT_FOUND', async () => {
     const blameRes = await getBlame(new Request('http://localhost/api/repos/nope/blame?file=a.txt'), ctx('nope'));
     const historyRes = await getHistory(new Request('http://localhost/api/repos/nope/history?file=a.txt'), ctx('nope'));
-    const committedRes = await getCommitted(new Request('http://localhost/api/repos/nope/committed'), ctx('nope'));
     const searchRes = await getSearch(new Request('http://localhost/api/repos/nope/search?q=x'), ctx('nope'));
-    for (const res of [blameRes, historyRes, committedRes, searchRes]) {
+    for (const res of [blameRes, historyRes, searchRes]) {
       expect(res.status).toBe(404);
       expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
     }

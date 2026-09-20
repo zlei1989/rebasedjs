@@ -2,7 +2,7 @@
  * 日志页：顶栏（抽为共用组件 RepoTopNav：**面包屑「首页 / 仓库名」** + RepoStatusBar + OperationStatus + 日志/变更/分支/合并/贮藏/设置入口 + 「更多」下拉）+ CommitGraph + 右侧 CommitDetailsPanel。
  * 纯 props 驱动：status/commits/selectedCommit/operation 由调用方容器注入（hooks 数据在应用层装配）。
  * 合并中（operation.kind==='merge'）时顶栏在操作条旁追加「去解决冲突」链接（onOpenConflicts 注入才渲染）。
- * 顶栏收敛：页面导航按钮（日志/变更/分支/合并/贮藏/设置）为主按钮区；P3-C 只读浏览（溯源/历史/已提交/搜索）与远程相关操作
+ * 顶栏收敛：页面导航按钮（日志/变更/分支/合并/贮藏/设置）为主按钮区；P3-C 只读浏览（溯源/历史/搜索）与远程相关操作
  * （拉取/推送/更新项目/远程管理）及 P3-D 四入口（补丁/搁置/控制台/忽略）及 GitHub/GitLab 面板
  * 收进「更多」Dropdown（以上均在 RepoTopNav 内装配），
  * 仅在容器注入对应回调时出现对应菜单项，
@@ -169,8 +169,6 @@ export interface LogPageProps {
   onOpenBlame?: () => void;
   /** 文件历史页入口回调；缺省时「更多」菜单不含历史项 */
   onOpenHistory?: () => void;
-  /** 已提交变更浏览页入口回调；缺省时「更多」菜单不含已提交项 */
-  onOpenCommitted?: () => void;
   /** 提交搜索页入口回调；缺省时「更多」菜单不含搜索项 */
   onOpenSearch?: () => void;
   /** 补丁页入口回调；缺省时「更多」菜单不含补丁项 */
@@ -327,7 +325,6 @@ export function LogPage({
   onOpenConflicts,
   onOpenBlame,
   onOpenHistory,
-  onOpenCommitted,
   onOpenSearch,
   onOpenPatches,
   onOpenShelves,
@@ -730,7 +727,6 @@ export function LogPage({
         onOpenConflicts={onOpenConflicts}
         onOpenBlame={onOpenBlame}
         onOpenHistory={onOpenHistory}
-        onOpenCommitted={onOpenCommitted}
         onOpenSearch={onOpenSearch}
         onOpenPatches={onOpenPatches}
         onOpenShelves={onOpenShelves}

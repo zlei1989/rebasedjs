@@ -24,7 +24,7 @@ export {
 export { useBlame } from './blame';
 export { useHistory } from './history';
 export { useBrowseTree, useBrowseContent } from './browse';
-export { useCommitFiles, useCommittedPage } from './committed';
+export { useCommitFiles } from './committed';
 export { useSearch } from './search';
 export { useGitExecutableInfo, useGpgConfig, useSettings, useSetGpgConfig } from './settings';
 export { useRepoConfig, useSetConfig } from './config';

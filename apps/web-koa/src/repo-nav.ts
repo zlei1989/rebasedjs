@@ -24,7 +24,6 @@ export type RepoNavCallbacks = Pick<
   | 'onOpenSettings'
   | 'onOpenBlame'
   | 'onOpenHistory'
-  | 'onOpenCommitted'
   | 'onOpenSearch'
   | 'onOpenTags'
   | 'onOpenRemotes'
@@ -64,7 +63,6 @@ export function useRepoNav(repoId: string): RepoNavCallbacks {
     onOpenSettings: () => go(`/repos/${repoId}/settings`),
     onOpenBlame: () => go(`/repos/${repoId}/blame`),
     onOpenHistory: () => go(`/repos/${repoId}/history`),
-    onOpenCommitted: () => go(`/repos/${repoId}/committed`),
     onOpenSearch: () => go(`/repos/${repoId}/search`),
     onOpenTags: () => go(`/repos/${repoId}/tags`),
     onOpenRemotes: () => go(`/repos/${repoId}/remotes`),

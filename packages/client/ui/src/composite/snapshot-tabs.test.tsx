@@ -331,6 +331,33 @@ describe('SnapshotTabs 变更集标签族（清单 + 逐文件差异）', () => 
     expect(screen.getByText('boom')).toBeInTheDocument();
   });
 
+  /* 空清单的两种说法（随 CommittedChangesPanel 撤页并入）：git 对 merge 提交默认不展开变更，
+     此时留白会被读成「这个提交什么都没改」，故给说明并指向同栏文件树；非 merge 的空清单也要有话说。 */
+  it('合并提交（files 空且 parents>1）：清单给「合并提交」说明，不留白也不说成「无文件变更」', () => {
+    render(
+      <SnapshotTabs
+        entries={entries}
+        browseTree={false}
+        changeset={{ entry: { ...changesetEntry, files: [], parents: ['p1', 'p2'] } }}
+      />,
+    );
+    expect(screen.getByText('合并提交')).toBeInTheDocument();
+    expect(screen.getByText(/git 对合并提交默认不列出文件变更/)).toBeInTheDocument();
+    expect(screen.queryByText('该提交无文件变更')).not.toBeInTheDocument();
+  });
+
+  it('非合并提交的空清单：给「该提交无文件变更」', () => {
+    render(
+      <SnapshotTabs
+        entries={entries}
+        browseTree={false}
+        changeset={{ entry: { ...changesetEntry, files: [], parents: ['p1'] } }}
+      />,
+    );
+    expect(screen.getByText('该提交无文件变更')).toBeInTheDocument();
+    expect(screen.queryByText('合并提交')).not.toBeInTheDocument();
+  });
+
   it('容器点名的差异标签：挂载即激活，正文用差异视图（stub 编辑器）', async () => {
     render(
       <SnapshotTabs

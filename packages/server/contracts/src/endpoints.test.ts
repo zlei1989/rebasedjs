@@ -12,7 +12,6 @@ import {
   autosquashBodySchema,
   commitEditBodySchema,
   commitAndPushBodySchema,
-  committedQuerySchema,
   configPutBodySchema,
   diffQuerySchema,
   historyQuerySchema,
@@ -697,24 +696,6 @@ describe('historyQuerySchema（文件历史查询）', () => {
   it('拒绝空 file 与缺 file', () => {
     expect(() => historyQuerySchema.parse({ file: '' })).toThrow();
     expect(() => historyQuerySchema.parse({})).toThrow();
-  });
-});
-
-describe('committedQuerySchema（Committed Changes 分页查询）', () => {
-  it('默认 limit=50、skip=0；查询串数字被 coerce（沿用 log 端点风格）', () => {
-    expect(committedQuerySchema.parse({})).toEqual({ limit: 50, skip: 0 });
-    expect(committedQuerySchema.parse({ limit: '10', skip: '20' })).toEqual({ limit: 10, skip: 20 });
-  });
-  it('接受边界 limit=1/200 与 skip=0', () => {
-    expect(committedQuerySchema.parse({ limit: '1', skip: '0' })).toEqual({ limit: 1, skip: 0 });
-    expect(committedQuerySchema.parse({ limit: 200 }).limit).toBe(200);
-  });
-  it('拒绝 limit 越界（0/201）、非整数与负 skip', () => {
-    expect(() => committedQuerySchema.parse({ limit: 0 })).toThrow();
-    expect(() => committedQuerySchema.parse({ limit: 201 })).toThrow();
-    expect(() => committedQuerySchema.parse({ limit: 1.5 })).toThrow();
-    expect(() => committedQuerySchema.parse({ skip: -1 })).toThrow();
-    expect(() => committedQuerySchema.parse({ skip: 0.5 })).toThrow();
   });
 });
 

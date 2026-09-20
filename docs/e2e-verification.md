@@ -90,7 +90,7 @@
 | 15 | UpdateProjectDialog（内嵌模态） | P3 | LogPage 内 | 更多「更新项目」 | F-098~F-100（3） | update | ✅ 3/3 |
 | 16 | BlameView | P3 | `/repos/:id/blame` | 更多「溯源」→ 页内输路径 | F-101~F-104（4） | blame | ✅ 4/4 |
 | 17 | HistoryPanel | P3 | `/repos/:id/history` | 更多「历史」→ 页内输路径 | F-105~F-107（3） | history | ✅ 3/3 |
-| 18 | CommittedChangesPanel | P3 | `/repos/:id/committed` | 更多「已提交」 | F-108~F-110（3） | committed | ✅ 3/3 |
+| 18 | ~~CommittedChangesPanel~~（页面已删除，2026-09-20 用户口径） | P3 | ~~`/repos/:id/committed`~~（已删除） | ~~更多「已提交」~~（入口已撤除） | F-108~F-110（3，历史记录） | committed | ✅ 3/3（删除前；能力在 LogPage 变更集标签） |
 | 19 | SearchPanel | P3 | `/repos/:id/search` | 更多「搜索」 | F-111~F-113（3） | search | ✅ 3/3 |
 | 20 | ConflictsPanel | P2 | `/repos/:id/conflicts` | 制造冲突自动跳入 / 操作条「去解决冲突」 | F-114~F-119（6） | conflicts | ✅ 6/6 |
 | 21 | PatchPanel | P3 | `/repos/:id/patches` | 更多「补丁」 | F-120~F-123（4） | patch | ✅ 4/4 |
@@ -169,7 +169,7 @@
 | F-020 | `refs.changed` 订阅 | pwsh 新建/删除分支 → 等待（页面全程不刷新） | ref chips 自动跟随变化（CLI） | ✅ | log-page-12.png（**双向实时实测**：页面加载完成后用 CLI `git branch -D f020-fixed-probe` → chips **6.0 s** 内消失；再 `git branch f020-fixed-probe HEAD` → **6.8 s** 内重新出现，全程未刷新；画面顶部行 chips = `rebase-topic / origin/rebase-topic / f020-fixed-probe`。修复前同场景等待 22 s 无变化——根因与修复落点见 §5.20 D-39） |
 | F-021 | `?select=<hash>` 深链 | navigate `/repos/:id?select=<某hash>` | 该行选中态 + 详情面板自动展开 | ✅ | log-page-13.png（`?select=761961d81ca2801637bea2ef42c7a3ca7211e670`：目标行 `data-selected=true` 带选中底色、详情面板同时展开为该提交） |
 | F-022 | 顶栏入口 5 按钮 | 观察顶栏按钮区 | 「状态/分支/合并/贮藏/设置」五按钮存在 | ✅ | log-page-14.png（顶栏实测 `aria-label`：撤销最近提交 / 变更 / 分支 / 合并 / 贮藏 / 设置 / 更多 + 首页链接——「变更」即状态页入口，五个要求入口齐备；截图含「合并」按钮悬停提示） |
-| F-023 | 「更多」菜单 18 项 | 展开「更多」下拉 | 18 项齐全（拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/已提交/搜索/补丁/搁置/控制台/忽略/GitHub/GitLab/工作树/子模块） | ✅ | log-page-15.png（本仓（本地 file 远程）**渲染 16 项**：溯源/历史/已提交/搜索/变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略/工作树/子模块；GitHub/GitLab 两项受检测门约束，见 F-134/F-140——18 为含两种托管面板的全集上限） |
+| F-023 | 「更多」菜单 15~17 项 | 展开「更多」下拉 | 15 项齐全（拉取/推送/更新项目/远程管理/变基/标签/溯源/历史/搜索/补丁/搁置/控制台/忽略/工作树/子模块） | ✅ | log-page-15.png（**图摄于「已提交」项撤除之前**：当时本仓（本地 file 远程）渲染 16 项，含已提交项；现为 15 项，其余清单不变。GitHub/GitLab 两项受检测门约束，见 F-134/F-140——17 为含两种托管面板的全集上限） |
 | F-024 | OperationStatus 操作条（kind + 中止） | 进入 rebase 冲突（见 F-076 前置）→ 观察操作条 → 点「中止」 | 操作条显示进行中操作 + 中止按钮；中止后恢复干净态（CLI） | ✅ | log-page-16.png（冲突仓检出 `feature` → 界面「更多→变基」onto=master → 冲突自动跳 `/conflicts`（4 路冲突、提示「变基进行中…」）→ 返回日志页顶栏显示 `(detached) \| 变基中（第 1/1 步）` + 红「中 止」；点中止 → 确认框「确定中止当前操作？工作区将回到操作前状态」→ CLI：`.git/rebase-merge` 清除、分支回 `feature`、`shared.txt` 回 feature 版、工作区干净） |
 | F-025 | 远程操作认证重试回路 | 向需认证的 HTTP 远端 push（依赖外部凭据服务；不具备 → 跳过） | 401 → AuthDialog 弹出（host 自 context、不含 token）→ 录入后 retry 重放 | ✅ | remote-04.png（本机起恒 401 的 git smart-HTTP 服务 `http://127.0.0.1:9418`，加远程 `auth-probe` → 日志页「拉取」触发 → 401 `AUTH_FAILED` → 「需要认证」对话框（主机自 `context.host` 预填 `127.0.0.1`、表单内不含 token）→ 填 `smoke-tester` / `smoke-token-f092` →「保存并重试」；服务端请求日志两次请求对比：`auth:null`（首请）→ `auth:"Bearer smoke-token-f092"`（重放），`config.json` → `auth.accounts` 落盘 `{host:127.0.0.1, account:smoke-tester, token:smoke-token-f092}`。边界同 R8：服务恒 401，「重放成功」以「重放确实发生且携带新凭据」为证。冒烟后已删除临时账户与 `auth-probe` 远程） |
 | F-026 | 按需加载更早提交（页大小 ≤500 + skip 游标） | 打开 `rebased-smoke-big` → 滚到列表底部（或点「加载更多」手动兜底） | 首屏 50 行 → 触底自动追加（页大小 50→100→200→400→500，skip 逐页累加），一路到服务端 `hasMore=false`：最早一条（`chore: bulk commit 1`）可见、按钮转「已到最早的提交」且禁用 | ✅ | log-page-18.png（大仓 320 提交实测：首屏 50 行 → 触底自动追加 → 列表内容高 1200→3600→7680（= 50→150→320 行）；网络实测档位 `limit=50&skip=0` → `limit=100&skip=50` → `limit=200&skip=150`，末页返回 170 条 < 200 → `hasMore=false`；滚到底后最早一行 `feat: 新增 big.txt 与 hunks.txt 初版` 可见、按钮转「已到最早的提交」且 `disabled`） |
@@ -178,7 +178,7 @@
 
 ### 4.3 DiffPage（slug `diff-page`；P1）
 
-- **入口**：StatusPage 双击变更文件（F-029~F-034、F-036~F-038）；任意两版本从 CommittedChangesPanel 文件点击；三版本从 StatusPage 行「三版本」。
+- **入口**：StatusPage 双击变更文件（F-029~F-034、F-036~F-038）；任意两版本从**日志页变更集清单**点文件（就地差异标签；原入口为已撤除的已提交页）；三版本从 StatusPage 行「三版本」。
 - **前置**：主仓有修改/暂存/新增/删除/重命名文件；`rebased-smoke-big` 有大文件变更（流式行）。
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
@@ -186,7 +186,7 @@
 | F-029 | Monaco DiffEditor（懒加载/行号/高亮/只读） | StatusPage 双击修改文件 → diff 页 | Monaco 渲染满高、行号+语法高亮、只读、vs-dark 暗色与应用一致 | ✅ | diff-page-01.png（状态页双击 `src/app.ts` → `/diff?file=src%2Fapp.ts`；`.monaco-diff-editor` 1424×818 满高、两侧编辑器均 `monaco-editor vs-dark`、body `#141414` 与应用暗色一致；decorations 5 插入 = CLI `git diff --stat` 的 `1 file changed, 5 insertions(+)`；只读口径见 `monaco-lazy.tsx:75` `readOnly:true` 与 `diff-viewer.tsx:142`）。**2026-09-16 复跑更正**：本行原写的「语法高亮」在此前各轮**并不成立**（两侧只有单调文本色，控制台持续报 `toUrl` TypeError；根因与修法见 P-30）。修复后实测 `proxyGateway` 仓 `…/diff?file=lib%2Fconvert%2Fstructured-output.js&from=e03b800f786dae1db3f368eccbe634bee107a233&to=aa995904ecc09786c45be8620d8f299e79eb4852`：`.monaco-diff-editor.side-by-side` 两侧已渲染、decorations **7 插入 / 5 删除**（= CLI `git show --stat` 的 `12 +++++-----`）、可见 token class **6 种**（`mtk1/5/6/7/8/9`，修复前恒为 1 种 `mtk1`）、页面控制台 **0 error / 0 warning** |
 | F-030 | 并排/行内切换 + 忽略空白 | 依次切换「行内」「忽略空白」开关 | 默认并排；行内切换生效；忽略空白后空白差异消失 | ✅ | diff-page-02.png（默认「并排」；为验证忽略空白，临时给 `src/app.ts` 第 2 行加 3 个行尾空格 → `git diff --stat` 变 6 插入/1 删除，页面 decorations 同步 `ins=6 del=1`；开「忽略空白」后变 `ins=5 del=0`（空白差异消失），切「行内」后单栏成对显示。取证后已把空格还原、`git diff --stat` 回到 5 insertions） |
 | F-031 | staged / 工作区切换（三态映射） | 切换 staged 开关 | staged 开 = HEAD vs 暂存区；关 = HEAD vs 工作区（CLI diff 互证） | ✅ | diff-page-03.png（状态页**双击「已暂存」组的 `src/util.ts`** → `/diff?file=src%2Futil.ts&staged=1`，右侧分段选中「已暂存」、4 处插入 = CLI `git diff --cached --stat`；同一文件切「工作区」→ 仍 4 处（HEAD vs 工作区，二者内容相同）；反向用 `src/app.ts` 实测：工作区模式 5 插入 = `git diff`，切「已暂存」→ 0 处 = `git diff --cached` 为空） |
-| F-032 | 任意两版本对比（from/to 成对） | CommittedChangesPanel 点文件 → `/diff?file&from=<父哈希>&to=<提交>` | 两侧正确 = 该提交 vs 其父提交 | ✅ | diff-page-04.png（已提交页选 `77e62c4` → 点 `src/app.ts` → `?file=src%2Fapp.ts&from=761961d…&to=77e62c4…`；左栏 6 行（= `git show 761961d:src/app.ts`）、右栏 7 行且含 `APP_VERSION`（= `git show 77e62c4:src/app.ts`），2 处插入；from/to 成对时「工作区/已暂存」分段隐藏（仅给 from 时仍显示，此时切「已暂存」会被服务端拒绝并在整页显示错误）） | |
+| F-032 | 任意两版本对比（from/to 成对） | 日志页变更集清单点文件 → 就地差异标签（`?diff=<路径>`，from=父提交、to=该提交） | 两侧正确 = 该提交 vs 其父提交 | ✅ | diff-page-04.png（**图为当时经已提交页点入的差异页**——同一 from/to 口径现由日志页变更集清单进入：选 `77e62c4` → 点 `src/app.ts` → `?file=src%2Fapp.ts&from=761961d…&to=77e62c4…`；左栏 6 行（= `git show 761961d:src/app.ts`）、右栏 7 行且含 `APP_VERSION`（= `git show 77e62c4:src/app.ts`），2 处插入；from/to 成对时「工作区/已暂存」分段隐藏（仅给 from 时仍显示，此时切「已暂存」会被服务端拒绝并在整页显示错误）） | |
 | F-033 | 新增/删除/重命名两侧渲染 | 打开 A/D/R 文件 diff | A 侧/D 侧缺失正确；R 显示 renameFrom | ✅ | diff-page-05.png（**D**：`docs/gone.md` 工作区删除 → 左栏 4 行全文/右栏空，4 删除装饰，页面无报错，API `{before: 4 行, after: ""}`——D-14 未见回归；**A**：`src/new-file.ts`（已暂存新增）→ 左栏空/右栏全文（API `before:""`）；**R**：已提交页点 `R docs/old-name.md → new-name.md` → `?renameFrom=docs%2Fold-name.md`，页面显示提示行「该变更涉及重命名：docs/old-name.md → docs/new-name.md（改名前的历史请到「历史」页查看）」且**不做伪 diff**（两侧 0 行）） | |
 | F-034 | unified diff 文本视图 | StatusPage 选中文件 → 行内补丁预览（`/diff/patch` 通道） | unified 文本正确渲染（`@@` 头 + +/- 行） | ✅ | diff-page-06.png（状态页选中 `src/app.ts` → 展开 hunk：正文为 `@@ -4,4 +4,9 @@ export const APP_VERSION = '1.0.0';` + 空格上下文行 + 5 个 `+` 行 + `\ No newline at end of file`，与 CLI `git diff` 逐行一致；通道实测 `GET …/diff/patch?file=src%2Fapp.ts&staged=false` → 200） | |
 | F-035 | 大 diff 分块流渲染（DiffStreamView） | 打开 `rebased-smoke-big` 大文件 diff → 等待全文 | 先语言 diff 只读渐进累积分块 → 全文到达切换标准视图 | ✅ | diff-page-07.png（大仓 `big.txt`：网络实测同时走 `…/diff?file=big.txt&staged=false` 与 `…/diff/stream?file=big.txt&staged=false`；流侧实收 **2 个 `diff.chunk` 帧**（16724 + 53320 字符，wire 75020 B）渐进累积，全文到达后切标准 Monaco diff 视图（620 行改写：左 `rewritten for large diff streaming` / 右 `working tree rewrite（大 diff 常驻）`）） | |
@@ -367,7 +367,10 @@
 
 ### 4.18 CommittedChangesPanel（slug `committed`；P3）
 
-- **入口**：更多「已提交」→ `/repos/:id/committed`。
+> **页面删除说明（2026-09-20，用户口径）**：独立整页 `/repos/:id/committed` 已删除（应用内没有任何入口；路由、页面容器、`composite/committed-changes-panel.tsx`、端点 `GET /committed` 与「更多」→「已提交」菜单项一并撤除）。能力由**日志页的变更集标签**承载：`?select=<哈希>&diff=` 列该提交的变更文件（`ChangesetList`，含合并提交/无文件变更两种空态），点文件在同栏开差异标签（`?diff=<路径>`，from=父提交、to=该提交，带「‹ 上一个 / 下一个 ›」）。
+> 下表的 3 行是**删除前的历史验证记录**（`committed-01~03.png` 保留在盘，作为该能力当时形态的证据，不再重拍——原「目录树」与「新标签页打开差异」两种形态已随删除改变，当前的等价验证见 §4.2 的日志页变更集相关行）。
+
+- **入口（删除前）**：更多「已提交」→ `/repos/:id/committed`。
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
@@ -493,7 +496,7 @@
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
 | F-147 | 分支快捷弹窗（等效 = 顶栏「分支」） | 顶栏「分支」→ 分支页 | 等效承载可达（同 branch-01 证据；本行截顶栏入口态） | ✅ | quick-actions-01.png（LogPage 顶栏入口态：悬停 `button[aria-label="分支"]` → Tooltip「打开分支页：查看本地/远程分支并执行新建、检出、合并等操作」；点击 → 直达 `/repos/:id/branches`（**等价承载可用**）；分支页功能证据见 branch-01/02.png（F-062 起）） |
-| F-148 | 操作聚合（等效 = 顶栏 + 更多菜单 + 操作条） | 展开顶栏按钮区 + 更多菜单 | 5 按钮 + 18 项全量入口聚合在位（同 log-page-14/15 证据；本行截聚合展开态） | ✅ | quick-actions-02.png（同屏聚合：顶栏动作按钮 **撤销最近提交/变更/分支/合并/贮藏**（图标按钮带 `aria-label`，悬停 `贮藏` 显示 Tooltip「打开贮藏页：把未提交的改动暂存起来，或把已有贮藏重新应用回工作区」）+ 工具位 首页/设置/更多 + 「更多」展开 **16 项**（主仓为本地 file 远程）——溯源/历史/已提交/搜索/变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略/工作树/子模块）。**计数实测**：无托管远端 16 / 仅 github 17（github-01.png）/ 仅 gitlab 17（F-140）/ **两者皆有 18**（用双托管远程的 clone 仓实测）→「18 为含两种托管面板的全集上限」成立；操作条证据沿用 conflicts-06.png |
+| F-148 | 操作聚合（等效 = 顶栏 + 更多菜单 + 操作条） | 展开顶栏按钮区 + 更多菜单 | 5 按钮 + 15 项全量入口聚合在位（同 log-page-14/15 证据；本行截聚合展开态） | ✅ | quick-actions-02.png（同屏聚合：顶栏动作按钮 **撤销最近提交/变更/分支/合并/贮藏**（图标按钮带 `aria-label`，悬停 `贮藏` 显示 Tooltip「打开贮藏页：把未提交的改动暂存起来，或把已有贮藏重新应用回工作区」）+ 工具位 首页/设置/更多 + 「更多」展开 **16 项**（主仓为本地 file 远程）。**图摄于「已提交」项撤除之前**：当时清单含已提交项、计数为 16/17/17/18；现行清单去掉该项后为 溯源/历史/搜索/变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略/工作树/子模块，**计数变为 无托管远端 15 / 仅 github 16 / 仅 gitlab 16 / 两者皆有 17**（GitHub 面板证据 github-01.png、GitLab 面板证据 F-140）→「17 为含两种托管面板的全集上限」成立；操作条证据沿用 conflicts-06.png |
 
 ### 4.30 SettingsPage（slug `settings`；P1/P2）
 
@@ -578,6 +581,8 @@
 > **夹具耦合（跑之前先看这条）**：内容级就绪门要求夹具里**真的有那些内容** —— browse 的树节点、settings 的 git 配置行（键集由代码里的 `CONFIG_KEYS` 决定，与夹具无关）、status 的变更行、stashes、tags、patches、shelves、worktrees、submodules、console 的历史记录。其中 stash / 未跟踪文件 / tag / patch / shelf / worktree / submodule 都是**可变状态**：一旦有人 drop 掉一个 stash、把未跟踪文件提交掉或删掉 tag，对应的格子会**如实判红**（提示「内容级就绪选择器未出现」）而不是静默跳过 —— 那一格此时没有可量的数据，绿了才是错的。排查顺序是先看夹具（`git stash list` / `git status --porcelain` / `git tag` …），不要先动门。另注：本轮期间实测到**另一个会话在同一夹具仓库上来回 checkout 分支**（`git reflog`：`master ↔ sub-b`），那会让日志页/对比页的内容中途换一批；跑验收前请确认没有别的会话在使用该夹具。
 
 #### ① 范围清单（逐项 ✅/❌/跳过+理由）
+
+> 本节的页面清单是**当轮（R22）的历史快照**：其中 `browse`（2026-09-16）与 `committed`（2026-09-20）两条整页路由已按用户口径删除，现行路由格以 `scripts/check-fluid-layout.mjs` 的 `routeCells()` 为准（现 23 个页面 / 24 条路由格）。删除说明见 §4.18、§4.31。
 
 **核心断言**：`document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1`（+1 容亚像素）。
 
@@ -1160,8 +1165,8 @@
 | `three-way-view` / `merge-view` | `conflicts-03.png`（全屏三栏：当前分支 / 合并来源 / 合并结果）、`conflicts-08b.png`（保存前结果栏已改写为 `line1 master` / `line2 feature` / `line3 resolved-by-hand`） |
 | `branch-compare-view` | `diff-page-10.png`（`?compare=diverge-test` 双 range 对比视图）、`branch-06.png`（分支页「比较」入口与「当前」分支禁用态） |
 | `blame-view` | `blame-01…04.png`（注解列表 / 三联动 / 受影响文件 / `previousLineno` 边界）；根 testid `blame-file` / `blame-line-N` / `blame-hash-N` 实测在盘 |
-| `committed-changes-panel` | `committed-01…03.png`（提交列表分页 50→100 / 目录树 / 与 diff 页联动）；根 testid `committed-entry-N` / `committed-load-more` 实测在盘 |
-| 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复（原 `BrowsePanel` 已随整页形态删除） |
+| ~~`committed-changes-panel`~~ | 组件已随页面删除（2026-09-20 用户口径）；`committed-01…03.png` 保留为删除前的历史证据（提交列表分页 50→100 / 目录树 / 与 diff 页联动），根 testid `committed-entry-N` / `committed-load-more` 已随组件移除。当前的等效证据见 `log-page-*`（变更集标签：`snapshot-changeset-title` / `snapshot-changeset-pane` / `changes-diff-*`） |
+| 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复（原 `BrowsePanel`、`CommittedChangesPanel` 已随整页形态删除） |
 
 ### 5.28 折叠 / 分支过滤 / 最近仓库项 冒烟（Task 8，2026-09-13）
 

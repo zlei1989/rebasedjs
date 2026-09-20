@@ -325,13 +325,6 @@ export const browseQuerySchema = z.object({ rev: z.string().min(1) });
 export const browseContentQuerySchema = z.object({ rev: z.string().min(1), file: z.string().min(1) });
 export type BrowseContentQuery = z.infer<typeof browseContentQuerySchema>;
 
-/** Committed Changes 分页查询：limit≤200、skip 游标（沿用 log 端点先例） */
-export const committedQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  skip: z.coerce.number().int().min(0).default(0),
-});
-export type CommittedPageQuery = z.infer<typeof committedQuerySchema>;
-
 /** 提交搜索查询：q 必填；mode 默认 grep；limit≤100 */
 export const searchQuerySchema = z.object({
   q: z.string().min(1),

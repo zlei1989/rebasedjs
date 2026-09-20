@@ -117,7 +117,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 | | `history` | 文件历史（`%P` 父哈希、重命名跟随） |
 | | `blame` | `blame --porcelain` 解析、父哈希批量解析 |
 | | `search` | 提交内容搜索（grep/pickaxe） |
-| | `committed` | 已提交变更浏览、提交文件清单 |
+| | `committed` | 单提交变更文件清单（原「已提交变更浏览分页」随该页撤除） |
 | | `tree` | `ls-tree -r -z` 历史快照树 |
 | | `content` | `readFileAtRev`（`git show <rev>:<file>` / 工作区读文件） |
 | 差异与暂存 | `diff` | 工作区/暂存/提交间 diff、流式 chunk、分支与工作树差异清单 |
@@ -181,7 +181,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 | `blame.ts` | 溯源 |
 | `history.ts` | 文件历史（含重命名跟随） |
 | `browse.ts` | 历史快照浏览（树 + 文件内容） |
-| `committed.ts` | 已提交变更浏览 |
+| `committed.ts` | 单提交变更文件清单（Show All Affected） |
 | `search.ts` | 提交内容搜索 |
 | `patch.ts` | 补丁创建/应用/删除/导入搁置 |
 | `shelf.ts` | 搁置管理 |
@@ -244,7 +244,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 |----|------|
 | base/ | **布局原语：`PageShell`、`Toolbar`、`EllipsisText`、`SplitPane` + 密度模块 `density.ts`/`density-context.tsx`（口径见 §6）+ 主题模块 `app-theme.tsx`（`useResolvedTheme`：偏好 → 实际明暗 + antd 配置 + `data-theme`，两个 app 共用，§5.23）**、`VirtualList`、`GraphCanvas`、`FileTree`、`MonacoDiffView`/`MonacoTextView`（`monaco-lazy` 懒加载 monaco-editor）、`CodeBlock`/`PatchCodeBlock`（`shiki-lazy` 懒加载 shiki，只读代码片段高亮，与 Monaco 的分工见 §3.1）、`EmptyState`、`OperationStatus` |
 | domain/ | `CommitGraph`、`RepoStatusBar`、`CommitDetailsPanel`、`DiffViewer`（并排/行内 + staged/工作区切换 + 忽略空白开关）、`HunkDiffView`（PR/MR 行级 diff）、`DirectoryTree`、`CommittedStatus` |
-| composite/ | `RepoPage`、`LogPage`、`SnapshotTabs`（日志页就地快照栏的标签栏）、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`BlameView`、`HistoryPanel`、`CommittedChangesPanel`、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`AppSettingsPage`/`RepoSettingsPage`/`SettingsShell`（§5.23 设置页按作用域拆两页，外壳共用） |
+| composite/ | `RepoPage`、`LogPage`、`SnapshotTabs`（日志页就地快照栏的标签栏）、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`BlameView`、`HistoryPanel`、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`AppSettingsPage`/`RepoSettingsPage`/`SettingsShell`（§5.23 设置页按作用域拆两页，外壳共用） |
 | graph-layout/ | 自 vcs-log/graph 移植的布局算法（纯函数，不 import React；`fixtures/java/` 为 Java testData 转制的行为等价夹具） |
 
 ### 2.6 框架层：web-next 与 web-koa
@@ -294,7 +294,7 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 | `GitStage*`（暂存区 + 三版本对比） | `StatusPage` 暂存区 + `ThreeWayView` | 三版本模型（本地/暂存/HEAD）、hunk 展开、整文件暂存 |
 | `GitConflictsPanel` + 平台 3-way merge | `ConflictsPanel` + `MergeView` | 冲突文件分组、左右 diff + 底部合并结果面板 |
 | CommitDialog（modal） | `StatusPage` 内嵌提交框 | changelist 选择、amend/sign-off/GPG 选项、提交范围 |
-| `CommittedChangesBrowser` | `CommittedChangesPanel` | 按目录树浏览已提交变更的结构 |
+| `CommittedChangesBrowser` | ~~`CommittedChangesPanel`~~（已撤除，能力并入 LogPage 变更集标签） | 按目录树浏览已提交变更的结构 |
 | `GitBranchesTreePopupOnBackend` / `GitQuickActionsToolbarPopup` | LogPage 顶栏 + 「更多」菜单 | 操作聚合方式（当前仓库可执行操作全集） |
 
 ---
@@ -382,7 +382,7 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 
 | 原语 | 位置 | 契约 | 它取代了什么 |
 |------|------|------|--------------|
-| `PageShell` | `packages/client/ui/src/base/page-shell.tsx` | `density?: 'compact' \| 'default'`（默认 compact）、`padding?: number \| string`（不传不落 style）、`gap?: number`（不传不落 style）、`scroll?: 'page' \| 'inner' \| 'none'`（默认 page）、`children` | 每个页面各写一遍的根 `<Flex vertical …>`（落地：两个 app **各 20 个页面文件** + ui 层 **11 个**页面级 composite 使用 `PageShell` —— 11 = `log-page` / `repo-page` / `settings-page` / `status-page` / `search-panel` / `merge-view` / `blame-view` / `branch-compare-view` / `diff-page` / `diff-stream-view` / `committed-changes-panel`，可逐文件核对；`github-panel` / `gitlab-panel` 的根是**横向行**，按 §6.2 的轴向判定**不迁**） |
+| `PageShell` | `packages/client/ui/src/base/page-shell.tsx` | `density?: 'compact' \| 'default'`（默认 compact）、`padding?: number \| string`（不传不落 style）、`gap?: number`（不传不落 style）、`scroll?: 'page' \| 'inner' \| 'none'`（默认 page）、`children` | 每个页面各写一遍的根 `<Flex vertical …>`（落地：两个 app 的页面容器（web-next 20 / web-koa 19 个页面文件）+ ui 层 **10 个**页面级 composite 使用 `PageShell` —— 10 = `log-page` / `repo-page` / `settings-page` / `status-page` / `search-panel` / `merge-view` / `blame-view` / `branch-compare-view` / `diff-page` / `diff-stream-view`，可逐文件核对；`github-panel` / `gitlab-panel` 的根是**横向行**，按 §6.2 的轴向判定**不迁**） |
 | `SplitPane` | `base/split-pane.tsx` | `side`、`children`（主区）、`sideWidth?: number`（默认 300）、`sidePosition?: 'start' \| 'end'`（browse 在左、log 在右）、`collapseBelow?: number`（默认 768）、`gap?: number`（不传不落 style） | 写死 `width:300/320 + flexShrink:0` 的侧栏（窄屏必然横向溢出的结构性成因） |
 | `Toolbar` | `base/toolbar.tsx` | `align?: 'start' \| 'center' \| 'end' \| 'between'`（映射**主轴** `justify`）、`gap?`、`wrap?: boolean`（默认 true）、`children`；容器带 `width:100%; minWidth:0` | 手写的 `flexWrap` 补丁（`flexWrap` 缺 `minWidth:0` 时子项仍会顶宽父级） |
 | `EllipsisText` | `base/ellipsis-text.tsx` | `children: string`、`title?`（存在则走 antd 原生 ellipsis tooltip）、`mono?`、`type?`、`strong?`、`maxWidth?: number \| string`；自身带 `minWidth: 0` | 不可断行的长 hash / 长路径 / 长分支名（它们把所在行顶宽，是溢出传播源） |
@@ -394,7 +394,7 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 
 页面根 = 纵向 Flex，`width:100%`、`minWidth:0`、`height:100%`，**刻意不设 `alignItems`**：
 
-1. `align-items` 的默认值（`normal` → 表现为 `stretch`）正是「子元素横向拉伸沾满」的来源。全站原先有 **44 处** `align="flex-start"`，其中 **40 处**是**纵向页面根**——在纵向 Flex 上交叉轴是水平方向，它表示「子项不横向拉伸」，于是页面内容不沾满、且子项按内容宽溢出并把父级顶宽（意外横向滚动条）；另有 **4 处**在**横向** composite 容器上（`branch-compare-view.tsx` / `committed-changes-panel.tsx` / `github-panel.tsx` / `gitlab-panel.tsx`），按下方口径**保留**。**删掉纵向根上的那个属性才是修好，加回去才是 bug。**
+1. `align-items` 的默认值（`normal` → 表现为 `stretch`）正是「子元素横向拉伸沾满」的来源。全站原先有 **44 处** `align="flex-start"`，其中 **40 处**是**纵向页面根**——在纵向 Flex 上交叉轴是水平方向，它表示「子项不横向拉伸」，于是页面内容不沾满、且子项按内容宽溢出并把父级顶宽（意外横向滚动条）；另有 **4 处**在**横向** composite 容器上（`branch-compare-view.tsx` / `github-panel.tsx` / `gitlab-panel.tsx` 三处在册；第四处 `committed-changes-panel.tsx` 已随该页撤除），按下方口径**保留**。**删掉纵向根上的那个属性才是修好，加回去才是 bug。**
 2. `minWidth: 0` 阻止 flex 子项以「自动最小尺寸 = 内容宽」把父级顶宽；`scroll="inner"` 另需 `minHeight: 0`（纵向 Flex 的主轴是垂直方向，默认 `min-height: auto` 会让内容撑开容器而不产生内部滚动）。
 3. `padding` / `gap` 默认**不落 style**：既有页面的 16px 内边距由页面级 composite 自带，原语默认值一旦非 0，迁移会凭空新增间距并可能制造溢出。
 
@@ -420,14 +420,15 @@ token: { fontSizeSM: 11 }   // 实效 fontSize / fontSizeSM / fontSizeLG = 12 / 
 
 ### 6.4 允许横向滚动的例外清单
 
-页面级横向滚动必须为 0（§6.5）；**组件内部**的横向滚动是允许的，且只有四类：
+页面级横向滚动必须为 0（§6.5）；**组件内部**的横向滚动是允许的，且只有三类：
+
+> 已撤销的例外：**提交行的 refs 芯片列**曾在本表里（`maxWidth:140` + `overflow-x:auto` + 隐藏滚动条，超出在列内滚动）。该口径已在 D-47（`docs/e2e-verification.md`）被判定为**静默截断**并撤销 —— 现行实现是 `maxWidth:320` 的**可收缩裁剪盒**（`flexShrink:1` + `minWidth:0`，空间不足时逐 chip 省略号 + `title` 全名），不做列内滚动，故它不再属于本清单。
 
 | 例外 | 位置 | 为什么必须允许 | 断言口径 |
 |------|------|----------------|----------|
 | Monaco 编辑器 | `MonacoDiffView` / `MonacoTextView` / `HunkDiffView`（`github-panel` / `gitlab-panel` 展开差异） | 代码行不换行是编辑器语义；长行必须靠编辑器自己的横向滚动条可达。编辑器宿主（`.monaco-editor`）本身是**裁剪容器**（`scrollWidth == clientWidth`），溢出**不外泄**到文档；真正持有横向滚动区间的是它内部的 `.monaco-scrollable-element` | 四条同时成立：① 长行真实存在（`.view-lines` 宽 > 编辑器 `clientWidth`）；② 宿主 `scrollWidth <= clientWidth + 1`（裁剪，不外泄）；③ `.monaco-scrollable-element` 的 `scrollWidth > clientWidth`（**注意其值是 Monaco 的大滚动哨兵 16777216，不能当长行的度量**）；④ 拖动 Monaco 自己的横向滚动条滑块后内容真的位移 |
 | 长文本块 | console / 补丁预览等等宽文本块；含 `base/code-block`（`.rebased-code-block`：状态页补丁预览的 hunk 正文与整份补丁，无编辑器实例） | 等宽原文不折行，属于内容语义。`code-block` 另有一条**垂直**滚动：hunk 正文 `maxHeight 240`、整份补丁 `maxHeight 480`，长补丁在块内滚而不是把卡片撑长 | 这些块自身带 `overflow: auto`，滚动发生在块内。`code-block` 的行块 `.line { white-space: pre }` 保证行内空白与长行不折行，横向滚动区间由块自己持有（页面级断言仍须为 0） |
 | 浮层 / 弹窗包裹层（overlay） | antd 的 `.ant-modal-wrap`（所有 `Modal`：认证弹窗、重置弹窗、忽略配置、CRLF 三选、手动合并全屏 Modal 等），以及同为 `position: fixed` 的浮层容器 | 浮层是**页面之外**的一层，其定位基准是视口而不是文档流：`.ant-modal-wrap` 自带 `overflow: auto`，弹窗内容横向变宽时滚动发生在这层包裹容器里，**不会**传播成文档级横向滚动。这正是「弹窗内部溢出被包裹层吃掉」的机制 | 页面级断言（§6.5）对弹窗开口的格子只能证明「**弹窗背后的页面**不溢出」——`position: fixed` 的元素既不参与文档滚动宽的计算，也被越界元素清单刻意跳过。**弹窗内部**的横向溢出要用另一把尺子：`.ant-modal-wrap`（或 `.ant-modal`）自身的 `scrollWidth <= clientWidth + 1`。目前验收脚本只做了前者，后者列为未覆盖项（`docs/e2e-verification.md` §5.16④） |
-| 提交行的 refs 芯片列 | `domain/commit-graph.tsx` 的 `[data-testid="commit-graph-refs"]`（`flexShrink:0` + `maxWidth: 140` + `overflowX:'auto'` + `scrollbarWidth:'none'`） | 一条提交可能挂任意多个分支/标签芯片，列宽必须设上限才不让提交行被顶宽；超出上限时**在列内横向滚动**（不是裁剪 —— `overflow-x: auto` 会给用户滚动区间），滚动条被 CSS 隐藏（`scrollbarWidth: none`），靠滚轮/触控板横向手势可达 | 该列的 `scrollWidth` 可大于 `clientWidth`（列内滚动），但它是**固定上限的裁剪盒**：页面级断言仍为 0（列宽 ≤ 140px 不会把行顶宽）。**不以「列内是否真的滚得动」为断言**（滚动条被隐藏，等价断言不稳定），改由 `commit` 页的页面级溢出断言覆盖它的外泄风险 |
 
 **不允许**的横向滚动：任何页面级横向滚动条（= 上述断言失败），以及「长 hash / 长路径 / 长分支名」把所在行顶宽——后者用 `EllipsisText`（截断 + 溢出时 tooltip）收口，不是滚动。
 

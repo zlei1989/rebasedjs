@@ -1,6 +1,6 @@
 /**
- * name-status 状态码 → 徽标共享件：CommittedChangesPanel（提交变更文件列表）与
- * BlameView 受影响文件 Modal（Show All Affected #34）同源渲染。
+ * name-status 状态码 → 徽标共享件：日志页变更集清单（ChangesetList）、BlameView 受影响文件
+ * Modal（Show All Affected #34）与分支/工作树差异清单同源渲染。
  */
 import { Tag } from 'antd';
 import type { CommittedFileStatus } from '@rebased/contracts';

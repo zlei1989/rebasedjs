@@ -785,7 +785,6 @@ export default function Page({
         onOpenTags={() => router.push(`/repos/${repoId}/tags`)}
         onOpenBlame={() => router.push(`/repos/${repoId}/blame`)}
         onOpenHistory={() => router.push(`/repos/${repoId}/history`)}
-        onOpenCommitted={() => router.push(`/repos/${repoId}/committed`)}
         onOpenSearch={() => router.push(`/repos/${repoId}/search`)}
         onOpenPatches={() => router.push(`/repos/${repoId}/patches`)}
         onOpenShelves={() => router.push(`/repos/${repoId}/shelves`)}

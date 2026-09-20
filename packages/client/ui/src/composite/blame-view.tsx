@@ -197,7 +197,7 @@ function AffectedFilesModal({
         </Typography.Text>
       ) : entry === null || entry === undefined || entry.files.length === 0 ? (
         entry !== null && entry !== undefined && entry.parents.length > 1 ? (
-          /* 合并提交：git log--name-status 默认不展开 merge 变更（与 CommittedChangesPanel 同语义提示） */
+          /* 合并提交：git log--name-status 默认不展开 merge 变更（与日志页变更集清单 ChangesetList 同语义提示） */
           <EmptyState title="合并提交" description="git 对合并提交默认不列出文件变更；请到日志页查看合并结果" />
         ) : (
           <EmptyState title="该提交无文件变更" />
