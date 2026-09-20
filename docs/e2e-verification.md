@@ -1582,7 +1582,7 @@
 | 9 | 未知态（陈旧 `?select=`） | ✅ | `?select=deadbeef…` → 操作条只剩 **3 个**按钮（**无「差异页」**，不猜根提交）；「本文件改动」显示服务端中文错误「引用不存在或不是提交：deadbeefdeadbeefdeadbeefdeadbeefdeadbeef」；中栏不高亮任何行但 **12 条历史仍在** | 控制台唯一一条 error 是预期内的 `GET /api/repos/…/commits/deadbeef…` **400** |
 | 10 | 旧 `?rev=` 深链规范化 | ✅ | web-koa `:5173`：`?file=docs/manual.md&rev=8d6d961` → 地址被改写为 `?file=docs%2Fmanual.md&select=8d6d961&view=annotate`，逐行注解 **1519 行**；web-next `:3091` 同形 | `git show -s 8d6d961` = `docs: 更新 README 与使用手册（同步新功能、精简 README、重选手册配图）` |
 | 11 | 前进 / 后退 | ✅ | 浏览器后退恢复 `?file=docs/manual.md&select=8d6d961&view=annotate` + 逐行注解 1519 行（页内动作走 replace，不塞满历史） | — |
-| 12 | 明暗双主题 + 列宽记忆 | ✅ | 暗色 `data-theme=dark`（body `rgb(20,20,20)`）；切偏好为 light 后 `data-theme=light`（body `rgb(255,255,255)`），**收尾已还原为 dark**；列宽偏好写入后 reload 仍为 `tree 320 / commits 260`，右栏弹性吃剩余 850。**复拍时补测**（明亮主题帧）：`[data-testid="blame-view-changes"]` 高 **759**、「本文件改动」渲染出**真实差异 3 处插入 / 5 处删除** | — |
+| 12 | 明暗双主题 + 列宽记忆 | ✅ | 暗色 `data-theme=dark`（body `rgb(20,20,20)`）；切偏好为 light 后 `data-theme=light`（body `rgb(255,255,255)`），**收尾已还原为 dark**；列宽偏好写入后 reload 仍为 `tree 320 / commits 260`，右栏弹性吃剩余 850。**复拍时补测**（明亮主题帧）：`[data-testid="blame-view-changes"]` 高 **759**、「本文件改动」渲染出**真实差异（3 行插入 / 3 行删除，见 ④ 表注）** | — |
 
 **控制者补充核对（超出 12 项，但与本次改动直接相关）**
 
@@ -1622,7 +1622,9 @@
 | `blame-04.png` | 「逐行注解」+ 点行选中联动（中栏与注解行同时高亮 `8536a91`） | 5 | `25B73FD59FD0FBAC` |
 | `blame-05.png` | 陈旧 `?select=` 未知态（无「差异页」+ 中文错误） | 9 | `CFC48706FFD87D80` |
 | `blame-05b.png` | 旧 `?rev=` 深链规范化后的落点（逐行注解） | 10 | `F2022B757D2417FB` |
-| `blame-06.png` | 三栏总览（明亮主题，「本文件改动」标签，**含真实差异**：3 处插入 / 5 处删除） | 12 | `F1D7395541B3FDFD` |
+| `blame-06.png` | 三栏总览（明亮主题，「本文件改动」标签，**含真实差异**：3 行插入 / 3 行删除） | 12 | `F1D7395541B3FDFD` |
+
+> **表注（差异行数的口径，勿用 DOM 计数）**：`blame-06.png` 与范围项 12 里的「3 行插入 / 3 行删除」取自 git 权威计数——`git diff --numstat b96148e^ b96148e -- AGENT.md` = `3	3	AGENT.md`（该提交即图内选中的 `b96148e`）。**不要再用 Monaco DOM 的 `.line-insert`/`.line-delete` 元素计数**：`.line-delete` 会把装饰性元素一并算进去，实测多出 2，得到「5 处删除」这个偏大的数（本台账首版即误采此值，已按 git 更正）。
 
 > **账目口径（§1.2）**：`<NN>` = 该行最终正确效果图，`<NN>b` = 过程图/第二态图。本页属**只读检索页**，没有表单与二次确认（故 §5.27 的「表单 + 成功」成对口径不适用），`blame-05`/`blame-05b` 是「未知态」与「深链规范化落点」两个独立状态，按 §1.2 的「同一行天然同画面必须换一个有意义的状态」规则区分。
 > **旧图处置**：旧的 `blame-01…05b`（单列版）被**同名覆盖/替换**——`blame-02.png` 与 `blame-04.png` 的旧图是单列内容，现为三栏内容；`blame-05.png`/`blame-05b.png` 旧图是「受影响文件 Modal」与「点文件后的联动」，现为「未知态」与「深链落点」。引用这些文件名的矩阵行（§4.16 四行、§5.27 ①、§5.27 ③）已同批改写为三栏口径。**除新拍的 `blame-06.png` 外，本轮无新增截图文件、无删除**。
@@ -1637,6 +1639,6 @@
 | 大文件历史（数千条提交）下中栏性能 | 未压测；计划 §0.3 已列为**非目标** | 触发条件出现（真实大仓反馈卡顿）时单独立项 |
 | F-104 `previousLineno` 边界 | 本轮 12 项范围里没有这一项，**未重跑**（沿用 R10 的结论）；旧图 `blame-04.png` 已被三栏态同名覆盖，单列态画面不再存在 | 三栏态下重走一次改名文件的注解（本 worktree 含重命名历史，夹具现成） |
 
-**⑥ 流水线复验**：本轮（文档收口）**只改 `docs/`**，无源码改动——改动路径只有 `docs/` 下的三个 `.md`：`e2e-verification.md`（本节的台账与矩阵行）与 `manual.md`、`pages-and-api-audit.md`（各 1 行，已随 `6ad98d8` 提交）。工作区另有**两处与本轮文档改动无关的既有残留**，如实登记：① `docs/shots/` 下的截图（由控制者直接落盘，已由 `5a5574e`、`2ad5c65` 提交）；② `.smoke-config/`（冒烟用的独立配置目录，**仍 untracked**，待控制者收尾清理）。`git diff --check` 干净。收尾实跑 `pnpm --filter @rebased/ui test` → **79 文件 / 983 用例全绿**（含三栏工作台的 `blame-workbench` / `blame-change-pane` / `blame-commits-column` / `blame-annotate-table` / `blame-state` 五套）；因本轮零代码改动，该结果与三栏工作台各提交时的结论一致。
+**⑥ 流水线复验**：本轮（文档收口）**只改 `docs/`**，无源码改动——改动路径只有 `docs/` 下的三个 `.md`：`e2e-verification.md`（本节的台账与矩阵行）与 `manual.md`、`pages-and-api-audit.md`（各 1 行，已随 `6ad98d8` 提交）。本轮开始时工作区另有两处与本轮文档改动无关的残留，**收尾时均已消解**：① `docs/shots/` 下的 7 张截图（由控制者直接落盘，已由 `5a5574e`、`2ad5c65` 提交）；② 冒烟用的临时配置目录 `.smoke-config/`（**已清理**）。复查时 `git status --porcelain` 输出为空（该次实测即本节收尾时的记录）。`git diff --check` 干净。收尾实跑 `pnpm --filter @rebased/ui test` → **79 文件 / 983 用例全绿**（含三栏工作台的 `blame-workbench` / `blame-change-pane` / `blame-commits-column` / `blame-annotate-table` / `blame-state` 五套）；因本轮零代码改动，该结果与三栏工作台各提交时的结论一致。
 
 
