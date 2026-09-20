@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { theme } from 'antd';
 import { describe, expect, it, vi } from 'vitest';
 import type { CommitInfo } from '@rebased/contracts';
-import { CommitGraph } from './commit-graph';
+import { CommitGraph, type CommitGraphProps } from './commit-graph';
 import { colorForRef } from '../graph-layout/color';
 import { compactTheme } from '../base/density';
 
@@ -44,10 +44,35 @@ describe('CommitGraph', () => {
     expect(onSelect).toHaveBeenCalledWith('c2');
   });
 
-  it('行默认列含 Author 与格式化日期', () => {
+  // 作者/日期两列**始终渲染**（2026-09-20 用户口径：删除隐藏策略）。
+  // 改前由 `showAuthor` / `showDate` 两个 prop 按「日志栏实测宽度 ≥ 512」整列显隐，且两列合计 272px
+  // 定宽；现在这两个 prop 已从 `CommitGraphProps` 删除，**没有任何开关能关掉它们**。
+  // 本用例是负向守卫：谁把开关加回来（重新引入条件渲染），这里立刻变红。
+  it('作者/日期始终渲染：每行都有这两列，且无 prop 可关掉', () => {
     render(<CommitGraph commits={commits} />);
     expect(screen.getAllByText('Alice')).toHaveLength(3);
     expect(screen.getAllByText('2026-09-01 14:30')).toHaveLength(3);
+    // 逐行都在（不是「整体命中 ≥1」）：3 行 × 两列
+    const rows = screen.getAllByTestId('commit-graph-row');
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(within(row).getByTestId('commit-graph-author')).toBeInTheDocument();
+      expect(within(row).getByTestId('commit-graph-date')).toBeInTheDocument();
+    }
+    // 两列可压缩但**不可被隐藏**：压缩靠省略号，不靠 display/visibility 的花招
+    for (const el of rows.flatMap((row) => [
+      within(row).getByTestId('commit-graph-author'),
+      within(row).getByTestId('commit-graph-date'),
+    ])) {
+      expect(el.style.display).toBe('');
+      expect(el.style.visibility).toBe('');
+      expect(el.hidden).toBe(false);
+    }
+    // 编译期守卫：接口上已无这两个 prop。
+    // @ts-expect-error showAuthor 已删除（删除隐藏策略）；若它被加回接口，这行会变成「多余」而报错
+    void ({} as CommitGraphProps).showAuthor;
+    // @ts-expect-error showDate 已删除（同上）
+    void ({} as CommitGraphProps).showDate;
   });
 
   it('分支 chips 默认开、tag chips 默认关；showTags 后显示标签', () => {
@@ -72,11 +97,19 @@ describe('CommitGraph', () => {
     expect(colorForRef('main')).not.toBe(colorForRef('feature'));
   });
 
-  // 行内间距口径（用户口径 8px）：说明区「说明文字 ↔ refs chips」的间距交给 antd Flex 的档位类名，
-  // 组件与调用点都不再写内联 gap —— 内联间距绕过主题密度，且一个档位调不了两处。
-  it('说明区不写内联间距：8px 由 antd Flex 的档位类名提供', () => {
+  // 行内间距口径：横向各段的间距**一律来自 antd Flex 的档位类名**，组件与调用点都不写内联 gap。
+  //
+  // 结构（2026-09-20 用户口径）：作者/日期进「行内容区」（`commit-graph-message`）后，
+  // 主题 + refs chips 又被收进**内层** Flex（主题组）——故间距分两级、两个档位：
+  //   · 内层（主题 ↔ chips）  = `gap="small"` = `paddingXS` = 4px；
+  //   · 外层（主题组 ↔ 作者 ↔ 日期）= `gap="middle"` = `padding` = 8px。
+  // 两个档位必须各锁一条，否则「内层档位被改/被去掉」只会表现为间距变化，测试全绿：
+  // 去掉内层 Flex 后主题与 chips 变成外层的直接子项，间距会从 4px **静默变成 8px**。
+  // 内联 gap 的禁令覆盖整棵子树（外层 + 内层 + chips 行 + 作者/日期）。
+  it('行内容区不写内联间距：外层 8px / 内层 4px 都由 antd Flex 的档位类名提供', () => {
     render(<CommitGraph commits={commits} />);
-    const box = within(screen.getAllByTestId('commit-graph-row')[0]).getByTestId('commit-graph-message');
+    const row = screen.getAllByTestId('commit-graph-row')[0];
+    const box = within(row).getByTestId('commit-graph-message');
     // 不变量：该子树里任何元素都不得用内联 gap/columnGap/rowGap 表达间距
     const inlineGap = [...box.querySelectorAll<HTMLElement>('*')].filter(
       (el) => el.style.gap !== '' || el.style.columnGap !== '' || el.style.rowGap !== '',
@@ -85,11 +118,81 @@ describe('CommitGraph', () => {
     // 机制：间距与交叉轴居中都由类名提供（gap=middle → .ant-flex-gap-middle）
     expect(box.className).toContain('ant-flex-gap-middle');
     expect(box.className).toContain('ant-flex-align-center');
-    // 口径锚点：middle 档 = 主题 `padding` token，而全站默认密度为紧凑
-    // （PageShell → base/density.ts 的 compactAlgorithm）——两者相等，8px 才成立。
+    // 内层主题组：同类机制、另一档位
+    const messageGroup = box.children[0] as HTMLElement;
+    expect(messageGroup.className).toContain('ant-flex-gap-small');
+    // 口径锚点：middle 档 = 主题 `padding` token、small 档 = `paddingXS`，
+    // 而全站默认密度为紧凑（PageShell → base/density.ts 的 compactAlgorithm）——8px / 4px 才成立。
     // 谁动了 density.ts 的间距 token、或把该行挂到非紧凑子树下，这里立刻变红。
     expect(theme.getDesignToken(compactTheme('light')).padding).toBe(8);
     expect(theme.getDesignToken(compactTheme('dark')).padding).toBe(8);
+    expect(theme.getDesignToken(compactTheme('light')).paddingXS).toBe(4);
+    expect(theme.getDesignToken(compactTheme('dark')).paddingXS).toBe(4);
+  });
+
+  // 结构口径（2026-09-20 用户明确「三个节点用一个 div 包裹」）：主题 / 作者 / 日期三层同处一个柔性容器；
+  // 作者/日期**直接是它的子项**——档位 gap 只作用于直接子项，隔一层包装就一个像素的间距都拿不到。
+  // 改前作者/日期是「行」的兄弟节点（容器之外），与说明区之间没有任何间距来源。
+  // 容器子项恰为 3 个：主题组（主题 + refs chips 的内层 Flex）+ 作者 + 日期。
+  it('主题 / 作者 / 日期同处一个柔性容器，且都是它的直接子项', () => {
+    render(<CommitGraph commits={commits} />);
+    const row = screen.getAllByTestId('commit-graph-row')[0];
+    const box = within(row).getByTestId('commit-graph-message');
+    const author = within(row).getByTestId('commit-graph-author');
+    const date = within(row).getByTestId('commit-graph-date');
+    // 三者在同一个容器内（作者/日期不再是「行」的直接子节点）
+    expect(box.contains(author)).toBe(true);
+    expect(box.contains(date)).toBe(true);
+    // 主题组：主题文字 + refs chips 在内层 Flex 里（chips 不再是外层容器的直接子项）
+    const messageGroup = box.children[0] as HTMLElement;
+    expect(messageGroup.className).toContain('ant-flex');
+    expect(messageGroup.children[0].textContent).toBe('合并 feature 分支');
+    expect(messageGroup.children[1]).toBe(within(row).getByTestId('commit-graph-refs'));
+    // 外层容器的直接子项：主题组 / 作者 / 日期（chips 已下沉一层）
+    expect(box.children).toHaveLength(3);
+    expect(box.children[1]).toBe(author);
+    expect(box.children[2]).toBe(date);
+    // 主题组承接「适配所有剩余宽度」：grow 1 + minWidth 0（只剩内容宽度就吃不下剩余宽度了）
+    expect(messageGroup.style.flexGrow).toBe('1');
+    expect(messageGroup.style.minWidth).toBe('0px');
+    expect(box.style.flexGrow).toBe('1');
+    expect(box.style.minWidth).toBe('0px');
+    // **flex-basis 必须是 auto，不能是 0%（即不能写成 `flex: 1`）**：flex 的收缩份额按
+    // `flex-basis × flex-shrink` 加权分配，basis 为 0 的项份额为 0 → 作者/日期永远不会被压缩，
+    // 它们的省略号样式静默失效（实测 520px 行宽下作者列恒为满宽 70px，改为 auto 后 42px）。
+    // 这是「宽度不足时作者和时间也出省略号」这条口径的唯一支点，故单列一条断言钉住它。
+    expect(messageGroup.style.flexBasis).toBe('auto');
+    expect(box.style.flexBasis).toBe('auto');
+    expect(messageGroup.style.flexShrink).toBe('1');
+    expect(box.style.flexShrink).toBe('1');
+    // 作者/日期已从「行」的直接子节点移走：行上只剩图列 + 本容器（否则又会多出一条无间距来源的兄弟）
+    expect([...row.children]).toEqual([within(row).getByTestId('commit-graph-lane'), box]);
+  });
+
+  // 宽度口径（用户明确「紧凑内容宽度」）：作者/日期不再钉死 144/128px，改为按内容宽度，
+  // 上限保留原值（只作超长兜底），且仍可被压缩——压缩下限为 0，故必须有省略号承接。
+  it('作者/日期按内容宽度（不再定宽），保留上限与省略号', () => {
+    render(<CommitGraph commits={commits} />);
+    const row = screen.getAllByTestId('commit-graph-row')[0];
+    const author = within(row).getByTestId('commit-graph-author');
+    const date = within(row).getByTestId('commit-graph-date');
+    for (const [el, ceiling] of [
+      [author, '144px'],
+      [date, '128px'],
+    ] as const) {
+      // 无固定 width（定宽即失去「内容宽度」语义），上限只作超长兜底
+      expect(el.style.width).toBe('');
+      expect(el.style.maxWidth).toBe(ceiling);
+      // 不抢剩余宽度（剩余宽度归主题），宽度按内容：flex-grow 0 + flex-basis auto
+      expect(el.style.flexGrow).toBe('0');
+      expect(el.style.flexBasis).toBe('auto');
+      // 仍可被压缩（用户选择「按内容宽度、仍可被压缩」）
+      expect(el.style.flexShrink).toBe('1');
+      expect(el.style.minWidth).toBe('0px');
+      // 压缩后不能硬切半个字
+      expect(el.style.overflow).toBe('hidden');
+      expect(el.style.textOverflow).toBe('ellipsis');
+    }
   });
 
   // 多个 ref chip 之间的间距（用户口径 4px，视觉上更紧凑）：chips 之间的空隙由 antd `Flex` 的档位类名统一给。

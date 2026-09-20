@@ -110,6 +110,31 @@ describe('RepoTopNav', () => {
     expect(screen.getByTestId('status-branch-chip')).toHaveTextContent('main');
   });
 
+  // 布局（用户口径）：分支状态条整条移到右侧操作区最左——与操作按钮同组，chip 落在该组第一个位置
+  it('分支状态条挂在右侧操作区最左（chip 是操作组的第一个子项，不再在面包屑旁）', () => {
+    render(<RepoTopNav repoName="alpha" status={status} onUndoCommit={() => {}} />);
+    const actions = screen.getByTestId('log-actions');
+    const chip = screen.getByTestId('status-branch-chip');
+    expect(actions).toContainElement(chip);
+    // 结构顺序即左右：状态条是操作组的第一项，后面才是撤销等按钮
+    expect(actions.firstElementChild).toContainElement(chip);
+    expect(screen.getByTestId('log-breadcrumb')).not.toContainElement(chip);
+  });
+
+  // 状态条搬走后左侧那个 Space 只装「进行中操作条 + 去解决冲突」：只注入 status 时不得留下空容器
+  it('只注入 status 时左侧信息区不渲染多余容器（面包屑的兄弟节点为空）', () => {
+    render(<RepoTopNav repoName="alpha" status={status} />);
+    const breadcrumb = screen.getByTestId('log-breadcrumb');
+    expect(breadcrumb.parentElement?.querySelector('.ant-space')).toBeNull();
+  });
+
+  // 回归（浏览器实测发现）：无进行中操作时容器传下来的是 `{kind:'none'}` 而非 undefined，
+  // 而 OperationStatus 自己把这个 kind 渲染成 null——只按 `!== undefined` 判空会留下一个空 Space
+  it('operation 为 none（无进行中操作）时左侧不留空容器', () => {
+    render(<RepoTopNav repoName="alpha" status={status} operation={{ kind: 'none' }} onAbortOperation={() => {}} />);
+    expect(screen.getByTestId('log-breadcrumb').parentElement?.querySelector('.ant-space')).toBeNull();
+  });
+
   it('日志页专属内容按注入渲染：status 驱动状态条；onUndoCommit 驱动撤销按钮（Popconfirm 确认后回调）', async () => {
     const onUndoCommit = vi.fn();
     render(<RepoTopNav repoName="alpha" status={status} onUndoCommit={onUndoCommit} />);

@@ -18,6 +18,8 @@
  *
  * UX 对齐 #2：行默认列为 Subject（图 + refs chips）+ Author + Date（Hash 列省）；
  * 分支 chips 默认开，tag chips 默认关（对齐 Java showTagNames=false），由 showTags 打开。
+ * 作者/日期两列**始终显示**（2026-09-20 用户口径：删除隐藏策略）：空间不足时按内容宽度压缩 + 省略号，
+ * 不再有「按日志栏宽度整列显隐」的开关（原 showAuthor / showDate 与日志页量宽链路已删除）。
  *
  * 间距口径（2026-09-12）：说明区内的间距**一律不写内联 gap / 自定义 class**，由 antd `Flex` 的档位给
  *   （`gap="middle"` = 主题 `padding` token；全站默认紧凑密度下恰为 8px，见下方说明区注释与测试锚点）。
@@ -41,15 +43,6 @@ export interface CommitGraphProps {
   height?: number;
   /** tag chips 开关（默认 false，对齐 Java VcsLogApplicationSettings.showTagNames） */
   showTags?: boolean;
-  /**
-   * 是否渲染作者列（默认 true）。
-   * 关掉即整列消失、腾出的宽度归主题列——日志页展开文件快照栏后列表被挤窄时用它
-   * （168px 的作者列表在窄列表里只能显示几个字，不如让位给提交主题）。
-   * 注意是**不渲染**而不是「渲染成空列」：空列仍占 144px，就失去了让位的意义。
-   */
-  showAuthor?: boolean;
-  /** 是否渲染日期列（默认 true）。语义与不渲染理由同 showAuthor */
-  showDate?: boolean;
   /** 选中行高亮（详情面板当前提交；`?select=<hash>` 深链与点击选中均经此呈现选中态） */
   selectedHash?: string | null;
   /** 分支过滤选中的分支名；空/缺省 = 不过滤（视图与现状逐像素一致） */
@@ -208,8 +201,6 @@ export function CommitGraph({
   onContextMenu,
   height = 480,
   showTags = false,
-  showAuthor = true,
-  showDate = true,
   selectedHash = null,
   branches = EMPTY_BRANCHES,
   collapsed = EMPTY_COLLAPSED,
@@ -355,6 +346,7 @@ export function CommitGraph({
                 cursor: onSelect ? 'pointer' : undefined,
                 whiteSpace: 'nowrap',
                 backgroundColor: selected ? token.controlItemBgActive : undefined,
+                paddingRight: 8,
               }}
               onClick={(event) => {
                 // 命中图元时不选中该行（对齐 Java GraphCommitCellController.shouldSelectCell：
@@ -406,17 +398,22 @@ export function CommitGraph({
                 </svg>
               </div>
               {/*
-              说明区：**说明文字 + refs chips 作为一个整体**（chips 跟在说明之后）。
+              行内容区（2026-09-20 重构）：**主题组（主题文字 + refs chips）/ 作者 / 日期三者同处一层 Flex**，
+              三者都是本层容器的**直接子项**，间距由 `gap="middle"` 统一给。
+              改前作者/日期是本行的兄弟节点（Flex 之外），与说明区之间没有任何间距来源，
+              两列还各自钉死 144/128px；现在按**内容宽度**（仍可被压缩，见下方注释）。
               间距口径（用户明确）：
                 · 说明文字距**本行图列车道中心** DOT_GUTTER = 8px —— 由上面图列的负右边距落位；
                   只画本行圆点的行，该车道就是圆点所在 lane，与旧口径逐像素一致；
-                · chips 距说明文字 8px —— **不写内联 gap**，交给这层 antd Flex 的 `gap="middle"` 档位类名
-                  （`.ant-flex-gap-middle`；该档取主题 `padding` token，全站默认紧凑密度下恰为 8px，
-                  见 base/page-shell.tsx + base/density.ts）。该等式的锚点见
-                  commit-graph.test.tsx「说明区不写内联间距」用例：density token 一动它就红。
-              为什么说明区只有这一层（原为「块级 div 套 flex div」两层）：外层本来只承担
-              flex:1 + minWidth:0 这两个**收缩契约**，与内层合并后 DOM 少一层，
-              收缩/省略行为逐字不变，`style` 里也只剩收缩契约、不含任何间距。
+                · 主题组 ↔ 作者 ↔ 日期 彼此 8px —— **不写内联 gap**，交给这层 antd Flex 的
+                  `gap="middle"` 档位类名（`.ant-flex-gap-middle`；该档取主题 `padding` token，
+                  全站默认紧凑密度下恰为 8px，见 base/page-shell.tsx + base/density.ts）。
+                  该等式的锚点见 commit-graph.test.tsx「行内容区不写内联间距」用例：density token 一动它就红。
+                · 主题 ↔ chips 4px —— 内层主题组自己的 `gap="small"`（见下）。
+              为什么只有这一层（原为「块级 div 套 flex div」两层）：外层本来只承担
+              收缩契约，与内层合并后 DOM 少一层，`style` 里也只剩收缩契约、不含任何间距。
+              图列**不进这一层**：它要落的是「文字距车道中心 + 8px」，靠的是自己的负右边距，
+              一旦变成内层子项就会连带吃掉那 8px 并让文字整体左移，故仍是本行的兄弟节点。
               用 marginLeft（可为负）而不是 paddingLeft（最小为 0）：图列宽度随 lane 变化，
               若用 padding 会把「本行图列宽 − 圆点位置」的差值夹成 0，文字于是比预期远 15~20px——
               那正是之前几轮反复对不上的根因。margin 可以直接落位到「圆点右缘 + 8px」。
@@ -425,48 +422,88 @@ export function CommitGraph({
                 data-testid="commit-graph-message"
                 align="center"
                 gap="middle"
-                style={{ flex: 1, minWidth: 0 }}
+                style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}
               >
-                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {commit.message.split('\n')[0]}
-                </span>
                 {/*
-                refs chips 列：宽度按内容自适应（有就占位、没有就不占）；上限 REF_COLUMN_WIDTH。
-                本容器只负责**布局契约**（`flexShrink: 1` + `minWidth: 0` 让它能被压缩而不是硬切，
-                `overflow: hidden` 兜底），chip 之间与 chips 前后的间距都不在这里写，见 RefChips 与说明区 Flex。 */}
-                <span
-                  data-testid="commit-graph-refs"
-                  style={{
-                    flexGrow: 0,
-                    flexShrink: 1,
-                    minWidth: 0,
-                    maxWidth: REF_COLUMN_WIDTH,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <RefChips refs={commit.refs} showTags={showTags} />
-                </span>
-              </Flex>
-              {/* 作者/日期两列可按需省略（日志页展开快照栏、列表被挤窄时）：
-                  条件渲染而非置空——空列照旧占 144/128px，让位就无从谈起。
-                  两列都省略时说明区（本行唯一可伸缩项）独自吃掉整行宽度。 */}
-              {showAuthor ? (
+                内层主题组：主题文字 + refs chips。
+                **`flexBasis: 'auto'` 是行为关键，不能退回 `flex: 1`**（2026-09-20 实测定位）：
+                  `flex: 1` 简写把 flex-basis 设成 `0%`，而 flex 收缩份额按 **flex-basis × flex-shrink**
+                    加权分配 —— 基础尺寸为 0 的项份额为 0，于是**永远不参与收缩**（`ellipsis` 样式形同虚设，
+                    只有主题文字被压）；同一个 basis 0 又让它白拿全部剩余宽度，实测 520px 行宽下本组拿到
+                    306px 而主题只用了 139px，作者/时间却保持满宽。
+                  改成 `auto`（= 按内容宽度）后，本组的**内容宽度**如实进入收缩分配：实测同一行宽下
+                    作者 70→42px、时间 93→56px，两列都出省略号（480px 行宽下 30 行里 25 行两列同时省略，
+                    改前只有 1 行）；主题文字因为内容最长，仍然拿得到最大的一份额度，观感不变。
+                  收缩下限仍是 `minWidth: 0`（否则 min-content 会顶住，压缩无从谈起）。 */}
+                <Flex gap="small" style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {commit.message.split('\n')[0]}
+                  </span>
+                  {/*
+                  refs chips 列：宽度按内容自适应（有就占位、没有就不占）；上限 REF_COLUMN_WIDTH。
+                  本容器只负责**布局契约**（`flexShrink: 1` + `minWidth: 0` 让它能被压缩而不是硬切，
+                  `overflow: hidden` 兜底），chip 之间与 chips 前后的间距都不在这里写，见 RefChips 与本层 Flex。 */}
+                  <span
+                    data-testid="commit-graph-refs"
+                    style={{
+                      flexGrow: 0,
+                      flexShrink: 1,
+                      minWidth: 0,
+                      maxWidth: REF_COLUMN_WIDTH,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <RefChips refs={commit.refs} showTags={showTags} />
+                  </span>
+                </Flex>
+                {/*
+                作者/日期两列**始终渲染**（2026-09-20 用户口径：删除隐藏策略）。
+                  改前两列由 `showAuthor` / `showDate` 按「日志栏实测宽度是否 ≥ 512」整列显隐；
+                  那两个 prop 连同日志页的量宽链路已一并删除，现在没有任何开关能关掉它们。
+                  为什么删：隐藏会让「同一行有没有作者」随宿主宽度变化，读起来像数据缺失；
+                  空间不足时正确的手法是**省略号**（列还在、内容可辨），而不是整列消失。
+                宽度口径（2026-09-20 用户口径「紧凑内容宽度」）：**不钉死 144/128px**。
+                  · `flexGrow: 0` + `flexBasis: 'auto'` → 不抢剩余宽度，宽度按内容
+                    （作者名短就短，不白占两列固定宽度）；
+                  · `maxWidth` 144/128 —— 只作**内容超长时的上限**（长作者名不至于把主题挤没），
+                    与「按内容宽度」不冲突：内容不足上限时该值完全不参与布局；
+                  · `flexShrink: 1` + `minWidth: 0` —— **两列都会被压缩并出省略号**（用户口径
+                    「宽度不足时作者和时间也展示省略号」）。注意：能否真的压到，取决于同一层里的
+                    主题组有没有如实报出自己的内容宽度（见内层主题组的 `flexBasis: 'auto'` 说明）——
+                    主题组一旦退回 `flex: 1`（basis 0%），收缩份额按 basis 加权分配，
+                    这两列份额为 0 就**永远不会缩**，本行的省略号样式会静默失效（实测 520px 行宽下
+                    作者列恒为满宽 70px，改后 42px）。实测（480px 行宽、30 行）：改前仅 1 行两列出省略号，改后 25 行。
+                  · 不写 `flex` 简写：与下面的 `flexShrink` 长写混用会被 React 判为 shorthand/longhand 冲突。 */}
                 <span
                   data-testid="commit-graph-author"
-                  style={{ width: 144, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                  style={{
+                    flexGrow: 0,
+                    flexBasis: 'auto',
+                    flexShrink: 1,
+                    minWidth: 0,
+                    maxWidth: 144,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
                 >
                   {commit.author}
                 </span>
-              ) : null}
-              {showDate ? (
                 <Typography.Text
                   data-testid="commit-graph-date"
                   type="secondary"
-                  style={{ width: 128, flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                  style={{
+                    flexGrow: 0,
+                    flexBasis: 'auto',
+                    flexShrink: 1,
+                    minWidth: 0,
+                    maxWidth: 128,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
                 >
                   {formatCommitDate(commit.dateIso)}
                 </Typography.Text>
-              ) : null}
+              </Flex>
             </div>
           );
         }}

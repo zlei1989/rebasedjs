@@ -265,11 +265,11 @@ describe('LogPage', () => {
       expect(container.querySelectorAll('.ant-card')).toHaveLength(0);
     });
 
-    it('作者/日期两列的显隐改由日志栏**实测宽度**驱动，与是否展开快照无关', () => {
-      // 旧口径（展开快照就隐列）已作废：用户要求改为宽度驱动（阈值 512，见 AUTHOR_COLUMN_MIN_WIDTH）。
-      // jsdom 下量不到真实宽度（offsetWidth 恒 0），此时按「静默放行」处理——两列照常渲染，
-      // 不会因为量不到就永久隐藏。真实阈值切换由 commit-graph 的 showAuthor/showDate 用例覆盖，
-      // 拖动过程中的实时切换在 :3081 冒烟里核（ResizeObserver 在 jsdom 不触发）。
+    it('作者/日期两列始终渲染：展开快照栏挤窄日志栏也不再隐列', () => {
+      // 旧口径（展开快照就隐列、后来改成按栏宽 512 阈值隐列）已作废：用户要求**删除隐藏策略**，
+      // 空间不足由省略号承接（见 commit-graph 的「作者/日期按内容宽度」与「始终显示」用例）。
+      // 故这里刻意让快照栏展开（最窄的日志栏形态）并断言两列仍在：若有人把按宽度隐列的开关加回来，
+      // 本用例会在 jsdom 的 0 宽（= 最窄）形态下变红。
       render(
         <LogPage
           repoName="alpha"

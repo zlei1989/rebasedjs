@@ -1,10 +1,12 @@
 /**
- * 仓库顶栏导航（从日志页顶栏抽出的共用组件）：**面包屑「首页 / 仓库名 / 当前页名」三级** + RepoStatusBar（分支名 + ahead/behind）+ 图标按钮组 + 「更多」下拉，
+ * 仓库顶栏导航（从日志页顶栏抽出的共用组件）：**面包屑「首页 / 仓库名 / 当前页名」三级** + 图标按钮组 + 「更多」下拉，
  * 除欢迎屏外的所有仓库页共用——每页经 `current` 指明自身，对应图标按钮高亮（color=primary + variant=filled，主色浅底填充），
  * 面包屑末级落到当前页名（非日志页的仓库名可点回日志页）。
  * 纯 props 驱动（沿用 ui 层约定：回调不注入即隐藏，不出现点了没反应的死控件）。
  * 日志页专属内容（操作条/撤销最近提交/「去解决冲突」链接）为可选 props：仅日志页容器注入；
- * 状态条（分支名胶囊 + ahead/behind 圆点）经两端 useRepoNav 的 status 装配在**所有仓库页**显示。
+ * 状态条（分支名胶囊 + ahead/behind 圆点）经两端 useRepoNav 的 status 装配在**所有仓库页**显示，
+ * 位置在**右侧操作区最左**（用户口径）：左区归导航信息（面包屑），右区是「当前分支 + 操作入口」一整组，
+ * 分支名于是紧挨着分支/合并等操作按钮；左区因此只剩进行中操作条与「去解决冲突」链接。
  * 拉取/推送/更新项目/变基四个「更多」菜单项是日志页容器持有的对话框入口——同样走可选注入，其余页面不注入即不出现。
  * 「日志」按钮（HistoryOutlined）是本组件新增的回日志页入口：替换掉各页原先的「返回日志」链接后，
  * 从任何仓库页都能一键回日志页，也让日志页自身有可高亮的图标。
@@ -273,8 +275,6 @@ export function RepoTopNav({
     else if (key === 'worktrees') onOpenWorktrees?.();
     else if (key === 'submodules') onOpenSubmodules?.();
   };
-  // 左侧信息区里状态条/操作条是否任一存在：全缺省时整块 Space 不渲染（不留空容器）
-  const infoExtras = status !== undefined || (operation !== undefined && onAbortOperation !== undefined);
   /** 仓库名是否作为「回日志页」链接：非日志页且注入了 onOpenLog（日志页自己是末级，点了也是原地） */
   const repoNameClickable = current !== undefined && current !== 'log' && onOpenLog !== undefined;
   /**
@@ -329,6 +329,27 @@ export function RepoTopNav({
     },
     ...(current !== undefined ? [{ title: <Typography.Text strong>{PAGE_NAMES[current]}</Typography.Text> }] : []),
   ];
+  /**
+   * 左区两块可选内容（分支状态条已按用户口径移到右侧操作区最左）：先把两块算成节点，再按「节点是否为空」决定整块 Space 渲染与否。
+   * 为什么不另写一份条件：两块各有自己的渲染门，另写必错位——实测踩过两次：
+   *   · OperationStatus 在 kind==='none' 时自己渲染 null，而容器无进行中操作时传下来的正是 `{kind:'none'}`，
+   *     只按 `!== undefined` 判空会在左区留一个空的 ant-space（空 ant-space-item）；
+   *   · 「去解决冲突」只依赖 onOpenConflicts（merge 进行中且容器注入导航时即出，不需要中止回调），
+   *     把 infoExtras 绑在 operation+onAbortOperation 上会把这一块整个吞掉。
+   */
+  const operationBar =
+    operation !== undefined && operation.kind !== 'none' && onAbortOperation !== undefined ? (
+      <OperationStatus operation={operation} onAbort={onAbortOperation} aborting={abortingOperation} />
+    ) : null;
+  const conflictsLink =
+    operation?.kind === 'merge' && onOpenConflicts !== undefined ? (
+      <Tooltip title="打开冲突解决页：逐个文件处理合并冲突，解决完再提交以结束合并">
+        <Button type="link" size="small" onClick={onOpenConflicts}>
+          去解决冲突
+        </Button>
+      </Tooltip>
+    ) : null;
+  const infoExtras = operationBar !== null || conflictsLink !== null;
   return (
     /* 顶栏两端布局：Grid（Row/Col）负责「左信息区 ←→ 右操作区」两端分布，Space 负责两侧组内间距。
        为什么不再用 `marginLeft:auto` 逐个占位：那是「凑」出右端，可选按钮一多，每个按钮都要按
@@ -344,7 +365,7 @@ export function RepoTopNav({
       justify="space-between"
       style={{ borderBottom: `1px solid ${token.colorSplit}`, padding: '4px 8px' }}
     >
-      {/* 左侧信息区：**面包屑**（首页 / 仓库名 / 当前页名）+ 分支状态条 + 进行中操作条；整体可收缩（窄屏优先压缩这一侧） */}
+      {/* 左侧信息区：**面包屑**（首页 / 仓库名 / 当前页名）+ 进行中操作条；整体可收缩（窄屏优先压缩这一侧） */}
       <Col style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', minWidth: 0 }}>
         {/* 面包屑三级形态（items 装配见上方 breadcrumbItems）；
             外层 `overflow: hidden` 保证超长仓库名/状态条不会把右端操作区挤出顶栏（承接原「minWidth:0 让长名可压缩」的口径） */}
@@ -352,27 +373,25 @@ export function RepoTopNav({
           <Breadcrumb data-testid="log-breadcrumb" items={breadcrumbItems} />
           {infoExtras ? (
             <Space size={16} style={{ minWidth: 0 }}>
-              {status !== undefined ? <RepoStatusBar status={status} /> : null}
-              {/* 进行中操作条：仅当容器同时注入 operation 与中止回调时渲染 */}
-              {operation && onAbortOperation ? (
-                <OperationStatus operation={operation} onAbort={onAbortOperation} aborting={abortingOperation} />
-              ) : null}
-              {/* 「去解决冲突」链接：仅合并进行中（operation.kind==='merge'）且容器注入导航回调时渲染，
-                  跟在操作条旁；base 组件 OperationStatus 不背导航职责，故由本层自行渲染 */}
-              {operation?.kind === 'merge' && onOpenConflicts ? (
-                <Tooltip title="打开冲突解决页：逐个文件处理合并冲突，解决完再提交以结束合并">
-                  <Button type="link" size="small" onClick={onOpenConflicts}>
-                    去解决冲突
-                  </Button>
-                </Tooltip>
-              ) : null}
+              {/* 进行中操作条与「去解决冲突」链接（两块节点在上方按各自的门算好，见 operationBar/conflictsLink） */}
+              {operationBar}
+              {conflictsLink}
             </Space>
           ) : null}
         </div>
       </Col>
-      {/* 右侧操作区：撤销/日志/变更/分支/合并/贮藏/设置/更多 八个入口，靠 justify="space-between" 贴右端 */}
+      {/* 右侧操作区：**最左是分支状态条**（当前分支 + ahead/behind 圆点），其后是撤销/日志/变更/分支/合并/贮藏/设置/更多 八个入口，
+          整组靠 justify="space-between" 贴右端 */}
       <Col style={{ flexShrink: 0 }}>
-        <Space size={4}>
+        <Space size={4} data-testid="log-actions">
+          {/* 分支状态条（用户口径：与操作按钮同组、占该组最左）：全分支名可能很长，
+              而右区不收缩，故 chip 自带 maxWidth + 省略号（见 domain/repo-status-bar）；
+              额外 4px 右外边距让它与第一个按钮之间的实际间距是 8px（Space 自身 4px + 这里 4px） */}
+          {status !== undefined ? (
+            <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, marginInlineEnd: 4 }}>
+              <RepoStatusBar status={status} />
+            </div>
+          ) : null}
           {/* 撤销最近提交（日志页专属）：Popconfirm 确认后回调（保留改动到暂存区，等价 reset --soft HEAD~1） */}
           {onUndoCommit ? (
             <Popconfirm

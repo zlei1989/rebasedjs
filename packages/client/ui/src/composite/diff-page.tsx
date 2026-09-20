@@ -64,8 +64,24 @@ export function DiffPage({
   // gap/padding 照抄既有值 8（PageShell 默认不落 style，不传会静默丢掉内距与行距）。
   return (
     <PageShell gap={8} padding={8}>
-      <Flex align="center" gap={16}>
-        <div style={{ fontWeight: 600 }}>{file}</div>
+      {/* 页头**两端对齐**（用户口径）：左端固定是文件路径，右端是同组文件的「上一个 / 下一个」整组。
+          路径必须自己负责截断：它没有可断词的空格，不压宽度就会把导航组顶出可视区（两端对齐也就白做），
+          故显式 `flex:'1 1 auto'` + minWidth:0 + 单行省略号；全名仍由 title 悬停给出。 */}
+      <Flex data-testid="diff-file-head" align="center" justify="space-between" gap={16}>
+        <div
+          data-testid="diff-file-name"
+          title={file}
+          style={{
+            fontWeight: 600,
+            flex: '1 1 auto',
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {file}
+        </div>
         <FileNavButtons files={files ?? []} file={file} onNavigateFile={onNavigateFile} />
       </Flex>
       {threeWayVersions !== undefined ? (

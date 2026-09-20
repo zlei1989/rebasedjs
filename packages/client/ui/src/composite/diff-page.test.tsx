@@ -103,6 +103,31 @@ describe('DiffPage', () => {
     rerender(<DiffPage versions={versions} file="src/app.ts" staged={false} language="python" loader={loader} />);
     expect(captured.at(-1)?.language).toBe('python');
   });
+
+  // 页头布局（用户口径）：两端对齐——左端固定是文件名，右端是「上一个 / 下一个」整组。
+  // 长路径必须自己截断：路径里没有可断词的空格，不压宽度就会把导航组顶出可视区。
+  it('页头两端对齐：文件名在左、导航组贴右端；长路径单行省略且 title 带全名', async () => {
+    const longPath = 'docs/superpowers/plans/2026-09-15-multi-protocol-inbound-p0.md';
+    render(
+      <DiffPage
+        versions={versions}
+        file={longPath}
+        staged={false}
+        files={['a.md', longPath]}
+        onNavigateFile={() => {}}
+        loader={stubLoader}
+      />,
+    );
+    const head = screen.getByTestId('diff-file-head');
+    expect(head).toHaveClass('ant-flex-justify-space-between');
+    const name = screen.getByTestId('diff-file-name');
+    // DOM 顺序即左右：文件名是首个子节点，导航组是末个子节点
+    expect(head.firstElementChild).toBe(name);
+    expect(head.lastElementChild).toBe(screen.getByTestId('diff-file-nav'));
+    expect(name).toHaveAttribute('title', longPath);
+    expect(name).toHaveStyle({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' });
+    expect(await screen.findByText('stub-diff-editor')).toBeInTheDocument();
+  });
 });
 
 describe('DiffPage 多文件 Prev/Next（#27）', () => {

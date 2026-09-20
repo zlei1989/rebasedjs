@@ -67,17 +67,12 @@ const DETAILS_WIDTH = {
   /** 展开快照栏时自动收到的宽度（用户口径：不能更小、可任意更大） */
   whenBrowsing: 320,
 };
-/**
- * 提交日志栏里作者/日期两列的显隐阈值（px）：**按本栏实测宽度**切换。
- * 512 是用户口径；两列合计 272px，栏宽不到 512 时它们各自只剩几个字，不如让位给提交主题。
- */
-const AUTHOR_COLUMN_MIN_WIDTH = 512;
 /** 快照栏默认宽度（字符数）：沿用原「文件内容栏 100 字符」的观感，换到标签页后正文宽度不变 */
 const SNAPSHOT_DEFAULT_CHARS = 100;
 /**
  * 快照栏的**拖拽下限**（px）：仅保证不塌成 0，往上不设限（用户口径「文件内容区域的拖拽不要有限制」）。
  * 语义从「至少 70 字符」放宽到「约 30 字符」——70 字符那条下限（≈548px）会吃掉三栏预算的三分之一，
- * 导致日志栏永远到不了 512、作者/日期列再也显示不出来（实测）。正文本身可横向滚动，故窄一点只是要多滚。
+ * 日志栏因此被挤得只剩一两行宽，正文本身可横向滚动，故窄一点只是要多滚。
  */
 const SNAPSHOT_MIN_PX = 240;
 /** 快照栏宽度上限（px）：再高也只是多留白，反而把日志栏挤没 */
@@ -571,14 +566,6 @@ export function LogPage({
   // 容器实测宽度（原语经 onAvailableChange 上报）：首帧为 0（还没量到），此时按偏好原样渲染，
   // 量到之后触发一次按比例的还原。
   const [columnsAvailable, setColumnsAvailable] = useState(0);
-  /* 提交日志栏的**实测**宽度（原语经 onPaneWidthChange 上报，拖动过程中实时更新）。
-     作者/日期两列按它切换显隐（阈值见 AUTHOR_COLUMN_MIN_WIDTH），而不是按「是否展示文件树」——
-     那是我之前的实现，用户口径明确要求改为跟着宽度走。首帧为 0（还没量到）时两列不渲染，
-     量到后一次到位；为避免这一拍造成「先窄后宽」的跳动，用落库的偏好先兜底。 */
-  const [logPaneWidth, setLogPaneWidth] = useState(0);
-  const onPaneWidthChange = (key: string, width: number): void => {
-    if (key === 'log') setLogPaneWidth(width);
-  };
   /** 复制全文的一次性反馈（按钮在文件标签的路径栏、文案在正文区，故状态由本页持有）；到期清空，避免常驻 */
   const [snapshotCopyHint, setSnapshotCopyHint] = useState<string | null>(null);
   const copyHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -666,13 +653,8 @@ export function LogPage({
             onSelect={onSelectCommit}
             onContextMenu={setMenuHash}
             showTags={showTags}
-            // 快照栏展开时隐去作者/日期两列（把宽度让给提交主题）——两列合计 272px，
-            // 日志栏被挤到 300~400px 时它们各自只剩几个字，信息价值远低于主题
-            // 作者/日期两列按**本栏实测宽度**切换（阈值 AUTHOR_COLUMN_MIN_WIDTH），
-            // 不再看「是否展示文件树」：那条口径已作废（用户明确要求改成宽度驱动）。
-            // 实测值拖动过程中实时更新，故拖到阈值时会当场显隐，不用松手。
-            showAuthor={logPaneWidth === 0 || logPaneWidth >= AUTHOR_COLUMN_MIN_WIDTH}
-            showDate={logPaneWidth === 0 || logPaneWidth >= AUTHOR_COLUMN_MIN_WIDTH}
+            // 作者/日期两列**始终显示**（2026-09-20 用户口径：删除隐藏策略）：
+            // 此前按本栏实测宽度 ≥ 512 决定整列显隐，现在没有开关，空间不足由省略号承接。
             selectedHash={selectedCommit?.hash ?? null}
             // 折叠/分支过滤三项受控 props：本页是唯一真源（工具栏按钮与图元命中改的是同一份状态）。
             // 三项都传 ⇒ 图的交互面（图元点击折叠、虚线边展开、悬停链高亮）才真正激活；
@@ -874,7 +856,7 @@ export function LogPage({
             · 未选中提交 → 主区独占满宽；
             · 选中但两个开关都关 → 两栏：日志主区 + 详情侧栏（antd Splitter）；
             · 选中且任一开关打开 → 三栏：日志 | 详情 | 快照（其内按开关决定有哪几族标签）。
-          作者/日期两列的显隐由日志栏**实测宽度**决定（阈值 AUTHOR_COLUMN_MIN_WIDTH），与开关无关。 */}
+          作者/日期两列**始终显示**（2026-09-20 用户口径：删除按栏宽显隐），与两个开关无关。 */}
       {activeCommit === null || activeCommit === undefined ? (
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' }}>{graphArea}</div>
       ) : (() => {
@@ -990,7 +972,6 @@ export function LogPage({
           <ResizableColumns
             onWidthsChange={onPaneWidthsChange}
             onAvailableChange={setColumnsAvailable}
-            onPaneWidthChange={onPaneWidthChange}
             panes={panes}
           />
         );

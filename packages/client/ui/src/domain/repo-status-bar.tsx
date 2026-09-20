@@ -7,6 +7,8 @@
  * tooltip 保留（文案不变），数字另带 aria-label 读屏口径，箭头对读屏隐藏。
  * 分支 chip 可点复制（点一下把分支名写进剪贴板，便于粘进命令或 PR）——走 base/CopyOnClick；
  * 游离 HEAD 时 chip 文案是 `(detached HEAD)`，那是展示占位而非真实 ref 名，故**不做成复制目标**。
+ * chip 单行省略 + `maxWidth`（全名挂 title 悬停可看）：状态条挂在顶栏**右侧操作区最左**，那一侧不收缩，
+ * 长分支名若放任撑开，被挤掉的是左侧面包屑；这里限宽后省略号才有的可截。
  */
 import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import { Badge, Flex, Tag, Tooltip, theme } from 'antd';
@@ -65,8 +67,20 @@ export function RepoStatusBar({ status }: RepoStatusBarProps): React.ReactNode {
   const chip = (
     /* 分支名用小 Tag 承载（chip 形态，对齐提交图里的 ref chips）。
         注意：antd 6.6.3 的 Tag **没有** size 变体（TagProps 无 size，样式里也无 -sm/-lg 分支），
-        它本身即「小」尺寸——高度由 token fontSizeSM（紧凑密度下 12px）决定，故不传 size、不额外压字号。 */
-    <Tag data-testid="status-branch-chip" style={{ marginInlineEnd: 0 }}>
+        它本身即「小」尺寸——高度由 token fontSizeSM（紧凑密度下 12px）决定，故不传 size、不额外压字号。
+        限宽 240 + 单行省略：顶栏右区不收缩，长分支名不让步就会把左侧面包屑挤没；
+        `title` 给原生悬停全名（点一下复制同样能拿到全名）。 */
+    <Tag
+      data-testid="status-branch-chip"
+      title={branch ?? undefined}
+      style={{
+        marginInlineEnd: 0,
+        maxWidth: 240,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}
+    >
       {branch ?? '(detached HEAD)'}
     </Tag>
   );
