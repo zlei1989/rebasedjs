@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { BlameLine } from '@rebased/contracts';
 import { BlameAnnotateTable } from './blame-annotate-table';
@@ -79,5 +79,38 @@ describe('BlameAnnotateTable 行交互', () => {
     render(<BlameAnnotateTable lines={[makeLine({ lineno: 1 })]} />);
     fireEvent.click(screen.getByTestId('blame-line-1'));
     expect(screen.getByTestId('blame-line-1')).toBeInTheDocument();
+  });
+
+  it.each([
+    { name: 'Enter', key: 'Enter', prevented: false },
+    { name: 'Space', key: ' ', prevented: true },
+  ])('键盘 $name 激活可点行：以完整哈希调 onSelectCommit', ({ key, prevented }) => {
+    const onSelectCommit = vi.fn();
+    render(<BlameAnnotateTable lines={[makeLine({ lineno: 4, hash: 'fullhash4' })]} onSelectCommit={onSelectCommit} />);
+    const row = screen.getByTestId('blame-line-4');
+    // 经 createEvent 取原生事件对象：Space 必须 preventDefault（默认行为是滚动页面），Enter 不该拦
+    const event = createEvent.keyDown(row, { key });
+    fireEvent(row, event);
+    expect(event.defaultPrevented).toBe(prevented);
+    expect(onSelectCommit).toHaveBeenCalledTimes(1);
+    expect(onSelectCommit).toHaveBeenCalledWith('fullhash4');
+  });
+
+  it('可点行可聚焦，不可点行（未提交 / 未注入回调）不可聚焦', () => {
+    const { unmount } = render(
+      <BlameAnnotateTable
+        lines={[makeLine({ lineno: 1, hash: ZERO_HASH }), makeLine({ lineno: 2, hash: 'h2' })]}
+        onSelectCommit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('blame-line-1')).not.toHaveAttribute('tabindex');
+    expect(screen.getByTestId('blame-line-1')).not.toHaveAttribute('role');
+    expect(screen.getByTestId('blame-line-2')).toHaveAttribute('tabindex', '0');
+    expect(screen.getByTestId('blame-line-2')).toHaveAttribute('role', 'button');
+    unmount();
+
+    render(<BlameAnnotateTable lines={[makeLine({ lineno: 1 })]} />);
+    expect(screen.getByTestId('blame-line-1')).not.toHaveAttribute('tabindex');
+    expect(screen.getByTestId('blame-line-1')).not.toHaveAttribute('role');
   });
 });
