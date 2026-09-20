@@ -50,6 +50,7 @@ export {
   type BlameViewKey,
   type ChangesHints,
 } from './composite/blame-state';
+export { BlameAnnotateTable, type BlameAnnotateTableProps } from './composite/blame-annotate-table';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
 export {
   SnapshotTreeColumn,
