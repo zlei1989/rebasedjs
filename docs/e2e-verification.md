@@ -213,7 +213,7 @@
 | F-048 | Create Patch from changes | 勾选 ≥1 文件 → 组级「创建补丁」→ Modal 输入名 | 成功跳 `/patches` 且列表含新补丁（CLI） | ✅ | status-page-10.png（勾 `src/app.ts` + `src/util.ts` → 组级「创建补丁」→ Modal「对勾选的 2 个文件创建补丁（工作区 diff）」输入 `smoke-changes` → 跳 `/patches` 且列表 1 项「smoke-changes 764 B」；CLI：`~/.rebasedjs/patches/f761a9f6-…/smoke-changes.patch` 764 B，首行 `diff --git a/src/app.ts b/src/app.ts`） | |
 | F-049 | Shelve Changes | 页头「搁置」→ Modal 输入名 | 成功跳 `/shelves` 且列表含新搁置（CLI） | ✅ | status-page-11.png（页头「搁置」→ 名称 `smoke-shelf-1` → 跳 `/shelves`，列表 1 项「smoke-shelf-1 \| 2 个未跟踪」；CLI：`~/.rebasedjs/shelves/f761a9f6-…/smoke-shelf-1/` 含 `patch.diff` 1129 B + `untracked/crlf.txt` + `untracked/scratch/todo.md`；搁置为**快照复制**——保存后 `git status` 工作区逐条不变） | |
 | F-050 | Stash Files | 页头「存入贮藏」→ Modal 填可选信息 | 成功跳 `/stashes` 且列表含新 stash（CLI `stash list`） | ✅ | status-page-12.png（页头「存入贮藏」→ 信息 `smoke stash from status page` → 跳 `/stashes`，列表 3 条；CLI：`stash@{0}: On master: smoke stash from status page` 置顶，工作区已跟踪改动全部清空（仅余未跟踪），`.gitignore` 的忽略行随之回到未忽略态） | |
-| F-051 | Annotate / Show History 入口 | 行「注解」→ 返回后行「历史」 | 「注解」→ `/blame?file=`；「历史」→ `/history?file=` | ✅ | status-page-13.png（工作区 `src/app.ts` 行「注解」→ `/blame?file=src%2Fapp.ts`；返回后行「历史」→ `/history?file=src%2Fapp.ts` 列出 2 条 `77e62c4` / `f55c880`，与 CLI `git log --oneline -- src/app.ts` 逐条一致） | |
+| F-051 | Annotate / Show History 入口 | 行「注解」→ 返回后行「历史」 | 「注解」→ `/blame?file=&view=annotate`（**直接落在「逐行注解」标签**；未选中提交时该标签是**工作区口径**——见 §5.34⑦ R25-4）；「历史」→ `/history?file=` | ✅ | status-page-13.png（工作区 `src/app.ts` 行「注解」→ `/blame?file=src%2Fapp.ts`；返回后行「历史」→ `/history?file=src%2Fapp.ts` 列出 2 条 `77e62c4` / `f55c880`，与 CLI `git log --oneline -- src/app.ts` 逐条一致）。**收尾轮（R25）口径补充**：落点现已带 `view=annotate`（复验见 §5.34⑦ R25-4；上句记的是 R23 当时观测到的 URL，不改写） | |
 
 ### 4.5 CommitDialog（等效内嵌提交框；slug `commit`；P2）
 
@@ -351,7 +351,7 @@
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-101 | 注解展示（右栏「逐行注解」标签） | 左树点 `AGENT.md` → 切「逐行注解」→ 点第 8 行 | 行列表：行号/短哈希徽标/作者/日期/内容，按选中提交那一版列出；点行选中它归属的提交 | ✅ | blame-01.png（三栏总览（暗色）：左树选中 `AGENT.md`、中栏 12 条提交（首条 `b96148e` 派生选中、带 `data-selected="true"`）、右栏操作条 + 「本文件改动」Monaco 差异）；blame-04.png（「逐行注解」：点 `blame-line-7`（归属 `8536a91`）→ 地址变 `?file=AGENT.md&view=annotate&select=8536a916…`、该行选中数 1、**中栏同时高亮 `8536a91`**——这就是从「这一行是谁写的」直接跳到「那次提交改了什么」的主链路）。**互证**：`git log --follow --oneline -- AGENT.md` = **12 条**，与中栏条数一致（顶条 `b96148e`）；`git show -s 8536a91` = `fix(core): abort 陈旧 pid 守卫与未合并状态解析，AGENT.md 路径更新`，与注解行的短哈希归属一致 |
+| F-101 | 注解展示（右栏「逐行注解」标签） | 左树点 `AGENT.md` → 切「逐行注解」→ 点第 8 行 | 行列表：行号/短哈希徽标/作者/日期/内容。**两种口径**：地址里**没有**显式 `?select=` 时看**当前工作区**（不给 `rev`，工作区未提交的行短哈希全 0、标「未提交」且不可点）；**在中栏选中某个提交后（或点注解行选中提交）改成看那一版的归属**。点行选中它归属的提交 | ✅ | blame-01.png（三栏总览（暗色）：左树选中 `AGENT.md`、中栏 12 条提交（首条 `b96148e` 派生选中、带 `data-selected="true"`）、右栏操作条 + 「本文件改动」Monaco 差异）；blame-04.png（「逐行注解」：点 `blame-line-7`（归属 `8536a91`）→ 地址变 `?file=AGENT.md&view=annotate&select=8536a916…`、该行选中数 1、**中栏同时高亮 `8536a91`**——这就是从「这一行是谁写的」直接跳到「那次提交改了什么」的主链路）。**互证**：`git log --follow --oneline -- AGENT.md` = **12 条**，与中栏条数一致（顶条 `b96148e`）；`git show -s 8536a91` = `fix(core): abort 陈旧 pid 守卫与未合并状态解析，AGENT.md 路径更新`，与注解行的短哈希归属一致。**收尾轮（R25）复验两种口径**：工作区口径见 §5.34⑦ R25-1 与 `blame-08.png`（1848 行中含 1 行「未提交」）；点中栏一条提交后钉住该版本见 R25-2（1831 行、未提交行 0 条） |
 | F-102 | 选中提交级出口与点击联动（轮换旧「注解行内三联动」） | 中栏点第 2 条提交（`?select=` 变）→ 切「与最新版本差异」→ 逐条走操作条四出口 → 深链旧 `?rev=` | 「日志定位」→ 日志页选中该提交；「差异页」→ **新标签页** DiffPage（`from=父&to=该提交`，根提交 `root=1`）；「文件历史」→ `/history?file=`；「受影响」→ 全量变更文件 Modal。切标签只写 `?view=` 并只拉当前标签的数据 | ✅ | blame-02.png（「与最新版本差异」标签：右栏工具条与 Monaco 差异就位，`[data-testid="blame-view-latest"]` 真实渲染、**高 580 落在右栏 646 之内**——Task 6 的高度契约修复在浏览器里被证实）；blame-05b.png（旧 `?rev=` 深链规范化后的落点）：`?file=docs/manual.md&rev=8d6d961` → 地址被改写成 `?file=docs%2Fmanual.md&select=8d6d961&view=annotate`，落在「逐行注解」1519 行（web-next 同形）。**点选复现**：无 `?select=` 时首条派生选中（`blame-commit-0` 带 `data-selected="true"`），点第 2 条 → `?select=6e1807493cf0050e9178a4e4935a8d9427a60416`。**四出口齐备**以 `blame-action-log` / `blame-action-diff` / `blame-action-affected` / `blame-action-history` 四个 testid 全在盘为证（blame-01.png 同屏可见，见 §5.34 范围项 6）。**淘汰说明**：旧单列页的「行内哈希徽标 → 日志 `?select=`／行内「差异」／行内「历史」」三联动已随 `BlameView` 一并删除（提交 `c824bcd`），能力升格为本行的选中提交级四出口 |
 | F-103 | Show All Affected（受影响文件） | 操作条「受影响」→ Modal 看清单 → 点文件 → Esc 关闭 | 提交全量变更文件 Modal；文件点击 → **新标签页**打开该文件在这次提交里的差异 | ✅ | blame-03.png（**根提交态**——选中根提交 `13a68f62…`（`.agent/AGENT.md` 的唯一提交）时点操作条「受影响」：「受影响文件（13a68f6）」Modal：**52 个文件行**（`affected-file-0…51`），状标全为 `A`，首行 `A .agent/AGENT.md`；Esc 可关。**互证**：`git show --name-only 13a68f62` 恰 **52** 条（含 `.agent/AGENT.md` 等），与清单逐条一致）。**降级口径**：该提交是根提交（`13a68f62…` 无父版本），清单里的文件点击走 `root=1` 分支——差异页只给提示行，与 F-102「差异页」同一三态出口 |
 | F-104 | previousLineno 边界 | 抽查重命名/边界行注解 | 注解近似正确（orig 近似边界口径，抽查即可） | ⏭ 本轮未重跑（沿用 R10） | 本行本轮**未重跑**（见 §5.34⑤）：近似边界判据落在未改动的 `blame-annotate-table` 行渲染上，API 侧 `previousLineno` 对改动行给 1、3、未改动行给 null（R10 口径）。按 §1.2 的 ✅ 定义「界面 + CLI 互证 + 截图」三者缺一不可，本轮既没重走、旧单列图 `blame-04.png` 也已被三栏态同名覆盖 ⇒ **不判 ✅、如实记未重跑** |
@@ -1160,7 +1160,7 @@
 | `diff-stream-view` | `diff-page-07.png`（大仓 `big.txt` 的分块流渲染，F-035 实测 2 个 `diff.chunk` 帧渐进累积后切标准视图）；其 `diff-stream-error` 分支由单测覆盖 |
 | `three-way-view` / `merge-view` | `conflicts-03.png`（全屏三栏：当前分支 / 合并来源 / 合并结果）、`conflicts-08b.png`（保存前结果栏已改写为 `line1 master` / `line2 feature` / `line3 resolved-by-hand`） |
 | `branch-compare-view` | `diff-page-10.png`（`?compare=diverge-test` 双 range 对比视图）、`branch-06.png`（分支页「比较」入口与「当前」分支禁用态） |
-| `blame-workbench`（三栏工作台；原单列 `blame-view` 已随页面重构删除） | `blame-01…06.png`（三栏总览暗色 / 「与最新版本差异」/ 受影响文件 Modal / 逐行注解点行联动 / 陈旧 `?select=` 未知态 / 明亮主题总览）；testid 实测在盘——根 `blame-pane`、操作条 `blame-pane-actions` + `blame-action-log`/`-diff`/`-affected`/`-history`、三标签页 `blame-view-changes`/`-latest`/`-annotate`、中栏 `blame-commits` + `blame-commit-N`、注解行 `blame-line-N` + `blame-hash-N`、提示行 `blame-changes-root-hint`/`-rename-hint`/`-missing-hint` 与 `blame-latest-missing-hint`。**旧 testid `blame-file` 已随旧组件消失**（路径输入框现为 `blame-file-input`） |
+| `blame-workbench`（三栏工作台；原单列 `blame-view` 已随页面重构删除） | `blame-01…06.png`（三栏总览暗色 / 「与最新版本差异」/ 受影响文件 Modal / 逐行注解点行联动 / 陈旧 `?select=` 未知态 / 明亮主题总览）+ `blame-08.png`（**收尾轮 R25 补拍**：工作区口径的逐行注解，含 1 行「未提交」，见 §5.34⑦）；testid 实测在盘——根 `blame-pane`、操作条 `blame-pane-actions` + `blame-action-log`/`-diff`/`-affected`/`-history`、三标签页 `blame-view-changes`/`-latest`/`-annotate`、中栏 `blame-commits` + `blame-commit-N`、注解行 `blame-line-N` + `blame-hash-N`、提示行 `blame-changes-root-hint`/`-rename-hint`/`-missing-hint` 与 `blame-latest-missing-hint`。**旧 testid `blame-file` 已随旧组件消失**（路径输入框现为 `blame-file-input`） |
 | `committed-changes-panel` | `committed-01…03.png`（提交列表分页 50→100 / 目录树 / 与 diff 页联动）；根 testid `committed-entry-N` / `committed-load-more` 实测在盘 |
 | 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复（原 `BrowsePanel` 已随整页形态删除） |
 
@@ -1612,7 +1612,7 @@
 - **网络面板**：范围项 4 的「只拉当前标签」、范围项 7/15 的「降级不发 `/diff`」、范围项 9 的唯一 400，三者合起来覆盖了「不发多余请求」与「错误如实透出」两侧。
 - **夹具自证**：注册的是本 worktree 自身；`git rev-parse --short HEAD` 在冒烟时为 `0903000`；本页只读，冒烟前后工作区状态未变。（repoId 每次注册都变，见页首夹具条，不作证据。）
 
-**④ 截图账目（7 张，均落 `docs/shots/`，`1440×900`）**
+**④ 截图账目（8 张，均落 `docs/shots/`，`1440×900`；第 8 张由收尾轮 R25 补拍，见 ⑦）**
 
 | 截图 | 内容（最终正确效果） | 对应范围项 | SHA256（前 16 位） |
 |------|----------------------|-----------|--------------------|
@@ -1623,12 +1623,13 @@
 | `blame-05.png` | 陈旧 `?select=` 未知态（无「差异页」+ 中文错误） | 9 | `CFC48706FFD87D80` |
 | `blame-05b.png` | 旧 `?rev=` 深链规范化后的落点（逐行注解） | 10 | `F2022B757D2417FB` |
 | `blame-06.png` | 三栏总览（明亮主题，「本文件改动」标签，**含真实差异**：3 行插入 / 3 行删除） | 12 | `F1D7395541B3FDFD` |
+| `blame-08.png` | **工作区口径的逐行注解**（地址只有 `?file=` + `view=annotate`）：夹具文件 `scripts/check-fluid-layout.mjs` 的 1848 行归属，其中 **1 行**短哈希 `00000000`、标「未提交」（作者 `Not Committed Yet`） | R25-1（⑦） | `430A6A9C59FD05E38908C95BBB6C5B924EB81BFE5C6EFE549A8D76147086440F`（**完整值**；上表其余行沿用 R24 收尾的前 16 位口径） |
 
 > **表注（差异行数的口径，勿用 DOM 计数）**：`blame-06.png` 与范围项 12 里的「3 行插入 / 3 行删除」取自 git 权威计数——`git diff --numstat b96148e^ b96148e -- AGENT.md` = `3	3	AGENT.md`（该提交即图内选中的 `b96148e`）。**不要再用 Monaco DOM 的 `.line-insert`/`.line-delete` 元素计数**：`.line-delete` 会把装饰性元素一并算进去，实测多出 2，得到「5 处删除」这个偏大的数（本台账首版即误采此值，已按 git 更正）。
 
 > **账目口径（§1.2）**：`<NN>` = 该行最终正确效果图，`<NN>b` = 过程图/第二态图。本页属**只读检索页**，没有表单与二次确认（故 §5.27 的「表单 + 成功」成对口径不适用），`blame-05`/`blame-05b` 是「未知态」与「深链规范化落点」两个独立状态，按 §1.2 的「同一行天然同画面必须换一个有意义的状态」规则区分。
 > **旧图处置**：旧的 `blame-01…05b`（单列版）被**同名覆盖/替换**——`blame-02.png` 与 `blame-04.png` 的旧图是单列内容，现为三栏内容；`blame-05.png`/`blame-05b.png` 旧图是「受影响文件 Modal」与「点文件后的联动」，现为「未知态」与「深链落点」。引用这些文件名的矩阵行（§4.16 四行、§5.27 ①、§5.27 ③）已同批改写为三栏口径。**除新拍的 `blame-06.png` 外，本轮无新增截图文件、无删除**。
-> **复拍说明（审查后收口）**：上表 7 张的 SHA256 是收尾用 `Get-FileHash` 逐张复核的**当前在盘值**；其中两张在审查后复拍并已在提交 `2ad5c65` 落库——`blame-03.png` 改拍**根提交态**的受影响弹窗（旧帧是 `b96148e` 的 9 行 `M`，与「13a68f6 + 52 行 `A`」的说明不符，已作废），`blame-06.png` 改拍**明亮主题 + 真实差异**帧（旧帧是没有差异的瞬时帧，看不出「本文件改动」渲染成功）。两张的说明已按新画面改写（见上表与 §4.16 F-103、§5.27 ①）。
+> **复拍说明（审查后收口）**：R24 那 7 张的 SHA256 是收尾用 `Get-FileHash` 逐张复核的**当前在盘值**；其中两张在审查后复拍并已在提交 `2ad5c65` 落库——`blame-03.png` 改拍**根提交态**的受影响弹窗（旧帧是 `b96148e` 的 9 行 `M`，与「13a68f6 + 52 行 `A`」的说明不符，已作废），`blame-06.png` 改拍**明亮主题 + 真实差异**帧（旧帧是没有差异的瞬时帧，看不出「本文件改动」渲染成功）。两张的说明已按新画面改写（见上表与 §4.16 F-103、§5.27 ①）。
 
 **⑤ 未覆盖项（如实登记，未覆盖就是未覆盖）**
 
@@ -1640,5 +1641,20 @@
 | F-104 `previousLineno` 边界 | 本轮 12 项范围里没有这一项，**未重跑**（沿用 R10 的结论）；旧图 `blame-04.png` 已被三栏态同名覆盖，单列态画面不再存在 | 三栏态下重走一次改名文件的注解（本 worktree 含重命名历史，夹具现成） |
 
 **⑥ 流水线复验**：本轮（文档收口）**只改 `docs/`**，无源码改动——改动路径只有 `docs/` 下的三个 `.md`：`e2e-verification.md`（本节的台账与矩阵行）与 `manual.md`、`pages-and-api-audit.md`（各 1 行，已随 `6ad98d8` 提交）。本轮开始时工作区另有两处与本轮文档改动无关的残留，**收尾时均已消解**：① `docs/shots/` 下的 7 张截图（由控制者直接落盘，已由 `5a5574e`、`2ad5c65` 提交）；② 冒烟用的临时配置目录 `.smoke-config/`（**已清理**）。复查时 `git status --porcelain` 输出为空（该次实测即本节收尾时的记录）。`git diff --check` 干净。收尾实跑 `pnpm --filter @rebased/ui test` → **79 文件 / 983 用例全绿**（含三栏工作台的 `blame-workbench` / `blame-change-pane` / `blame-commits-column` / `blame-annotate-table` / `blame-state` 五套）；因本轮零代码改动，该结果与三栏工作台各提交时的结论一致。
+
+**⑦ 收尾轮复验（R25，2026-09-20；修复波 `951e950` 的界面复验）**
+
+> **触发**：修复波 `951e950` 把「逐行注解」改回**工作区口径**——地址里没有显式 `?select=` 时不给 `rev`（`git blame <file>` 的工作区语义，本地未提交的行标「未提交」），有显式 `?select=`（含旧 `?rev=` 规范化来的）时才看那一版；同时两端状态页行内「注解」补 `&view=annotate` 直接落在该标签。F-101 的「按选中提交那一版列出」与 F-051 的 `/blame?file=` 落点两句**当前态判据**已同批改写（见 §4.16 两行）。
+> **环境**：本 worktree 的 web-next 本地实例 `:3091`（`REBASED_CONFIG_DIR=<worktree>\.smoke-config`，独立于用户配置，与 R24 同一套）；夹具仍为**本 worktree 自身**。浏览器视口 `1440×900`，走真实用户路径。
+> **夹具构造**：给**已跟踪**文件 `scripts/check-fluid-layout.mjs` 造一处**未提交改动**（正是要验「工作区口径」能带出「未提交」行）；**验证后已 `git checkout -- scripts/check-fluid-layout.mjs` 还原**，工作区不再有已跟踪改动（仅剩未跟踪文件）。
+
+| # | 复验项 | 结论 | 判据（浏览器 DOM / 地址栏 / 网络） |
+|---|--------|------|-----------------------------------|
+| R25-1 | 无显式 `?select=` + `view=annotate` → **工作区口径** | ✅ | `?file=scripts%2Fcheck-fluid-layout.mjs&view=annotate` → 注解 **1848 行**；其中 **1 行**短哈希 `00000000`、标「未提交」（作者 `Not Committed Yet`、日期 2026-09-20 19:26），该行 `tabindex=null`（**不可聚焦、点了没反应**）。截图 `blame-08.png`（见 ④ 表） |
+| R25-2 | 中栏点一条提交 → **钉在该版本** | ✅ | 点 `blame-commit-1` → 地址加 `select=2444a02de8a5c00dfad71ffa93080e6cc0672d71`；注解 **1831 行**、**未提交行 0 条**；前台标签仍是「逐行注解」（追责流：点注解行写 `?select=` 即钉住那一版，口径不变） |
+| R25-3 | 操作条**四出口**（工作区口径下仍齐备、且都指向选中提交） | ✅ | 「日志定位」→ `/repos/<id>?select=2444a02d…`；「差异页」→ **新标签页** `/repos/<id>/diff?file=…&from=8d6d961aec5154251e9a1ea8e86a93578c9f4e47&to=94f8baca2f62c809bb923feac86c6929c1e9f796`；「受影响」→ 弹窗「受影响文件（94f8bac）」**136 行**；「文件历史」→ `/repos/<id>/history?file=scripts%2Fcheck-fluid-layout.mjs` |
+| R25-4 | 状态页行内「注解」入口（I-1 端到端） | ✅ | 状态页点 `annotate-unstaged-scripts/check-fluid-layout.mjs`（**按钮，不是 `<a>`**）→ 落到 `?file=scripts%2Fcheck-fluid-layout.mjs&view=annotate`，**「逐行注解」标签在前**（修复前该入口落在「本文件改动」，与「注解」这个词的承诺不符） |
+
+> **收尾状态**：验证用的未提交改动已还原（`git checkout --`），本轮只新增 `docs/shots/blame-08.png` 并改 `docs/e2e-verification.md`、`docs/manual.md` 两个 `.md`；截图的完整 SHA256 见 ④ 表（`Get-FileHash` 实算），冒烟临时配置目录 `.smoke-config/` 收尾时与 R24 同口径**已清理**。
 
 
