@@ -146,7 +146,7 @@
 | rebase | `repos/:id/rebase`、`rebase/todo`、`rebase/interactive`、`autosquash`、`commit-edit` | POST/GET/POST/POST/POST | 变基 onto / todo 读取 / 交互式执行 / auto-squash（fixup!·squash! 折入）/ 单提交编辑直通（reword/drop/squash/fixup） | RebaseDialog（内嵌 LogPage）+ 日志行右键 | ✅ |
 | pick | `repos/:id/cherry-pick`、`revert` | POST | 摘樱桃 / 还原 | LogPage 详情面板按钮 | ✅ |
 | tag | `repos/:id/tags` | GET/POST | 标签列表 / create(含附注)/delete/push/pushAll/deleteRemote | TagPanel | ✅ |
-| blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`） | BlameWorkbench（`blame-workbench.tsx`） | ✅ |
+| blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`；**不给 `rev` 即当前工作区**，给 `rev` 看该版本） | BlameWorkbench（`blame-workbench.tsx`：地址无 `?select=` 时不给 `rev`——工作区口径，本地未提交行标「未提交」） | ✅ |
 | history | `repos/:id/history` | GET | 文件历史（`--follow`） | HistoryPanel | ✅ |
 | browse | `repos/:id/browse`、`repos/:id/browse/content` | GET ×2 | 指定版本文件树 / 单文件内容（二进制标记） | LogPage 就地快照栏（`?browse=<路径\|空>`，键在即开、值承载定位）、`scripts/check-fluid-layout.mjs` 选夹具文件 | ✅ |
 | committed | `repos/:id/committed` | GET | 已提交变更分页浏览 | CommittedChangesPanel | ✅ |
@@ -270,7 +270,7 @@ Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存
 | Create Patch from changes（#44） | ✅ | 组级「创建补丁」（勾选≥1 可用，Modal 收集名）→ `createPatch` paths 载荷（工作区/暂存 diff 按组）→ 跳 `/patches` |
 | Shelve Changes（#45） | ✅ | 页头「搁置」（Modal 收集名）→ `shelf save` 全量工作区+暂存 → 跳 `/shelves` |
 | Stash Files（#49） | ✅ | 页头「存入贮藏」（Modal 收集可选信息）→ `stash save` → 跳 `/stashes` |
-| Annotate / Show History（#47） | ✅ | 行内「注解」→ `/blame?file=`；行内「历史」→ `/history?file=` |
+| Annotate / Show History（#47） | ✅ | 行内「注解」→ `/blame?file=&view=annotate`（直接落在「逐行注解」标签；未选中提交 = 工作区口径）；行内「历史」→ `/history?file=` |
 
 ### 4.5 CommitDialog 🟡（等效非模态形态）
 
@@ -425,13 +425,13 @@ Update Project——策略化更新入口；对应 `GitUpdateOptionsDialog` / `G
 
 文件溯源注解（逐行显示最后修改提交/作者/日期）+ 单文件的提交记录与变更查看（三栏工作台：文件树｜提交记录｜变更内容）；对应 `GitAnnotationProvider` / `GitAnnotationService`。
 
-- **落点**：路由 `/repos/:id/blame`；组件 `composite/blame-workbench.tsx`（+ 子件 `blame-commits-column.tsx` 中栏 / `blame-change-pane.tsx` 右栏（操作条 + 三标签）/ `blame-annotate-table.tsx` 注解行表 / `blame-state.ts` 派生规则；左栏复用 `snapshot-tree-column.tsx`）；服务 `api/blame.ts`（core `blame --line-porcelain`）；端点 `GET /blame`、`GET /history`（中栏 `--follow`）、`GET /diff`（右栏两标签）、`GET /browse`（左树 `rev=HEAD`）、`GET /commits/:hash`（受影响弹窗）；URL 真源 `?file=` / `?select=` / `?view=changes|latest|annotate`（缺省不写地址：无 `select` 时容器派生中栏首条、无 `view` 即 `changes`），旧 `?rev=<hash>` 只读兼容（读到即规范化成 `select=<hash>&view=annotate`）；页内路径输入与三栏交互一律 replace 回写地址。
+- **落点**：路由 `/repos/:id/blame`；组件 `composite/blame-workbench.tsx`（+ 子件 `blame-commits-column.tsx` 中栏 / `blame-change-pane.tsx` 右栏（操作条 + 三标签）/ `blame-annotate-table.tsx` 注解行表 / `blame-state.ts` 派生规则；左栏复用 `snapshot-tree-column.tsx`）；服务 `api/blame.ts`（core `blame --line-porcelain`）；端点 `GET /blame`、`GET /history`（中栏 `--follow`）、`GET /diff`（右栏两标签）、`GET /browse`（左树 `rev=HEAD`）、`GET /commits/:hash`（受影响弹窗）；URL 真源 `?file=` / `?select=` / `?view=changes|latest|annotate`（缺省不写地址：无 `select` 时容器派生中栏首条、无 `view` 即 `changes`），旧 `?rev=<hash>` 只读兼容（读到即规范化成 `select=<hash>&view=annotate`）；页内路径输入与三栏交互一律 replace 回写地址。**「逐行注解」的版本口径跟着「有没有显式 `?select=`」走**：无 → 不给 `rev`（`git blame <file>` = 当前工作区，本地未提交的行标「未提交」），有（含旧 `?rev=`）→ 看那一版；两个差异标签始终看选中提交那一版。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 注解展示 | ✅（等效形态） | 右栏「逐行注解」标签（`blame-annotate-table.tsx`，即原 `BlameView` 行渲染的承继者）：行号/短哈希/作者/日期/内容，承载注解语义（Web 无编辑器 gutter）；工作区未提交行（全 0 哈希）标注「未提交」 |
+| 注解展示 | ✅（等效形态） | 右栏「逐行注解」标签（`blame-annotate-table.tsx`，即原 `BlameView` 行渲染的承继者）：行号/短哈希/作者/日期/内容，承载注解语义（Web 无编辑器 gutter）；**默认看当前工作区**（地址无 `?select=` 时不给 `rev`，即旧单列页的工作区口径），工作区未提交行（全 0 哈希）标注「未提交」且不可点；显式选中某提交（含旧 `?rev=`）时才看那一版 |
 | 注解点击联动 | ✅ | 右栏操作条（**选中提交级**，等价旧行内按钮，D4）四出口：「日志定位」→ LogPage `?select=`；「差异页」→ 新标签页 DiffPage `from=父哈希&to=该提交`（根提交 `root=1`；父提交未知时不注入该按钮）；「文件历史」→ HistoryPanel；「受影响」→ 全量变更文件 Modal（边 #29/#33）。**新增**：注解行点击 = 选中该行归属的提交（页内联动，D7） |
-| 右栏三标签（本文件改动 / 与最新版本差异 / 逐行注解） | ✅ | 「本文件改动」（默认）= `useFileDiff(from=父提交,to=该提交)`；**「与最新版本差异」= `useFileDiff(repoId,file,false,该提交)` 的 from-only 语义（该提交版本 vs 当前工作区版本，未提交改动一并体现）**；「逐行注解」= `useBlame(repoId,file,该提交)`；三标签懒取数——非激活标签挂 null key 不发请求 |
+| 右栏三标签（本文件改动 / 与最新版本差异 / 逐行注解） | ✅ | 「本文件改动」（默认）= `useFileDiff(from=父提交,to=该提交)`；**「与最新版本差异」= `useFileDiff(repoId,file,false,该提交)` 的 from-only 语义（该提交版本 vs 当前工作区版本，未提交改动一并体现）**；「逐行注解」= `useBlame(repoId,file,rev)`，**`rev` 只在该标签被激活且地址里有显式 `?select=` 时才给**（不给 = 工作区口径），门禁随之分叉（无显式选中时不要求 hash 非空——一次提交都没有的文件照样能注解工作区内容）；三标签懒取数——非激活标签挂 null key 不发请求 |
 | 降级提示行（不给伪 diff） | ✅ | 根提交 / 重命名 / 该提交的版本里没有这个路径：判据统一由 `blame-state.ts` 的 `changesHints` 派生，两标签各按自己的取数门禁筛（与差异页、日志页变更集同一口径）——**标签1「本文件改动」三种情形都只给提示行、连请求都不发**（根提交无父版本、重命名两侧文件名不同、该提交里没有这个路径，三种下 `useFileDiff` 均挂 null key）；**标签2「与最新版本差异」只筛「该提交的版本里没有这个路径」这一种**（它比的是该提交版本 vs 当前工作区版本，与父版本无关），根提交与重命名两种情形**照常发 `/diff` 请求并渲染真实差异** |
 | 左栏 HEAD 文件树（选文件） | ✅ | **新增**：复用 `snapshot-tree-column.tsx`（`useBrowseTree(repoId,'HEAD')` → `GET /browse?rev=HEAD`）；树固定最新版本、**不跟随选中提交**（D3）；点叶子写 `?file=` 并清 `?select=`（选中回落该文件最新一条） |
 | 中栏该文件提交清单（`--follow`） | ✅ | **新增**：`blame-commits-column.tsx` + `useHistory`（`GET /history`，最新在上、含改名之前）；单击整行 = 选中（写 `?select=`），**行内无按钮**（出口全在右栏操作条）；无 `?select=` 时派生首条（不写地址）；空清单给空态 |
@@ -732,7 +732,7 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 | 44 | StatusPage → PatchPanel | 右键 Create Patch | `CreatePatchFromChangesAction.java:44` | ✅ 组级「创建补丁」（勾选集 → paths 载荷）→ 成功跳 `/patches` |
 | 45 | StatusPage → ShelfPanel | Shelve Changes | `ShelveChangesAction.kt:9` | ✅ 页头「搁置」（全量 save）→ 成功跳 `/shelves` |
 | 46 | StatusPage → IgnoreDialog | 右键 Add to .gitignore / Exclude | backend.xml:380-384 | ✅ 未跟踪行「忽略」→ Modal.confirm → `ignore/add` |
-| 47 | StatusPage → HistoryPanel/BlameWorkbench | 右键 Annotate / Show History | backend.xml:106-117 | ✅ 行内「注解」→ `/blame?file=`（进页默认停在「本文件改动」标签）；行内「历史」→ `/history?file=` |
+| 47 | StatusPage → HistoryPanel/BlameWorkbench | 右键 Annotate / Show History | backend.xml:106-117 | ✅ 行内「注解」→ `/blame?file=&view=annotate`（**进页直接落在「逐行注解」标签**；未选中提交 = 看当前工作区版本，本地未提交的行标「未提交」）；行内「历史」→ `/history?file=` |
 | 48 | StatusPage → 三版本对比 DiffPage | 右键 Compare Three Versions | `GitStageCompareThreeVersionsAction.kt:41-50` | ✅ 行「三版本」按钮 → `/diff?file=&three=1` |
 | 49 | StatusPage → StashPanel | Stash Files | backend.xml:420 | ✅ 页头「存入贮藏」（message 可空）→ 成功跳 `/stashes` |
 | 50 | CommitDialog → PushDialog | Commit and Push… 执行器 | `GitCommitAndPushExecutor.kt:19` | ✅ 提交框「提交并推送」→ `POST /commit/push`（commit 先落盘 → push 缺省当前分支上游；三态提示） |

@@ -17,6 +17,8 @@
  * 取数（全部既有端点，无新增）：左树 useBrowseTree(HEAD) / 中栏 useHistory(--follow) /
  * 选中提交变更集 useCommitFiles（父提交与三种降级判据的唯一来源，也供受影响弹窗同键缓存共享）/
  * 右栏三标签各按激活项条件拉取——非激活标签传空字符串挂 null key，不发请求（design §3.2）。
+ * 「逐行注解」按地址里有没有显式 `?select=` 分两种口径：没有 → 看**当前工作区**（不给 rev，本地未提交的行
+ * 标「未提交」）；有（含旧 `?rev=` 规范化来的）→ 看那一版。差异两标签始终看选中提交那一版。
  * 出口（选中提交级）：日志页定位 `?select=`（`router.push`，这一步是真导航）/ 新标签页差异
  * （from=父&to=提交，根提交 root=1，父提交未知则不注入该回调）/ 受影响弹窗（清单行点击 → 该文件这次的差异）/
  * 文件历史页。
@@ -153,8 +155,15 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
     false,
     hash,
   );
-  const annotateEnabled = view === 'annotate' && file !== '' && hash !== '';
-  const { data: lines, isLoading: linesLoading, error: linesError } = useBlame(repoId, annotateEnabled ? file : '', hash);
+  // 「逐行注解」的两种口径由**地址里有没有显式 `?select=`** 决定（不是由派生出来的 hash 决定）：
+  //   · 有 `?select=`（含旧 `?rev=` 规范化来的）→ 看那一版的归属，rev 传选中哈希；
+  //   · 没有 → 看**当前工作区**，**不给 rev**（`git blame <file>` 的工作区语义，本地未提交的行标「未提交」）。
+  // 门禁也据此分叉：只有「显式选中」这一路要求 hash 非空——一次提交都没有的文件（中栏空清单）派生出的 hash
+  // 是空串，但它的工作区内容照样能注解；反过来，没有显式选中时若卡在 hash !== '' 上，工作区注解就永远发不出去。
+  // changes / latest 两标签的门禁与父提交三态解析**不受此影响**（它们看的一直是选中提交那一版）。
+  const annotateRev = urlHash === null ? undefined : hash;
+  const annotateEnabled = view === 'annotate' && file !== '' && (urlHash === null || hash !== '');
+  const { data: lines, isLoading: linesLoading, error: linesError } = useBlame(repoId, annotateEnabled ? file : '', annotateRev);
   // 受影响弹窗（Show All Affected）：与上同键（同一提交）时缓存命中，不产生第二个请求
   const [affectedHash, setAffectedHash] = useState('');
   const { data: affectedEntry, isLoading: affectedLoading, error: affectedError } = useCommitFiles(repoId, affectedHash);

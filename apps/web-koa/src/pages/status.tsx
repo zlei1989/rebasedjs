@@ -241,8 +241,9 @@ export function RepoStatusPage(): React.ReactNode {
             })
             .catch(onError);
         }}
-        // Annotate（#47）：行内「注解」→ /blame?file=（HEAD 工作区版本溯源）
-        onOpenAnnotate={(path) => navigate(`/repos/${repoId}/blame?file=${encodeURIComponent(path)}`)}
+        // Annotate（#47）：行内「注解」→ /blame?file=&view=annotate（直接落在「逐行注解」标签；
+        // 不带 ?select= 即看当前工作区版本，本地未提交的行标「未提交」）
+        onOpenAnnotate={(path) => navigate(`/repos/${repoId}/blame?file=${encodeURIComponent(path)}&view=annotate`)}
         // Show History（#47）：行内「历史」→ /history?file=
         onOpenHistory={(path) => navigate(`/repos/${repoId}/history?file=${encodeURIComponent(path)}`)}
       />

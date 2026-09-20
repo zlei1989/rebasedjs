@@ -96,12 +96,16 @@ export function BlameWorkbench({
     available,
     widthPanes.length - 1,
   );
-  /** 拖动回写：本页栏数恒为 3（不会增删），故按下标取用是安全的（日志页栏数会随开关增删，那边按 key 定位） */
+  /**
+   * 拖动回写：本页栏数恒为 3（不会增删），故按下标取用是安全的（日志页栏数会随开关增删，那边按 key 定位）。
+   * 与日志页同口径：**只有宽度真的变了才调 setter**——写入器每次都会落 `localStorage`，
+   * 拖动时逐帧无条件回写等于把同一个值反复写进存储（无谓的同步 IO，也让「本机偏好」看不出何时真的变过）。
+   */
   const onWidthsChange = (next: number[]): void => {
     const nextTree = next[0];
     const nextCommits = next[1];
-    if (typeof nextTree === 'number') setTreeWidth(nextTree);
-    if (typeof nextCommits === 'number') setCommitsWidth(nextCommits);
+    if (typeof nextTree === 'number' && nextTree !== treeWidth) setTreeWidth(nextTree);
+    if (typeof nextCommits === 'number' && nextCommits !== commitsWidth) setCommitsWidth(nextCommits);
   };
   const hasFile = file !== '';
   const panes: ResizablePane[] = [
