@@ -54,14 +54,24 @@ export function RepoBlamePage(): React.ReactNode {
   // 选中提交：URL 优先（陈旧深链也要能看），否则回落清单首条；都没有则空串（右栏空态、不发请求）
   const hash = resolveBlameHash(urlHash, commits);
   // 选中提交的变更集：父提交 + 重命名/路径不存在的判据 + 受影响弹窗的数据源（一份数据三处用）
-  const { data: entry, isLoading: entryLoading } = useCommitFiles(repoId, hash);
+  const { data: entry, error: entryError } = useCommitFiles(repoId, hash);
   const hints = changesHints(entry, hash, file);
-  const parent = hints.ready ? entry?.parents[0] : undefined;
+  // 父提交三态（不能只看「有没有父」——「未知」与「根提交」必须分开，否则取数那一拍会把有父提交误判成根提交）：
+  //   · 变更集就绪 → 用它的 parents（权威来源：陈旧/被重写、不在中栏清单里的 hash 也准确）；
+  //   · 未就绪但该 hash 在中栏清单里 → 用清单条目自带的同一个 %P 字段即时兜底
+  //     （中栏与本页看的是同一份提交数据，只是到达时间不同）；
+  //   · 两者都没有 → 未知，出口不猜。
+  const listed = commits?.find((c) => c.hash === hash);
+  const parents = hints.ready ? entry?.parents : listed?.parents;
+  const parent = parents?.[0];
+  // 根提交判据同理取三态：就绪看变更集派生值，未就绪看清单条目；未知时**不置位**（否则又会把未知说成根提交）
+  const rootCommit = hints.ready ? hints.rootCommit : listed !== undefined && listed.parents.length === 0;
   // 右栏三标签：只拉当前激活的那一个（未激活传空串 → hook 挂 null key 不发请求）；
   // 走降级提示行的两种情形（重命名 / 该提交没有这个路径）**连请求都不发**——两侧都取不到内容，
-  // 发出去只会拿回两个空文档（与「不给伪 diff」同一口径）
+  // 发出去只会拿回两个空文档（与「不给伪 diff」同一口径）。
+  // 另显式要求 `hints.ready`：父提交现在可能是中栏兜底值，不能再拿「有父」代表变更集已就绪
   const changesEnabled =
-    view === 'changes' && file !== '' && parent !== undefined && hints.renameFrom === undefined && !hints.missingPath;
+    view === 'changes' && file !== '' && hints.ready && parent !== undefined && hints.renameFrom === undefined && !hints.missingPath;
   const { data: changesVersions, isLoading: changesLoading, error: changesError } = useFileDiff(
     repoId,
     changesEnabled ? file : '',
@@ -95,11 +105,19 @@ export function RepoBlamePage(): React.ReactNode {
     const trimmed = draft.trim();
     if (trimmed !== '') selectFile(trimmed);
   };
-  /** 操作条「差异页」：新标签页打开（本页留在原处）；根提交无父版本 → root=1 只给提示行 */
+  /**
+   * 操作条「差异页」：新标签页打开（本页留在原处）。三态出口——
+   * 有父 → `from=父&to=该提交`；确知是根提交 → `root=1`（差异页只给提示行）；
+   * 父提交未知（变更集没到且该 hash 不在中栏清单里，如陈旧/被重写的 ?select= 深链）→ **什么都不做**，
+   * 与按下条件不注入本回调同一条口径：宁可没有这个按钮，也不打开一张说错话的页面。
+   */
   const openDiffPage = (target: string): void => {
     const path = encodeURIComponent(file);
-    if (parent === undefined) openInNewTab(`/repos/${repoId}/diff?file=${path}&root=1`);
-    else openInNewTab(`/repos/${repoId}/diff?file=${path}&from=${parent}&to=${target}`);
+    if (parent !== undefined) {
+      openInNewTab(`/repos/${repoId}/diff?file=${path}&from=${parent}&to=${target}`);
+      return;
+    }
+    if (rootCommit) openInNewTab(`/repos/${repoId}/diff?file=${path}&root=1`);
   };
   /** 受影响清单里点文件：该文件在这次提交里的差异（同样新标签页；根提交 → root=1） */
   const openAffectedFile = (path: string): void => {
@@ -132,7 +150,11 @@ export function RepoBlamePage(): React.ReactNode {
           </span>
         </Tooltip>
       </Flex>
-      {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载（三栏内部无会话态，语义对齐既有页面约定） */}
+      {/* key=repoId：SPA 同挂载实例切换仓库时强制重挂载（三栏内部无会话态，语义对齐既有页面约定）。
+          changes 通道的 error 带上变更集自身的取数失败：陈旧/被重写的 ?select= 父提交永远不到，
+          不带上就会一直转圈，而服务端其实已经给了中文错误。
+          「差异页」出口只在有父提交或确知根提交时注入（右栏契约：未注入回调就不渲染该按钮）——
+          父提交未知时不猜：宁可没有这个按钮，也不打开一张说错话的页面 */}
       <BlameWorkbench
         key={repoId}
         file={file}
@@ -141,7 +163,11 @@ export function RepoBlamePage(): React.ReactNode {
         hash={hash}
         view={view}
         entry={entry}
-        changes={{ versions: changesVersions, loading: changesLoading || (changesEnabled && entryLoading), error: changesError?.message }}
+        changes={{
+          versions: changesVersions,
+          loading: changesLoading,
+          error: changesError?.message ?? (hints.ready ? undefined : entryError?.message),
+        }}
         latest={{ versions: latestVersions, loading: latestLoading, error: latestError?.message }}
         annotate={{ lines, loading: linesLoading, error: linesError?.message }}
         affected={{ hash: affectedHash, entry: affectedEntry, loading: affectedLoading, error: affectedError?.message ?? null }}
@@ -149,7 +175,7 @@ export function RepoBlamePage(): React.ReactNode {
         onSelectCommit={(next) => write(withBlameSelection(searchParams, next))}
         onViewChange={(next) => write(withBlameView(searchParams, next))}
         onOpenCommit={(target) => navigate(`/repos/${repoId}?select=${target}`)}
-        onOpenDiff={openDiffPage}
+        {...(parent !== undefined || rootCommit ? { onOpenDiff: openDiffPage } : {})}
         onShowAffected={setAffectedHash}
         onCloseAffected={() => setAffectedHash('')}
         onOpenAffectedFile={openAffectedFile}
