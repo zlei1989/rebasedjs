@@ -10,7 +10,10 @@ import { describe, expect, it } from 'vitest';
 import {
   diffTabsFromUrl,
   isLegacySnapshotUrl,
+  normalizeBlameQuery,
   PANEL_AGGREGATE,
+  readBlameFile,
+  readBlameView,
   readChanges,
   readChangesPath,
   readBrowse,
@@ -19,6 +22,9 @@ import {
   readParam,
   readSelect,
   syncDiffTabsWithUrl,
+  withBlameFile,
+  withBlameSelection,
+  withBlameView,
   withChangesPanel,
   withBrowsePanel,
   withMigratedSnapshot,
@@ -277,5 +283,70 @@ describe('旧深链 ?snap=<hash>（+ ?file=）的一次性改写', () => {
   it('不是旧形态时原样返回（无 snap 键就不动 select / browse）', () => {
     const next = withMigratedSnapshot(new URLSearchParams('select=abc&browse=keep.ts'));
     expect(next.toString()).toBe('select=abc&browse=keep.ts');
+  });
+});
+
+describe('溯源页参数（?file= / ?select= / ?view=，旧 ?rev= 只读兼容）', () => {
+  it('readBlameFile：缺省与空值都归一为空串', () => {
+    expect(readBlameFile(new URLSearchParams('file=src/app.ts'))).toBe('src/app.ts');
+    expect(readBlameFile(new URLSearchParams('file='))).toBe('');
+    expect(readBlameFile(new URLSearchParams(''))).toBe('');
+  });
+
+  it('readBlameView：缺省/非法值一律回落 changes，三个合法值原样读出', () => {
+    expect(readBlameView(new URLSearchParams(''))).toBe('changes');
+    expect(readBlameView(new URLSearchParams('view=diagonal'))).toBe('changes');
+    expect(readBlameView(new URLSearchParams('view=latest'))).toBe('latest');
+    expect(readBlameView(new URLSearchParams('view=annotate'))).toBe('annotate');
+  });
+
+  it('normalizeBlameQuery：旧 ?rev= 改写成 select + view=annotate，并删掉 rev 键', () => {
+    const next = normalizeBlameQuery(new URLSearchParams('file=a.ts&rev=abc123'));
+    expect(next.get('file')).toBe('a.ts');
+    expect(next.get('select')).toBe('abc123');
+    expect(next.get('view')).toBe('annotate');
+    expect(next.has('rev')).toBe(false);
+  });
+
+  it('normalizeBlameQuery：非法 view 写成 changes；空 file / 空 select / 空 rev 删键', () => {
+    const next = normalizeBlameQuery(new URLSearchParams('file=&select=&view=bogus&rev='));
+    expect(next.has('file')).toBe(false);
+    expect(next.has('select')).toBe(false);
+    expect(next.has('rev')).toBe(false);
+    expect(next.get('view')).toBe('changes');
+  });
+
+  it('normalizeBlameQuery：已规范的查询串原样（幂等，不再触发地址改写）', () => {
+    const query = new URLSearchParams('file=a.ts&select=abc&view=annotate');
+    expect(normalizeBlameQuery(query).toString()).toBe(query.toString());
+  });
+
+  it('withBlameFile：换文件删掉 select（回落该文件最新一条），view 保留', () => {
+    const next = withBlameFile(new URLSearchParams('file=a.ts&select=abc&view=latest'), 'b.ts');
+    expect(next.get('file')).toBe('b.ts');
+    expect(next.has('select')).toBe(false);
+    expect(next.get('view')).toBe('latest');
+  });
+
+  it('withBlameSelection：写/删 select，其余参数原样', () => {
+    const picked = withBlameSelection(new URLSearchParams('file=a.ts&view=annotate'), 'abc');
+    expect(picked.get('select')).toBe('abc');
+    expect(picked.get('view')).toBe('annotate');
+    const cleared = withBlameSelection(picked, null);
+    expect(cleared.has('select')).toBe(false);
+    expect(cleared.get('file')).toBe('a.ts');
+  });
+
+  it('withBlameView：写入 view，不动 file/select', () => {
+    const next = withBlameView(new URLSearchParams('file=a.ts&select=abc'), 'latest');
+    expect(next.get('view')).toBe('latest');
+    expect(next.get('file')).toBe('a.ts');
+    expect(next.get('select')).toBe('abc');
+  });
+
+  it('记录形态入参（web-next 的 searchParams）同样可读可写', () => {
+    expect(readBlameFile({ file: 'a.ts' })).toBe('a.ts');
+    expect(readBlameView({ view: ['annotate'] })).toBe('annotate');
+    expect(withBlameSelection({ file: 'a.ts' }, 'abc').get('select')).toBe('abc');
   });
 });

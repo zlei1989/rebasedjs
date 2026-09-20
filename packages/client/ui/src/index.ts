@@ -42,7 +42,17 @@ export { GitHubPanel, type GitHubPanelProps } from './composite/github-panel';
 export { GitLabPanel, type GitLabPanelProps } from './composite/gitlab-panel';
 export { BranchPanel, mergedCleanupCandidates, type BranchPanelProps } from './composite/branch-panel';
 export { BranchCompareView, type BranchCompareViewProps } from './composite/branch-compare-view';
-export { BlameView, type BlameViewProps } from './composite/blame-view';
+export {
+  changesHints,
+  isEntryReady,
+  resolveBlameHash,
+  type BlameViewKey,
+  type ChangesHints,
+} from './composite/blame-state';
+export { BlameAnnotateTable, type BlameAnnotateTableProps } from './composite/blame-annotate-table';
+export { BlameChangePane, type BlameChangePaneProps, type BlameDiffChannel } from './composite/blame-change-pane';
+export { BlameCommitsColumn, type BlameCommitsColumnProps } from './composite/blame-commits-column';
+export { BlameWorkbench, type BlameWorkbenchProps } from './composite/blame-workbench';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
 export {
   SnapshotTreeColumn,

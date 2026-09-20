@@ -44,7 +44,7 @@
 | 打开 worktree 项目 | 不做：无多项目会话模型；经 RepoPage 打开流程可达 |
 | Update 流程内子模块更新 | 不做：独立 SubmodulePanel 承载 |
 | 分支弹窗 New Working Tree | 不做：入口在「更多」菜单 → 工作树页 |
-| 全局 Search Everywhere / 编辑器内嵌 Blame | 不做：Web 无宿主，以页面承载（SearchPanel/BlameView） |
+| 全局 Search Everywhere / 编辑器内嵌 Blame | 不做：Web 无宿主，以页面承载（SearchPanel/BlameWorkbench） |
 
 ---
 
@@ -78,7 +78,7 @@
 | 13 | PushDialog | 推送对话框 | remote | P3 | ✅（内嵌模态） |
 | 14 | PullDialog | 拉取对话框 | remote | P3 | ✅（内嵌模态） |
 | 15 | UpdateProjectDialog | Update Project（策略化更新） | update | P3 | ✅（内嵌模态） |
-| 16 | BlameView | 文件溯源注解 | blame | P3 | ✅ |
+| 16 | BlameWorkbench | 文件溯源注解（三栏工作台：文件树｜提交记录｜变更内容） | blame | P3 | ✅ |
 | 17 | HistoryPanel | 文件历史（含重命名跟随） | history | P3 | ✅ |
 | 18 | ~~CommittedChangesPanel~~（已删除，2026-09-20 用户口径） | 已提交变更浏览器——**整页形态已删除**：应用内没有任何入口，能力由 LogPage 的**变更集标签**承载（`?select=<hash>&diff=`，见 §4.18） | committed（API 一并撤除） | P3 | ✅（能力在 LogPage） |
 | 19 | SearchPanel | 提交搜索 | search | P3 | ✅ |
@@ -146,10 +146,10 @@
 | rebase | `repos/:id/rebase`、`rebase/todo`、`rebase/interactive`、`autosquash`、`commit-edit` | POST/GET/POST/POST/POST | 变基 onto / todo 读取 / 交互式执行 / auto-squash（fixup!·squash! 折入）/ 单提交编辑直通（reword/drop/squash/fixup） | RebaseDialog（内嵌 LogPage）+ 日志行右键 | ✅ |
 | pick | `repos/:id/cherry-pick`、`revert` | POST | 摘樱桃 / 还原 | LogPage 详情面板按钮 | ✅ |
 | tag | `repos/:id/tags` | GET/POST | 标签列表 / create(含附注)/delete/push/pushAll/deleteRemote | TagPanel | ✅ |
-| blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`） | BlameView | ✅ |
+| blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`；**不给 `rev` 即当前工作区**，给 `rev` 看该版本） | BlameWorkbench（`blame-workbench.tsx`：地址无 `?select=` 时不给 `rev`——工作区口径，本地未提交行标「未提交」） | ✅ |
 | history | `repos/:id/history` | GET | 文件历史（`--follow`） | HistoryPanel | ✅ |
 | browse | `repos/:id/browse`、`repos/:id/browse/content` | GET ×2 | 指定版本文件树 / 单文件内容（二进制标记） | LogPage 就地快照栏（`?browse=<路径\|空>`，键在即开、值承载定位）、`scripts/check-fluid-layout.mjs` 选夹具文件 | ✅ |
-| commits | `repos/:id/commits/:hash` | GET | 单提交全量变更文件（Show All Affected） | LogPage 变更集标签（`useCommitFiles`）、BlameView 受影响文件 Modal | ✅ |
+| commits | `repos/:id/commits/:hash` | GET | 单提交全量变更文件（Show All Affected） | LogPage 变更集标签（`useCommitFiles`）、BlameWorkbench（操作条「受影响」弹窗） | ✅ |
 | search | `repos/:id/search` | GET | 提交搜索（grep/pickaxe） | SearchPanel | ✅ |
 | patch | `repos/:id/patches`、`patches/create`、`patches/apply`、`patches/delete`、`patches/:name/import-shelf` | GET + 4×POST | 补丁列表 / 创建（四态：工作区/暂存/提交区间/**勾选文件**）/ 应用（check 先行）/ 删除 / 导入搁置 | PatchPanel、StatusPage（创建补丁入口） | ✅ |
 | shelf | `repos/:id/shelves` | GET/POST | 搁置列表 / save/restore/drop | ShelfPanel | ✅ |
@@ -219,7 +219,7 @@
 | 顶栏状态条：分支名（detached 提示）、incoming 蓝/outgoing 绿徽标 | ✅ | 对齐 `GitInOutState` 2025 版形态 |
 | 状态变更自动刷新（事件驱动） | ✅ | `repo.state-changed` → 回写缓存 + 重验证日志 + 重订阅流 |
 | `refs.changed` 订阅（分支/标签/贮藏建删移动） | ✅ | 重验证日志快照（ref chips/图可达性）+ 全局分支列表键 |
-| `?select=<hash>` 深链（定位选中提交） | ✅ | BlameView/HistoryPanel/SearchPanel 结果点击均经此回跳；**选中态以 URL 为唯一真源**：页内点行即把哈希写回地址栏（replace，不新增历史步），刷新/前进后退/复制链接都回到同一选中（`url-select.ts`，两端同构）；目标不在已加载窗口内时有界补页（≤6 页 ≈1750 条）把它拉进列表，到上限即放弃 |
+| `?select=<hash>` 深链（定位选中提交） | ✅ | BlameWorkbench 操作条「日志定位」（注解行点击改为页内选中该提交，不再跳页）/HistoryPanel/SearchPanel 结果点击均经此回跳；**选中态以 URL 为唯一真源**：页内点行即把哈希写回地址栏（replace，不新增历史步），刷新/前进后退/复制链接都回到同一选中（`url-select.ts`，两端同构）；目标不在已加载窗口内时有界补页（≤6 页 ≈1750 条）把它拉进列表，到上限即放弃 |
 | 顶栏入口：首页链接 + 撤销最近提交 / 变更（状态页）/ 分支 / 合并 / 贮藏 / 设置 / 更多 7 个按钮 | ✅ | 等价 Java 工具窗口 tab 组 + Git 主菜单入口面；状态页入口按钮文案为「变更」 |
 | 「更多」菜单：15~17 项入口聚合 | ✅ | 溯源/历史/搜索/变基/标签/拉取/推送/更新项目/远程管理/补丁/搁置/控制台/忽略/工作树/子模块 15 项恒渲染；「GitHub 面板」「GitLab 面板」各需检测到对应托管远程（仅其一 16 项、两者皆有 17 项）。原「已提交」项随该页撤除（2026-09-20 用户口径） |
 | OperationStatus 操作条（kind 展示 + 中止） | ✅ | `GET /operation` + `operation.state-changed` + `POST /operation/abort` |
@@ -269,7 +269,7 @@ Local Changes + 暂存区主页——工作区变更分组、暂存/取消暂存
 | Create Patch from changes（#44） | ✅ | 组级「创建补丁」（勾选≥1 可用，Modal 收集名）→ `createPatch` paths 载荷（工作区/暂存 diff 按组）→ 跳 `/patches` |
 | Shelve Changes（#45） | ✅ | 页头「搁置」（Modal 收集名）→ `shelf save` 全量工作区+暂存 → 跳 `/shelves` |
 | Stash Files（#49） | ✅ | 页头「存入贮藏」（Modal 收集可选信息）→ `stash save` → 跳 `/stashes` |
-| Annotate / Show History（#47） | ✅ | 行内「注解」→ `/blame?file=`；行内「历史」→ `/history?file=` |
+| Annotate / Show History（#47） | ✅ | 行内「注解」→ `/blame?file=&view=annotate`（直接落在「逐行注解」标签；未选中提交 = 工作区口径）；行内「历史」→ `/history?file=` |
 
 ### 4.5 CommitDialog 🟡（等效非模态形态）
 
@@ -420,17 +420,22 @@ Update Project——策略化更新入口；对应 `GitUpdateOptionsDialog` / `G
 | 更新会话（进度/结果汇总） | ✅ | 常规更新后对话框保持打开呈现结果面板（fetched 引用数 + pull 状态：updated 已合入 / up-to-date 已最新 / conflicts 引导冲突页；footer 变「关闭」；推送被拒续推流程闭环不展示面板——`GitUpdateSession` 结果汇总的 Web 单仓库形态） |
 | 修复跟踪分支（Reset to tracked） | ✅ | 左下「Reset to tracked」（本地分支 → 上游文案）→ Modal.confirm（danger）→ `reset {ref: upstream, mode:'hard'}`（丢弃工作区/暂存变更）；无上游（detached/未跟踪）不渲染 |
 
-### 4.16 BlameView ✅
+### 4.16 BlameWorkbench ✅
 
-文件溯源注解（逐行显示最后修改提交/作者/日期）；对应 `GitAnnotationProvider` / `GitAnnotationService`。
+文件溯源注解（逐行显示最后修改提交/作者/日期）+ 单文件的提交记录与变更查看（三栏工作台：文件树｜提交记录｜变更内容）；对应 `GitAnnotationProvider` / `GitAnnotationService`。
 
-- **落点**：路由 `/repos/:id/blame`；组件 `composite/blame-view.tsx`；服务 `api/blame.ts`（core `blame --line-porcelain`）；端点 `GET /blame`；`?file=` 初始值 + 页内路径输入。
+- **落点**：路由 `/repos/:id/blame`；组件 `composite/blame-workbench.tsx`（+ 子件 `blame-commits-column.tsx` 中栏 / `blame-change-pane.tsx` 右栏（操作条 + 三标签）/ `blame-annotate-table.tsx` 注解行表 / `blame-state.ts` 派生规则；左栏复用 `snapshot-tree-column.tsx`）；服务 `api/blame.ts`（core `blame --line-porcelain`）；端点 `GET /blame`、`GET /history`（中栏 `--follow`）、`GET /diff`（右栏两标签）、`GET /browse`（左树 `rev=HEAD`）、`GET /commits/:hash`（受影响弹窗）；URL 真源 `?file=` / `?select=` / `?view=changes|latest|annotate`（缺省不写地址：无 `select` 时容器派生中栏首条、无 `view` 即 `changes`），旧 `?rev=<hash>` 只读兼容（读到即规范化成 `select=<hash>&view=annotate`）；页内路径输入与三栏交互一律 replace 回写地址。**「逐行注解」的版本口径跟着「有没有显式 `?select=`」走**：无 → 不给 `rev`（`git blame <file>` = 当前工作区，本地未提交的行标「未提交」），有（含旧 `?rev=`）→ 看那一版；两个差异标签始终看选中提交那一版。
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 注解展示 | ✅（等效形态） | 行列表（行号/作者/日期/内容 + hash 短名徽标）承载注解语义（Web 无编辑器 gutter） |
-| 注解点击联动 | ✅ | hash 徽标 → LogPage `?select=`；行内「差异」→ DiffPage from/to（父哈希出 blame `parents` 批量解析，根提交 → `root=1`）；行内「历史」→ HistoryPanel（边 #29/#33） |
-| Show All Affected（受影响文件） | ✅ | 行内「受影响」→ 提交全量变更文件 Modal（对照「Paths affected in <revision>」对话框；`GET /commits/:hash`，文件点击 → 该文件 diff——边 #34） |
+| 注解展示 | ✅（等效形态） | 右栏「逐行注解」标签（`blame-annotate-table.tsx`，即原 `BlameView` 行渲染的承继者）：行号/短哈希/作者/日期/内容，承载注解语义（Web 无编辑器 gutter）；**默认看当前工作区**（地址无 `?select=` 时不给 `rev`，即旧单列页的工作区口径），工作区未提交行（全 0 哈希）标注「未提交」且不可点；显式选中某提交（含旧 `?rev=`）时才看那一版 |
+| 注解点击联动 | ✅ | 右栏操作条（**选中提交级**，等价旧行内按钮，D4）四出口：「日志定位」→ LogPage `?select=`；「差异页」→ 新标签页 DiffPage `from=父哈希&to=该提交`（根提交 `root=1`；父提交未知时不注入该按钮）；「文件历史」→ HistoryPanel；「受影响」→ 全量变更文件 Modal（边 #29/#33）。**新增**：注解行点击 = 选中该行归属的提交（页内联动，D7） |
+| 右栏三标签（本文件改动 / 与最新版本差异 / 逐行注解） | ✅ | 「本文件改动」（默认）= `useFileDiff(from=父提交,to=该提交)`；**「与最新版本差异」= `useFileDiff(repoId,file,false,该提交)` 的 from-only 语义（该提交版本 vs 当前工作区版本，未提交改动一并体现）**；「逐行注解」= `useBlame(repoId,file,rev)`，**`rev` 只在该标签被激活且地址里有显式 `?select=` 时才给**（不给 = 工作区口径），门禁随之分叉（无显式选中时不要求 hash 非空——一次提交都没有的文件照样能注解工作区内容）；三标签懒取数——非激活标签挂 null key 不发请求 |
+| 降级提示行（不给伪 diff） | ✅ | 根提交 / 重命名 / 该提交的版本里没有这个路径：判据统一由 `blame-state.ts` 的 `changesHints` 派生，两标签各按自己的取数门禁筛（与差异页、日志页变更集同一口径）——**标签1「本文件改动」三种情形都只给提示行、连请求都不发**（根提交无父版本、重命名两侧文件名不同、该提交里没有这个路径，三种下 `useFileDiff` 均挂 null key）；**标签2「与最新版本差异」只筛「该提交的版本里没有这个路径」这一种**（它比的是该提交版本 vs 当前工作区版本，与父版本无关），根提交与重命名两种情形**照常发 `/diff` 请求并渲染真实差异** |
+| 左栏 HEAD 文件树（选文件） | ✅ | **新增**：复用 `snapshot-tree-column.tsx`（`useBrowseTree(repoId,'HEAD')` → `GET /browse?rev=HEAD`）；树固定最新版本、**不跟随选中提交**（D3）；点叶子写 `?file=` 并清 `?select=`（选中回落该文件最新一条） |
+| 中栏该文件提交清单（`--follow`） | ✅ | **新增**：`blame-commits-column.tsx` + `useHistory`（`GET /history`，最新在上、含改名之前）；单击整行 = 选中（写 `?select=`），**行内无按钮**（出口全在右栏操作条）；无 `?select=` 时派生首条（不写地址）；空清单给空态 |
+| URL 真源（`?file=&select=&view=`；旧 `?rev=` 兼容） | ✅ | **新增**：两端 `url-select.ts` 的 `normalizeBlameQuery`/`readBlameView`/`withBlameFile`/`withBlameSelection`/`withBlameView`（两端同批断言）；刷新/深链/前进后退落到同一视图；旧 `?rev=<hash>` 读到即规范化为 `select+view=annotate`（文件历史页「Annotate」链接继续有效）；陈旧 `?select=`（改名前的提交/被重写哈希）中栏不高亮、右栏仍按该哈希取数（父提交取自变更集） |
+| Show All Affected（受影响文件） | ✅ | 右栏操作条「受影响」→ 提交全量变更文件 Modal（组件搬到 `affected-files-modal.tsx`，行为与文案逐字不变；`GET /commits/:hash`，文件点击 → 该文件 diff——边 #34） |
 | previousLineno 边界 | ✅ | orig 近似边界注释在案 |
 
 ### 4.17 HistoryPanel ✅
@@ -443,7 +448,7 @@ Update Project——策略化更新入口；对应 `GitUpdateOptionsDialog` / `G
 |--------|------|------|
 | 文件历史列表 | ✅ | 条目：短哈希 + subject + 作者 + 日期 |
 | 重命名跟随（`--follow`） | ✅ | 改名前的提交同样列出 |
-| 版本 diff 联动 | ✅ | 条目点击 → 日志页 `?select=`；双击 → DiffPage from=父哈希&to=该提交（%P 解析，根提交 `root=1`）；行内「Annotate」→ `/blame?rev=`（边 #30/#31）；历史条目与溯源行现均带父哈希 |
+| 版本 diff 联动 | ✅ | 条目点击 → 日志页 `?select=`；双击 → DiffPage from=父哈希&to=该提交（%P 解析，根提交 `root=1`）；行内「Annotate」→ `/blame?file=&rev=`（读到即规范化成 `select=<hash>&view=annotate`，落到溯源页「逐行注解」标签；边 #30/#31）；父提交现由选中提交的变更集（`/commits/:hash`）提供 |
 
 ### 4.18 ~~CommittedChangesPanel~~（页面删除，2026-09-20 用户口径）✅ 能力在 LogPage
 
@@ -651,7 +656,7 @@ Git 命令输出控制台；对应 `GitCommandOutputConsolePrinter` / `GitConsol
 | Version Control 工具窗口 tab | StatusPage、LogPage、StashPanel、ConflictsPanel、HistoryPanel、~~CommittedChangesPanel~~、ShelfPanel、GitConsole、WorktreePanel；GitHub/GitLab PR/MR 窗口 | `/repos/:id/<页>` 路由（LogPage 为枢纽页）；GitHub/GitLab 面板带远程检测门；~~CommittedChangesPanel~~ 已撤除（能力并入 LogPage 变更集标签） |
 | 模态对话框 | CommitDialog、ResetDialog、MergeDialog、RebaseDialog、TagPanel、RemotePanel、PushDialog、PullDialog、UpdateProjectDialog、PatchPanel、Stash save/Unstash As、Worktree 创建 | 内嵌 Modal（Reset/Rebase/Push/Pull/Update/MergeView/AuthDialog）或页面化路由（Merge/Settings/Remote/Tag/Patch/Stash）；CommitDialog=内嵌提交框 |
 | 弹出（非模态弹窗/菜单） | BranchPanel、QuickActionsMenu、SearchPanel | 路由页；顶栏+更多菜单聚合 |
-| 编辑器内嵌 | BlameView（gutter 注解）；DiffPage | 独立页面 + 页内路径输入；DiffPage 路由页 |
+| 编辑器内嵌 | BlameWorkbench（gutter 注解）；DiffPage | 独立页面（三栏工作台：文件树｜提交记录｜变更内容）+ 页内路径输入；DiffPage 路由页 |
 | 无独立 UI | SubmodulePanel、IgnoreDialog | 独立面板（SubmodulePanel）；IgnoreDialog 路由页 |
 
 ### 5.2 全局骨架
@@ -705,13 +710,13 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 | 26 | LogPage → Open in Browser | 右键托管平台链接 | backend.xml:555-561 | ✅ 行右键「在浏览器中打开」（GitHub/GitLab 提交页链接，域检测驱动） |
 | 27 | DiffPage 页内 | 多文件 Prev/Next | `DiffNextFileAction`/`DiffPreviousFileAction` | ✅ 页头「上一个 / 下一个」（`?files=<JSON 数组>` 同组文件列表——committed 提交变更集/日志变更集/分支与工作树差异三入口注入；当前文件不在组内不渲染；组参数切换保留 from/to/staged）。**共用组件** `domain/file-nav-buttons.tsx` 同时供日志页快照栏的变更集差异标签使用（那里切文件 = 在同一标签栏开/切标签） |
 | 28 | 编辑器/项目树 → HistoryPanel | 右键 Show History | backend.xml:115 | ➖（无编辑器宿主；等价=「更多」+ 页内输入） |
-| 29 | BlameView → HistoryPanel | gutter 右键 Show in History | `ShowInFileHistoryAnnotationActionProvider.kt:55` | ✅ 行内「历史」按钮 → `/history?file=` |
+| 29 | BlameWorkbench → HistoryPanel | gutter 右键 Show in History | `ShowInFileHistoryAnnotationActionProvider.kt:55` | ✅ 右栏操作条「文件历史」→ `/history?file=` |
 | 30 | HistoryPanel → DiffPage | 双击版本/变更 | `ChangesBrowserBase.onDoubleClick:211` | ✅ 双击条目 → `/diff?file&from=父哈希&to=该提交`（根提交 `root=1`） |
-| 31 | HistoryPanel → BlameView | Annotate Revision | `AnnotateRevisionFromHistoryAction` | ✅ 行内「Annotate Revision」→ `/blame?rev=` |
-| 32 | 编辑器 → BlameView | 右键 Annotate | `AnnotateToggleAction`（VcsActions.xml:20） | ➖（无编辑器宿主；等价=「更多」+ 页内输入） |
-| 33 | BlameView → DiffPage | gutter 右键 Show Diff | `ShowDiffFromAnnotation.java:85` | ✅ 行内「差异」→ DiffPage from/to（根提交 `root=1`） |
-| 34 | BlameView → 受影响提交对话框 | 点击 Show All Affected | `AbstractVcsHelperImpl.java:551-564` | ✅ 行内「受影响」→ 提交全量变更文件 Modal（`GET /commits/:hash`；文件点击 → 该文件 diff；无效 hash → 400 INVALID_REF） |
-| 35 | BlameView 关闭 | 右键 Close Annotations | `EditorGutterComponentImpl:2719` | ➖（页面离开即关闭） |
+| 31 | HistoryPanel → BlameWorkbench | Annotate Revision | `AnnotateRevisionFromHistoryAction` | ✅ 条目「Annotate」→ `/blame?file=&rev=<hash>`（规范化成 `select=<hash>&view=annotate`，落在「逐行注解」标签） |
+| 32 | 编辑器 → BlameWorkbench | 右键 Annotate | `AnnotateToggleAction`（VcsActions.xml:20） | ➖（无编辑器宿主；等价=「更多」+ 左栏树选文件/页内输入） |
+| 33 | BlameWorkbench → DiffPage | gutter 右键 Show Diff | `ShowDiffFromAnnotation.java:85` | ✅ 右栏操作条「差异页」→ 新标签页 DiffPage from/to（根提交 `root=1`；父提交未知时不注入该按钮） |
+| 34 | BlameWorkbench → 受影响提交对话框 | 点击 Show All Affected | `AbstractVcsHelperImpl.java:551-564` | ✅ 右栏操作条「受影响」→ 提交全量变更文件 Modal（`GET /commits/:hash`；文件点击 → 该文件 diff；无效 hash → 400 INVALID_REF） |
+| 35 | BlameWorkbench 关闭 | 右键 Close Annotations | `EditorGutterComponentImpl:2719` | ➖（页面离开即关闭） |
 | 36 | 任意处 → SearchPanel | Search Everywhere Git tab | `GitSearchEverywhereContributor` | ✅ 「更多」→ `/search` |
 | 37 | ~~工具窗口 → CommittedChangesPanel~~ | Repository tab | `CommittedChangesViewManager.kt:39` | ➖ 2026-09-20 用户口径撤除该页（能力并入 LogPage 变更集标签；`GET /committed` 一并删除） |
 | 38 | ~~CommittedChangesPanel → DiffPage（双击变更）~~ | 双击变更 | `ChangesBrowserBase` | ✅ 能力保留并就地化：LogPage 变更集清单点文件 → 同栏差异标签（`?diff=<路径>`，from=父提交、to=该提交） |
@@ -728,7 +733,7 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 | 44 | StatusPage → PatchPanel | 右键 Create Patch | `CreatePatchFromChangesAction.java:44` | ✅ 组级「创建补丁」（勾选集 → paths 载荷）→ 成功跳 `/patches` |
 | 45 | StatusPage → ShelfPanel | Shelve Changes | `ShelveChangesAction.kt:9` | ✅ 页头「搁置」（全量 save）→ 成功跳 `/shelves` |
 | 46 | StatusPage → IgnoreDialog | 右键 Add to .gitignore / Exclude | backend.xml:380-384 | ✅ 未跟踪行「忽略」→ Modal.confirm → `ignore/add` |
-| 47 | StatusPage → HistoryPanel/BlameView | 右键 Annotate / Show History | backend.xml:106-117 | ✅ 行内「注解」→ `/blame?file=`；行内「历史」→ `/history?file=` |
+| 47 | StatusPage → HistoryPanel/BlameWorkbench | 右键 Annotate / Show History | backend.xml:106-117 | ✅ 行内「注解」→ `/blame?file=&view=annotate`（**进页直接落在「逐行注解」标签**；未选中提交 = 看当前工作区版本，本地未提交的行标「未提交」）；行内「历史」→ `/history?file=` |
 | 48 | StatusPage → 三版本对比 DiffPage | 右键 Compare Three Versions | `GitStageCompareThreeVersionsAction.kt:41-50` | ✅ 行「三版本」按钮 → `/diff?file=&three=1` |
 | 49 | StatusPage → StashPanel | Stash Files | backend.xml:420 | ✅ 页头「存入贮藏」（message 可空）→ 成功跳 `/stashes` |
 | 50 | CommitDialog → PushDialog | Commit and Push… 执行器 | `GitCommitAndPushExecutor.kt:19` | ✅ 提交框「提交并推送」→ `POST /commit/push`（commit 先落盘 → push 缺省当前分支上游；三态提示） |
@@ -816,7 +821,7 @@ RepoPage ──Open/点击最近项目──▶ LogPage（仓库枢纽页）
 1. **打开 → 工作流**：RepoPage → LogPage → 顶栏/更多菜单 → 各域页面（Web 单仓库模型，无 Java 的多项目会话）。
 2. **提交 → 推送**：StatusPage 提交框 →（推送独立于「更多」菜单 PushDialog）；commit&push 组合执行器已落地（提交框「提交并推送」→ `POST /commit/push`）；push 被拒 → 自动 Update 联动（#91）。
 3. **合并/变基/摘樱桃/还原 → 冲突 → 解决 → 继续**：四操作冲突统一跳 ConflictsPanel → MergeView 逐文件（ours/theirs/manual/delete）→ 「完成合并」`operation/continue` 泛化 → 回日志页；abort 在操作条。
-4. **溯源链路**：BlameView / HistoryPanel / SearchPanel 结果 → 日志页 `?select=<hash>` 深链；日志页变更集清单 → 依赖单击在同栏开差异标签（原 CommittedChangesPanel → DiffPage 的跨页跳转随该页撤除，见 §4.18）。
+4. **溯源链路**：BlameWorkbench（操作条「日志定位」；「逐行注解」里点行改为页内选中该提交）/ HistoryPanel / SearchPanel 结果 → 日志页 `?select=<hash>` 深链；日志页变更集清单 → 依赖单击在同栏开差异标签（原 CommittedChangesPanel → DiffPage 的跨页跳转随该页撤除，见 §4.18）。
 5. **变更暂存架**：StatusPage → 补丁（PatchPanel 三态创建）/ 搁置（ShelfPanel save/restore）/ 忽略（一键 add）；Patch→Shelf（导入搁置 → 跳 ShelfPanel）、Shelve from Status 已落地（页头「搁置」全量 save → 跳 `/shelves`，边 #45）。
 
 ---
