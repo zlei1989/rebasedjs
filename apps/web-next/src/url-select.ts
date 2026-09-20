@@ -22,6 +22,8 @@
  * 旧写法 `?snap=<hash>` 只作**只读兼容**（读到即改写成新形态，见 {@link withMigratedSnapshot}），
  * 应用自己不再写出该参数，也不再写出 `?file=`（它被两个面板键各自吸收）。
  */
+import type { BlameViewKey } from '@rebased/ui';
+
 /** 查询参数形态：URLSearchParams（react-router）或 Next searchParams 记录（同名参数重复时为数组） */
 export type UrlQuery = URLSearchParams | Record<string, string | string[] | undefined>;
 
@@ -220,4 +222,71 @@ export function withMigratedSnapshot(query: UrlQuery): URLSearchParams {
   const legacyFile = next.get('file');
   next.delete('file');
   return withBrowsePanel(next, legacyFile === null || legacyFile === '' ? PANEL_AGGREGATE : legacyFile);
+}
+
+/**
+ * 溯源页（`/repos/:id/blame`）三栏工作台的参数读写。三个键各管一件事：
+ *   · `file=<路径>`                  —— 溯源目标（与 /diff、/history 同名同义）
+ *   · `select=<完整哈希>`            —— 中栏选中的提交（右栏三标签看的都是它）
+ *   · `view=changes|latest|annotate` —— 右栏在前台的标签
+ * 缺省不写进地址：`?select=` 缺失时容器派生「该文件最新一条」，`?view=` 缺失即 `changes`；
+ * 只有用户显式动作才落参数（与日志页「URL 是真源、交互一律 replace」同一口径）。
+ * `rev=<哈希>` 是**只读兼容**：文件历史页「Annotate」的旧链接等价于「选中该提交 + 逐行注解」，
+ * 读到即由 {@link normalizeBlameQuery} 改写成新形态，应用自己不再写出该参数。
+ */
+export function readBlameFile(query: UrlQuery): string {
+  return readParam(query, 'file') ?? '';
+}
+
+/** 读右栏标签：缺省与非法值一律回落 `changes`（地址被手改也不至于渲染出一个不存在的标签） */
+export function readBlameView(query: UrlQuery): BlameViewKey {
+  const raw = readParam(query, 'view');
+  return raw === 'latest' || raw === 'annotate' || raw === 'changes' ? raw : 'changes';
+}
+
+/**
+ * 规范化溯源页查询串（幂等，返回**新的** URLSearchParams）：
+ *   · `rev=<哈希>` → 删 rev，补 `select=<该哈希>` 与 `view=annotate`（旧深链落到等价视图）；
+ *   · `view=` 非法值 → 写成 `changes`（读侧虽也回落，但地址里留个看不懂的值没有意义）；
+ *   · `file=` / `select=` 空值 → 删键（空串不是有效定位，留着只会让「有没有值」两种写法各解释一遍）。
+ * 其余参数（?compare= 等）原样保留。
+ */
+export function normalizeBlameQuery(query: UrlQuery): URLSearchParams {
+  const next = copyOf(query);
+  const legacyRev = readParam(next, 'rev');
+  if (next.has('rev')) next.delete('rev');
+  if (legacyRev !== null) {
+    next.set('select', legacyRev);
+    next.set('view', 'annotate');
+  }
+  if (next.has('file') && (next.get('file') ?? '') === '') next.delete('file');
+  if (next.has('select') && (next.get('select') ?? '') === '') next.delete('select');
+  if (next.has('view')) {
+    const view = next.get('view') ?? '';
+    if (view !== 'changes' && view !== 'latest' && view !== 'annotate') next.set('view', 'changes');
+  }
+  return next;
+}
+
+/** 换溯源文件：写 `file`，**删掉 `select`**（选中回落该文件最新一条），`view` 保留（用户的视角偏好不该被换文件重置） */
+export function withBlameFile(query: UrlQuery, file: string): URLSearchParams {
+  const next = copyOf(query);
+  next.set('file', file);
+  next.delete('select');
+  return next;
+}
+
+/** 选中提交：hash 为 null/空串时删键（取消选中）；其余参数原样保留 */
+export function withBlameSelection(query: UrlQuery, hash: string | null): URLSearchParams {
+  const next = copyOf(query);
+  if (hash === null || hash === '') next.delete('select');
+  else next.set('select', hash);
+  return next;
+}
+
+/** 切右栏标签：只动 `view` 一个键 */
+export function withBlameView(query: UrlQuery, view: BlameViewKey): URLSearchParams {
+  const next = copyOf(query);
+  next.set('view', view);
+  return next;
 }
