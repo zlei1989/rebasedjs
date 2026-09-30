@@ -22,7 +22,7 @@ export {
   type HeldFileDiff,
 } from './diff';
 export { useBlame } from './blame';
-export { useHistory } from './history';
+export { useFileHistory } from './file-history';
 export { useBrowseTree, useBrowseContent } from './browse';
 export { useCommitFiles } from './committed';
 export { useSearch } from './search';

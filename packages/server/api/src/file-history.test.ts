@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ServiceError } from '@rebased/contracts';
-import { getFileHistory } from './history';
+import { getFileHistoryLog } from './file-history';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -30,18 +30,18 @@ async function rejectError(promise: Promise<unknown>): Promise<ServiceError> {
   throw new Error('期望抛出 ServiceError 但未抛错');
 }
 
-describe('getFileHistory 服务', () => {
+describe('getFileHistoryLog 服务（文件历史清单）', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   // 成功矩阵：三提交 → 条目序列（最新在前）与字段完整透传
-  it('三提交文件历史：最新在前且字段完整', { timeout: 30000 }, async () => {
+  it('三提交文件历史清单：最新在前且字段完整', { timeout: 30000 }, async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
     const h1 = commitFile(repo, 'f.txt', 'one', 'first');
     const h2 = commitFile(repo, 'f.txt', 'two', 'second');
     const h3 = commitFile(repo, 'f.txt', 'three', 'third');
 
-    const entries = await getFileHistory(repo, 'f.txt');
+    const entries = await getFileHistoryLog(repo, 'f.txt');
 
     expect(entries.map((e) => e.hash)).toEqual([h3, h2, h1]);
     expect(entries.map((e) => e.shortHash)).toEqual([h3.slice(0, 7), h2.slice(0, 7), h1.slice(0, 7)]);
@@ -63,7 +63,7 @@ describe('getFileHistory 服务', () => {
     execFileSync('git', ['-C', repo, 'mv', 'a.txt', 'b.txt']);
     const h2 = commitFile(repo, 'b.txt', 'alpha', 'rename');
 
-    const entries = await getFileHistory(repo, 'b.txt');
+    const entries = await getFileHistoryLog(repo, 'b.txt');
 
     expect(entries.map((e) => e.hash)).toEqual([h2, h1]);
     expect(entries.map((e) => e.subject)).toEqual(['rename', 'create']);
@@ -74,7 +74,7 @@ describe('getFileHistory 服务', () => {
     const repo = createTmpRepo();
     dirs.push(repo);
 
-    const err = await rejectError(getFileHistory(repo, '../secret.txt'));
+    const err = await rejectError(getFileHistoryLog(repo, '../secret.txt'));
 
     expect(err.code).toBe('INVALID_QUERY');
     expect(err.message).toBe('非法的文件路径');
@@ -85,7 +85,7 @@ describe('getFileHistory 服务', () => {
     const repo = createTmpRepo();
     dirs.push(repo);
 
-    const err = await rejectError(getFileHistory(repo, join(repo, 'secret.txt')));
+    const err = await rejectError(getFileHistoryLog(repo, join(repo, 'secret.txt')));
 
     expect(err.code).toBe('INVALID_QUERY');
     expect(err.message).toBe('非法的文件路径');
@@ -96,7 +96,7 @@ describe('getFileHistory 服务', () => {
     const repo = createTmpRepo();
     dirs.push(repo);
 
-    const err = await rejectError(getFileHistory(repo, 'no-such.txt'));
+    const err = await rejectError(getFileHistoryLog(repo, 'no-such.txt'));
 
     expect(err.code).toBe('INVALID_REF');
     expect(err.message).toBe('文件不存在：no-such.txt');

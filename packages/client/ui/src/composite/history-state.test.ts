@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { CommittedEntry, FileHistoryEntry } from '@rebased/contracts';
-import { changesHints, isEntryReady, resolveBlameHash } from './blame-state';
+import { changesHints, isEntryReady, resolveHistoryHash } from './history-state';
 
 /** 历史条目工厂 */
 function makeHistory(hash: string): FileHistoryEntry {
@@ -22,22 +22,22 @@ function makeEntry(partial: Partial<CommittedEntry> & { hash: string }): Committ
   };
 }
 
-describe('resolveBlameHash（选中提交解析）', () => {
+describe('resolveHistoryHash（选中提交解析）', () => {
   it('URL 有 hash：以 URL 为准（陈旧深链也要能看）', () => {
-    expect(resolveBlameHash('abc', [makeHistory('def')])).toBe('abc');
+    expect(resolveHistoryHash('abc', [makeHistory('def')])).toBe('abc');
   });
 
   it('URL 无 hash：回落清单首条（最新一条），带 ?file= 深链进来右栏立刻有内容', () => {
-    expect(resolveBlameHash(null, [makeHistory('first'), makeHistory('second')])).toBe('first');
+    expect(resolveHistoryHash(null, [makeHistory('first'), makeHistory('second')])).toBe('first');
   });
 
   it('URL 无 hash 且清单为空：空串（右栏空态、不发请求）', () => {
-    expect(resolveBlameHash(null, [])).toBe('');
-    expect(resolveBlameHash(null, undefined)).toBe('');
+    expect(resolveHistoryHash(null, [])).toBe('');
+    expect(resolveHistoryHash(null, undefined)).toBe('');
   });
 
   it('URL 空串与缺省同义', () => {
-    expect(resolveBlameHash('', [makeHistory('first')])).toBe('first');
+    expect(resolveHistoryHash('', [makeHistory('first')])).toBe('first');
   });
 });
 

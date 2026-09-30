@@ -1,5 +1,5 @@
 /**
- * blame 原语：git blame --line-porcelain 逐行溯源解析。
+ * blame 原语：调用 `git blame --line-porcelain` 做逐行责任归属解析。
  *
  * porcelain 块结构（实测 git 2.47，与 builtin/blame.c 的 emit_porcelain 对照印证）：
  * - 块起始行「<hash> <orig> <final> [<cnt>]」——组内首行含 cnt（组内行数）；
@@ -13,7 +13,7 @@
  */
 import { runGit } from './exec';
 
-/** 溯源行：逐字段对应 contracts 的 BlameLine（core 层持 Core 前缀镜像，api 层映射） */
+/** 归属行：逐字段对应 contracts 的 BlameLine（core 层持 Core 前缀镜像，api 层映射） */
 export interface CoreBlameLine {
   /** 最终文件行号（1-based） */
   lineno: number;
@@ -31,7 +31,7 @@ export interface CoreBlameLine {
 const HEADER_RE = /^[0-9a-f]{40,64} (\d+) (\d+)(?: (\d+))?$/;
 
 /**
- * 解析 --line-porcelain 全文为逐行溯源数组。
+ * 解析 --line-porcelain 全文为逐行归属数组。
  * 算法（单遍状态机）：起始行重置本块累积的 hash/orig/final 与头字段；
  * 头字段按前缀识别（author/author-mail/author-time/author-tz/previous），其余（committer*、summary、
  * boundary、filename、merged）不计——filename 的 C 引号转义不参与解析；
@@ -101,8 +101,8 @@ function formatAuthorIso(epochSecs: number, tz: string): string {
   return `${wall.getUTCFullYear()}-${pad(wall.getUTCMonth() + 1)}-${pad(wall.getUTCDate())}T${pad(wall.getUTCHours())}:${pad(wall.getUTCMinutes())}:${pad(wall.getUTCSeconds())}${m[1]}${m[2]}:${m[3]}`;
 }
 
-/** 单文件逐行溯源：--line-porcelain 一次取全量（文件行数不大，无分页场景）；
- *  rev 可选：指定版本溯源（git blame <rev> -- file；Annotate Revision 语义），缺省当前工作区文件 */
+/** 单文件逐行归属：--line-porcelain 一次取全量（文件行数不大，无分页场景）；
+ *  rev 可选：指定版本归属（git blame <rev> -- file；Annotate Revision 语义），缺省当前工作区文件 */
 export async function fileBlame(cwd: string, file: string, rev?: string): Promise<CoreBlameLine[]> {
   const args = rev === undefined
     ? ['blame', '--line-porcelain', '--', file]

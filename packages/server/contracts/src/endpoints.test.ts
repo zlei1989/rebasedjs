@@ -14,7 +14,7 @@ import {
   commitAndPushBodySchema,
   configPutBodySchema,
   diffQuerySchema,
-  historyQuerySchema,
+  fileHistoryQuerySchema,
   hunkStagingBodySchema,
   logQuerySchema,
   openRepoBodySchema,
@@ -678,7 +678,7 @@ describe('tagActionSchema（标签写操作判别联合）', () => {
   });
 });
 
-describe('blameQuerySchema（溯源查询）', () => {
+describe('blameQuerySchema（逐行归属查询）', () => {
   it('接受非空 file', () => {
     expect(blameQuerySchema.parse({ file: 'src/a.txt' })).toEqual({ file: 'src/a.txt' });
   });
@@ -688,14 +688,14 @@ describe('blameQuerySchema（溯源查询）', () => {
   });
 });
 
-describe('historyQuerySchema（文件历史查询）', () => {
+describe('fileHistoryQuerySchema（文件历史清单查询）', () => {
   it('接受非空 file', () => {
-    expect(historyQuerySchema.parse({ file: 'src/a.txt' })).toEqual({ file: 'src/a.txt' });
-    expect(historyQuerySchema.parse({ file: 'b/c.md' })).toEqual({ file: 'b/c.md' });
+    expect(fileHistoryQuerySchema.parse({ file: 'src/a.txt' })).toEqual({ file: 'src/a.txt' });
+    expect(fileHistoryQuerySchema.parse({ file: 'b/c.md' })).toEqual({ file: 'b/c.md' });
   });
   it('拒绝空 file 与缺 file', () => {
-    expect(() => historyQuerySchema.parse({ file: '' })).toThrow();
-    expect(() => historyQuerySchema.parse({})).toThrow();
+    expect(() => fileHistoryQuerySchema.parse({ file: '' })).toThrow();
+    expect(() => fileHistoryQuerySchema.parse({})).toThrow();
   });
 });
 

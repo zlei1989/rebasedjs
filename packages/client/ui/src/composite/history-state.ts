@@ -1,5 +1,5 @@
-/**
- * 溯源页三栏的**派生规则**（纯函数，无 React、无请求）：
+﻿/**
+ * 历史页三栏的**派生规则**（纯函数，无 React、无请求）：
  *   · 选中提交解析——URL 优先、清单首条兜底；
  *   · 变更集就绪判据——SWR 换键那一拍可能还挂着上一提交的数据；
  *   · 三种降级判据——根提交 / 重命名 / 该提交的版本里没有这个路径。
@@ -8,15 +8,15 @@
  */
 import type { CommittedEntry, FileHistoryEntry } from '@rebased/contracts';
 
-/** 右栏三个视图标签的键（也是 URL `?view=` 的取值域） */
-export type BlameViewKey = 'changes' | 'latest' | 'annotate';
+/** 右栏四个视图标签的键（也是 URL `?view=` 的取值域；`detail` = 提交详情） */
+export type HistoryViewKey = 'changes' | 'latest' | 'annotate' | 'detail';
 
 /**
  * 选中提交解析：URL 的 `?select=` 优先（陈旧深链——改名之前的提交、被重写掉的哈希——也要能看），
  * 否则回落清单首条（最新一条）——这样带 `?file=` 深链进来右栏立刻有内容，不必再点一次；
  * 清单也为空（未跟踪文件/空仓库）时给空串，调用方据此走空态、钩子挂 null key 不发请求。
  */
-export function resolveBlameHash(urlHash: string | null, commits?: FileHistoryEntry[]): string {
+export function resolveHistoryHash(urlHash: string | null, commits?: FileHistoryEntry[]): string {
   if (urlHash !== null && urlHash !== '') return urlHash;
   const first = commits?.[0];
   return first === undefined ? '' : first.hash;

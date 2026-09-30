@@ -294,7 +294,7 @@ export interface CrlfWarning { warning: boolean; files: string[]; }
  *  version=git --version 输出（失败 null）；ok 标识可执行（检测到且版本可解析） */
 export interface GitExecutableInfo { exec: string; version: string | null; ok: boolean; }
 
-/** 溯源行（line-porcelain 逐字段）：lineno 为最终文件行号（1-based） */
+/** 归属行（line-porcelain 逐字段）：lineno 为最终文件行号（1-based） */
 export interface BlameLine {
   lineno: number;
   hash: string;
@@ -316,7 +316,7 @@ export interface FileHistoryEntry {
   shortHash: string;
   subject: string;
   author: string;
-  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；blame 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
+  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；history 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;
   /** 父提交哈希（%P 解析）；根提交为空数组——双击 diff 导航据此降级为 root=1 */
   parents: string[];
@@ -349,10 +349,10 @@ export interface CommittedEntry {
   shortHash: string;
   subject: string;
   /** 提交信息全文（%B：主题 + 正文，结尾换行已裁）；与日志页 CommitInfo.message 同口径。
-   *  溯源页注解行点击哈希后的浮层展示「完整提交内容」用它——subject 只是首行，不是完整信息 */
+   *  历史页注解行点击哈希后的浮层展示「完整提交内容」用它——subject 只是首行，不是完整信息 */
   message: string;
   author: string;
-  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；blame 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
+  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；history 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;
   /** 父提交哈希（git %P，空格分隔解析）；根提交为空数组——容器打开根提交 diff 时据此降级为提示 */
   parents: string[];
@@ -378,7 +378,7 @@ export interface SearchResult {
   shortHash: string;
   subject: string;
   author: string;
-  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；blame 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
+  /** 日期为 ISO 字符串（git %aI，带作者时区偏移；history 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;
 }
 /** 搜索模式：grep=提交信息全文（--grep）；pickaxe=内容增量（-S） */

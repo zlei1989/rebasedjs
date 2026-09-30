@@ -30,7 +30,7 @@ async function rejectError(promise: Promise<unknown>): Promise<ServiceError> {
   throw new Error('期望抛出 ServiceError 但未抛错');
 }
 
-describe('getFileBlame 服务', () => {
+describe('getFileBlame 服务（逐行归属）', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   // 成功矩阵：两提交改同一行 → 逐行归属 + 字段完整透传（含日期为合法 ISO，new Date() 可解析）
@@ -65,7 +65,7 @@ describe('getFileBlame 服务', () => {
     expect(lines[1].parents).toEqual([h1]);
   });
 
-  // rev 指定版本溯源（Annotate Revision）：在首提交版本上溯源 → 全部行归属首提交
+  // rev 指定版本归属（Annotate Revision）：在首提交版本上看归属 → 全部行归属首提交
   it('rev 指定版本：整文件归属该版本（首提交行全部 hash=h1）', { timeout: 30000 }, async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
@@ -79,7 +79,7 @@ describe('getFileBlame 服务', () => {
   });
 
   // 成功矩阵：子目录文件（相对路径）
-  it('子目录文件可溯源', { timeout: 30000 }, async () => {
+  it('子目录文件可看归属', { timeout: 30000 }, async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
     mkdirSync(join(repo, 'sub'));

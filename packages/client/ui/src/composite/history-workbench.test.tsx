@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { BlameLine, BrowseEntry, CommittedEntry, FileHistoryEntry } from '@rebased/contracts';
-import { BlameWorkbench } from './blame-workbench';
+import { HistoryWorkbench } from './history-workbench';
 
 const loader = async (): Promise<never> => {
   throw new Error('测试不应加载 monaco');
@@ -42,9 +42,9 @@ const entry: CommittedEntry = {
 };
 
 /** 缺省整页夹具 */
-function renderWorkbench(overrides: Partial<React.ComponentProps<typeof BlameWorkbench>> = {}) {
+function renderWorkbench(overrides: Partial<React.ComponentProps<typeof HistoryWorkbench>> = {}) {
   return render(
-    <BlameWorkbench
+    <HistoryWorkbench
       file="src/app.ts"
       tree={{ entries }}
       commits={{ entries: commits }}
@@ -54,14 +54,13 @@ function renderWorkbench(overrides: Partial<React.ComponentProps<typeof BlameWor
       changes={{}}
       latest={{}}
       annotate={{ lines }}
-      affected={{ hash: '' }}
       loader={loader}
       {...overrides}
     />,
   );
 }
 
-describe('BlameWorkbench 三栏装配', () => {
+describe('HistoryWorkbench 三栏装配', () => {
   it('三栏宿主齐备（文件 | 提交记录 | 变更内容）', () => {
     renderWorkbench();
     expect(screen.getByTestId('resizable-pane-tree')).toBeInTheDocument();
@@ -79,22 +78,26 @@ describe('BlameWorkbench 三栏装配', () => {
   it('中栏清单：点提交回调 onSelectCommit', () => {
     const onSelectCommit = vi.fn();
     renderWorkbench({ onSelectCommit });
-    fireEvent.click(screen.getByTestId('blame-commit-0'));
+    fireEvent.click(screen.getByTestId('history-commit-0'));
     expect(onSelectCommit).toHaveBeenCalledWith('c1');
   });
 
-  it('右栏三标签与操作条透传（注解行点击 → onSelectCommit）', () => {
+  it('右栏标签透传（注解行点击 → onSelectCommit）', () => {
     const onSelectCommit = vi.fn();
-    const onOpenCommit = vi.fn();
-    renderWorkbench({ onSelectCommit, onOpenCommit });
+    renderWorkbench({ onSelectCommit });
     fireEvent.click(screen.getByTestId('blame-line-1'));
     expect(onSelectCommit).toHaveBeenCalledWith('c1');
-    fireEvent.click(screen.getByTestId('blame-action-log'));
-    expect(onOpenCommit).toHaveBeenCalledWith('c1');
+  });
+
+  it('「提交详情」标签透传：点变更集文件名回调 onOpenChangedFile', () => {
+    const onOpenChangedFile = vi.fn();
+    renderWorkbench({ view: 'detail', onOpenChangedFile });
+    fireEvent.click(screen.getByTestId('changes-file-src/app.ts'));
+    expect(onOpenChangedFile).toHaveBeenCalledWith('src/app.ts');
   });
 });
 
-describe('BlameWorkbench 空态', () => {
+describe('HistoryWorkbench 空态', () => {
   it('没有文件（file 为空串）：中右两栏给引导空态，左树仍在', () => {
     renderWorkbench({ file: '', hash: '', entry: null, commits: { entries: [] }, annotate: {} });
     expect(screen.getByText('在左侧选择一个文件，或直接输入路径')).toBeInTheDocument();

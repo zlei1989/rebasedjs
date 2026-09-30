@@ -1,9 +1,9 @@
-/**
+﻿/**
  * 中栏「提交记录」列：该文件的提交清单（git log --follow，跟随重命名，最新在上）。
  * 行 = 短哈希 + 标题 + 作者 + 日期；**单击整行 = 选中该提交**（右栏三标签随之换版本）。
- * 行内不放按钮：日志页定位 / 新标签页差异 / 受影响 / 文件历史四个出口统一收在右栏操作条，
+ * 行内不放按钮：出口都收在右栏标签里（R28 起操作条整行删除），
  * 免得一栏里每行挤四个按钮（用户口径，见 design §1.3 / D4）。
- * 列表走 antd Listy（与文件历史页同口径）；不做虚拟滚动——与既有 /history 页一致，行为不倒退。
+ * 列表走 antd Listy；不做虚拟滚动——原 HistoryPanel 整页正是这个中栏（该页已并入历史页），行为不倒退。
  * 不做上下键在行间移动（design §0.3 明列的非目标），Tab 逐行停靠 + Enter/Space 激活即够。
  * 纯受控：不调接口，数据与回调由容器注入。
  */
@@ -12,7 +12,7 @@ import type { FileHistoryEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { formatCommitDate } from '../domain/format';
 
-export interface BlameCommitsColumnProps {
+export interface HistoryCommitsColumnProps {
   entries?: FileHistoryEntry[];
   loading?: boolean;
   error?: string;
@@ -22,26 +22,26 @@ export interface BlameCommitsColumnProps {
   onSelect?: (hash: string) => void;
 }
 
-export function BlameCommitsColumn({
+export function HistoryCommitsColumn({
   entries,
   loading,
   error,
   selectedHash,
   onSelect,
-}: BlameCommitsColumnProps): React.ReactNode {
+}: HistoryCommitsColumnProps): React.ReactNode {
   // 分隔与选中底色走主题 token（暗色主题下硬编码浅色会过亮）
   const { token } = theme.useToken();
-  if (loading === true) return <Spin data-testid="blame-commits-loading" />;
+  if (loading === true) return <Spin data-testid="history-commits-loading" />;
   if (error !== undefined) {
     return (
-      <Typography.Text type="danger" data-testid="blame-commits-error">
+      <Typography.Text type="danger" data-testid="history-commits-error">
         {error}
       </Typography.Text>
     );
   }
   if (entries === undefined || entries.length === 0) return <EmptyState title="该文件暂无提交记录" />;
   return (
-    <div data-testid="blame-commits">
+    <div data-testid="history-commits">
       <Listy
         items={entries}
         rowKey={(entry) => entry.hash}
@@ -65,7 +65,7 @@ export function BlameCommitsColumn({
               };
           return (
             <Flex
-              data-testid={`blame-commit-${index}`}
+              data-testid={`history-commit-${index}`}
               data-selected={selected ? 'true' : undefined}
               role={clickable ? 'button' : undefined}
               tabIndex={clickable ? 0 : undefined}

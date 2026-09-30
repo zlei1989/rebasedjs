@@ -1,8 +1,8 @@
 /**
- * 溯源页三栏工作台：文件（HEAD 目录树） | 提交记录（该文件的提交清单） | 变更内容（操作条 + 三标签）。
+ * 历史页三栏工作台：文件（HEAD 目录树） | 提交记录（该文件的提交清单） | 变更内容（四个标签）。
  * 为什么这么分（用户口径，见 design §0.2）：左栏解决「换文件要手打路径」，中栏解决「这文件改过几次」，
- * 右栏解决「这次提交到底改了什么」——三个问题各占一栏，一屏内闭环；逐行注解归到右栏第三个标签，
- * 于是「逐行归属 → 提交 → 变更」的主链路不再需要跳页或新开标签。
+ * 右栏解决「这次提交到底改了什么」——三个问题各占一栏，一屏内闭环；逐行注解与提交详情都归到右栏标签
+ * （前者给归属、后者给该提交的全貌），于是「逐行归属 → 提交 → 变更」的主链路不再需要跳页或新开标签。
  * 三栏宽度走 base/resizable-columns（antd Splitter 映射）：左/中非弹性（像素偏好记 localStorage），
  * 右栏弹性吃剩余——差异最需要宽度。纯受控：ui 不调接口，数据与动作由容器注入。
  */
@@ -14,10 +14,10 @@ import { ResizableColumns, restoreWidthsToAvailable, type ResizablePane } from '
 import { useStoredWidth } from '../base/stored-preference';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
 import type { LineHighlighterLoader } from '../base/line-highlighter';
-import { BlameChangePane } from './blame-change-pane';
+import { HistoryChangePane } from './history-change-pane';
 import type { BlameDetailState } from './blame-annotate-table';
-import { BlameCommitsColumn } from './blame-commits-column';
-import type { BlameViewKey } from './blame-state';
+import { HistoryCommitsColumn } from './history-commits-column';
+import type { HistoryViewKey } from './history-state';
 import { SnapshotTreeColumn } from './snapshot-tree-column';
 
 /** 左栏（文件树）默认/夹紧宽度：240 约放得下两层路径，80 是「还能拖到多窄」的硬下限 */
@@ -27,17 +27,17 @@ const COMMITS_WIDTH = { default: 320, min: 80, max: 640 };
 /** 右栏（变更内容）下限：差异与注解都需要宽度，240 是「还能看」的底线 */
 const PANE_MIN_PX = 240;
 /** 列宽偏好键（与日志页 `rebased.log.*` 同一命名口径） */
-const TREE_WIDTH_KEY = 'rebased.blame.treeWidth';
-const COMMITS_WIDTH_KEY = 'rebased.blame.commitsWidth';
+const TREE_WIDTH_KEY = 'rebased.history.treeWidth';
+const COMMITS_WIDTH_KEY = 'rebased.history.commitsWidth';
 
-export interface BlameWorkbenchProps {
-  /** 当前溯源的相对路径（'' = 还没选文件） */
+export interface HistoryWorkbenchProps {
+  /** 当前归属的相对路径（'' = 还没选文件） */
   file: string;
   tree: { entries?: BrowseEntry[]; loading?: boolean; error?: string };
   commits: { entries?: FileHistoryEntry[]; loading?: boolean; error?: string };
   /** 选中的提交哈希（'' = 没有可看的提交） */
   hash: string;
-  view: BlameViewKey;
+  view: HistoryViewKey;
   entry?: CommittedEntry | null;
   changes: { versions?: FileVersions; loading?: boolean; error?: string };
   /** 标签1 的根提交分支：该提交里的文件全文（容器经 useBrowseContent 条件拉取） */
@@ -50,21 +50,18 @@ export interface BlameWorkbenchProps {
   onToggleDetail?: (hash: string | null) => void;
   /** 测试注入点：替换注解行的高亮加载器 */
   annotateLoader?: LineHighlighterLoader;
-  affected: { hash: string; entry?: CommittedEntry | null; loading?: boolean; error?: string | null };
+  /** 「提交详情」标签的取数三态（与 entry 同源：变更集未到 → 加载，拉取失败 → 中文错误） */
+  entryState?: { loading?: boolean; error?: string };
   onSelectFile?: (path: string) => void;
   onSelectCommit?: (hash: string) => void;
-  onViewChange?: (view: BlameViewKey) => void;
-  onOpenCommit?: (hash: string) => void;
-  onOpenDiff?: (hash: string) => void;
-  onShowAffected?: (hash: string) => void;
-  onOpenInHistory?: (hash: string) => void;
-  onCloseAffected?: () => void;
-  onOpenAffectedFile?: (path: string) => void;
+  onViewChange?: (view: HistoryViewKey) => void;
+  /** 「提交详情」标签：点变更集里的文件名 → 容器在新标签页打开该文件的差异页 */
+  onOpenChangedFile?: (path: string) => void;
   /** 测试注入点：替换 monaco 加载器 */
   loader?: MonacoDiffLoader;
 }
 
-export function BlameWorkbench({
+export function HistoryWorkbench({
   file,
   tree,
   commits,
@@ -75,21 +72,16 @@ export function BlameWorkbench({
   rootContent,
   latest,
   annotate,
-  affected,
   onSelectFile,
   onSelectCommit,
   onViewChange,
-  onOpenCommit,
-  onOpenDiff,
-  onShowAffected,
-  onOpenInHistory,
-  onCloseAffected,
-  onOpenAffectedFile,
+  onOpenChangedFile,
+  entryState,
   detail,
   onToggleDetail,
   annotateLoader,
   loader,
-}: BlameWorkbenchProps): React.ReactNode {
+}: HistoryWorkbenchProps): React.ReactNode {
   const [treeWidth, setTreeWidth] = useStoredWidth(TREE_WIDTH_KEY, TREE_WIDTH.default, TREE_WIDTH.min, TREE_WIDTH.max);
   const [commitsWidth, setCommitsWidth] = useStoredWidth(
     COMMITS_WIDTH_KEY,
@@ -149,7 +141,7 @@ export function BlameWorkbench({
       min: COMMITS_WIDTH.min,
       max: COMMITS_WIDTH.max,
       content: (
-        <BlameCommitsColumn
+        <HistoryCommitsColumn
           entries={commits.entries}
           loading={commits.loading}
           error={commits.error}
@@ -167,7 +159,7 @@ export function BlameWorkbench({
       max: Number.MAX_SAFE_INTEGER,
       flexible: true,
       content: hasFile ? (
-        <BlameChangePane
+        <HistoryChangePane
           file={file}
           hash={hash}
           view={view}
@@ -177,15 +169,10 @@ export function BlameWorkbench({
           latest={latest}
           annotate={annotate}
           selectedHash={hash === '' ? null : hash}
-          affected={affected}
           {...(onViewChange === undefined ? {} : { onViewChange })}
           {...(onSelectCommit === undefined ? {} : { onSelectCommit })}
-          {...(onOpenCommit === undefined ? {} : { onOpenCommit })}
-          {...(onOpenDiff === undefined ? {} : { onOpenDiff })}
-          {...(onShowAffected === undefined ? {} : { onShowAffected })}
-          {...(onOpenInHistory === undefined ? {} : { onOpenInHistory })}
-          {...(onCloseAffected === undefined ? {} : { onCloseAffected })}
-          {...(onOpenAffectedFile === undefined ? {} : { onOpenAffectedFile })}
+          {...(entryState === undefined ? {} : { entryState })}
+          {...(onOpenChangedFile === undefined ? {} : { onOpenChangedFile })}
           {...(detail === undefined ? {} : { detail })}
           {...(onToggleDetail === undefined ? {} : { onToggleDetail })}
           {...(annotateLoader === undefined ? {} : { annotateLoader })}

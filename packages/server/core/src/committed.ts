@@ -89,7 +89,7 @@ function parseCommitted(stdout: string): CoreCommittedEntry[] {
     if (line === '') continue;
     if (line.includes('\0')) {
       const [hash, shortHash, subject, author, dateIso, parentsField = ''] = line.split('\0');
-      // 字段数防御（与 history 的 parseHistoryRecords 同款）：格式行约定 6 字段，缺字段整行丢弃
+      // 字段数防御（与 file-history 的 parseFileHistoryRecords 同款）：格式行约定 6 字段，缺字段整行丢弃
       if (hash === undefined || shortHash === undefined || subject === undefined || author === undefined || dateIso === undefined) continue;
       current = {
         hash,

@@ -1,4 +1,4 @@
-/** blame.ts 测试：useBlame 查询串（BlameLine[]）+ 空 file 挂 null key 不发请求 */
+/** history.ts 测试：useBlame 查询串（逐行归属）（BlameLine[]）+ 空 file 挂 null key 不发请求 */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +22,7 @@ describe('useBlame', () => {
 
     let result: { data?: BlameLine[]; error?: unknown } | undefined;
     function Probe() {
-      const { data, error } = useBlame('r-blame-1', 'src/a.txt');
+      const { data, error } = useBlame('r-history-1', 'src/a.txt');
       result = { data, error };
       return null;
     }
@@ -34,7 +34,7 @@ describe('useBlame', () => {
       await vi.waitFor(() => expect(result?.data).toEqual(LINES));
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-blame-1/blame?file=src%2Fa.txt');
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-history-1/blame?file=src%2Fa.txt');
     await act(async () => {
       renderer.unmount();
     });
@@ -46,7 +46,7 @@ describe('useBlame', () => {
 
     let result: { data?: BlameLine[]; error?: unknown } | undefined;
     function Probe() {
-      const { data, error } = useBlame('r-blame-2', '');
+      const { data, error } = useBlame('r-history-2', '');
       result = { data, error };
       return null;
     }

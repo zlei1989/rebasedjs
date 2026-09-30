@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileHistory } from './history';
+import { fileHistoryLog } from './file-history';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -19,7 +19,7 @@ function commitFile(repo: string, file: string, content: string, msg: string): s
   return git(repo, 'rev-parse', 'HEAD');
 }
 
-describe('history 原语', () => {
+describe('file-history 原语', () => {
   afterAll(() => dirs.forEach(cleanupTmpRepo));
 
   // 三提交 → 条目序列（最新在前）
@@ -30,7 +30,7 @@ describe('history 原语', () => {
     const h2 = commitFile(repo, 'f.txt', 'two', 'second');
     const h3 = commitFile(repo, 'f.txt', 'three', 'third');
 
-    const entries = await fileHistory(repo, 'f.txt');
+    const entries = await fileHistoryLog(repo, 'f.txt');
 
     expect(entries.map((e) => e.hash)).toEqual([h3, h2, h1]);
     expect(entries.map((e) => e.subject)).toEqual(['third', 'second', 'first']);
@@ -41,7 +41,7 @@ describe('history 原语', () => {
     expect(entries[2].dateIso).toBe(git(repo, 'log', '-1', '--format=%aI', h1));
   });
 
-  // git mv 重命名后 fileHistory(新名) 仍返回重命名前提交（--follow 证据）
+  // git mv 重命名后 fileHistoryLog(新名) 仍返回重命名前提交（--follow 证据）
   it('git mv 重命名：--follow 返回重命名前提交', { timeout: 30000 }, async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
@@ -49,7 +49,7 @@ describe('history 原语', () => {
     execFileSync('git', ['-C', repo, 'mv', 'a.txt', 'b.txt']);
     const h2 = commitFile(repo, 'b.txt', 'alpha', 'rename');
 
-    const entries = await fileHistory(repo, 'b.txt');
+    const entries = await fileHistoryLog(repo, 'b.txt');
 
     expect(entries.map((e) => e.hash)).toEqual([h2, h1]);
     expect(entries.map((e) => e.subject)).toEqual(['rename', 'create']);

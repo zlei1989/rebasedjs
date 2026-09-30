@@ -1,10 +1,10 @@
 /**
- * blame 功能：单文件逐行溯源（git blame --line-porcelain 的 core 原语 → contracts 形状）。
+ * 逐行归属功能：单文件逐行责任归属（`git blame --line-porcelain` 的 core 原语 → contracts 形状）。
  *
  * 入参在此校验（预检先于 git 调用）：路径越界 → INVALID_QUERY '非法的文件路径'；
  * 文件不存在（工作区 stat）→ INVALID_REF '文件不存在：…'。
  *
- * rev 可选：指定版本溯源（Annotate Revision）；责任提交的父哈希经 parentHashesOf 批量解析
+ * rev 可选：指定版本归属（Annotate Revision）；责任提交的父哈希经 parentHashesOf 批量解析
  * （一次 no-walk 取全量去重 hash，供 UI 双击 diff 导航与根提交降级）。
  *
  * 日期透传（P3-C 终审裁定）：BlameLine.dateIso 为 core 已转换的 ISO 字符串——author-time epoch 秒 +
@@ -17,7 +17,7 @@ import { fileBlame, parentHashesOf, type CoreBlameLine } from '@rebased/core';
 import { ServiceError, type BlameLine } from '@rebased/contracts';
 
 /**
- * 预检：路径边界 + 文件存在性（blame/history 共用）。
+ * 预检：路径边界 + 文件存在性（history 与 file-history 两个端点共用）。
  * 边界沿用 diff.ts 的 assertValidQuery 手法——file 含 `..` 路径段或为绝对路径即非法；
  * 另加 resolve+relative 兜底：Windows 盘符相对路径（如 C:foo）能逃过 isAbsolute 检查，
  * 凡 resolve 后仍在仓库根之外的一律按越界拦截。
@@ -45,7 +45,7 @@ export function assertValidFilePath(repoPath: string, file: string): void {
   }
 }
 
-/** core 溯源行 → contracts BlameLine（字段同构，映射在此收敛，core 不依赖 contracts）；
+/** core 归属行 → contracts BlameLine（字段同构，映射在此收敛，core 不依赖 contracts）；
  *  parents 经批量解析补全（一次 no-walk 取全量去重 hash 的父提交） */
 async function toBlameLine(line: CoreBlameLine, parentsByHash: Record<string, string[]>): Promise<BlameLine> {
   return {
@@ -61,8 +61,8 @@ async function toBlameLine(line: CoreBlameLine, parentsByHash: Record<string, st
   };
 }
 
-/** 单文件逐行溯源：预检通过后调用 core，逐行映射；文件行数不大，一次全量返回；
- *  rev 可选（指定版本溯源）；责任提交父哈希批量解析供 diff 导航（根提交 parents=[]） */
+/** 单文件逐行归属：预检通过后调用 core，逐行映射；文件行数不大，一次全量返回；
+ *  rev 可选（指定版本归属）；责任提交父哈希批量解析供 diff 导航（根提交 parents=[]） */
 export async function getFileBlame(repoPath: string, file: string, rev?: string): Promise<BlameLine[]> {
   assertValidFilePath(repoPath, file);
   const lines = await fileBlame(repoPath, file, rev);

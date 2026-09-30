@@ -1,5 +1,6 @@
 /**
- * history 原语：git log --follow 文件历史（--follow 跟随重命名，最新在前）。
+ * file-history 原语：git log --follow 文件历史清单（--follow 跟随重命名，最新在前）。
+ * 它是历史页**中栏**的数据源（逐行归属在 history 原语里，走 git blame）。
  *
  * 格式：--format=%H%x00%h%x00%s%x00%an%x00%aI——每条记录 5 个字段、字段间 \x00，
  * 记录之间 git 只以换行结尾（无 NUL），故记录边界是 \n 而非字段组；subject 不含换行/NUL。
@@ -8,7 +9,7 @@
 import { runGit } from './exec';
 
 /** 文件历史条目：逐字段对应 contracts 的 FileHistoryEntry（core 层持 Core 前缀镜像，api 层映射；parents 供根提交降级与 diff 导航） */
-export interface CoreFileHistoryEntry {
+export interface CoreFileHistoryLogEntry {
   hash: string;
   shortHash: string;
   subject: string;
@@ -27,8 +28,8 @@ const HISTORY_FORMAT = '%H%x00%h%x00%s%x00%an%x00%aI%x00%P';
  * 每条记录 6 字段 5 个 NUL，按 NUL 直接分组会在记录边界错位）；
  * 先按 \n 切记录、再按 \0 切字段；末尾字段上剥记录尾随换行（兼容 \r\n 环境）。
  */
-export function parseHistoryRecords(stdout: string): CoreFileHistoryEntry[] {
-  const entries: CoreFileHistoryEntry[] = [];
+export function parseFileHistoryRecords(stdout: string): CoreFileHistoryLogEntry[] {
+  const entries: CoreFileHistoryLogEntry[] = [];
   for (const record of stdout.split('\n')) {
     if (record.trim() === '') continue;
     const [hash, shortHash, subject, author, dateIso, parents] = record.split('\0');
@@ -45,8 +46,8 @@ export function parseHistoryRecords(stdout: string): CoreFileHistoryEntry[] {
   return entries;
 }
 
-/** 单文件历史（--follow 跟随重命名，最新在前）；文件不存在由 git 报错上抛 */
-export async function fileHistory(cwd: string, file: string): Promise<CoreFileHistoryEntry[]> {
+/** 单文件历史清单（--follow 跟随重命名，最新在前）；文件不存在由 git 报错上抛 */
+export async function fileHistoryLog(cwd: string, file: string): Promise<CoreFileHistoryLogEntry[]> {
   const { stdout } = await runGit(['log', '--follow', `--format=${HISTORY_FORMAT}`, '--', file], { cwd });
-  return parseHistoryRecords(stdout);
+  return parseFileHistoryRecords(stdout);
 }

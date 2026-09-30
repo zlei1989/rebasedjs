@@ -1,9 +1,9 @@
-/** history.ts 测试：useHistory 查询串（FileHistoryEntry[]）+ 空 file 挂 null key 不发请求 */
+/** file-history.ts 测试：useFileHistory 查询串（FileHistoryEntry[]）+ 空 file 挂 null key 不发请求 */
 import { act, createElement } from 'react';
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FileHistoryEntry } from '@rebased/contracts';
-import { useHistory } from './history';
+import { useFileHistory } from './file-history';
 import { freshCache } from './testing/fresh-cache';
 
 const ENTRIES: FileHistoryEntry[] = [
@@ -15,14 +15,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('useHistory', () => {
-  it('按 file 拼接查询串请求 history 端点并返回 FileHistoryEntry[]', async () => {
+describe('useFileHistory', () => {
+  it('按 file 拼接查询串请求 file-history 端点并返回 FileHistoryEntry[]', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(ENTRIES), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     let result: { data?: FileHistoryEntry[]; error?: unknown } | undefined;
     function Probe() {
-      const { data, error } = useHistory('r-history-1', 'b.txt');
+      const { data, error } = useFileHistory('r-history-1', 'b.txt');
       result = { data, error };
       return null;
     }
@@ -34,7 +34,7 @@ describe('useHistory', () => {
       await vi.waitFor(() => expect(result?.data).toEqual(ENTRIES));
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-history-1/history?file=b.txt');
+    expect(fetchMock).toHaveBeenCalledWith('/api/repos/r-history-1/file-history?file=b.txt');
     await act(async () => {
       renderer.unmount();
     });
@@ -46,7 +46,7 @@ describe('useHistory', () => {
 
     let result: { data?: FileHistoryEntry[]; error?: unknown } | undefined;
     function Probe() {
-      const { data, error } = useHistory('r-history-2', '');
+      const { data, error } = useFileHistory('r-history-2', '');
       result = { data, error };
       return null;
     }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * browse 功能：历史快照浏览——以指定提交为根的只读文件树 + 单文件内容。
  * 对应 Java GitBrowseRepoAtRevisionAction 的 RepositoryBrowser 语义（虚拟文件，不触碰工作区）。
  *
@@ -11,7 +11,7 @@ import { isAbsolute } from 'node:path';
 import { GitExitError, listTreeAtRevision, readFileAtRev, verifyCommitish } from '@rebased/core';
 import { ServiceError, type BrowseContent, type BrowseContentQuery, type BrowseEntry, type BrowseTree } from '@rebased/contracts';
 
-/** 路径边界预检：file 含 `..` 路径段或绝对路径即非法（blame/history 同口径；本场景文件只在版本内存在，不做 stat 存在性校验） */
+/** 路径边界预检：file 含 `..` 路径段或绝对路径即非法（history/history 同口径；本场景文件只在版本内存在，不做 stat 存在性校验） */
 function assertSafeFilePath(file: string): void {
   if (file.split(/[\\/]/).includes('..') || isAbsolute(file)) {
     throw new ServiceError('INVALID_QUERY', '非法的文件路径');

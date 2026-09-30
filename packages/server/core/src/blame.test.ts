@@ -19,7 +19,7 @@ function commitFile(repo: string, file: string, content: string, msg: string): s
   return git(repo, 'rev-parse', 'HEAD');
 }
 
-/** 提交作者严格 ISO（%aI：作者时区偏移墙钟）→ blamer 期望的 dateIso（对齐 history/committed/search 口径） */
+/** 提交作者严格 ISO（%aI：作者时区偏移墙钟）→ historyr 期望的 dateIso（对齐 history/committed/search 口径） */
 function authorIso(repo: string, hash: string): string {
   return git(repo, 'log', '-1', '--format=%aI', hash);
 }
@@ -46,7 +46,7 @@ describe('blame 原语', () => {
     expect(lines[0].authorEmail).toBe('test@example.com');
     expect(lines[0].dateIso).toBe(authorIso(repo, h1));
     expect(lines[0].previousLineno).toBeNull();
-    // 行 2：归属次提交；编辑溯源 → previousLineno = 次提交版本中的源行号
+    // 行 2：归属次提交；编辑归属 → previousLineno = 次提交版本中的源行号
     expect(lines[1].lineno).toBe(2);
     expect(lines[1].hash).toBe(h2);
     expect(lines[1].shortHash).toBe(h2.slice(0, 7));
@@ -56,7 +56,7 @@ describe('blame 原语', () => {
     expect(lines[1].previousLineno).toBe(2);
   });
 
-  // 重命名文件（git mv）+ 修改：previous 溯源行出现在重命名/编辑交集的行
+  // 重命名文件（git mv）+ 修改：previous 归属行出现在重命名/编辑交集的行
   it('git mv 重命名 + 修改：previousLineno 非空且指向重命名前行号', { timeout: 30000 }, async () => {
     const repo = createTmpRepo();
     dirs.push(repo);
@@ -71,7 +71,7 @@ describe('blame 原语', () => {
     expect(lines[0].content).toBe('alpha');
     expect(lines[0].hash).toBe(h1);
     expect(lines[0].previousLineno).toBeNull();
-    // 重命名 + 编辑的行归属次提交，且溯源到重命名前的行号
+    // 重命名 + 编辑的行归属次提交，且归属到重命名前的行号
     expect(lines[1].content).toBe('BRAVO');
     expect(lines[1].hash).toBe(h2);
     expect(lines[1].lineno).toBe(2);
@@ -106,7 +106,7 @@ describe('blame 原语', () => {
   });
 
   // 冒烟 D-18 复现：工作区存在未提交改动时，git blame 对未提交行输出零哈希伪提交，
-  // 修复前 parentHashesOf 把它传给 git log → `fatal: bad object 0000…` 退出码 128 → blame 页 500
+  // 修复前 parentHashesOf 把它传给 git log → `fatal: bad object 0000…` 退出码 128 → 本页 500
   it('未提交行（零哈希）不进入 git log 参数，父哈希按空列表返回', { timeout: 30000 }, async () => {
     const repo = createTmpRepo();
     dirs.push(repo);

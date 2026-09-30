@@ -7,7 +7,7 @@ export { abortOperation, assertNoOperationInProgress, continueOperation, getOper
 export { getLogPage, streamLogEvents } from './log';
 export { getBranchWorkingDiff, getFileDiff, getFileThreeVersions, getFileVersions, streamDiffEvents } from './diff';
 export { getFileBlame } from './blame';
-export { getFileHistory } from './history';
+export { getFileHistoryLog } from './file-history';
 export { getBrowseContent, getBrowseTree } from './browse';
 export { getCommitFiles } from './committed';
 export { searchCommitsService } from './search';
