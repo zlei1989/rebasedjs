@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 状态页（Local Changes + 暂存区 + 提交框）：
  *  变更按 porcelain XY 码分三组——已暂存（X ∈ MADRC）、工作区（Y ∈ MDT）、未跟踪（??；!! 已忽略条目不展示）。
  *  可选 changelists：提供时三组内再按变更列表子分组（默认列表平铺，非默认列表以列表名子标题分组），
@@ -82,9 +82,9 @@ export interface StatusPageProps {
   onShelve?: (name: string) => void;
   /** 组级「存入贮藏」（Stash Files 语义）：传入后页头渲染「存入贮藏」按钮（Modal 收集可选 message） */
   onStash?: (message: string | undefined) => void;
-  /** 行内「注解」（Show in Annotate 语义）：传入后各组件行渲染按钮 → /blame?file= */
+  /** 行内「注解」（Show in Annotate 语义）：传入后各组件行渲染按钮 → /history?file= */
   onOpenAnnotate?: (path: string) => void;
-  /** 行内「历史」（Show History 语义）：传入后各组件行渲染按钮 → /history?file= */
+  /** 行内「历史」（Show History 语义）：传入后各组件行渲染按钮 → 历史页 /history?file=（中栏即该文件的提交清单） */
   onOpenHistory?: (path: string) => void;
   /** 组合执行器（GitCommitAndPushExecutor 语义）：提交后推送当前分支上游；缺省不渲染「提交并推送」按钮（向后兼容） */
   onCommitAndPush?: (body: CommitBody) => void;
@@ -320,7 +320,7 @@ function ChangeGroup({
         {/* 「注解」行操作（Annotate 语义）；点击不触发行选中 */}
         {onOpenAnnotate !== undefined && (
           <Flex onClick={(e) => e.stopPropagation()}>
-            <Tooltip title="打开该文件的逐行溯源页（blame），查看每行的最后修改提交">
+            <Tooltip title="打开该文件的逐行历史页（history），查看每行的最后修改提交">
               <Button
                 size="small"
                 type="text"
@@ -335,7 +335,7 @@ function ChangeGroup({
         {/* 「历史」行操作（Show History 语义）；点击不触发行选中 */}
         {onOpenHistory !== undefined && (
           <Flex onClick={(e) => e.stopPropagation()}>
-            <Tooltip title="打开该文件的提交历史页，查看它的历次变更记录">
+            <Tooltip title="打开该文件的历史：在历史页中栏看它的逐次提交，右栏看每次改动与逐行归属">
               <Button
                 size="small"
                 type="text"

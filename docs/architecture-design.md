@@ -114,8 +114,8 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 | | `refs` | 引用快照与差异（`refs.changed` 指纹） |
 | | `operation` | 进行中操作检测（rebase-merge/apply 状态与步进）、中止 |
 | 历史与内容 | `log` | 流式 `log --graph`：自定义 `--format` 分隔符 + NUL，逐条产出 `GraphLine`；分页/过滤/range |
-| | `history` | 文件历史（`%P` 父哈希、重命名跟随） |
-| | `blame` | `blame --porcelain` 解析、父哈希批量解析 |
+| | `blame` | 逐行责任归属（`git blame --line-porcelain` 解析、父哈希批量解析）——注解族保留 blame 命名 |
+| | `file-history` | 文件历史清单（`git log --follow`、`%P` 父哈希、重命名跟随）——历史页中栏的数据源 |
 | | `search` | 提交内容搜索（grep/pickaxe） |
 | | `committed` | 单提交变更文件清单（原「已提交变更浏览分页」随该页撤除） |
 | | `tree` | `ls-tree -r -z` 历史快照树 |
@@ -178,8 +178,8 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 | `tag.ts` | 标签动作 |
 | `remote.ts` | 远端管理、fetch/pull/push |
 | `update.ts` | Update Project、检出并更新、force-pushed 修复 |
-| `blame.ts` | 溯源 |
-| `history.ts` | 文件历史（含重命名跟随） |
+| `blame.ts` | 逐行责任归属（`git blame --line-porcelain` 解析、父哈希批量解析） |
+| `file-history.ts` | 文件历史清单（`git log --follow` 跟随重命名）——历史页中栏的数据源（原 `/history` 端点让位后改挂 `/file-history`） |
 | `browse.ts` | 历史快照浏览（树 + 文件内容） |
 | `committed.ts` | 单提交变更文件清单（Show All Affected） |
 | `search.ts` | 提交内容搜索 |
@@ -244,7 +244,7 @@ core  ──→ 无（node 内置 + 系统 git CLI）
 |----|------|
 | base/ | **布局原语：`PageShell`、`Toolbar`、`EllipsisText`、`SplitPane` + 密度模块 `density.ts`/`density-context.tsx`（口径见 §6）+ 主题模块 `app-theme.tsx`（`useResolvedTheme`：偏好 → 实际明暗 + antd 配置 + `data-theme`，两个 app 共用，§5.23）**、`VirtualList`、`GraphCanvas`、`FileTree`、`MonacoDiffView`/`MonacoTextView`（`monaco-lazy` 懒加载 monaco-editor）、`CodeBlock`/`PatchCodeBlock`（`shiki-lazy` 懒加载 shiki，只读代码片段高亮，与 Monaco 的分工见 §3.1）、`EmptyState`、`OperationStatus` |
 | domain/ | `CommitGraph`、`RepoStatusBar`、`CommitDetailsPanel`、`DiffViewer`（并排/行内 + staged/工作区切换 + 忽略空白开关）、`HunkDiffView`（PR/MR 行级 diff）、`DirectoryTree`、`CommittedStatus` |
-| composite/ | `RepoPage`、`LogPage`、`SnapshotTabs`（日志页就地快照栏的标签栏）、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`BlameWorkbench`（溯源页三栏工作台：文件树｜提交记录｜变更内容）、`HistoryPanel`、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`AppSettingsPage`/`RepoSettingsPage`/`SettingsShell`（§5.23 设置页按作用域拆两页，外壳共用） |
+| composite/ | `RepoPage`、`LogPage`、`SnapshotTabs`（日志页就地快照栏的标签栏）、`DiffPage`、`StatusPage`（Local Changes + 暂存区 + 内嵌提交框）、`BranchPanel`、`MergeDialog`、`RebaseDialog`（交互式）、`ResetDialog`、`StashPanel`、`TagPanel`、`RemotePanel`、`PushDialog`/`PullDialog`/`UpdateProjectDialog`、`HistoryWorkbench`（历史页三栏工作台：文件树｜提交记录｜变更内容；原 `HistoryPanel` 的文件历史清单已并入其中栏，该面板随页撤除）、`SearchPanel`、`ConflictsPanel`、`PatchPanel`、`ShelfPanel`、`ConsolePanel`、`IgnoreDialog`、`BranchCompareView`、`DiffStreamView`（diff/stream 渐进渲染）、`ThreeWayView`/`MergeView`、`WorktreePanel`、`SubmodulePanel`、`GithubPanel`/`GitlabPanel`、`AuthDialog`、`AppSettingsPage`/`RepoSettingsPage`/`SettingsShell`（§5.23 设置页按作用域拆两页，外壳共用） |
 | graph-layout/ | 自 vcs-log/graph 移植的布局算法（纯函数，不 import React；`fixtures/java/` 为 Java testData 转制的行为等价夹具） |
 
 ### 2.6 框架层：web-next 与 web-koa
@@ -382,7 +382,7 @@ Java 版 UI 构成三类，处置方式不同（判定原则：**算法移植、
 
 | 原语 | 位置 | 契约 | 它取代了什么 |
 |------|------|------|--------------|
-| `PageShell` | `packages/client/ui/src/base/page-shell.tsx` | `density?: 'compact' \| 'default'`（默认 compact）、`padding?: number \| string`（不传不落 style）、`gap?: number`（不传不落 style）、`scroll?: 'page' \| 'inner' \| 'none'`（默认 page）、`children` | 每个页面各写一遍的根 `<Flex vertical …>`（落地：两个 app **各 19 个页面文件**直接使用 `PageShell`——逐文件可核：`apps/web-koa/src/pages/*.tsx` 22 个里 19 个、`apps/web-next/app/**/page.tsx` 23 个里 19 个；首页、日志页与应用/仓库设置页由 `RepoPage`/`LogPage`/`SettingsShell` 这些 ui 外壳自带 `PageShell`，容器层不直接出现）+ ui 层 **9 个**页面级 composite 使用 `PageShell` —— 9 = `log-page` / `repo-page` / `settings-shell` / `status-page` / `search-panel` / `merge-view` / `branch-compare-view` / `diff-page` / `diff-stream-view`，可逐文件核对（`blame-workbench` 不用 `PageShell`：溯源页那一层在两端 app 容器里；`github-panel` / `gitlab-panel` 的根是**横向行**，按 §6.2 的轴向判定**不迁**） |
+| `PageShell` | `packages/client/ui/src/base/page-shell.tsx` | `density?: 'compact' \| 'default'`（默认 compact）、`padding?: number \| string`（不传不落 style）、`gap?: number`（不传不落 style）、`scroll?: 'page' \| 'inner' \| 'none'`（默认 page）、`children` | 每个页面各写一遍的根 `<Flex vertical …>`（落地：两个 app **各 19 个页面文件**直接使用 `PageShell`——逐文件可核：`apps/web-koa/src/pages/*.tsx` 22 个里 19 个、`apps/web-next/app/**/page.tsx` 23 个里 19 个；首页、日志页与应用/仓库设置页由 `RepoPage`/`LogPage`/`SettingsShell` 这些 ui 外壳自带 `PageShell`，容器层不直接出现）+ ui 层 **9 个**页面级 composite 使用 `PageShell` —— 9 = `log-page` / `repo-page` / `settings-shell` / `status-page` / `search-panel` / `merge-view` / `branch-compare-view` / `diff-page` / `diff-stream-view`，可逐文件核对（`history-workbench` 不用 `PageShell`：历史页那一层在两端 app 容器里；`github-panel` / `gitlab-panel` 的根是**横向行**，按 §6.2 的轴向判定**不迁**） |
 | `SplitPane` | `base/split-pane.tsx` | `side`、`children`（主区）、`sideWidth?: number`（默认 300）、`sidePosition?: 'start' \| 'end'`（browse 在左、log 在右）、`collapseBelow?: number`（默认 768）、`gap?: number`（不传不落 style） | 写死 `width:300/320 + flexShrink:0` 的侧栏（窄屏必然横向溢出的结构性成因） |
 | `Toolbar` | `base/toolbar.tsx` | `align?: 'start' \| 'center' \| 'end' \| 'between'`（映射**主轴** `justify`）、`gap?`、`wrap?: boolean`（默认 true）、`children`；容器带 `width:100%; minWidth:0` | 手写的 `flexWrap` 补丁（`flexWrap` 缺 `minWidth:0` 时子项仍会顶宽父级） |
 | `EllipsisText` | `base/ellipsis-text.tsx` | `children: string`、`title?`（存在则走 antd 原生 ellipsis tooltip）、`mono?`、`type?`、`strong?`、`maxWidth?: number \| string`；自身带 `minWidth: 0` | 不可断行的长 hash / 长路径 / 长分支名（它们把所在行顶宽，是溢出传播源） |

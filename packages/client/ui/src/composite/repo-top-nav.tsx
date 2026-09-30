@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 仓库顶栏导航（从日志页顶栏抽出的共用组件）：**面包屑「首页 / 仓库名 / 当前页名」三级** + 图标按钮组 + 「更多」下拉，
  * 除欢迎屏外的所有仓库页共用——每页经 `current` 指明自身，对应图标按钮高亮（color=primary + variant=filled，主色浅底填充），
  * 面包屑末级落到当前页名（非日志页的仓库名可点回日志页）。
@@ -21,7 +21,7 @@ import { RepoStatusBar } from '../domain/repo-status-bar';
 /**
  * 仓库页标识：`current` 传当前页，对应图标按钮高亮。
  * 前六个（log/status/branches/merge/stashes/settings）各有专属按钮；
- * 其余（blame…submodules）都在「更多」菜单里——落在这些页时高亮「更多」按钮本身；
+ * 其余（history…submodules）都在「更多」菜单里——落在这些页时高亮「更多」按钮本身；
  * conflicts/diff 不在导航任何位置，落在它们上时不高亮任何按钮。
  */
 export type RepoNavPage =
@@ -31,7 +31,6 @@ export type RepoNavPage =
   | 'merge'
   | 'stashes'
   | 'settings'
-  | 'blame'
   | 'history'
   | 'search'
   | 'tags'
@@ -49,7 +48,6 @@ export type RepoNavPage =
 
 /** 「更多」菜单承载的页面：落在这些页时高亮「更多」按钮（conflicts/diff 不在菜单内，无高亮） */
 const MORE_MENU_PAGES: ReadonlySet<RepoNavPage> = new Set([
-  'blame',
   'history',
   'search',
   'tags',
@@ -75,7 +73,6 @@ const PAGE_NAMES: Record<RepoNavPage, string> = {
   merge: '合并',
   stashes: '贮藏',
   settings: '设置',
-  blame: '溯源',
   history: '历史',
   search: '搜索',
   tags: '标签',
@@ -111,9 +108,7 @@ export interface RepoTopNavProps {
   onOpenStashes?: () => void;
   /** 设置页入口回调；缺省不渲染设置按钮 */
   onOpenSettings?: () => void;
-  /** 溯源页入口回调；缺省时「更多」菜单不含溯源项 */
-  onOpenBlame?: () => void;
-  /** 文件历史页入口回调；缺省时「更多」菜单不含历史项 */
+  /** 历史页入口回调；缺省时「更多」菜单不含历史项 */
   onOpenHistory?: () => void;
   /** 提交搜索页入口回调；缺省时「更多」菜单不含搜索项 */
   onOpenSearch?: () => void;
@@ -175,7 +170,6 @@ export function RepoTopNav({
   onOpenMerge,
   onOpenStashes,
   onOpenSettings,
-  onOpenBlame,
   onOpenHistory,
   onOpenSearch,
   onOpenPull,
@@ -234,8 +228,7 @@ export function RepoTopNav({
     );
   /** 「更多」菜单项：仅装配容器注入回调的入口（页面导航 + 日志页对话框项）；全缺省时连「更多」按钮都不渲染 */
   const moreItems = [
-    ...(onOpenBlame ? [{ key: 'blame', label: <Tooltip title="打开逐行溯源视图：查看每一行的最后修改者与提交"><span>溯源</span></Tooltip> }] : []),
-    ...(onOpenHistory ? [{ key: 'history', label: <Tooltip title="打开该文件的提交历史：只看改动过它的记录"><span>历史</span></Tooltip> }] : []),
+    ...(onOpenHistory ? [{ key: 'history', label: <Tooltip title="打开文件历史视图：查看每一行的最后修改者与提交"><span>历史</span></Tooltip> }] : []),
     ...(onOpenSearch ? [{ key: 'search', label: <Tooltip title="在整个仓库历史中按提交信息、作者或文件内容检索"><span>搜索</span></Tooltip> }] : []),
     ...(onOpenRebase ? [{ key: 'rebase', label: <Tooltip title="打开变基对话框：把当前分支的提交重新应用到指定基底（会重写提交哈希）"><span>变基</span></Tooltip> }] : []),
     ...(onOpenTags ? [{ key: 'tags', label: <Tooltip title="打开标签管理页：查看、创建或删除仓库标签"><span>标签</span></Tooltip> }] : []),
@@ -257,8 +250,7 @@ export function RepoTopNav({
   ];
   /** 「更多」菜单点击分发：按 key 调对应入口回调 */
   const onMoreClick = (key: string): void => {
-    if (key === 'blame') onOpenBlame?.();
-    else if (key === 'history') onOpenHistory?.();
+    if (key === 'history') onOpenHistory?.();
     else if (key === 'search') onOpenSearch?.();
     else if (key === 'rebase') onOpenRebase?.();
     else if (key === 'tags') onOpenTags?.();
@@ -433,7 +425,7 @@ export function RepoTopNav({
             >
               {/* Tooltip 放在 Dropdown 内侧：Dropdown 需要直接包裹真实控件才能接住点击触发 */}
               <Tooltip
-                title="更多功能：只读浏览（溯源/历史/搜索）、本地操作与远程操作统一收在这里"
+                title="更多功能：只读浏览（历史/搜索）、本地操作与远程操作统一收在这里"
                 open={moreMenuOpen ? false : undefined}
               >
                 <Button

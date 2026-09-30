@@ -24,8 +24,8 @@
 
 | 维度 | 终态 |
 |------|------|
-| 功能域 | **36/36** ✅：repo / status / log / diff / settings / operation / reset / staging / changelist / commit / branch / checkout / merge / stash / conflict / config / auth / rebase（含交互式）/ cherry-pick / revert / tag / remote / update / blame / history / committed / search / patch / shelf / console / ignore / github / gitlab / worktree / submodule / browse |
-| 操作页面/面板 | **31/31**：29 ✅ + 2 🟡 等效（CommitDialog → StatusPage 内嵌提交框；QuickActionsMenu → 顶栏 +「更多」菜单 + 操作条，均为定案形态）；其中 BrowsePanel 与 CommittedChangesPanel 的整页形态已按用户口径撤除，能力分别并入日志页的就地快照栏与变更集标签 |
+| 功能域 | **36/36** ✅：repo / status / log / diff / settings / operation / reset / staging / changelist / commit / branch / checkout / merge / stash / conflict / config / auth / rebase（含交互式）/ cherry-pick / revert / tag / remote / update / history（页面：三栏工作台 + 逐行注解）/ blame（逐行归属接口，注解族保留 blame 命名）/ file-history（文件提交清单）/ committed / search / patch / shelf / console / ignore / github / gitlab / worktree / submodule / browse |
+| 操作页面/面板 | **31/31**：29 ✅ + 2 🟡 等效（CommitDialog → StatusPage 内嵌提交框；QuickActionsMenu → 顶栏 +「更多」菜单 + 操作条，均为定案形态）；其中 BrowsePanel、CommittedChangesPanel 与旧 HistoryPanel 的整页形态已按用户口径撤除，能力分别并入日志页的就地快照栏、变更集标签与历史页中栏。**2026-09-30 改名轮**：原「溯源」页整体改名为「历史」——菜单项、面包屑、页面路由 `/repos/:id/history`、页面级组件与 testid 同步改名；**逐行注解这一族保留 `blame` 命名**（`GET /blame`、`useBlame`、`BlameLine`、`blame-annotate-table` 与行级 testid） |
 | 接口 | **102 路径 / 117 方法**，两端完全对称；无死接口、无半使用接口 |
 | 契约 | zod schema 70、领域类型 98、SSE 事件 6 种、错误码 12 定义（9 实际产生 / 3 预留） |
 | 导航边 | 106 条：93 ✅（含等效边）+ 1 🟡 + 8 ➖ + 4 ❌（明确不做）—— **❌ 可做缺口 0** |
@@ -37,8 +37,8 @@
 | 类别 | 项 |
 |------|----|
 | 可选功能域（2 项） | terminal（内置终端）、local-history（本地历史）—— 无编辑器宿主 / 与核心价值正交 |
-| 子功能（决策清单） | GitHub Gist / GitLab Snippet；自托管 GitLab 实例；托管平台 OAuth/device 登录流（改 PAT 手动录入）；PR AI 描述；打开 worktree 项目；Update 流程内子模块更新；分支弹窗 New Working Tree；全局 Search Everywhere 与编辑器内嵌 Blame（以页面承载）；分享项目到 GitHub；QuickActionsMenu 独立聚合组件 |
-| 🟡 等效形态（非缺口） | 上表 2 项；导航边 #20 分支右键子菜单（功能面完整，仅菜单组织形态差异） |
+| 子功能（决策清单） | GitHub Gist / GitLab Snippet；自托管 GitLab 实例；托管平台 OAuth/device 登录流（改 PAT 手动录入）；PR AI 描述；打开 worktree 项目；Update 流程内子模块更新；分支弹窗 New Working Tree；全局 Search Everywhere 与编辑器内嵌注解（以页面承载）；分享项目到 GitHub；QuickActionsMenu 独立聚合组件 |
+| 🟡 等效形态（非缺口） | 上表 2 项；导航边 #20 分支右键子菜单（功能面完整，仅菜单组织形态差异）；旧 HistoryPanel 整页形态撤除（2026-09-30）→ 能力并入历史页中栏 |
 | 预留错误码（2 个） | `STALE_LOCK`（index.lock 竞态）、`CANCELLED`（客户端断开）—— 待底层路径消费 |
 | 环境依赖 | GitHub / GitLab 面板需目标仓库挂有对应托管远程且令牌有效；PR / MR 内容未纳入冒烟截图（冒烟环境无有效令牌） |
 

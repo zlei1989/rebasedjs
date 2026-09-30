@@ -1,6 +1,7 @@
 # Rebased.js E2E 冒烟测试参照（MCP 模拟人工操作）
 
 - **日期**：2026-09-10（功能矩阵定稿；执行结果按轮次回填，R1 已回填）
+- **命名沿革（2026-09-30 改名轮，R31）**：原「溯源」页整体改名为「历史」——菜单项、面包屑、页面路由（`/repos/:id/history`）、页面级 ui 组件与状态键、页面级 testid 同步改名；**逐行注解这一族保留 `blame` 命名**（`GET /api/repos/:id/blame`、`useBlame`、`BlameLine`、`blame-annotate-table` 与 `blame-line-*` 等行级 testid）；文件提交清单（`git log --follow`）改挂 `GET /api/repos/:id/file-history`。**本文 R1~R30 的正文一律保留当时的真名**（「溯源 / `blame` / `BlameWorkbench` / `/repos/:id/blame` / `GET /history`（清单）/ `blame-*.png`），按 §1.2 的归档口径不改写历史；当前态口径见 §5.40。**`blame-01…11.png` 这批截图名保持原样**：`history-01…03.png` 是已删除的旧历史页（HistoryPanel）的证据，两批图不能同名。
 - **文档定位**：冒烟测试**参照文档**——先定义功能矩阵，执行后逐行回填结果，不得在本文件外另行扩展口径
 - **范围**：`docs/pages-and-api-audit.md` §二/§四 全量（31 页面 / 36 功能域 → 功能点矩阵 **159 个测试行 + 11 个排除行**；terminal、local-history 2 个全域不做项无对应页面）
 - **基准**：功能对齐 Java 版 Rebased（`D:\zhanglei1120\Github\rebased`）；终态口径以 `docs/pages-and-api-audit.md`（2026-09-21 终核版）为准
@@ -69,7 +70,7 @@
 
 ## 二、功能矩阵总览（31 页面）
 
-> 行数 = 测试行（含跳过候补）；排除行见 §三。**状态列 = 最近一轮（R23，2026-09-12 起全量重跑）的实测结果**：未重跑到的页面仍保留 R1~R22 的收官状态，重跑完成后逐页改写。**2026-09-20 起**：溯源页（#16）整页重构为三栏工作台并删掉旧单列 `BlameView`，该页按**部分重跑 R24** 的新证据改写（见 §4.16 与 §5.34）——**3/4 重跑，F-104 本轮未重跑**（故该页状态列由 `✅ 4/4` 改为 `⚠️ 3/4`），其余页面状态不动。**站级合计不随之变动**：R23 那条「159 行 = ✅150 / ⏭9」是 R23 当轮的口径记录，不改写历史。
+> 行数 = 测试行（含跳过候补）；排除行见 §三。**状态列 = 最近一轮（R23，2026-09-12 起全量重跑）的实测结果**：未重跑到的页面仍保留 R1~R22 的收官状态，重跑完成后逐页改写。**2026-09-20 起**：溯源页（#16）整页重构为三栏工作台并删掉旧单列 `HistoryView`，该页按**部分重跑 R24** 的新证据改写（见 §4.16 与 §5.34）——**3/4 重跑，F-104 本轮未重跑**（故该页状态列由 `✅ 4/4` 改为 `⚠️ 3/4`），其余页面状态不动。**站级合计不随之变动**：R23 那条「159 行 = ✅150 / ⏭9」是 R23 当轮的口径记录，不改写历史。
 
 | # | 页面 | 阶段 | 路由/承载 | 模拟入口（一步到达） | 测试行 | 截图前缀 | 状态 |
 |---|------|------|-----------|----------------------|--------|----------|------|
@@ -88,8 +89,8 @@
 | 13 | PushDialog（内嵌模态） | P3 | LogPage 内 | 更多「推送」 | F-093~F-095（3） | push | ✅ 3/3 |
 | 14 | PullDialog（内嵌模态） | P3 | LogPage 内 | 更多「拉取」 | F-096~F-097（2） | pull | ✅ 2/2 |
 | 15 | UpdateProjectDialog（内嵌模态） | P3 | LogPage 内 | 更多「更新项目」 | F-098~F-100（3） | update | ✅ 3/3 |
-| 16 | BlameWorkbench（原 BlameView，三栏工作台） | P3 | `/repos/:id/blame` | 更多「溯源」→ 左树选文件（或页内输路径） | F-101~F-104（4） | blame | ⚠️ 3/4 本轮重跑（F-104 本轮未重跑，沿用 R10；见 §5.34⑤） |
-| 17 | HistoryPanel | P3 | `/repos/:id/history` | 更多「历史」→ 页内输路径 | F-105~F-107（3） | history | ✅ 3/3 |
+| 16 | HistoryWorkbench（原 HistoryView，三栏工作台） | P3 | `/repos/:id/history` | 更多「历史」→ 左树选文件（或页内输路径） | F-101~F-104（4） | history | ⚠️ 3/4 本轮重跑（F-104 本轮未重跑，沿用 R10；见 §5.34⑤。**2026-09-30 改名轮**：本页由「溯源」改名为「历史」，路由与菜单项同步改名，起作用的判据见 §5.40） |
+| 17 | ~~HistoryPanel~~（已删除，2026-09-30 用户口径） | P3 | ~~`/repos/:id/history`~~（已删除；该路径现归 #16 本页） | ~~更多「历史」→ 页内输路径~~（入口已撤除） | F-105~F-107（3，历史记录） | file-history | ✅ 3/3（删除前；能力在历史页中栏） |
 | 18 | ~~CommittedChangesPanel~~（页面已删除，2026-09-20 用户口径） | P3 | ~~`/repos/:id/committed`~~（已删除） | ~~更多「已提交」~~（入口已撤除） | F-108~F-110（3，历史记录） | committed | ✅ 3/3（删除前；能力在 LogPage 变更集标签） |
 | 19 | SearchPanel | P3 | `/repos/:id/search` | 更多「搜索」 | F-111~F-113（3） | search | ✅ 3/3 |
 | 20 | ConflictsPanel | P2 | `/repos/:id/conflicts` | 制造冲突自动跳入 / 操作条「去解决冲突」 | F-114~F-119（6） | conflicts | ✅ 6/6 |
@@ -213,7 +214,7 @@
 | F-048 | Create Patch from changes | 勾选 ≥1 文件 → 组级「创建补丁」→ Modal 输入名 | 成功跳 `/patches` 且列表含新补丁（CLI） | ✅ | status-page-10.png（勾 `src/app.ts` + `src/util.ts` → 组级「创建补丁」→ Modal「对勾选的 2 个文件创建补丁（工作区 diff）」输入 `smoke-changes` → 跳 `/patches` 且列表 1 项「smoke-changes 764 B」；CLI：`~/.rebasedjs/patches/f761a9f6-…/smoke-changes.patch` 764 B，首行 `diff --git a/src/app.ts b/src/app.ts`） | |
 | F-049 | Shelve Changes | 页头「搁置」→ Modal 输入名 | 成功跳 `/shelves` 且列表含新搁置（CLI） | ✅ | status-page-11.png（页头「搁置」→ 名称 `smoke-shelf-1` → 跳 `/shelves`，列表 1 项「smoke-shelf-1 \| 2 个未跟踪」；CLI：`~/.rebasedjs/shelves/f761a9f6-…/smoke-shelf-1/` 含 `patch.diff` 1129 B + `untracked/crlf.txt` + `untracked/scratch/todo.md`；搁置为**快照复制**——保存后 `git status` 工作区逐条不变） | |
 | F-050 | Stash Files | 页头「存入贮藏」→ Modal 填可选信息 | 成功跳 `/stashes` 且列表含新 stash（CLI `stash list`） | ✅ | status-page-12.png（页头「存入贮藏」→ 信息 `smoke stash from status page` → 跳 `/stashes`，列表 3 条；CLI：`stash@{0}: On master: smoke stash from status page` 置顶，工作区已跟踪改动全部清空（仅余未跟踪），`.gitignore` 的忽略行随之回到未忽略态） | |
-| F-051 | Annotate / Show History 入口 | 行「注解」→ 返回后行「历史」 | 「注解」→ `/blame?file=&view=annotate`（**直接落在「逐行注解」标签**；未选中提交时该标签是**工作区口径**——见 §5.34⑦ R25-4）；「历史」→ `/history?file=` | ✅ | status-page-13.png（工作区 `src/app.ts` 行「注解」→ `/blame?file=src%2Fapp.ts`；返回后行「历史」→ `/history?file=src%2Fapp.ts` 列出 2 条 `77e62c4` / `f55c880`，与 CLI `git log --oneline -- src/app.ts` 逐条一致）。**收尾轮（R25）口径补充**：落点现已带 `view=annotate`（复验见 §5.34⑦ R25-4；上句记的是 R23 当时观测到的 URL，不改写） | |
+| F-051 | Annotate / Show History 入口 | 行「注解」→ 返回后行「历史」 | 「注解」→ `/history?file=&view=annotate`（**直接落在「逐行注解」标签**；未选中提交时该标签是**工作区口径**——见 §5.34⑦ R25-4）；「历史」→ `/history?file=` | ✅ | status-page-13.png（工作区 `src/app.ts` 行「注解」→ `/blame?file=src%2Fapp.ts`；返回后行「历史」→ `/history?file=src%2Fapp.ts` 列出 2 条 `77e62c4` / `f55c880`，与 CLI `git log --oneline -- src/app.ts` 逐条一致）。**收尾轮（R25）口径补充**：落点现已带 `view=annotate`（复验见 §5.34⑦ R25-4；上句记的是 R23 当时观测到的 URL，不改写） | |
 
 ### 4.5 CommitDialog（等效内嵌提交框；slug `commit`；P2）
 
@@ -344,22 +345,25 @@
 | F-099 | 更新会话（进度/结果汇总） | 执行更新 → 观察结果面板 | fetched 引用数 + pull 状态（updated 已合入/up-to-date 已最新）汇总；footer 变「关闭」 | ✅ | update-02.png（「更新结果」面板：`fetch 更新 1 个远程引用：refs/remotes/origin/rebase-topic` + 绿条「已合入当前分支」，footer 变「关 闭」；CLI：生成合并提交 `ca1efbc`（双父 `5f1f717` + `ab55a1b`），远端提交成为本地祖先）。P3 观察：结果渲染完成前有极短窗口 footer 同时存在「关 闭」与「确 定」，稳定后只剩「关 闭」，属渲染瞬时态、不计缺陷 |
 | F-100 | Reset to tracked | 左下「Reset to tracked」→ Modal.confirm（danger） | reset --hard upstream、丢弃工作区/暂存（CLI）；无上游不渲染 | ✅ | update-03.png（危险确认框「Reset 到上游分支？」+「将丢弃 `rebase-topic` 的工作区/暂存变更，硬重置到 `origin/rebase-topic`；此操作不可恢复」（primary=danger）→ 确定；CLI：HEAD = `ab55a1b` = 上游、README 探针行消失、`f100-staged-probe.txt` 消失、`status` 仅剩 3 个未跟踪）。**无上游不渲染**：`rebased-smoke-big`（master 无 upstream、无远程）打开同一对话框时 `reset-to-tracked` 查无、说明也缺失 |
 
-### 4.16 BlameWorkbench（slug `blame`；P3，三栏工作台）
+### 4.16 HistoryWorkbench（slug `history`；P3，三栏工作台＝「历史」页）
 
-- **入口**：更多「溯源」→ `/repos/:id/blame`；左栏（HEAD 文件树）选文件或页内「输入文件路径」框（两者都写回 `?file=`）；也可带 `?file=&select=&view=` 深链直达，旧 `?rev=<hash>` 读到即规范化为 `select=<hash>&view=annotate`。
-- **形态**：左树（文件，固定看 HEAD）｜中栏（该文件的提交清单，`--follow`）｜右栏（操作条四出口 + 「本文件改动」/「与最新版本差异」/「逐行注解」三标签）；页面动作一律 replace 回写地址。注解行**整行是一个入口**（2026-09 用户口径：只做点击、不做 hover、移入不高亮）：点行的任何位置 = 选中该行归属的提交 **+** 在该行哈希旁开/收提交详情浮层（浮层位置不因"整行可点"而变，仍锚在哈希）。
+- **入口**：更多「历史」→ `/repos/:id/history`；左栏（HEAD 文件树）选文件或页内「输入文件路径」框（两者都写回 `?file=`）；也可带 `?file=&select=&view=` 深链直达，旧 `?rev=<hash>` 读到即规范化为 `select=<hash>&view=annotate`。
+- **形态**：左树（文件，固定看 HEAD）｜中栏（该文件的提交清单，`--follow`）｜右栏（**R28 起 = 四个标签**「本文件改动」/「与最新版本差异」/「逐行注解」/「提交详情」；原顶上那行操作条与它的四个出口、以及受影响文件 Modal 已按用户口径整行删除，见 §5.37）；页面动作一律 replace 回写地址。注解行**整行是一个入口**（2026-09 用户口径：只做点击、不做 hover、移入不高亮）：点行的任何位置 = 选中该行归属的提交 **+** 在该行哈希旁开/收提交详情浮层（浮层位置不因"整行可点"而变，仍锚在哈希）。
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
-| F-101 | 注解展示（右栏「逐行注解」标签） | 左树点 `AGENT.md` → 切「逐行注解」→ 点第 8 行（非哈希处） | 行列表：**行号｜时间｜短哈希 + 逐行语法高亮的正文**（2026-09 改版：作者不占列、移入哈希浮层）。**两种口径**：地址里**没有**显式 `?select=` 时看**当前工作区**（不给 `rev`，工作区未提交的行短哈希全 0、**不可点且不再写「未提交」字样**）；**在中栏选中某个提交后（或点注解行的非哈希处选中提交）改成看那一版的归属**。点行（哈希段除外）选中它归属的提交 | ✅（R26 重跑，2026-09-30） | blame-09.png（**R26 改版后实测**：主仓 `AGENT.md` 的「逐行注解」**108 行**，每行 = 行号｜时间｜短哈希 + 逐行高亮正文、**无作者列**、全页无「未提交」字样；`.rebased-line .code` 计算色 3 种；`rebased-smoke` 的 `src/app.ts` 12 行含 5 行全 0 伪哈希，均不可点、无文案——见 §5.35 的 R26-1/R26-6）；blame-01.png（三栏总览（暗色）：左树选中 `AGENT.md`、中栏 12 条提交（首条 `b96148e` 派生选中、带 `data-selected="true"`）、右栏操作条 + 「本文件改动」Monaco 差异）；blame-04.png（**改版前**的「逐行注解」：点 `blame-line-7`（归属 `8536a91`）→ 地址变 `?file=AGENT.md&view=annotate&select=8536a916…`、该行选中数 1、**中栏同时高亮 `8536a91`**——这就是从「这一行是谁写的」直接跳到「那次提交改了什么」的主链路）。**互证**：`git log --follow --oneline -- AGENT.md` = **12 条**，与中栏条数一致（顶条 `b96148e`）；`git show -s 8536a91` = `fix(core): abort 陈旧 pid 守卫与未合并状态解析，AGENT.md 路径更新`，与注解行的短哈希归属一致。**收尾轮（R25）复验两种口径**：工作区口径见 §5.34⑦ R25-1 与 `blame-08.png`（1848 行中含 1 行「未提交」）；点中栏一条提交后钉住该版本见 R25-2（1831 行、未提交行 0 条）。**R26 口径变更**：R25 那句「标『未提交』」是**改版前**的形态，现按用户口径下线（行为不变：不可点） |
-| F-102 | 选中提交级出口与点击联动（轮换旧「注解行内三联动」） | 中栏点第 2 条提交（`?select=` 变）→ 切「与最新版本差异」→ 逐条走操作条四出口 → 深链旧 `?rev=` | 「日志定位」→ 日志页选中该提交；「差异页」→ **新标签页** DiffPage（`from=父&to=该提交`，根提交 `root=1`）；「文件历史」→ `/history?file=`；「受影响」→ 全量变更文件 Modal。切标签只写 `?view=` 并只拉当前标签的数据 | ✅ | blame-02.png（「与最新版本差异」标签：右栏工具条与 Monaco 差异就位，`[data-testid="blame-view-latest"]` 真实渲染、**高 580 落在右栏 646 之内**——Task 6 的高度契约修复在浏览器里被证实）；blame-05b.png（旧 `?rev=` 深链规范化后的落点）：`?file=docs/manual.md&rev=8d6d961` → 地址被改写成 `?file=docs%2Fmanual.md&select=8d6d961&view=annotate`，落在「逐行注解」1519 行（web-next 同形）。**点选复现**：无 `?select=` 时首条派生选中（`blame-commit-0` 带 `data-selected="true"`），点第 2 条 → `?select=6e1807493cf0050e9178a4e4935a8d9427a60416`。**四出口齐备**以 `blame-action-log` / `blame-action-diff` / `blame-action-affected` / `blame-action-history` 四个 testid 全在盘为证（blame-01.png 同屏可见，见 §5.34 范围项 6）。**淘汰说明**：旧单列页的「行内哈希徽标 → 日志 `?select=`／行内「差异」／行内「历史」」三联动已随 `BlameView` 一并删除（提交 `c824bcd`），能力升格为本行的选中提交级四出口 |
-| F-103 | Show All Affected（受影响文件） | 操作条「受影响」→ Modal 看清单 → 点文件 → Esc 关闭 | 提交全量变更文件 Modal；文件点击 → **新标签页**打开该文件在这次提交里的差异 | ✅ | blame-03.png（**根提交态**——选中根提交 `13a68f62…`（`.agent/AGENT.md` 的唯一提交）时点操作条「受影响」：「受影响文件（13a68f6）」Modal：**52 个文件行**（`affected-file-0…51`），状标全为 `A`，首行 `A .agent/AGENT.md`；Esc 可关。**互证**：`git show --name-only 13a68f62` 恰 **52** 条（含 `.agent/AGENT.md` 等），与清单逐条一致）。**降级口径**：该提交是根提交（`13a68f62…` 无父版本），清单里的文件点击走 `root=1` 分支——差异页只给提示行，与 F-102「差异页」同一三态出口 |
+| F-101 | 注解展示（右栏「逐行注解」标签） | 左树点 `AGENT.md` → 切「逐行注解」→ 点第 8 行（非哈希处） | 行列表：**行号｜时间｜短哈希 + 逐行语法高亮的正文**（2026-09 改版：作者不占列、移入哈希浮层）。**两种口径**：地址里**没有**显式 `?select=` 时看**当前工作区**（不给 `rev`，工作区未提交的行短哈希全 0、**不可点且不再写「未提交」字样**）；**在中栏选中某个提交后（或点注解行的非哈希处选中提交）改成看那一版的归属**。点行（哈希段除外）选中它归属的提交 | ✅（R26 重跑，2026-09-30） | blame-09.png（**R26 改版后实测**：主仓 `AGENT.md` 的「逐行注解」**108 行**，每行 = 行号｜时间｜短哈希 + 逐行高亮正文、**无作者列**、全页无「未提交」字样；`.rebased-line .code` 计算色 3 种；`rebased-smoke` 的 `src/app.ts` 12 行含 5 行全 0 伪哈希，均不可点、无文案——见 §5.35 的 R26-1/R26-6）；blame-01.png（三栏总览（暗色）：左树选中 `AGENT.md`、中栏 12 条提交（首条 `b96148e` 派生选中、带 `data-selected="true"`）、右栏操作条 + 「本文件改动」Monaco 差异）；blame-04.png（**改版前**的「逐行注解」：点 `history-line-7`（归属 `8536a91`）→ 地址变 `?file=AGENT.md&view=annotate&select=8536a916…`、该行选中数 1、**中栏同时高亮 `8536a91`**——这就是从「这一行是谁写的」直接跳到「那次提交改了什么」的主链路）。**互证**：`git log --follow --oneline -- AGENT.md` = **12 条**，与中栏条数一致（顶条 `b96148e`）；`git show -s 8536a91` = `fix(core): abort 陈旧 pid 守卫与未合并状态解析，AGENT.md 路径更新`，与注解行的短哈希归属一致。**收尾轮（R25）复验两种口径**：工作区口径见 §5.34⑦ R25-1 与 `blame-08.png`（1848 行中含 1 行「未提交」）；点中栏一条提交后钉住该版本见 R25-2（1831 行、未提交行 0 条）。**R26 口径变更**：R25 那句「标『未提交』」是**改版前**的形态，现按用户口径下线（行为不变：不可点） |
+| F-102 | 选中提交级出口与点击联动（轮换旧「注解行内三联动」；**R28 起四个出口随操作条整行删除，见 §5.37**） | 中栏点第 2 条提交（`?select=` 变）→ 切「与最新版本差异」→ 逐条走操作条四出口 → 深链旧 `?rev=`（**R28 前**的判据） | 「日志定位」→ 日志页选中该提交；「差异页」→ **新标签页** DiffPage（`from=父&to=该提交`，根提交 `root=1`）；「文件历史」→ `/history?file=`；「受影响」→ 全量变更文件 Modal。切标签只写 `?view=` 并只拉当前标签的数据 | ✅ | history-02.png（「与最新版本差异」标签：右栏工具条与 Monaco 差异就位，`[data-testid="history-view-latest"]` 真实渲染、**高 580 落在右栏 646 之内**——Task 6 的高度契约修复在浏览器里被证实）；blame-05b.png（旧 `?rev=` 深链规范化后的落点）：`?file=docs/manual.md&rev=8d6d961` → 地址被改写成 `?file=docs%2Fmanual.md&select=8d6d961&view=annotate`，落在「逐行注解」1519 行（web-next 同形）。**点选复现**：无 `?select=` 时首条派生选中（`history-commit-0` 带 `data-selected="true"`），点第 2 条 → `?select=6e1807493cf0050e9178a4e4935a8d9427a60416`。**四出口齐备**以 `history-action-log` / `history-action-diff` / `history-action-affected` / `history-action-history` 四个 testid 全在盘为证（history-01.png 同屏可见，见 §5.34 范围项 6）。**淘汰说明**：旧单列页的「行内哈希徽标 → 日志 `?select=`／行内「差异」／行内「历史」」三联动已随 `HistoryView` 一并删除（提交 `c824bcd`），能力升格为本行的选中提交级四出口。**R28 淘汰**：这四个出口与 `history-pane-actions` 整行**已删除**（用户口径「删除这行」），「受影响」的清单改由「提交详情」标签就地承担——本条的历史证据仅存于 R28 之前的截图与 §5.34；新形态见 §5.37 |
+| F-103 | Show All Affected（受影响文件） | 操作条「受影响」→ Modal 看清单 → 点文件 → Esc 关闭 | 提交全量变更文件 Modal；文件点击 → **新标签页**打开该文件在这次提交里的差异 | ✅ | history-03.png（**根提交态**——选中根提交 `13a68f62…`（`.agent/AGENT.md` 的唯一提交）时点操作条「受影响」：「受影响文件（13a68f6）」Modal：**52 个文件行**（`affected-file-0…51`），状标全为 `A`，首行 `A .agent/AGENT.md`；Esc 可关。**互证**：`git show --name-only 13a68f62` 恰 **52** 条（含 `.agent/AGENT.md` 等），与清单逐条一致）。**降级口径**：该提交是根提交（`13a68f62…` 无父版本），清单里的文件点击走 `root=1` 分支——差异页只给提示行，与 F-102「差异页」同一三态出口 |
 | F-104 | previousLineno 边界 | 抽查重命名/边界行注解 | 注解近似正确（orig 近似边界口径，抽查即可） | ⏭ 本轮未重跑（沿用 R10） | 本行本轮**未重跑**（见 §5.34⑤）：近似边界判据落在未改动的 `blame-annotate-table` 行渲染上，API 侧 `previousLineno` 对改动行给 1、3、未改动行给 null（R10 口径）。按 §1.2 的 ✅ 定义「界面 + CLI 互证 + 截图」三者缺一不可，本轮既没重走、旧单列图 `blame-04.png` 也已被三栏态同名覆盖 ⇒ **不判 ✅、如实记未重跑** |
 | F-164 | 注解行：整行可点 → 选中提交 + 哈希旁详情浮层（2026-09 用户口径：只做点击、不做 hover、移入不高亮） | 切「逐行注解」→ 点某行的**正文区**（非哈希处）→ 读浮层内容与位置 → 点另一行 → 再点同一行收起 → 悬停未选中行看底色 | ① 点行任意位置：选中该行归属的提交（URL 写 `?select=`、中栏高亮）**并且**在该行**哈希右侧**（`rightTop`，空间不足时 antd 自动上下翻转、左右恒在右侧）弹出详情卡（`commit-detail-card`）：主题 + **完整提交正文**（保留换行）+ 作者与绝对时间 + **作者邮箱**（`commit-detail-email`）+ 短哈希（点一下复制完整哈希）+ 父提交链接；② 再点同一行收起、点另一行浮层挪过去；③ 未提交行（全 0 哈希）**整行不可点**（含哈希）；④ 行内**没有任何 button**、行是唯一 `role=button`+`tabIndex`；⑤ **鼠标移入不高亮**（唯一反馈是 `cursor: pointer`）；⑥ 关闭态/换文件不发 `/commits/:hash` | ✅（R26；整行可点改版见 §5.35⑨） | blame-09.png（R26 复拍：`AGENT.md` 的「逐行注解」——相对时间列（`28天前`/`17天前`…定宽右对齐）+ 短哈希（只读文本）+ 高亮正文；**点第 8 行正文区**后：地址写入 `?select=0881b926…`、该提交的行带选中底色、浮层在其哈希右侧展开）。**几何实测**：浮层 `left=756` 在哈希 `left=692` 之右（`popupIsRightOfHash=true`）、`placement=ant-popover-placement-rightTop`；正文左沿 `distinctCodeLeft=[768]` 单一值；悬停未选中行时行与哈希背景均为 `rgba(0,0,0,0)`、选中行为 `rgb(21,50,91)`（选中态而非 hover）；行内 `button` 计数 **0**。**完整正文**以 `b96148e` 实测（R26-3）：浮层正文 5 段与 `git show -s --format=%B b96148e` **逐字一致**、邮箱与 `--format='%an <%ae>'` 一致、父提交 `6ba9c86` 与 `%P` 一致；**按需取数**（R26-5）：点 `13a68f6` 新增一次 `GET /commits/13a68f62…` 200，同哈希再点走 SWR 缓存不重复请求；**缺陷**：初版按哈希开合导致同哈希多行同时弹多个浮层（D-45，已修 + 回归守卫） |
 
-### 4.17 HistoryPanel（slug `history`；P3）
+### 4.17 HistoryPanel（slug `history`；P3）——整页形态已删除（2026-09-30）
 
-- **入口**：更多「历史」→ `/repos/:id/history`，页内路径输入。
+> **本页已删除**：路由（旧）`/repos/:id/history`、「更多」→「历史」入口、ui `HistoryPanel` 与 `history-panel.test.tsx` 一并撤除；文件清单端点**保留**并改挂 `GET /api/repos/:id/file-history`（历史页中栏的数据源）。**2026-09-30 改名轮**：`/repos/:id/history` 与「历史」这个名字已归 §4.16 本页。
+> 能力并入**历史页中栏**（§4.16），改动清单与判据见 §5.39（改名轮见 §5.40）。下表 F-105~F-107 的判定与截图均为**删除前**的现场证据，按 §1.2 归档口径保留，不再重跑。
+
+- **入口（删除前）**：更多「历史」→ `/repos/:id/history`，页内路径输入。
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
@@ -552,7 +556,7 @@
 | R7 | 2026-09-11 | F-086~F-088（TagPanel 3 行：创建轻量/附注、删除本地/远程、推送单个/全部） | ✅ 3（TagPanel 3/3 收官） | D-26、D-27（已修复并复验）；夹具：file:// 裸远端 `D:\zhanglei1120\Github\smoke-remote` |
 | R8 | 2026-09-11 | F-089~F-092（RemotePanel 4 行：远程 CRUD / fetch 三形态 / shallow·unshallow / 401 认证回路） | ✅ 4（RemotePanel 4/4 收官） | D-28、D-29（已修复并复验）；F-092 用本地恒 401 服务（`http://127.0.0.1:9418`）触发真实认证回路 |
 | R9 | 2026-09-11 | F-093~F-100（PushDialog 3 + PullDialog 2 + UpdateProjectDialog 3：推送/上游设置/强推/被拒自动更新；拉取与 rebase；更新策略·结果汇总·Reset to tracked） | ✅ 8（三页各自收官：push 3/3、pull 2/2、update 3/3） | 本轮无新缺陷；夹具：由 `rebased-smoke-other` 推送远端侧提交制造分叉与领先态，`rebase-topic` 经 F-093 建立上游（后续需要「无上游」形态时改用 rebased-smoke-big） |
-| R10 | 2026-09-11 | F-101~F-104（BlameView 4 行：注解列表 / 三联动 / 受影响文件 / previousLineno 边界）+ F-025 补测（认证重试回路，用本地 401 服务解除原「跳过」） | ✅ 5（BlameView 4/4 收官；LogPage 20/20） | 本轮无新缺陷；每行均与 CLI（`blame`/`blame --line-porcelain`/`show --name-status`）逐项互证 |
+| R10 | 2026-09-11 | F-101~F-104（HistoryView 4 行：注解列表 / 三联动 / 受影响文件 / previousLineno 边界）+ F-025 补测（认证重试回路，用本地 401 服务解除原「跳过」） | ✅ 5（HistoryView 4/4 收官；LogPage 20/20） | 本轮无新缺陷；每行均与 CLI（`blame`/`blame --line-porcelain`/`show --name-status`）逐项互证 |
 | R11 | 2026-09-11 | F-105~F-110（HistoryPanel 3 + CommittedChangesPanel 3：文件历史 / --follow 跟随 / 版本 diff 联动；提交浏览与分页 / 目录树 / diff 联动） | ✅ 6（两页各自收官：history 3/3、committed 3/3） | 本轮无新缺陷；F-108 分页在 321 提交的大仓实测 50→100；P3 观察（不改）：溯源/历史页的页内路径输入不回写 URL（`?file=` 仅作入口深链），刷新后回到入口态 |
 | R12 | 2026-09-11 | F-111~F-113（SearchPanel 3 行：grep/pickaxe 双模式与非法正则、结果→日志、分支快速搜索） | ✅ 3（SearchPanel 3/3 收官） | D-30（已修复并复验）；两模式结果均与 CLI 逐条互证 |
 | R13 | 2026-09-11 | F-114~F-119（ConflictsPanel 6 行：冲突列表与徽标 / 整侧解决 / 3-way 手合并 / 完成合并 / 跳过 / 状态联动与中止） | ✅ 6（ConflictsPanel 6/6 收官） | 本轮无新缺陷；夹具重建为一次性呈现 AA/UD/UU 四路冲突 + rebase 冲突，每步均与 CLI 互证 |
@@ -565,7 +569,7 @@
 | R20 | 2026-09-11 | F-149~F-155（SettingsPage 7 行：应用设置读写 / git 配置 9 键 / 账户令牌 / config-store 重启持久化 / git 可执行文件 / GPG 配置 / 保护分支与联动拦截） | ✅ 7（SettingsPage 7/7 收官） | 本轮无新缺陷；F-152 真杀进程重启后复查，F-155 用「已推送提交 Reword」实测联动拦截 |
 | R21 | 2026-09-11 | F-156~F-159（BrowsePanel 4 行：文件树 / 只读查看与二进制 / 降级边界 / 入口与回边） | ✅ 4（BrowsePanel 4/4 收官） | 本轮无新缺陷；树与内容均与 `ls-tree -r` / `show <rev>:<file>` 互证，越界与绝对路径均被 `INVALID_QUERY` 拦下 |
 | R22 | 2026-09-11 | **全站流体布局与密度几何验收**（非 F-xx 功能行）：六档宽度 × 明暗 × 24 路由 + 6 个状态（含 GitHub/GitLab 展开差异、认证/重置弹窗、EllipsisText 浮层）+ 两条例外断言；web-koa 对等抽查 | ✅ 576/576 格（web-next 384 + web-koa 192） | 修复前基线 375/384：`stashes` 行在 360/480 顶宽（`scrollWidth 492 > clientWidth 360/480`）→ 该行加 `wrap`；另 4 格为断言测量竞态（已修断言）。见 §5.16 |
-| **R23** | **2026-09-12** | **全量重跑（159 行全跑完 + 收官抽查）**：按 §1.3 用 `scripts/smoke-setup.ps1` 复位重建全部冒烟仓后，从 F-001 起按矩阵顺序跑完 **F-001~F-159**（31 个页面全覆盖：RepoPage 8 / LogPage 20 / DiffPage 10 / StatusPage 13 / CommitDialog 7 / ResetDialog 3 / BranchPanel 11 / MergeDialog 3 / RebaseDialog 5 / StashPanel 5 / TagPanel 3 / RemotePanel 4 / PushDialog 3 / PullDialog 2 / UpdateProjectDialog 3 / BlameView 4 / HistoryPanel 3 / CommittedChangesPanel 3 / SearchPanel 3 / ConflictsPanel 6 / PatchPanel 4 / ShelfPanel 3 / WorktreePanel 3 / SubmodulePanel 2 / IgnoreDialog 2 / GitHubPanel 6 / GitLabPanel 5 / GitConsole 2 / QuickActions 2 / SettingsPage 7 / BrowsePanel 4）；另完成收官抽查：**明亮主题 8 张**（§5.18①）、**响应式 6 张**（§5.18②，`scrollWidth <= clientWidth+1` 全通过），并重拍 F-058 回执与 F-119 换态图。截图**全量重拍 196 张**（归档时删除 1 张失效证据图，账目 195 张；**2026-09 复核在盘 206 张**——其后批次又落盘若干图，见 §5.19：引用=在盘、无缺失、无重复 SHA、无孤儿。**2026-09-13 全量重拍后为 205 张，见 §5.26**） | ✅ **150** / ❌ **0** / ⏭ **9**（F-056 的 gpg 分支 + F-136~F-139、F-141~F-144 共 8 行需真实托管仓库与 PAT） | **新登记缺陷**：D-39（`refs.changed` 后 chips 不刷新）、D-40（「清理已合并（N）」计数与执行集不一致）、D-41（并发下 `.git/index.lock` raw 报错透出，P3）、D-42（配置 BOM 化 → 全站 400 且文案误导，P2）、D-43（硬杀 dev 后 `.next` 缓存不一致 → 二级嵌套 API 404，P2）、D-44（`conflicts-06.png` 与 `log-page-16.png` 同图，证据链重复）——**D-39~D-42 与 D-44 已于本轮修复并复验（修复落点/回归守卫/实测见 §5.20），D-43 复核两次未复现、按偶发登记**；**流程/夹具纠偏 P-12~P-29**（见 §5.17）；**主题/响应式/账目** 三节见 §5.18~§5.19 |
+| **R23** | **2026-09-12** | **全量重跑（159 行全跑完 + 收官抽查）**：按 §1.3 用 `scripts/smoke-setup.ps1` 复位重建全部冒烟仓后，从 F-001 起按矩阵顺序跑完 **F-001~F-159**（31 个页面全覆盖：RepoPage 8 / LogPage 20 / DiffPage 10 / StatusPage 13 / CommitDialog 7 / ResetDialog 3 / BranchPanel 11 / MergeDialog 3 / RebaseDialog 5 / StashPanel 5 / TagPanel 3 / RemotePanel 4 / PushDialog 3 / PullDialog 2 / UpdateProjectDialog 3 / HistoryView 4 / HistoryPanel 3 / CommittedChangesPanel 3 / SearchPanel 3 / ConflictsPanel 6 / PatchPanel 4 / ShelfPanel 3 / WorktreePanel 3 / SubmodulePanel 2 / IgnoreDialog 2 / GitHubPanel 6 / GitLabPanel 5 / GitConsole 2 / QuickActions 2 / SettingsPage 7 / BrowsePanel 4）；另完成收官抽查：**明亮主题 8 张**（§5.18①）、**响应式 6 张**（§5.18②，`scrollWidth <= clientWidth+1` 全通过），并重拍 F-058 回执与 F-119 换态图。截图**全量重拍 196 张**（归档时删除 1 张失效证据图，账目 195 张；**2026-09 复核在盘 206 张**——其后批次又落盘若干图，见 §5.19：引用=在盘、无缺失、无重复 SHA、无孤儿。**2026-09-13 全量重拍后为 205 张，见 §5.26**） | ✅ **150** / ❌ **0** / ⏭ **9**（F-056 的 gpg 分支 + F-136~F-139、F-141~F-144 共 8 行需真实托管仓库与 PAT） | **新登记缺陷**：D-39（`refs.changed` 后 chips 不刷新）、D-40（「清理已合并（N）」计数与执行集不一致）、D-41（并发下 `.git/index.lock` raw 报错透出，P3）、D-42（配置 BOM 化 → 全站 400 且文案误导，P2）、D-43（硬杀 dev 后 `.next` 缓存不一致 → 二级嵌套 API 404，P2）、D-44（`conflicts-06.png` 与 `log-page-16.png` 同图，证据链重复）——**D-39~D-42 与 D-44 已于本轮修复并复验（修复落点/回归守卫/实测见 §5.20），D-43 复核两次未复现、按偶发登记**；**流程/夹具纠偏 P-12~P-29**（见 §5.17）；**主题/响应式/账目** 三节见 §5.18~§5.19 |
 
 **收官复核（R21 末）**
 
@@ -1118,7 +1122,7 @@
 | 初始化仓库（首页） | 表单（Modal） | 首页「初始化」 | `repo-page-14b.png`（Modal「初始化仓库」，`init-path` = `D:\zhanglei1120\Github\rebased-smoke-init-ui`；占位符「仓库目录（不存在时创建）」） | `repo-page-14.png`（跳 `/repos/534c841e-39bf-4933-acf8-70844a96440b`，页面「暂无提交 / 该仓库还没有任何提交…」） | CLI：该目录成为 git 工作树（`rev-parse --is-inside-work-tree` = `true`、`git status` = 「On branch master」且无提交、目录内仅 `.git`）。**收尾**：首页「移除」（Popconfirm「移除该仓库？」）使列表 12→11，并删除目录；探针仓与 id `534c841e-…` 均已清理 |
 | 保存搁置（搁置页） | 表单（Modal） | `/shelves`「保 存」 | `shelf-05b.png`（Modal「保存搁置」，`shelf-save-name` = `f-ui-shelf-save-probe`；占位符「搁置名（必填）」） | `shelf-05.png`（搁置列表 **2→3**，新条目「f-ui-shelf-save-probe \| 1 个未跟踪」置顶） | CLI：`~/.rebasedjs/shelves/<repoId>/f-ui-shelf-save-probe/` 生成 `patch.diff` + `untracked/f-ui-shelf-save-probe.txt`。**语义观察（不同于 JetBrains）**：保存搁置**不移出工作区**——确认后 `git status` 仍为 `?? f-ui-shelf-save-probe.txt`（相当于复制入档）。**该动作不弹 toast**；收尾已删除该探针搁置目录并清掉工作区探针文件 |
 | 搁置变更（状态页页头） | 表单（Modal） | `/status` 页头「搁 置」 | `shelf-06b.png`（Modal「搁置变更」，`page-action-shelf-input` = `f-ui-shelve-from-status`） | `shelf-06.png`（toast「已搁置：f-ui-shelve-from-status」+ 自动跳 `/shelves`，列表 **3→4**） | CLI：同名搁置目录生成 `patch.diff` + `untracked/…`。**收尾**：删除两个探针搁置后列表回到 2（`f120-worktree` / `smoke-shelf-r3`） |
-| 受影响文件（溯源页查看型卡） | 查看（Modal）+ 联动 | `/blame` 右栏操作条「受影响」（**选中提交级**，F-103） | `blame-05b.png`（**本轮已重拍**：旧 `?file=&rev=` 深链规范化后的落点在「逐行注解」标签——左边文件树 / 中栏提交清单 / 右栏注解行表，页面上没有对话框） | `blame-05.png`（**本轮已重拍**：陈旧 `?select=` 未知态——操作条只剩三个出口（**无「差异页」**，不猜根提交）、「本文件改动」给服务端中文错误「引用不存在或不是提交：deadbeef…」） | **配对口径已失效**：本轮两张同名图换成了三栏态的非对话框画面。受影响文件 Modal 的**卡本体证据**现由 F-103 的 `blame-03.png` 承载（**根提交态**：选中 `13a68f62…` 时打开，标题「受影响文件（13a68f6）」+ 52 个 `A` 行）；入口也从旧版「注解行内按钮」升格为右栏操作条的选中提交级出口，组件搬到 `affected-files-modal.tsx`（行为与文案逐字不变） |
+| ~~受影响文件（溯源页查看型卡）~~ | 查看（Modal）+ 联动 | **R28 起组件与入口一并删除**（用户口径：操作条整行删除、「受影响」出口下线）；同一份变更集清单改由「提交详情」标签就地给出（`ChangesetList`，与日志页「变更(N)」同一组件，点文件名同样开差异页），见 §5.37 | `blame-05b.png`（**本轮已重拍**：旧 `?file=&rev=` 深链规范化后的落点在「逐行注解」标签——左边文件树 / 中栏提交清单 / 右栏注解行表，页面上没有对话框） | `blame-05.png`（**本轮已重拍**：陈旧 `?select=` 未知态——操作条只剩三个出口（**无「差异页」**，不猜根提交）、「本文件改动」给服务端中文错误「引用不存在或不是提交：deadbeef…」） | **R28 起卡本体已不存在**（`affected-files-modal.tsx` 与其 82 行测试一并删除，`AffectedFilesModal` 未被 `ui/index.ts` 导出，删除不触动公共导出面）。此前的卡本体证据由 F-103 的 `history-03.png` 承载（**根提交态**：选中 `13a68f62…` 时打开，标题「受影响文件（13a68f6）」+ 52 个 `A` 行），该图作**历史证据**保留 |
 
 **② 待补矩阵（按页面分组；每项都需要「表单 + 成功」两张）**
 
@@ -1142,7 +1146,7 @@
 | 冲突页 `conflicts` | —— | 删除该文件（`conflicts-07b/07`）、手动合并（`conflicts-08b/08`）、完成合并（`conflicts-04/04b`）、跳过（`conflicts-05b/05`）、**中止当前操作**（`conflicts-09b/09`）五组均已成对 |
 | 合并视图 `merge-view` | —— | 手动合并已在冲突页一组中成对（`conflicts-08b/08`）；`conflicts-03` 保留为 F-116 的编辑态证据 |
 | GitHub / GitLab 面板 `github` `gitlab` | 合并 PR/MR Modal、新建 MR Modal、Approve / Request changes Popconfirm | ⏭ **环境阻塞（2026-09-13 复核）**：按 F-134/F-140 口径在 `rebased-smoke-big` 临时加 `https://github.com/example/rebased-smoke.git` 与 `https://gitlab.com/example/rebased-smoke.git` 远程后打开两个面板，DOM 实测**只渲染降级卡**（`github-auth-failed` / `gitlab-auth-failed` +「未配置 … 令牌，请在设置中添加」+「去设置」），无 PR/MR 列表、无建单/合并/Approve 任何入口（`buttons` 仅 返回日志 / 设置 / 去设置）→ **表单态在本环境亦不可达**（不存在「用假远程取表单态」的路径），成功态更需真实托管仓库 + 有效 PAT；降级卡本身的既有证据见 F-135（`github-02.png`）与 F-140（`gitlab-01.png`）。探针远程已移除（`git remote -v` 为空） |
-| 控制台 `console` / 搜索 `search` / 溯源 `blame` | —— | 三页均无表单/二次确认（只读检索页）；`blame` 的「受影响文件」为查看型 Modal（右栏操作条「受影响」打开，已按「卡本体 + 点文件联动」配对——卡本体见 F-103 的 `blame-03.png`，弹窗组件落图见 §5.27 ①），三栏工作台整体落图见 §5.27 ③ 与 §5.34 |
+| 控制台 `console` / 搜索 `search` / 溯源 `blame` | —— | 三页均无表单/二次确认（只读检索页）；`blame` 的「受影响文件」为查看型 Modal（右栏操作条「受影响」打开，已按「卡本体 + 点文件联动」配对——卡本体见 F-103 的 `history-03.png`，弹窗组件落图见 §5.27 ①），三栏工作台整体落图见 §5.27 ③ 与 §5.34 |
 
 **③ 新 UI 组件落图清单（随批次补齐）**
 
@@ -1166,9 +1170,9 @@
 | `diff-stream-view` | `diff-page-07.png`（大仓 `big.txt` 的分块流渲染，F-035 实测 2 个 `diff.chunk` 帧渐进累积后切标准视图）；其 `diff-stream-error` 分支由单测覆盖 |
 | `three-way-view` / `merge-view` | `conflicts-03.png`（全屏三栏：当前分支 / 合并来源 / 合并结果）、`conflicts-08b.png`（保存前结果栏已改写为 `line1 master` / `line2 feature` / `line3 resolved-by-hand`） |
 | `branch-compare-view` | `diff-page-10.png`（`?compare=diverge-test` 双 range 对比视图）、`branch-06.png`（分支页「比较」入口与「当前」分支禁用态） |
-| `blame-workbench`（三栏工作台；原单列 `blame-view` 已随页面重构删除） | `blame-01…06.png`（三栏总览暗色 / 「与最新版本差异」/ 受影响文件 Modal / 逐行注解点行联动 / 陈旧 `?select=` 未知态 / 明亮主题总览）+ `blame-08.png`（**收尾轮 R25 补拍**：工作区口径的逐行注解，含 1 行「未提交」，见 §5.34⑦）+ `blame-09.png`（R26 逐行注解改版）+ `blame-07.png` / `blame-10.png`（**R27**：根提交的「本文件改动」＝Alert 提示 + 只读代码视图，见 §5.36）；testid 实测在盘——根 `blame-pane`、操作条 `blame-pane-actions` + `blame-action-log`/`-diff`/`-affected`/`-history`、三标签页 `blame-view-changes`/`-latest`/`-annotate`、中栏 `blame-commits` + `blame-commit-N`、注解行 `blame-line-N` + **相对时间列 `blame-time-N`（定宽 68px）** + **逐行高亮正文 `blame-code-N`** + **哈希 `blame-hash-N`（只读文本，同时是浮层锚点；行内无 button——行 `blame-line-N` 本身才是 `role=button`）** + 浮层内容 `commit-detail-card` / `commit-detail-email` / `blame-detail-loading` / `blame-detail-error`、提示行 `blame-changes-root-hint`/`-rename-hint`/`-missing-hint` 与 `blame-latest-missing-hint`（**R27 起** `blame-changes-root-hint` 落在 antd `Alert` 根节点上：`DIV.ant-alert.ant-alert-info` + `role=alert`，其下多一个 `browse-code-editor`——`ReadonlyTextView` 的既有 testid，复用而非新造；另有两个 R27 新增的 props 而非 testid：`rootContent` 通道与 `contentLoader` 注入点）。**旧 testid `blame-file` 已随旧组件消失**（路径输入框现为 `blame-file-input`）；**`blame-hash-cell-N` 随 ⑨ 改版删除**（哈希定宽容器不再需要——两类行的哈希已是同一元素） |
+| `history-workbench`（三栏工作台；原单列 `blame-view` 已随页面重构删除） | `history-01…06.png`（三栏总览暗色 / 「与最新版本差异」/ 受影响文件 Modal / 逐行注解点行联动 / 陈旧 `?select=` 未知态 / 明亮主题总览）+ `blame-08.png`（**收尾轮 R25 补拍**：工作区口径的逐行注解，含 1 行「未提交」，见 §5.34⑦）+ `blame-09.png`（R26 逐行注解改版）+ `blame-07.png` / `blame-10.png`（**R27**：根提交的「本文件改动」＝Alert 提示 + 只读代码视图，见 §5.36）；testid 实测在盘——根 `history-pane`、**四标签页 `history-view-changes`/`-latest`/`-annotate`/`-detail`（R28 新增 `-detail`）**、中栏 `blame-commits` + `history-commit-N`、注解行 `history-line-N` + **相对时间列 `history-time-N`（定宽 68px）** + **逐行高亮正文 `history-code-N`** + **哈希 `history-hash-N`（只读文本，同时是浮层锚点；行内无 button——行 `history-line-N` 本身才是 `role=button`）** + 浮层内容 `commit-detail-card` / `commit-detail-email` / `history-detail-loading` / `history-detail-error`、提示行 `history-changes-root-hint`/`-rename-hint`/`-missing-hint` 与 `history-latest-missing-hint`（**R27 起** `history-changes-root-hint` 落在 antd `Alert` 根节点上：`DIV.ant-alert.ant-alert-info` + `role=alert`，其下多一个 `browse-code-editor`——`ReadonlyTextView` 的既有 testid，复用而非新造；另有两个 R27 新增的 props 而非 testid：`rootContent` 通道与 `contentLoader` 注入点）；**R28 新增**：`history-view-detail`（标签页本体）、`history-detail-body`（详情卡 + 清单的纵向容器）、`history-commit-detail`（详情卡，复用 `domain/commit-details-panel`）、`history-view-detail-loading` / `history-view-detail-error`（该标签自己的三态）。**R28 删除**：操作条 `history-pane-actions` 与 `history-action-log`/`-diff`/`-affected`/`-history` 四个出口、受影响弹窗 `affected-loading`/`affected-error`/`affected-file-N`（随 `affected-files-modal.tsx` 删除）。**旧 testid `history-file` 已随旧组件消失**（路径输入框现为 `history-file-input`）；**`history-hash-cell-N` 随 ⑨ 改版删除**（哈希定宽容器不再需要——两类行的哈希已是同一元素） |
 | ~~`committed-changes-panel`~~ | 组件已随页面删除（2026-09-20 用户口径）；`committed-01…03.png` 保留为删除前的历史证据（提交列表分页 50→100 / 目录树 / 与 diff 页联动），根 testid `committed-entry-N` / `committed-load-more` 已随组件移除。当前的等效证据见 `log-page-*`（变更集标签：`snapshot-changeset-title` / `snapshot-changeset-pane` / `changes-diff-*`） |
-| 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复（原 `BrowsePanel`、`CommittedChangesPanel` 已随整页形态删除） |
+| 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / ~~`HistoryPanel`~~（已随整页形态删除，2026-09-30） / `SearchPanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复（原 `BrowsePanel`、`CommittedChangesPanel` 已随整页形态删除） |
 
 ### 5.28 折叠 / 分支过滤 / 最近仓库项 冒烟（Task 8，2026-09-13）
 
@@ -1567,8 +1571,8 @@
 
 ### 5.34 溯源页三栏工作台 冒烟（R24 部分重跑，2026-09-20）
 
-> **触发**：溯源页由单列 `BlameView` 整页重构为三栏工作台（左树｜中栏提交清单｜右栏操作条 + 三标签，提交 `2bbe3fd`、`496f21f`、`c824bcd`、`f412b53`、`0903000`），旧单列组件已删除，F-101~F-104 四行的界面形态与截图全部作废，需要在真实服务 + 真实仓库里重走一遍并归档。
-> **夹具**：**本 worktree 自身**（`D:\zhanglei1120\Github\rebasedjs-blame-workbench`，历史足够长、含重命名与多作者），经欢迎屏「仓库路径 → 打开」注册；浏览器侧全只读（未提交/检出/改文件）。**repoId 不作证据**：它由注册动作现场生成，重开一次就换一个（首轮为 `04cda2c7-…`，重拍时为 `aad9baff-…`），故本文只按「本 worktree 自身」这一层记录。
+> **触发**：溯源页由单列 `HistoryView` 整页重构为三栏工作台（左树｜中栏提交清单｜右栏操作条 + 三标签，提交 `2bbe3fd`、`496f21f`、`c824bcd`、`f412b53`、`0903000`），旧单列组件已删除，F-101~F-104 四行的界面形态与截图全部作废，需要在真实服务 + 真实仓库里重走一遍并归档。
+> **夹具**：**本 worktree 自身**（`D:\zhanglei1120\Github\rebasedjs-history-workbench`，历史足够长、含重命名与多作者），经欢迎屏「仓库路径 → 打开」注册；浏览器侧全只读（未提交/检出/改文件）。**repoId 不作证据**：它由注册动作现场生成，重开一次就换一个（首轮为 `04cda2c7-…`，重拍时为 `aad9baff-…`），故本文只按「本 worktree 自身」这一层记录。
 > **服务（全部为本 worktree 的本地实例，用户正在用的 `:3081` 全程未被触碰）**：web-next `pnpm --filter @rebased/web-next exec next dev -p 3091`（`:3091`，主要证据侧）；web-koa SPA `pnpm --filter @rebased/web-koa dev:web`（`:5173`，代理 `/api` → `:3082`）；web-koa API `pnpm --filter @rebased/web-koa dev`（`:3082`）；独立配置目录 `REBASED_CONFIG_DIR=<worktree>\.smoke-config`，与用户配置互不影响。
 > **浏览器**：Playwright MCP；为不打扰用户正在使用的同一浏览器实例，全部操作在**新建的独立标签页**里完成；视口 `1440×900`。
 > **入场路径**：从日志页顶栏「更多 → 溯源」进入（不用 URL 直达绕过入口），其后按真实用户路径逐项操作。
@@ -1579,22 +1583,22 @@
 |---|--------|------|---------------------------|--------------------|
 | 1 | 入口：日志页顶栏「更多 → 溯源」 | ✅ | 地址变为 `/repos/<id>/blame`；顶栏「更多」高亮（web-koa `:5173` 实测） | — |
 | 2 | 左树点 `AGENT.md` | ✅ | 地址变为 `?file=AGENT.md`；左树该行选中；中栏出现 **12 条**提交 | `git log --follow --oneline -- AGENT.md` = **12 条**，顶条 `b96148e` 与中栏首条一致（提交标题按中栏宽度省略号截断，故按短哈希比对，不比标题全串） |
-| 3 | 中栏派生选中 / 点选 | ✅ | 无 `?select=` 时首条自动选中（`blame-commit-0` 带 `data-selected="true"`）；点第 2 条 → `?select=6e1807493cf0050e9178a4e4935a8d9427a60416` | `git log -1 6e180749…` = `feat(web): 设置页按作用域拆两页 + web-koa 主题接线`，与中栏第 2 行一致 |
+| 3 | 中栏派生选中 / 点选 | ✅ | 无 `?select=` 时首条自动选中（`history-commit-0` 带 `data-selected="true"`）；点第 2 条 → `?select=6e1807493cf0050e9178a4e4935a8d9427a60416` | `git log -1 6e180749…` = `feat(web): 设置页按作用域拆两页 + web-koa 主题接线`，与中栏第 2 行一致 |
 | 4 | 三标签切换 | ✅ | 「与最新版本差异」→ `?view=latest`；「逐行注解」→ `?view=annotate`；**均只拉当前标签的数据** | 网络面板逐次核对：非激活标签无对应 `/diff`、`/blame` 请求 |
-| 5 | 逐行注解 + 点行选提交 | ✅ | 点 `blame-line-7`（归属 `8536a91`）→ `?file=AGENT.md&view=annotate&select=8536a9166d331aaad59c788df7cf35114e05e21c`；注解选中行数 1；**中栏同时高亮 `8536a91`**；注解区行数 77 | `git show -s 8536a91` = `fix(core): abort 陈旧 pid 守卫与未合并状态解析，AGENT.md 路径更新`，与注解行归属一致 |
-| 6 | 操作条四出口齐备 | ✅ | `blame-action-log` / `blame-action-diff` / `blame-action-affected` / `blame-action-history` 四个 testid **全部渲染** | — |
-| 7 | 根提交降级 | ✅ | `.agent/AGENT.md` 唯一提交即根提交（`13a68f62…`）；「本文件改动」显示 `blame-changes-root-hint`（「该提交为根提交（无父版本）…」），**无加载态、无错误** | `git rev-list --parents -1 13a68f62` 只有一个字段（无父）；**不发 `/diff` 请求**（网络面板 0 条，与 UI 无加载态互证）。**⤳ R27 起**：该提示改由 antd `Alert` 承载，下面就地展示该提交里的文件全文（只读代码视图）——本行的「不发 `/diff`」结论仍成立，见 §5.36 |
+| 5 | 逐行注解 + 点行选提交 | ✅ | 点 `history-line-7`（归属 `8536a91`）→ `?file=AGENT.md&view=annotate&select=8536a9166d331aaad59c788df7cf35114e05e21c`；注解选中行数 1；**中栏同时高亮 `8536a91`**；注解区行数 77 | `git show -s 8536a91` = `fix(core): abort 陈旧 pid 守卫与未合并状态解析，AGENT.md 路径更新`，与注解行归属一致 |
+| 6 | ~~操作条四出口齐备~~ → **R28：操作条整行删除，四标签 + 「提交详情」齐备** | ✅ | **R28 实测**（§5.37）：`history-pane-actions` 与 `history-action-log`/`-diff`/`-affected`/`-history` **四个 testid 全不在盘**；标签栏 = 「本文件改动」「与最新版本差异」「逐行注解」「提交详情」，`history-view-detail` / `history-commit-detail` 在盘 | — |
+| 7 | 根提交降级 | ✅ | `.agent/AGENT.md` 唯一提交即根提交（`13a68f62…`）；「本文件改动」显示 `history-changes-root-hint`（「该提交为根提交（无父版本）…」），**无加载态、无错误** | `git rev-list --parents -1 13a68f62` 只有一个字段（无父）；**不发 `/diff` 请求**（网络面板 0 条，与 UI 无加载态互证）。**⤳ R27 起**：该提示改由 antd `Alert` 承载，下面就地展示该提交里的文件全文（只读代码视图）——本行的「不发 `/diff`」结论仍成立，见 §5.36 |
 | 8 | 受影响文件弹窗 | ✅ | 标题「受影响文件（13a68f6）」；**52 个文件行**（`affected-file-0…51`），状标 `A`；Esc 可关 | `git show --name-only 13a68f62` 恰 **52** 条，与清单逐条一致 |
 | 9 | 未知态（陈旧 `?select=`） | ✅ | `?select=deadbeef…` → 操作条只剩 **3 个**按钮（**无「差异页」**，不猜根提交）；「本文件改动」显示服务端中文错误「引用不存在或不是提交：deadbeefdeadbeefdeadbeefdeadbeefdeadbeef」；中栏不高亮任何行但 **12 条历史仍在** | 控制台唯一一条 error 是预期内的 `GET /api/repos/…/commits/deadbeef…` **400** |
 | 10 | 旧 `?rev=` 深链规范化 | ✅ | web-koa `:5173`：`?file=docs/manual.md&rev=8d6d961` → 地址被改写为 `?file=docs%2Fmanual.md&select=8d6d961&view=annotate`，逐行注解 **1519 行**；web-next `:3091` 同形 | `git show -s 8d6d961` = `docs: 更新 README 与使用手册（同步新功能、精简 README、重选手册配图）` |
 | 11 | 前进 / 后退 | ✅ | 浏览器后退恢复 `?file=docs/manual.md&select=8d6d961&view=annotate` + 逐行注解 1519 行（页内动作走 replace，不塞满历史） | — |
-| 12 | 明暗双主题 + 列宽记忆 | ✅ | 暗色 `data-theme=dark`（body `rgb(20,20,20)`）；切偏好为 light 后 `data-theme=light`（body `rgb(255,255,255)`），**收尾已还原为 dark**；列宽偏好写入后 reload 仍为 `tree 320 / commits 260`，右栏弹性吃剩余 850。**复拍时补测**（明亮主题帧）：`[data-testid="blame-view-changes"]` 高 **759**、「本文件改动」渲染出**真实差异（3 行插入 / 3 行删除，见 ④ 表注）** | — |
+| 12 | 明暗双主题 + 列宽记忆 | ✅ | 暗色 `data-theme=dark`（body `rgb(20,20,20)`）；切偏好为 light 后 `data-theme=light`（body `rgb(255,255,255)`），**收尾已还原为 dark**；列宽偏好写入后 reload 仍为 `tree 320 / commits 260`，右栏弹性吃剩余 850。**复拍时补测**（明亮主题帧）：`[data-testid="history-view-changes"]` 高 **759**、「本文件改动」渲染出**真实差异（3 行插入 / 3 行删除，见 ④ 表注）** | — |
 
 **控制者补充核对（超出 12 项，但与本次改动直接相关）**
 
 | # | 范围项 | 结论 | 判据 |
 |---|--------|------|------|
-| 13 | Tabs 高度契约端到端成立 | ✅ | 「与最新版本差异」里 Monaco 真实渲染，`[data-testid="blame-view-latest"]` 高 **580** 落在右栏 **646** 之内（Task 6 的 Important 修复在浏览器里被证实） |
+| 13 | Tabs 高度契约端到端成立 | ✅ | 「与最新版本差异」里 Monaco 真实渲染，`[data-testid="history-view-latest"]` 高 **580** 落在右栏 **646** 之内（Task 6 的 Important 修复在浏览器里被证实） |
 | 14 | hydration 一致性 | ✅ | web-next 硬加载深链 `?file=AGENT.md&view=annotate&select=<完整哈希>` → 控制台 **0 error**（修复前必报 `Hydration failed …`）；注：范围项 9 那次陈旧哈希的唯一 error 是预期内的 400 |
 | 15 | 「降级不请求」成立 | ✅ | 根提交与「该提交无此路径」两种降级下，「本文件改动」**不发 `/diff` 请求**（网络面板与 UI 加载态互证）。**⤳ R27 起**：根提交这一种会**新增一条** `GET /browse/content?rev=该提交&file=`（读该版本全文给只读代码视图），`/diff` 仍为 0 条；「该提交无此路径」仍是**一条请求都不发**——见 §5.36 |
 
@@ -1602,7 +1606,7 @@
 
 1. 日志页顶栏「更多 → 溯源」进入 `/repos/<repoId>/blame`（不直达 URL；repoId 由注册现场生成，见页首夹具条）。
 2. 左树 `AGENT.md` → 读中栏条数与首条选中态 → 点第 2 条提交（读 `?select=`）→ 依次切「与最新版本差异」「逐行注解」（读 `?view=` 与请求数）。
-3. 「逐行注解」里点 `blame-line-7` → 读地址、注解选中行数与中栏高亮。
+3. 「逐行注解」里点 `history-line-7` → 读地址、注解选中行数与中栏高亮。
 4. 回「本文件改动」→ 读四个出口 testid。
 5. 左树点 `.agent/AGENT.md`（唯一提交 = 根提交）→ 读根提示行与网络面板 0 条 `/diff`。
 6. 点「受影响」→ 数文件行 → 按 Esc 关闭。
@@ -1622,9 +1626,9 @@
 
 | 截图 | 内容（最终正确效果） | 对应范围项 | SHA256（前 16 位） |
 |------|----------------------|-----------|--------------------|
-| `blame-01.png` | 三栏总览（暗色）：左树选中 `AGENT.md` / 中栏 12 条提交（首条选中）/ 右栏操作条 + 「本文件改动」Monaco 差异 | 2、3、6 | `0FF12E6BF0458CE7` |
-| `blame-02.png` | 「与最新版本差异」标签（该提交版本 vs 工作区） | 4、13 | `05920108689926FF` |
-| `blame-03.png` | 受影响文件弹窗（**根提交态**：选中根提交 `13a68f62…` 时打开）——标题「受影响文件（13a68f6）」+ **52 个** `A` 行，首行 `A .agent/AGENT.md` | 8 | `3EA02059586639CC` |
+| `history-01.png` | 三栏总览（暗色）：左树选中 `AGENT.md` / 中栏 12 条提交（首条选中）/ 右栏操作条 + 「本文件改动」Monaco 差异 | 2、3、6 | `0FF12E6BF0458CE7` |
+| `history-02.png` | 「与最新版本差异」标签（该提交版本 vs 工作区） | 4、13 | `05920108689926FF` |
+| `history-03.png` | 受影响文件弹窗（**根提交态**：选中根提交 `13a68f62…` 时打开）——标题「受影响文件（13a68f6）」+ **52 个** `A` 行，首行 `A .agent/AGENT.md` | 8 | `3EA02059586639CC` |
 | `blame-04.png` | 「逐行注解」+ 点行选中联动（中栏与注解行同时高亮 `8536a91`） | 5 | `25B73FD59FD0FBAC` |
 | `blame-05.png` | 陈旧 `?select=` 未知态（无「差异页」+ 中文错误） | 9 | `CFC48706FFD87D80` |
 | `blame-05b.png` | 旧 `?rev=` 深链规范化后的落点（逐行注解） | 10 | `F2022B757D2417FB` |
@@ -1633,9 +1637,9 @@
 
 > **表注（差异行数的口径，勿用 DOM 计数）**：`blame-06.png` 与范围项 12 里的「3 行插入 / 3 行删除」取自 git 权威计数——`git diff --numstat b96148e^ b96148e -- AGENT.md` = `3	3	AGENT.md`（该提交即图内选中的 `b96148e`）。**不要再用 Monaco DOM 的 `.line-insert`/`.line-delete` 元素计数**：`.line-delete` 会把装饰性元素一并算进去，实测多出 2，得到「5 处删除」这个偏大的数（本台账首版即误采此值，已按 git 更正）。
 
-> **账目口径（§1.2）**：`<NN>` = 该行最终正确效果图，`<NN>b` = 过程图/第二态图。本页属**只读检索页**，没有表单与二次确认（故 §5.27 的「表单 + 成功」成对口径不适用），`blame-05`/`blame-05b` 是「未知态」与「深链规范化落点」两个独立状态，按 §1.2 的「同一行天然同画面必须换一个有意义的状态」规则区分。
-> **旧图处置**：旧的 `blame-01…05b`（单列版）被**同名覆盖/替换**——`blame-02.png` 与 `blame-04.png` 的旧图是单列内容，现为三栏内容；`blame-05.png`/`blame-05b.png` 旧图是「受影响文件 Modal」与「点文件后的联动」，现为「未知态」与「深链落点」。引用这些文件名的矩阵行（§4.16 四行、§5.27 ①、§5.27 ③）已同批改写为三栏口径。**除新拍的 `blame-06.png` 外，本轮无新增截图文件、无删除**。
-> **复拍说明（审查后收口）**：R24 那 7 张的 SHA256 是收尾用 `Get-FileHash` 逐张复核的**当前在盘值**；其中两张在审查后复拍并已在提交 `2ad5c65` 落库——`blame-03.png` 改拍**根提交态**的受影响弹窗（旧帧是 `b96148e` 的 9 行 `M`，与「13a68f6 + 52 行 `A`」的说明不符，已作废），`blame-06.png` 改拍**明亮主题 + 真实差异**帧（旧帧是没有差异的瞬时帧，看不出「本文件改动」渲染成功）。两张的说明已按新画面改写（见上表与 §4.16 F-103、§5.27 ①）。
+> **账目口径（§1.2）**：`<NN>` = 该行最终正确效果图，`<NN>b` = 过程图/第二态图。本页属**只读检索页**，没有表单与二次确认（故 §5.27 的「表单 + 成功」成对口径不适用），`history-05`/`history-05b` 是「未知态」与「深链规范化落点」两个独立状态，按 §1.2 的「同一行天然同画面必须换一个有意义的状态」规则区分。
+> **旧图处置**：旧的 `history-01…05b`（单列版）被**同名覆盖/替换**——`history-02.png` 与 `blame-04.png` 的旧图是单列内容，现为三栏内容；`blame-05.png`/`blame-05b.png` 旧图是「受影响文件 Modal」与「点文件后的联动」，现为「未知态」与「深链落点」。引用这些文件名的矩阵行（§4.16 四行、§5.27 ①、§5.27 ③）已同批改写为三栏口径。**除新拍的 `blame-06.png` 外，本轮无新增截图文件、无删除**。
+> **复拍说明（审查后收口）**：R24 那 7 张的 SHA256 是收尾用 `Get-FileHash` 逐张复核的**当前在盘值**；其中两张在审查后复拍并已在提交 `2ad5c65` 落库——`history-03.png` 改拍**根提交态**的受影响弹窗（旧帧是 `b96148e` 的 9 行 `M`，与「13a68f6 + 52 行 `A`」的说明不符，已作废），`blame-06.png` 改拍**明亮主题 + 真实差异**帧（旧帧是没有差异的瞬时帧，看不出「本文件改动」渲染成功）。两张的说明已按新画面改写（见上表与 §4.16 F-103、§5.27 ①）。
 
 **⑤ 未覆盖项（如实登记，未覆盖就是未覆盖）**
 
@@ -1646,7 +1650,7 @@
 | 大文件历史（数千条提交）下中栏性能 | 未压测；计划 §0.3 已列为**非目标** | 触发条件出现（真实大仓反馈卡顿）时单独立项 |
 | F-104 `previousLineno` 边界 | 本轮 12 项范围里没有这一项，**未重跑**（沿用 R10 的结论）；旧图 `blame-04.png` 已被三栏态同名覆盖，单列态画面不再存在 | 三栏态下重走一次改名文件的注解（本 worktree 含重命名历史，夹具现成） |
 
-**⑥ 流水线复验**：本轮（文档收口）**只改 `docs/`**，无源码改动——改动路径只有 `docs/` 下的三个 `.md`：`e2e-verification.md`（本节的台账与矩阵行）与 `manual.md`、`pages-and-api-audit.md`（各 1 行，已随 `6ad98d8` 提交）。本轮开始时工作区另有两处与本轮文档改动无关的残留，**收尾时均已消解**：① `docs/shots/` 下的 7 张截图（由控制者直接落盘，已由 `5a5574e`、`2ad5c65` 提交）；② 冒烟用的临时配置目录 `.smoke-config/`（**已清理**）。复查时 `git status --porcelain` 输出为空（该次实测即本节收尾时的记录）。`git diff --check` 干净。收尾实跑 `pnpm --filter @rebased/ui test` → **79 文件 / 983 用例全绿**（含三栏工作台的 `blame-workbench` / `blame-change-pane` / `blame-commits-column` / `blame-annotate-table` / `blame-state` 五套）；因本轮零代码改动，该结果与三栏工作台各提交时的结论一致。
+**⑥ 流水线复验**：本轮（文档收口）**只改 `docs/`**，无源码改动——改动路径只有 `docs/` 下的三个 `.md`：`e2e-verification.md`（本节的台账与矩阵行）与 `manual.md`、`pages-and-api-audit.md`（各 1 行，已随 `6ad98d8` 提交）。本轮开始时工作区另有两处与本轮文档改动无关的残留，**收尾时均已消解**：① `docs/shots/` 下的 7 张截图（由控制者直接落盘，已由 `5a5574e`、`2ad5c65` 提交）；② 冒烟用的临时配置目录 `.smoke-config/`（**已清理**）。复查时 `git status --porcelain` 输出为空（该次实测即本节收尾时的记录）。`git diff --check` 干净。收尾实跑 `pnpm --filter @rebased/ui test` → **79 文件 / 983 用例全绿**（含三栏工作台的 `history-workbench` / `history-change-pane` / `history-commits-column` / `history-annotate-table` / `history-state` 五套）；因本轮零代码改动，该结果与三栏工作台各提交时的结论一致。
 
 **⑦ 收尾轮复验（R25，2026-09-20；修复波 `951e950` 的界面复验）**
 
@@ -1657,7 +1661,7 @@
 | # | 复验项 | 结论 | 判据（浏览器 DOM / 地址栏 / 网络） |
 |---|--------|------|-----------------------------------|
 | R25-1 | 无显式 `?select=` + `view=annotate` → **工作区口径** | ✅ | `?file=scripts%2Fcheck-fluid-layout.mjs&view=annotate` → 注解 **1848 行**；其中 **1 行**短哈希 `00000000`、标「未提交」（作者 `Not Committed Yet`、日期 2026-09-20 19:26），该行 `tabindex=null`（**不可聚焦、点了没反应**）。截图 `blame-08.png`（见 ④ 表） |
-| R25-2 | 中栏点一条提交 → **钉在该版本** | ✅ | 点 `blame-commit-1` → 地址加 `select=2444a02de8a5c00dfad71ffa93080e6cc0672d71`；注解 **1831 行**、**未提交行 0 条**；前台标签仍是「逐行注解」（追责流：点注解行写 `?select=` 即钉住那一版，口径不变） |
+| R25-2 | 中栏点一条提交 → **钉在该版本** | ✅ | 点 `history-commit-1` → 地址加 `select=2444a02de8a5c00dfad71ffa93080e6cc0672d71`；注解 **1831 行**、**未提交行 0 条**；前台标签仍是「逐行注解」（追责流：点注解行写 `?select=` 即钉住那一版，口径不变） |
 | R25-3 | 操作条**四出口**（工作区口径下仍齐备、且都指向选中提交） | ✅ | 「日志定位」→ `/repos/<id>?select=2444a02d…`；「差异页」→ **新标签页** `/repos/<id>/diff?file=…&from=8d6d961aec5154251e9a1ea8e86a93578c9f4e47&to=94f8baca2f62c809bb923feac86c6929c1e9f796`；「受影响」→ 弹窗「受影响文件（94f8bac）」**136 行**；「文件历史」→ `/repos/<id>/history?file=scripts%2Fcheck-fluid-layout.mjs` |
 | R25-4 | 状态页行内「注解」入口（I-1 端到端） | ✅ | 状态页点 `annotate-unstaged-scripts/check-fluid-layout.mjs`（**按钮，不是 `<a>`**）→ 落到 `?file=scripts%2Fcheck-fluid-layout.mjs&view=annotate`，**「逐行注解」标签在前**（修复前该入口落在「本文件改动」，与「注解」这个词的承诺不符） |
 
@@ -1671,15 +1675,15 @@
 
 | # | 冒烟项 | 结论 | 判据（浏览器 DOM / 网络 / CLI 互证） |
 |---|--------|------|--------------------------------------|
-| R26-1 | 行结构改版（行号｜时间｜哈希 + 高亮正文；无作者列、无「未提交」字样） | ✅ | `blame-line-1` 文本 = `1` + `2026-09-01 15:40` + `13a68f6` + `# AGENT.md`；全页 `innerText` **不含「未提交」**；`.rebased-line .code` 计算色 **3 种**（`AGENT.md`）/ **6 种**（`src/app.ts`，`.ts` 语法）——逐行 token 着色生效 |
-| R26-2 | 哈希是原生 `button`（键盘天生可达）→ **已随 ⑨ 改版移除** | ⤳ 见 ⑨ | 改版前：108 行 → `button[data-testid^="blame-hash-"]` 恰 **108** 个；⑨ 之后行内 **0 个 button**（整行 `role=button` 才是入口，见 ⑨ 的实测） |
-| R26-3 | 浮层展示**完整提交信息**（与 CLI 逐字一致） | ✅ | 点 `blame-hash-44`（改版后同样流程：点该行任意位置）→ `commit-detail-card` 文本含主题 + **正文 5 段全部**（末段「已重启本机 dev 服务并探针验证…」在内）+ 作者时间 + `commit-detail-email` = `zhanglei1120@jd.com` + 父提交 `6ba9c86`；**互证**：`git show -s --format=%B b96148e` 与卡内正文逐字相同、`git show -s --format='%an <%ae>'` = `zhanglei1120 <zhanglei1120@jd.com>` |
+| R26-1 | 行结构改版（行号｜时间｜哈希 + 高亮正文；无作者列、无「未提交」字样） | ✅ | `history-line-1` 文本 = `1` + `2026-09-01 15:40` + `13a68f6` + `# AGENT.md`；全页 `innerText` **不含「未提交」**；`.rebased-line .code` 计算色 **3 种**（`AGENT.md`）/ **6 种**（`src/app.ts`，`.ts` 语法）——逐行 token 着色生效 |
+| R26-2 | 哈希是原生 `button`（键盘天生可达）→ **已随 ⑨ 改版移除** | ⤳ 见 ⑨ | 改版前：108 行 → `button[data-testid^="history-hash-"]` 恰 **108** 个；⑨ 之后行内 **0 个 button**（整行 `role=button` 才是入口，见 ⑨ 的实测） |
+| R26-3 | 浮层展示**完整提交信息**（与 CLI 逐字一致） | ✅ | 点 `history-hash-44`（改版后同样流程：点该行任意位置）→ `commit-detail-card` 文本含主题 + **正文 5 段全部**（末段「已重启本机 dev 服务并探针验证…」在内）+ 作者时间 + `commit-detail-email` = `zhanglei1120@jd.com` + 父提交 `6ba9c86`；**互证**：`git show -s --format=%B b96148e` 与卡内正文逐字相同、`git show -s --format='%an <%ae>'` = `zhanglei1120 <zhanglei1120@jd.com>` |
 | R26-4 | ~~点哈希**不**代劳行选中（两个入口互不代劳）~~ → **已随 ⑨ 改版反转** | ⤳ 见 ⑨ | 改版前：点哈希后地址未写 `?select=`、选中行数不变；⑨ 之后**整行点击同时选中并开浮层**（一次点击两个后果是用户新口径，见 ⑨ 的实测与说明） |
 | R26-5 | 再点同一行收起；点另一行 → 浮层挪过去并按需取数 | ✅ | 改版前按哈希点、⑨ 之后按行点，行为一致：再点同点位 → `.ant-popover.ant-popover-hidden` 且 `display:none`（可见浮层 0）；点另一行（`13a68f6`，与选中提交不同）→ 网络新增 `GET /commits/13a68f62ba…` **200**，可见浮层内容 = 该提交（单行信息 → **无正文块**，与 `CommitDetailsPanel` 口径一致） |
 | R26-6 | 未提交行（全 0 伪哈希）：不可点、无文案、行也不可选 | ✅ | `src/app.ts` 5 行 `0000000`：哈希元素是 **`SPAN`**（非 button）、所在行无 `tabindex`/`role`；**互证**：CLI `git blame --line-porcelain -- src/app.ts` = 12 行 / 5 行全 0，API `GET /blame?file=src/app.ts` = 12 行 / 5 行 `hash` 全 0，与页面逐项一致 |
-| R26-7 | 浮层开合必须**按行**（首次实测暴露并修复，见 D-45） | ✅（修复后复验） | 修复前：点 `b96148e`（**占 3 行**）同时弹 **3 个**同内容浮层（`b96148e` 3 行、`13a68f6` 48 行时更甚）；修复后同点位**可见浮层恰 1 个**，单测加回归（同哈希两行只弹一个，`blame-annotate-table.test.tsx`） |
+| R26-7 | 浮层开合必须**按行**（首次实测暴露并修复，见 D-45） | ✅（修复后复验） | 修复前：点 `b96148e`（**占 3 行**）同时弹 **3 个**同内容浮层（`b96148e` 3 行、`13a68f6` 48 行时更甚）；修复后同点位**可见浮层恰 1 个**，单测加回归（同哈希两行只弹一个，`history-annotate-table.test.tsx`） |
 
-> **新登记缺陷 D-45（已修，本轮冒烟发现）**：注解行浮层的开合初版按「哈希命中」判定（`detail.hash === line.hash`），而**一个提交通常拥有连续多行**——点一次哈希会同时弹出 N 个内容相同的浮层（实测 `b96148e` 3 个叠在一起，`13a68f6` 48 行时更严重；3 个浮层还会互相干扰关闭路径）。修法：开合状态改为**被点的那一行**（组件内 `openLineno`），容器 API 不变；回归守卫见 `blame-annotate-table.test.tsx` 的「同一提交拥有多行时只弹一个浮层」。
+> **新登记缺陷 D-45（已修，本轮冒烟发现）**：注解行浮层的开合初版按「哈希命中」判定（`detail.hash === line.hash`），而**一个提交通常拥有连续多行**——点一次哈希会同时弹出 N 个内容相同的浮层（实测 `b96148e` 3 个叠在一起，`13a68f6` 48 行时更严重；3 个浮层还会互相干扰关闭路径）。修法：开合状态改为**被点的那一行**（组件内 `openLineno`），容器 API 不变；回归守卫见 `history-annotate-table.test.tsx` 的「同一提交拥有多行时只弹一个浮层」。
 > **探针纠偏 P-32（写进口径，避免下次误判）**：antd 浮层关闭后**节点仍留在 DOM**（`destroyOnHidden` 默认 false，只在 `.ant-popover` 上加 `ant-popover-hidden`）。因此 `document.querySelector('[data-testid="commit-detail-card"]')` 取到的是**第一个（可能是已隐藏的旧）浮层**——本轮一度据此误判"点 13a68f6 显示 b96148e 内容（张冠李戴）"，复查后澄清：**可见浮层内的内容是正确的**。后续 e2e 断言一律**限定在可见浮层内**（`getComputedStyle(p).display !== 'none'`）再取文本。
 > **视觉口径（实测）**：`placement="rightTop"` 在右栏靠近视口底部时会被 antd 自动上下翻转（实测类名 `ant-popover-placement-rightBottom`）以留在视口内（`autoAdjustOverflow` 默认 true）——**左右方向始终在右侧**（锚点 x=717 → 浮层 x=797）。若要求严格"右上不翻转"，需 `autoAdjustOverflow={false}` 并接受可能溢出错位；当前取「留在视口内」。
 > **未覆盖（如实登记）**：**web-koa 站点**（`pnpm dev` 的另一半：`:3082` 服务端与 `:5173` SPA——本轮它们未在运行，未擅自起服务）；明亮主题下的浮层取色；360/480/768 响应式档；Esc 关闭浮层（未实测）；**键盘**在行上按 Enter/Space 开浮层（⑨ 之后键盘入口就是行本身；仅单测覆盖，未在浏览器实测）；点浮层外面关闭（未实测）；`?select=` 显式选中版本口径下的注解行浮层（本轮只测了工作区口径）。
@@ -1704,11 +1708,11 @@
 **⑨ 同日改版：整行可点击（选中 + 浮层）+ 移入不高亮 + 行内去按钮**
 
 > **口径**：交互从「点哈希开浮层 / 点行其余处选中提交」两个入口，改为**整行一个入口**——点行的任何位置（行号、时间、哈希、正文）**同时**：① 选中该行归属的提交；② 在该行**哈希旁边**开/收提交详情浮层（浮层位置不变，仍是 `rightTop`）。**鼠标移入不高亮**；行内不再有任何按钮。
-> **做法**：`BlameAnnotateTable` 的 `activate` 一个入口做完两件事（`onSelectCommit` + `onToggleDetail`，都注入才做）；哈希退回**只读 `Typography.Text`**（仍是浮层的锚点——`Text` 是 `forwardRef` 的 span），Popover 用**受控 `open`** 且**刻意不接 `onOpenChange`**（否则哈希上的一次点击会被「行点击 + 浮层自身」各 toggle 一遍，开了立刻又关）；行内的按键判 target !== currentTarget 的守卫随之删除（已无行内控件）。
+> **做法**：`HistoryAnnotateTable` 的 `activate` 一个入口做完两件事（`onSelectCommit` + `onToggleDetail`，都注入才做）；哈希退回**只读 `Typography.Text`**（仍是浮层的锚点——`Text` 是 `forwardRef` 的 span），Popover 用**受控 `open`** 且**刻意不接 `onOpenChange`**（否则哈希上的一次点击会被「行点击 + 浮层自身」各 toggle 一遍，开了立刻又关）；行内的按键判 target !== currentTarget 的守卫随之删除（已无行内控件）。
 > **实测（浏览器，`getBoundingClientRect` / `getComputedStyle`）**：
 > - 点**正文区**（非哈希处）→ `?select=0881b926…` 写入、`[data-selected="true"]` 行出现、**可见浮层 1 个**且 `placement=ant-popover-placement-rightTop`、浮层 `left=756` 在哈希 `left=692` **之右**（`popupIsRightOfHash=true`）；
 > - **移入不高亮**：悬停未选中行 → 行背景 `rgba(0,0,0,0)`、哈希背景 `rgba(0,0,0,0)`；被选中行是 `rgb(21,50,91)`（`controlItemBgActive`＝**选中态**，不是 hover）；行 `cursor: pointer` 是唯一的移入反馈；
-> - **行内 0 个 `button`**（`document.querySelectorAll('[data-testid^="blame-line-"] button').length === 0`）→ 上千行时不再有上千个 Tab 停靠点；行是唯一 `role=button` + `tabIndex=0` + Enter/Space 的入口；
+> - **行内 0 个 `button`**（`document.querySelectorAll('[data-testid^="history-line-"] button').length === 0`）→ 上千行时不再有上千个 Tab 停靠点；行是唯一 `role=button` + `tabIndex=0` + Enter/Space 的入口；
 > - 对齐复测：`AGENT.md` 108 行 `distinctCodeLeft=[768]`；`rebased-smoke-big` 的 `big.txt` 620 行 `distinctCodeLeft=[753]`（同一个页面内单一值；两页数值不同是因为三栏宽度偏好不同，非错位）。
 > **一行一提示（用户可见的行为变化，如实记下）**：整行点击现在**一次做两件事**——选中（会写 `?select=`，于是「逐行注解」切到那一版，行内容随之变化）**并**开浮层。若只想要浮层、不希望顺手改选中/切版本，说一声即可去掉选中那半边（`activate` 里一行的事）。
 
@@ -1716,29 +1720,29 @@
 
 > **收尾状态**：本轮新增 `docs/shots/blame-09.png` 一张；**未改动任何夹具**（`rebasedjs` 与 `rebased-smoke` 的工作区状态与冒烟前一致：前者干净、后者保留其既有的未提交改动，未新增/未还原）。截图落盘走 AGENT.md §MCP 五步：本项目不在 MCP 允许根内 → 先以纯文件名落盘到 MCP 输出目录，再按绝对路径搬进 `docs/shots/` 并 `Get-FileHash` 复核。
 >
-> **归属说明（并发会话）**：本轮提交 `9a3623a` 的**消息只描述注解行改版**，但该提交由 `git add -A` 一并收进了**并行会话在途的改动**——§5.36（R27）的根提交「本文件改动」改 Alert + 只读代码视图（`BlameContentChannel` / `useBrowseContent` 接线、`blame-change-pane` / `blame-workbench` / 两端 blame 页面 / `index.ts` 导出）与它的两张证据图 `blame-07.png`、`blame-10.png`。**本节的 R26-1~R26-9 只覆盖注解行改版**；那两张图与那段功能的判据以 §5.36 自述为准（该会话自带完整台账），不要按本节的结论去解释它们。此类混排的成因是**并发会话共用同一工作区**：`git add -A` 会把别人在途的改动一起收走——后续轮次收尾请按**显式路径**暂存，别用 `-A`。
+> **归属说明（并发会话）**：本轮提交 `9a3623a` 的**消息只描述注解行改版**，但该提交由 `git add -A` 一并收进了**并行会话在途的改动**——§5.36（R27）的根提交「本文件改动」改 Alert + 只读代码视图（`HistoryContentChannel` / `useBrowseContent` 接线、`history-change-pane` / `history-workbench` / 两端 blame 页面 / `index.ts` 导出）与它的两张证据图 `blame-07.png`、`blame-10.png`。**本节的 R26-1~R26-9 只覆盖注解行改版**；那两张图与那段功能的判据以 §5.36 自述为准（该会话自带完整台账），不要按本节的结论去解释它们。此类混排的成因是**并发会话共用同一工作区**：`git add -A` 会把别人在途的改动一起收走——后续轮次收尾请按**显式路径**暂存，别用 `-A`。
 
 ### 5.36 溯源页根提交「本文件改动」改 Alert + 只读代码视图 冒烟（R27，2026-09-30）
 
 > **口径（用户当场指认，2026-09-30）**：根提交那句提示「该提交为根提交（无父版本），无法按父级对比变更；该文件的初始内容可在「逐行注解」标签查看」**改用 `Alert` 包裹**，并在**下面展示该提交新添加的内容**；「高亮」经用户澄清＝**代码（语法）高亮**（不是差异的增行绿块）。范围**限溯源页右栏「本文件改动」标签**（用户明确「只改这里」）——日志页变更集的差异标签与差异页 `root=1` **维持原样**（仍是纯提示行；差异页若要同样处理，需给入口链接补 `to=<哈希>` 才能取到内容）。
 
-**改动面（一句话）**：`ui/composite/blame-change-pane.tsx` 的标签1 根提交分支 = `Alert`（`type="info"` + `showIcon`，`data-testid="blame-changes-root-hint"` **保持不变**、落在 Alert 根节点上）+ 下面 `ReadonlyTextView`（Monaco 只读，语言按路径推断）；新增受控通道 `rootContent`（`content`/`binary`/`loading`/`error`）与测试注入点 `contentLoader`，`blame-workbench` 只做透传；两端容器（web-next `app/repos/[repoId]/blame/page.tsx`、web-koa `src/pages/blame.tsx`，同构）在 `view=changes && hints.ready && hints.rootCommit` 时用 `useBrowseContent(repoId, hash, file)` 读该版本全文。**零新增端点、零契约改动**；根提交**仍不发 `/diff`**（没有可比的两端）。
+**改动面（一句话）**：`ui/composite/history-change-pane.tsx` 的标签1 根提交分支 = `Alert`（`type="info"` + `showIcon`，`data-testid="history-changes-root-hint"` **保持不变**、落在 Alert 根节点上）+ 下面 `ReadonlyTextView`（Monaco 只读，语言按路径推断）；新增受控通道 `rootContent`（`content`/`binary`/`loading`/`error`）与测试注入点 `contentLoader`，`history-workbench` 只做透传；两端容器（web-next `app/repos/[repoId]/blame/page.tsx`、web-koa `src/pages/blame.tsx`，同构）在 `view=changes && hints.ready && hints.rootCommit` 时用 `useBrowseContent(repoId, hash, file)` 读该版本全文。**零新增端点、零契约改动**；根提交**仍不发 `/diff`**（没有可比的两端）。
 
 **① 范围清单**
 
 | # | 冒烟项 | 结论 | 判据（浏览器 DOM / 网络 / CLI 互证） |
 |---|--------|------|--------------------------------------|
-| R27-1 | 提示由 Alert 承载（文案逐字不变） | ✅ | `rebased-smoke-big` 的 `big.txt`（根提交 `a6de2eb657ebc22b3de66618f405f3ccf859d00f`）：「本文件改动」里 `blame-changes-root-hint` 是 `DIV.ant-alert.ant-alert-info.ant-alert-outlined`、`role=alert`，`textContent` **逐字**＝「该提交为根提交（无父版本），无法按父级对比变更；该文件的初始内容可在「逐行注解」标签查看」 |
+| R27-1 | 提示由 Alert 承载（文案逐字不变） | ✅ | `rebased-smoke-big` 的 `big.txt`（根提交 `a6de2eb657ebc22b3de66618f405f3ccf859d00f`）：「本文件改动」里 `history-changes-root-hint` 是 `DIV.ant-alert.ant-alert-info.ant-alert-outlined`、`role=alert`，`textContent` **逐字**＝「该提交为根提交（无父版本），无法按父级对比变更；该文件的初始内容可在「逐行注解」标签查看」 |
 | R27-2 | 下面展示该提交里的文件全文（不是伪 diff） | ✅ | 同页 1 个 `.monaco-editor`、首行 `big file line 1`、滚到底末行 `big file line 40`。**互证**：`git show a6de2eb6:big.txt` = **40 行**（首 `big file line 1`／末 `big file line 40`）；`GET /browse/content?rev=a6de2eb6…&file=big.txt` 同一份（`split('\n')` 41 段 = 40 行 + 末尾换行，`binary:false`）。**关键对照**：该仓工作区的 `big.txt` 是**另一份 620 行改写稿**（§5.35 另记：`git status` = ` M big.txt`）——页面渲染的是**选中提交那一版**（40 行），不是工作区那一份，版本口径正确 |
 | R27-3 | 「高亮」＝代码（语法）高亮 | ✅ | `proxyGateway` 的 `app.js`（根提交 `e74f624da39ad6d2ff3d93bfb8fa80cc63ee0b2e`）：宿主 `data-mode-id="javascript"`、`.view-lines span[class*="mtk"]` = **463 个**（`mtk1/mtk5/mtk7/mtk8/mtk9` 等 + `bracket-highlighting`）；同一功能在 `big.txt` 上是 `plaintext` 且 0 着色（`.txt` 不在 `domain/language` 映射里）——**沿既有「不猜语法」口径** |
-| R27-4 | 仍不做伪 diff | ✅ | 根提交页 `.monaco-diff-editor` **0**、差异工具条 `diff-ignore-ws` **不在盘**、`blame-changes-loading` **不在盘**（提示不依赖取数，不会退化成加载态或伪差异） |
+| R27-4 | 仍不做伪 diff | ✅ | 根提交页 `.monaco-diff-editor` **0**、差异工具条 `diff-ignore-ws` **不在盘**、`history-changes-loading` **不在盘**（提示不依赖取数，不会退化成加载态或伪差异） |
 | R27-5 | 「不发差异请求」口径保持 | ✅ | 网络面板（两页各一遍）：只有 `GET /commits/<hash>` 200 与 **`GET /browse/content?rev=<hash>&file=` 200**，**`/diff` 0 条**；未就绪（`?select=` 陈旧/被改写）时 `hints.ready=false` → 连 `browse/content` 也不发（门禁同源） |
-| R27-6 | 高度契约（Alert 自适应 + 代码视图吃满剩余） | ✅ | `blame-view-changes` 高 **755.7**（y 144.3→900）；`blame-changes-root-hint` 高 **29.3**（144.3→173.7）；编辑器宿主 `browse-code-editor` 高 **718.3**（181.7→900）——紧接 Alert 之下、与右栏底边齐平；无溢出、无零高盒子 |
-| R27-7 | 单测（先写测试再改实现）与静态检查 | ✅ | `blame-change-pane.test.tsx` 根提交用例改为断言 `role=alert` 文案逐字 + 只读代码视图的值/推断语言（`typescript`）+ **无**差异工具条，并新增「加载/错误/二进制三态下 Alert 恒在、正文按态切换」。`@rebased/ui` 全量 **78 文件 / 992 用例全绿**；`packages/client/ui`、`apps/web-next`、`apps/web-koa` 三包 `tsc --noEmit` 均 0 错误。**执行口径**：本机 corepack 把 `pnpm` 解析成 v11，与仓库 `packageManager: pnpm@10.26.2` 不符而拒绝执行 → 改用各包 `node_modules/.bin/vitest run` 与 `node_modules/.bin/tsc --noEmit`（与 `pnpm --filter … test` / `pnpm typecheck` 等价），ESLint `--fix` 同理走包内 bin |
+| R27-6 | 高度契约（Alert 自适应 + 代码视图吃满剩余） | ✅ | `history-view-changes` 高 **755.7**（y 144.3→900）；`history-changes-root-hint` 高 **29.3**（144.3→173.7）；编辑器宿主 `browse-code-editor` 高 **718.3**（181.7→900）——紧接 Alert 之下、与右栏底边齐平；无溢出、无零高盒子 |
+| R27-7 | 单测（先写测试再改实现）与静态检查 | ✅ | `history-change-pane.test.tsx` 根提交用例改为断言 `role=alert` 文案逐字 + 只读代码视图的值/推断语言（`typescript`）+ **无**差异工具条，并新增「加载/错误/二进制三态下 Alert 恒在、正文按态切换」。`@rebased/ui` 全量 **78 文件 / 992 用例全绿**；`packages/client/ui`、`apps/web-next`、`apps/web-koa` 三包 `tsc --noEmit` 均 0 错误。**执行口径**：本机 corepack 把 `pnpm` 解析成 v11，与仓库 `packageManager: pnpm@10.26.2` 不符而拒绝执行 → 改用各包 `node_modules/.bin/vitest run` 与 `node_modules/.bin/tsc --noEmit`（与 `pnpm --filter … test` / `pnpm typecheck` 等价），ESLint `--fix` 同理走包内 bin |
 
 **② 操作路径（点击 / 深链序列）**
 
-1. 深链 `http://localhost:3081/repos/7649bb35-612f-4949-9974-d498d68fb19d/blame?file=big.txt&view=changes&select=a6de2eb657ebc22b3de66618f405f3ccf859d00f`（即用户当场指认的那一页）→ 等 SWR 落定 → 读 Alert 节点（标签名/类名/`role`/文案）、`.monaco-editor` 计数、首末行、`blame-view-changes` 与两个子盒的 `getBoundingClientRect()`。
+1. 深链 `http://localhost:3081/repos/7649bb35-612f-4949-9974-d498d68fb19d/blame?file=big.txt&view=changes&select=a6de2eb657ebc22b3de66618f405f3ccf859d00f`（即用户当场指认的那一页）→ 等 SWR 落定 → 读 Alert 节点（标签名/类名/`role`/文案）、`.monaco-editor` 计数、首末行、`history-view-changes` 与两个子盒的 `getBoundingClientRect()`。
 2. 同页 `fetch('/api/repos/<id>/browse/content?rev=a6de2eb6…&file=big.txt')` 取同一份内容做前后端互证；再把编辑器滚到底读末行。
 3. 换 `proxyGateway` 根提交页：`/repos/bc52b542-3369-4522-b30f-fb78428eb5a1/blame?file=app.js&view=changes&select=e74f624da39ad6d2ff3d93bfb8fa80cc63ee0b2e` → 读 `data-mode-id` 与着色 token 计数、复读两条网络请求与差异元素计数。
 4. 网络面板复核（`/api/repos/<id>/…` 过滤）：两页均无 `/diff`，只有 `/commits/<hash>` 与 `/browse/content`。
@@ -1760,4 +1764,180 @@
 
 > **收尾状态**：本轮新增 `docs/shots/blame-07.png`、`blame-10.png` 两张（SHA256 见 ③，实算值）；**未改动任何夹具**（`rebased-smoke-big`、`proxyGateway` 的工作区保持冒烟前状态：前者保留其既有的 ` M big.txt`，后者未动）。截图落盘走 AGENT.md §MCP 五步：本项目不在 MCP 允许根内 → 先以纯文件名落盘到 MCP 输出目录，再按绝对路径搬进 `docs/shots/` 并 `Get-FileHash` 复核。
 
+### 5.37 溯源页右栏：删操作条 + 新增「提交详情」标签 冒烟（R28，2026-09-30）
 
+> **口径（用户当场指认，2026-09-30）**：① 右栏顶上那行操作条（`<code>big.txt</code>` + 日志定位/差异页/受影响/文件历史）**「删除这行」**——用户裁定的范围是**整行删除、四个出口一并去掉**（钉死前问过，未选「把出口搬进新标签」）；② tabs 里**新增「提交详情」标签**，「展示提交的详细内容，包括文件变更集，变更集样式参考」日志页快照栏的「变更(N)」清单（用户圈了 `snapshot-changeset-pane` 那个 `M big.txt` 行）；③ **优先复用组件**（用户圈了 `M big.txt` 那一行强调）。
+
+**改动面（一句话）**：`ui/composite/history-change-pane.tsx` 删掉操作条与其 7 个 props（`onOpenCommit`/`onOpenDiff`/`onShowAffected`/`onOpenInHistory`/`affected`/`onCloseAffected`/`onOpenAffectedFile`），新增第 4 个标签「提交详情」＝ 复用 `domain/commit-details-panel`（详情卡）+ 复用 `composite/changeset-pane` 的 `ChangesetList`（变更集清单，与日志页同一个组件）；`entry → CommitInfo` 的映射抽成 `composite/commit-detail-card` 导出的 `toCommitInfo()`（注解浮层与新标签共用一份，不另写）。`affected-files-modal.tsx` 与其测试删除（唯一入口随操作条消失，能力由新标签就地承担；该组件未被 `ui/index.ts` 导出）。`HistoryViewKey` 增 `'detail'`，两端 `url-select.ts` 的 `readHistoryView` 与 `normalizeHistoryQuery` 同步纳入（否则深链一进来就被改写成 `changes`）。两端容器同构改造：删受影响弹窗的 state 与那份 `useCommitFiles`、删只服务操作条的 `openDiffPage`，新增 `entryState`（该标签三态）与 `onOpenChangedFile`（点文件名 → 新标签页差异页，复刻旧「受影响」的 `from=父&to=提交` / 根提交 `root=1` 口径；**未就绪时不注入** → 行不可点）。**零新增端点、零契约改动、零新增请求**（详情与清单都吃已有的 `useCommitFiles`）。
+
+**① 范围清单**
+
+| # | 冒烟项 | 结论 | 判据（浏览器 DOM / 网络 / CLI 互证） |
+|---|--------|------|--------------------------------------|
+| R28-1 | 操作条整行删除（含文件名与四个出口） | ✅ | 深链 `?file=big.txt&select=3957cf9…&view=detail`：`history-pane-actions` **不在盘**，`history-action-log`/`-diff`/`-affected`/`-history` 四个 testid 逐个查均为 `null`；截图 blame-11.png 里右栏顶部直接是标签栏（原「路径 + 四按钮」那一行不见） |
+| R28-2 | 标签栏四个标签，「提交详情」在最后 | ✅ | `[...document.querySelectorAll('.ant-tabs-tab')].map(t => t.innerText)` = `["本文件改动","与最新版本差异","逐行注解","提交详情"]`；`document.querySelector('.ant-tabs-tab-active').innerText` = 「提交详情」（深链 `view=detail` 直接落在这里） |
+| R28-3 | 详情 = 提交详情卡（复用组件） | ✅ | `history-commit-detail` 文本 = 「feat: 重写 big.txt 制造大 diff ｜ 3957cf9 ｜ Smoke Tester on 2026-09-13 at 17:19 ｜ 父提交： c001f3b」；`copy-hash` / `author-line` / `parent-link` 均复用 `domain/commit-details-panel` 的既有 testid（组件身份可查） |
+| R28-4 | 变更集清单与日志页同款（用户圈的样式） | ✅ | `changes-file-<path>` 行文本 = 「**M** big.txt」（根提交 `a6de2eb…` 那次为「**A** big.txt / **A** hunks.txt」）——与日志页快照栏 `snapshot-changeset-pane` 的 `M big.txt` 同一组件（`ChangesetList`）、同一 markup（`CommittedStatusTag` + `Typography.Text[data-testid=changes-file-<path>]`）。**CLI 互证**：`git -C <rebased-smoke-big> show --name-status 3957cf9b` = `M big.txt`（与页面逐字一致） |
+| R28-5 | 点变更文件名 → 新标签页差异页 | ✅ | 根提交 `a6de2eb…`：点 `changes-file-big.txt` 触发 `window.open("/repos/7649bb35…/diff?file=big.txt&root=1","_blank","noopener")`，浏览器实开新标签并落到该 URL；非根 `3957cf9…`：点 `changes-file-big.txt` → `window.open("/repos/7649bb35…/diff?file=big.txt&from=c001f3b71f042857108ee9e099bb4402968cdaeb&to=3957cf9b3109a594fc7b0919e9f87a2fe5fead54", …)` —— 与旧「受影响」弹窗的行点击口径**逐字相同** |
+| R28-6 | 选中提交与切标签联动（`?view=detail`） | ✅ | 中栏点第 1 条提交 → 地址 `?select=3957cf9b…`（`view=detail` 保留），详情标签**就地**换成新提交的卡与清单（不必切标签）；标签栏点「本文件改动」→ `?view=changes` 且 `diff-ignore-ws` 在盘；点「逐行注解」→ `?view=annotate` 且 `history-line-1` 在盘；切回「提交详情」→ `?view=detail`（一律 replace，无整页刷新） |
+| R28-7 | 深链 / 刷新不变形（`view=detail` 合法值） | ✅ | `?file=big.txt&select=3957cf9b…&view=detail` 硬加载后 `location.search` **仍是**该串（`normalizeHistoryQuery` 未把它改写成 `changes`），落点在「提交详情」标签 |
+| R28-8 | 取数三态：加载 / 错误 / 空清单 | ✅ | 加载：刚进页 `history-view-detail-loading` 在盘、无详情卡；错误：`?select=deadbeef…`（陈旧/被改写哈希）→ `history-view-detail-error` 文本 =「引用不存在或不是提交：deadbeefdeadbeefdeadbeefdeadbeefdeadbeef」，**不渲染**详情卡与清单；空清单两种空态由 `ChangesetList` 承担（单测覆盖，见 R28-10） |
+| R28-9 | 未注入 `onOpenChangedFile` 时行不可点 | ✅ | 容器门禁 = `hints.ready`（变更集未到不注入）——单测 `history-change-pane.test.tsx` 的详情标签用例以「未传回调」渲染时点行不产生调用；实机上未就绪那一拍标签内是加载态、清单根本不在盘 |
+| R28-10 | 单测（先写测试再改实现）与静态检查 | ✅ | 先改测试见 **7 失败** → 再改实现转绿：`history-change-pane.test.tsx` **17 例**（操作条「不再渲染」2 例 + 标签栏四标签 + 「提交详情」6 例：卡与清单同款渲染 / 点文件名回调 / 加载态不撒谎 / 错误行 / 两种空态 / 不越界渲染差异与注解）、`history-workbench.test.tsx` **7 例**（含 `view=detail` 透传 `onOpenChangedFile`）、两端 `url-select.test.ts` 各 **36 例**（`view=detail` 读得出 + 规范化幂等）。`@rebased/ui` 全量跑了两轮：**收尾轮 77 文件 / 991 用例全绿**（少的一个文件即删除的 `affected-files-modal.test.tsx`）；**同一时段再跑一轮为 76 文件 / 992 用例、2 例失败**（`github-panel.test.tsx` 与 `snapshot-tabs.test.tsx` 各 1 例，且日志里有 `Failed to start forks worker` / `Timeout terminating forks worker`）——**两文件单独重跑各 27/27、50/50 全绿**，判为并发争抢（并行会话同时在同一工作区跑测试 + 我这边两个 vitest 实例并行）导致的抖动，与本次改动无关（两文件都不引用本次改动的模块）；轮次间文件数/用例数会变，因为并行会话正在同时增删测试，读数只作当轮快照。`packages/client/ui`、`apps/web-next`、`apps/web-koa` 三包 `tsc --noEmit` 均 0 错误；三包 `eslint --fix` 0 报错。**执行口径**同 §5.36：本机 corepack 的 `pnpm` 为 v11、与 `packageManager: pnpm@10.26.2` 不符而拒绝执行 → 改用包内 `node_modules/.bin/{vitest,tsc,eslint}` |
+
+**② 操作路径（点击 / 深链序列）**
+
+1. 深链 `http://localhost:3081/repos/7649bb35-612f-4949-9974-d498d68fb19d/blame?file=big.txt&select=a6de2eb657ebc22b3de66618f405f3ccf859d00f&view=detail`（根提交）→ 等 SWR 落定 → 读标签栏、`history-pane-actions` 与四个 `history-action-*`、详情卡文本、清单行文本。
+2. 该页点 `changes-file-big.txt` → 断言 `window.open` 的实参（`file=big.txt&root=1`）并在浏览器里确认新标签落到该 URL。
+3. 中栏点第 1 条（`history-commit-0`，`3957cf9…`）→ 读地址 `?select=` 变化与详情卡/清单就地更新；点 `changes-file-big.txt` → 读 `from=c001f3b7…&to=3957cf9b…`。
+4. 依次点「本文件改动」「逐行注解」「提交详情」→ 每次读 `?view=`、`diff-ignore-ws`、`history-line-1`、`history-commit-detail` 的在盘情况（覆盖回归：另三个标签未被本次改动破坏）。
+5. 陈旧哈希深链 `?select=deadbeef…&view=detail` → 读错误行文案。
+6. 隔离上下文（`browser.newContext()`，1440×900 暗色）截图一张（先落 MCP 输出目录再搬进 `docs/shots/`），`Get-FileHash` 复核。**注**：本轮 MCP 浏览器与并行会话共用（同标签被切到别的应用数次、`3081` 热更新期间还撞上 `net::ERR_ABORTED` 与 Next HMR 的 `Router action dispatched before initialization`）——故关键断言改在**独立新上下文**里跑，避免被抢占；另有一条 `blame-05.png` 里记录的旧口径（陈旧 `?select=` 时操作条只剩三个出口）随本轮操作条删除而作废。
+
+**③ 证据（截图，`Get-FileHash -Algorithm SHA256` 实算）**
+
+| 截图 | 画面 | 覆盖项 | SHA256（完整值，字节数） |
+|------|------|--------|--------------------------|
+| `blame-11.png` | 1440×900 暗色：`rebased-smoke-big` 的 `big.txt`（提交 `3957cf9b…`，非根）——右栏标签栏四项且「提交详情」在前台；**顶部已无操作条**；正文＝详情卡（加粗主题 `feat: 重写 big.txt 制造大 diff`、短哈希 `3957cf9`、`Smoke Tester on 2026-09-13 at 17:19`、父提交 `c001f3b`）+ 变更集清单一行 `M big.txt` | R28-1、R28-2、R28-3、R28-4 | `A0700D8EE7CA00AFD9E58BD42A5A1339EA57AB14CD9124C425500B45128D7735`（38126 字节） |
+
+**④ 未覆盖（如实登记）**
+
+- **web-koa 站点**（`:3082` 服务端 / `:5173` SPA）本轮未起服务、未在浏览器实走；该容器与 web-next **同构**（同一批 hook、同一份 props 形状、同一份门禁判据），本轮以包内 `tsc --noEmit` + 共享组件单测覆盖，未以浏览器断言背书。
+- **受影响文件弹窗的删除**只有单测口径（组件与其 82 行测试一并删除；**源码树** `grep 'AffectedFilesModal|affected-files-modal'` 命中为 0，仅文档留痕）与 §5.37 的浏览器断言（入口与卡都不在盘）为证，未单独造一张「删除后」的对照图。
+- **合并提交的空清单文案**沿用 `ChangesetList` 原文「git 对合并提交默认不列出文件变更；合并结果可在「浏览快照」的文件树里查看」——该句里的「浏览快照」是日志页的说法，在溯源页语境下略偏（本页左栏就是文件树）；本轮按用户口径**优先复用组件**、未改写共享文案，登记待口径。
+- **明亮主题**下的新标签未复拍：卡与清单均由 antd 主题 token 驱动（无新硬编码色），但本轮只有暗色帧。
+- **超长变更集**（例如 52 文件那次）在详情标签里的滚动观感未专门实测（清单容器 `overflow: auto`，与日志页同一份组件行为）。
+
+### 5.38 日志页快照文件标签：路径栏两个视图图标按钮（逐行注解 / 与最新版本差异）冒烟（R29，2026-09-30）
+
+> **口径（用户当场指认，2026-09-30）**：在日志页快照栏**文件标签的路径栏**里、`<code>big.txt</code>` 右侧的**复制按钮左侧**加两个图标按钮——「逐行注解」与「与最新版本差异」；**文字写进 tooltip**（按钮本身只有图标）、**点击后高亮**、**下方代码内容切换成对应视图**。开工前经用户确认三点：① 注解行的点击联动要**与溯源页完全一致**（点行 = 选中该提交 + 哈希旁详情浮层），并且**优先复用组件**；② 再点一次点亮的按钮即回「文件内容」（不额外长第三个按钮）；③ 路径窄时按「路径文本可省略、按钮恒在」处理。**「最新版本」口径 = 工作区当前版本（含未提交改动）**，与溯源页同名标签逐字同源。
+
+**改动面（一句话）**：`ui/base/readonly-text-view.tsx` 的 `ReadonlyTextActions` 增两个视图按钮（`browse-view-annotate` / `browse-view-latest`，图标 + tooltip + `aria-pressed` + `type=primary` 高亮，再点回 `plain`；tooltip `placement="bottomRight"` 防视口右缘截断），并导出 `SnapshotFileView`；`ui/composite/snapshot-tabs.tsx` 增受控通道 `views: SnapshotFileViews`（`view` + `onChange` + `annotate`/`latest` 两路取数三态 + `latestHint`）与 `onSelectCommit`/`detail`/`onToggleDetail`/`annotateLoader` 透传，正文按视图**只渲染当前那一个**（annotate = 复用 `composite/history-annotate-table`；latest = 复用 `domain/diff-viewer`）；`ui/composite/log-page.tsx` 只做 props 透传；两端容器（web-next `app/repos/[repoId]/page.tsx`、web-koa `src/pages/repo.tsx`，同构）用 `useHistory(repoId, file, selectedHash)` 与 `useFileDiff(repoId, file, false, selectedHash)`（from-only = 该提交 vs 工作区）条件拉取，视图真源是 URL 的新键 `?view=plain|annotate|latest`（`readSnapshotFileView` / `withSnapshotFileView` / `withoutSnapshotFileView`，`plain` = 删键）。**零新增端点、零契约改动**。
+
+**① 范围清单**
+
+| # | 冒烟项 | 结论 | 判据（浏览器 DOM / 网络 / 单测互证） |
+|---|--------|------|--------------------------------------|
+| R29-1 | 两个图标按钮落在路径栏、复制按钮左侧 | ✅ | `?select=3957cf9b…&browse=big.txt`：`[data-testid^="browse-view-"]` 两个都在盘，`browse-copy-all` 也在盘；按 `getBoundingClientRect().left` 实测 = `browse-view-annotate 1343 < browse-view-latest 1372 < browse-copy-all 1401`（同一行 `top=112`）；三个按钮 `textContent` 均为空串、名字只在 `aria-label` / tooltip 里（用户口径：文字写进 tooltip） |
+| R29-2 | 两条 tooltip 文案与「不被视口截断」 | ✅ | 悬浮后可见 tooltip（`.ant-tooltip:not(.ant-tooltip-hidden)`）：`class=… ant-tooltip-placement-bottomRight`、`textContent` =「与最新版本差异：该版本与此文件当前版本（含未提交改动）逐行对比」；`getBoundingClientRect()` = `left 1143 / right 1393`，**落在 1430 宽视口内**（默认 `top` 落位实测被右缘裁掉半句，故改 `placement="bottomRight"`）。另一条 =「逐行注解：看这一版里每一行分别由哪次提交写下的；点某一行可选中它归属的提交」 |
+| R29-3 | 点击后高亮 + 地址写 `?view=` | ✅ | 点 `browse-view-annotate` → 地址 `…&browse=big.txt&view=annotate`，该按钮 `data-active="true"` / `aria-pressed="true"` / `className` 含 `ant-btn-primary`，另一个 `data-active="false"`、类名是 `ant-btn-default`；点 `browse-view-latest` → `?view=latest` 且高亮转移；**再点一次** → `?view=` **整键消失**（回 plain，用户口径②） |
+| R29-4 | 下方内容切换（annotate = 复用溯源页注解表） | ✅ | `?view=annotate`（`select=3957cf9b…`，该版 620 行）：`browse-view-annotate-body` 在盘、`browse-code-editor` **不在盘**；`.ant-tabs-content-active` 内 `history-line-*` **620 行**、首行文本「1｜16天前｜3957cf9｜big file line 1 - rewritten for large diff streaming」；行 `role="button"` |
+| R29-5 | 下方内容切换（latest = 该版本 vs 工作区差异） | ✅ | `?view=latest` → `browse-view-latest-body` 在盘；`.monaco-diff-editor` **1** 个、渲染 64 行、首行 `big file line 1 - rewritten for large diff streaming`；宿主高 **634.0** 落在快照栏 **706.0** 之内（高度契约成立，无零高盒子） |
+| R29-6 | 注解行点击与溯源页逐字一致 | ✅ | 点第 3 行：`.ant-popover` 与 `commit-detail-card` 在盘、`commit-detail-email` = `smoke@example.com`、卡内主题与「父提交」链接同在；**同一提交**再点 → 地址**一字不变**（`?select=3957cf9b…&browse=big.txt&view=annotate`），注解表与浮层都不被弹掉（这条靠容器侧同值守卫：标签栏的挂载键是版本，凭空重写会让浮层当场消失——浏览器实测过） |
+| R29-7 | 点注解行换版本时留在当前文件与视图 | ✅ | 在 `select=a6de2eb…&browse=big.txt&view=annotate` 上点归属 `3957cf9…` 的行 → 地址变 `?select=3957cf9b…&browse=big.txt&view=annotate`：**`browse` 与 `view` 都保留**（不是落回文件树），标签栏仍是「文件(2) ｜ big.txt」、`snapshot-tree-pane` 不在盘、`browse-view-annotate` 仍 `data-active="true"`、行表已换成新版本（620 行、哈希全 `3957cf9`）。**旁证**：这条联动走的是**专用** `onSnapshotSelectCommit`，不是列表行那条 `onSelectCommit`（后者按既有契约会把 `browse` 落回文件树，注解表会当场消失）——单测逐条断言二者互不代劳 |
+| R29-8 | 取数只拉当前视图那一路 | ✅ | 网络面板过滤 `/api/repos/.*/(diff\|blame)`：切到 annotate 只有 `GET /blame?file=big.txt&rev=3957cf9b…` 200；切到 latest 只有 `GET /diff?file=big.txt&staged=false&from=3957cf9b…` 200（**无 `to`** = from-only = 该提交 vs 工作区）；切回 plain 无新请求 |
+| R29-9 | 无数据即不渲染按钮（无死控件） | ✅ | 单测：容器不给 `views` 时 `browse-view-annotate` / `browse-view-latest` 都不在盘、只剩复制按钮；非激活文件标签恒显示「文件内容」（按钮只出现在激活标签那一页）；容器侧门禁 = 面板开着 + 有选中提交 + 停在某个文件上（`browse=` 空值即停在树上 → 整套不给） |
+| R29-10 | 三种降级不撒谎 | ✅ | annotate：加载 → `Spin`（`history-loading`）、失败 → `history-error` 红字；latest：错误 → `browse-view-latest-error`、未就绪 → `browse-view-latest-loading`；**该提交那一版里没有这个路径** → 只给 `browse-view-latest-hint`（与溯源页同句），**连差异视图都不渲染**，且那一次 `/diff` 请求本来就没发（门禁在容器侧，判据取自 `changesHints`，与溯源页同源） |
+| R29-11 | URL 键的清理不越界 | ✅ | 关「浏览快照」面板 → `view` 键一并删除（`withoutSnapshotFileView`），`diff` 键不动（变更集那一族不读 `view`）；跨仓库复位时把 `view` 与两个面板键一起清掉；`?view=annotate\|latest\|plain` 之外的取值（含溯源页的 `detail`）在日志页一律回落 `plain`——单测各 5 例 |
+| R29-12 | 单测（含既有回归）与静态检查 | ✅ | 新增：`snapshot-tabs.test.tsx` 11 例、`log-page.test.tsx` 1 例（专用回调与列表回调互不代劳）、两端 `url-select.test.ts` 各 5 例；`snapshot-tabs.test.tsx` 全量 **50 例**、`log-page.test.tsx` 全量 **108 例** 绿（改动 tooltip 落位后，这三份文件**再跑一轮 3 文件 / 168 用例全绿**）。**回归**：`@rebased/ui` 全量 **77 文件 / 1002 用例全绿**；两端 `blame-browse.test.ts`（8 + 6 例）绿；`packages/client/{ui,client}`、`apps/{web-koa,web-next}` 四包 `tsc --noEmit` 0 错误、三包 `eslint --fix` 0 报错。**执行口径**同 §5.36/§5.37：本机 corepack 的 `pnpm` 为 v11、与 `packageManager: pnpm@10.26.2` 不符而拒绝执行 → 改用包内 `node_modules/.bin/{vitest,tsc,eslint}` |
+| R29-14 | 落地形态 | ✅ | 提交 `f8c3046`「feat(log): 快照文件标签加两个视图图标按钮（逐行注解 / 与最新版本差异）」，**只含本节的 15 个文件**（3 张截图 + 12 份源码/测试）。**两处踩坑如实登记**：① 起草提交信息时临时文件写盘失败，`git commit -F` 读到了**并发会话遗留的同名临时文件**（`%TEMP%\rebased-commit-msg.txt`），当场以 `--amend -F`（改用 `.git/` 下的自建文件）改正；② `%TEMP%` 下这类同名临时文件是并发会话的共享风险点，后续提交一律把信息文件写在仓库 `.git/` 内。 |
+| R29-13 | 未新增测试锚点的说明 | ✅ | 只新增三个 testid：`browse-view-annotate` / `browse-view-latest`（按钮）、`browse-view-annotate-body` / `browse-view-latest-body` / `browse-view-latest-hint` / `browse-view-latest-error` / `browse-view-latest-loading`（正文与三态）；注解行、浮层、差异工具条**全部复用既有 testid**（`history-line-N` / `history-hash-N` / `history-code-N` / `commit-detail-card` / `diff-*`）——组件复用即交互复用 |
+
+**② 操作路径（点击 / 深链序列）**
+
+1. 硬加载 `http://localhost:3081/repos/7649bb35-612f-4949-9974-d498d68fb19d?select=3957cf9b3109a594fc7b0919e9f87a2fe5fead54&browse=big.txt`（web-next `:3081`，即用户当场指认的那页）→ 读路径栏三个按钮的 `data-testid` / `data-active` / `textContent` / `left` 顺序。
+2. 点 `browse-view-annotate` → 读地址 `?view=`、按钮类名与 `aria-pressed`、`browse-view-annotate-body` 在盘情况、`browse-code-editor` 是否退场、`history-line-*` 行数与首行文本。
+3. 点 `browse-view-latest` → 读 `browse-view-latest-body` 高度与 `.monaco-diff-editor` 计数；**再点一次** → 读地址里 `view` 键是否消失、文件内容编辑器是否回来。
+4. 回到 annotate，点 `history-code-3` → 读 `.ant-popover`、`commit-detail-card`、`commit-detail-email` 与地址（同值不写地址）。
+5. 硬加载 `?select=a6de2eb657ebc22b3de66618f405f3ccf859d00f&browse=big.txt&view=annotate`（同文件另一版），点归属 `3957cf9…` 的行 → 读地址里 `browse`/`view` 是否保留、标签栏是否仍是文件标签、行表是否已换版本。
+6. 网络面板按 `/api/repos/.*/(diff|blame)` 过滤，逐步复核 R29-8。
+7. 悬浮两个按钮 → 读可见 tooltip 的 `textContent` 与 `getBoundingClientRect()`（确认落在视口内）。
+8. 截图三张（先落 MCP 输出目录再搬进 `docs/shots/`），`Get-FileHash` 复核。
+
+**③ 证据（截图，`Get-FileHash -Algorithm SHA256` 实算）**
+
+| 截图 | 画面 | 覆盖项 | SHA256（完整值，字节数） |
+|------|------|--------|--------------------------|
+| `log-browse-views-01.png` | 1430×771 暗色：`rebased-smoke-big` 的 `big.txt`（`3957cf9b…`）——路径栏「`big.txt` ｜ **高亮的逐行注解按钮** ｜ 与最新版本差异按钮 ｜ 复制」；正文 = **溯源页同款注解行表**（行号｜`16天前`｜`3957cf9`｜高亮正文），第 3 行右侧展开提交详情浮层（主题 `feat: 重写 big.txt 制造大 diff`、父提交 `c001f3b`、邮箱） | R29-1、R29-3、R29-4、R29-6 | `D3960AC4F6B64F1AE4420CEF8690B0D9B8125B3BB12EE50ADC78F7D7E59E856C`（155464 字节） |
+| `log-browse-views-02.png` | 1430×771 暗色：同页——鼠标停在「与最新版本差异」按钮上，**按钮右下**展开完整 tooltip（两行、未被视口右缘裁切） | R29-2 | `9CD26977B52F3E5209BC5050CB069A4ECACCE3DA37285706277DA53475740903`（136784 字节） |
+| `log-browse-views-03.png` | 1430×771 暗色：同页切到「与最新版本差异」——路径栏第二个按钮高亮；正文 = Monaco 差异（**行内**模式开场、差异工具条「并排/行内 + 忽略空白 + 自动换行 + 空白显示 + 上下文 5 行」）与 `- big file line 1…` 的删除色块（该仓工作区 `big.txt` 是另一份 620 行改写稿，故整篇显示为删除侧） | R29-3、R29-5、R29-8 | `82B7D1297C366533C1E96EBFD90C0B9C62C425B3E1DBA4A76EF5067F8C75AA0`（183452 字节） |
+
+**④ 未覆盖（如实登记）**
+
+- **web-koa 站点**（`:3082` 服务端 / `:5173` SPA）本轮未起服务、未在浏览器实走；该容器与 web-next **同构**（同一批 hook、同一份 props 形状、同一份门禁判据、同一套 URL 读写函数），本轮以包内 `tsc --noEmit` + 共享组件单测 + 两端 `url-select.test.ts` 覆盖，未以浏览器断言背书。
+- **`latestHint` 降级行**（该提交那一版里没有这个路径）只有单测覆盖：`rebased-smoke-big` 的两个文件在所选提交里都存在，未造「改名之前／尚未创建」的实机夹具（判据与溯源页同源，溯源页那边有 R27 的历史口径可参）。
+- **明亮主题**下的两个新视图未复拍：按钮走 antd `type` 主题色、注解行与差异视图都是既有组件（主题跟随），但本轮只有暗色帧。
+- **工作区有未提交改动时点「与最新版本差异」**未单独造帧：本轮 `rebased-smoke-big` 工作区的 `big.txt`（620 行改写稿）与选中提交那一版（40 行）本就不同，故 R29-5 的删除侧色块正是「与工作区比」的直接证据；再叠加一层未提交改动的场景未跑。
+- **超长文件的注解滚动观感**未专门实测（620 行注解表由既有 `HistoryAnnotateTable` 渲染，实测 DOM 里只挂约 40 行可视窗口）。
+- **并发会话**：同一工作区另有一路会话正在改溯源页（`history-workbench` / `history-change-pane` / `commit-detail-card` / 三份 `docs/*.md`，并删除了 `affected-files-modal.*`），本轮与其**文件不重叠**（我改的是 quick 快照栏那一支：`snapshot-tabs` / `readonly-text-view` / `log-page` / 两端 `repo.tsx` + `url-select`）；`@rebased/ui` 全量绿是**两份在飞改动合起来**的读数（16:15 那次 77 文件 / 1002 用例）。另注：本轮 `eslint --fix` 按仓库约定在 `packages/client/ui` 全包跑过一次，可能对并发会话正在编辑的文件产生过**纯格式**（全角括号 → 半角）改动。
+
+> **收尾状态**：本轮新增 `docs/shots/log-browse-views-01.png`、`-02.png`、`-03.png` 三张（SHA256 见 ③，实算值）；**未改动任何夹具仓库**（`rebased-smoke-big` 的工作区保持冒烟前状态——它本来就带 ` M big.txt`，本轮未提交、未检出、未写文件）。截图落盘走 AGENT.md §MCP 五步：本项目不在 MCP 允许根内 → 先落 MCP 输出目录，再按绝对路径复制进 `docs/shots/` 并 `Get-FileHash` 复核。
+
+### 5.39 溯源页接管文件历史（旧 HistoryPanel 整页撤除）（R30，2026-09-30）
+
+> **触发**：用户口径「使用溯源代替历史，修改全面无遗漏」——删除「历史」入口与整页形态，文件历史的能力由**溯源页中栏**承载；
+> 服务端 `blame` 原语与 `GET /history` 端点**保持不变**（后者正是中栏的数据源）。
+
+**① 范围清单**
+
+| # | 项 | 结论 | 判据（本轮实算） |
+|---|-----|------|------------------|
+| R30-1 | 两端页面路由 `/repos/:id/history` 删除 | ✅ | `apps/web-koa/src/main.tsx` 已无该 `<Route>` 与 `RepoHistoryPage` 导入；`apps/web-next/app/repos/[repoId]/history/` 目录（含 page.tsx）已删，同路径下的 `app/api/repos/[repoId]/history/route.ts` **保留** |
+| R30-2 | 「更多」菜单去掉「历史」项；导航回调合并为一条 | ✅ | `repo-top-nav.tsx` 的 `RepoNavPage` / `MORE_MENU_PAGES` / `PAGE_NAMES` / `moreItems` / 键盘分支五处均无 `history`；`log-page.tsx` 与两端 `repo-nav.ts` 只剩 `onOpenBlame` |
+| R30-3 | 变更页行内「历史」改落溯源页中栏 | ✅ | 两端状态页容器 `onOpenHistory` → `/blame?file=`；`status-page.tsx` 的行按钮 tooltip 同步改口径（按钮文案仍为「历史」，语义是「这个文件的历次提交」） |
+| R30-4 | ui `HistoryPanel`（组件 + 测试）删除 | ✅ | 两个文件删除；`ui/index.ts` 导出面移除；全仓检索 `HistoryPanel` 命中 0 |
+| R30-5 | 旧 `?rev=` 只读兼容删除 | ✅ | 两端 `url-select.ts` 的 `normalizeHistoryQuery` 只删 `rev` 残键、不再解释语义；两端 `url-select.test.ts` 各删 1 例、改 1 例（新增「带值残键也删」断言） |
+| R30-6 | 文档四份 + README 联动 | ✅ | README（页面撤除说明 + 等效形态行）；manual（§1.1 该去哪页、§3.2 入口表、§3.5 URL 表删 3 行、§4.16 用途与重命名提示行、**§4.17 整节改撤除存根**、§5 菜单项 14~16、§6 索引 F-105~F-107）；pages-and-api-audit（§2.2 #16/#17 行、有路由页面计数 23→22、端点表消费方、导航边 #12/#25/#28/#29/#30/#31/#47、§4.17 存根、§5.4 汇总注记、§5.5 溯源链路）；architecture-design（composite 清单） |
+| R30-7 | 影响面之外零残留 | ✅ | 全仓检索 `HistoryPanel\|onOpenInHistory\|history-panel\|RepoHistoryPage` 仅剩 `GET /api/repos/:id/history` 端点三处（路由 / client hook / Next API route）——中栏数据源，属预期保留 |
+
+**② 操作路径**：无浏览器操作（见 ④）；判据 = 全仓类型检查 + 包内单测 + 全仓检索。
+
+**③ 证据（本轮实算）**
+
+- `pnpm typecheck`（corepack 固定 pnpm 10.26.2）：**全绿** —— server/contracts、server/core、server/api、client/client、client/ui 与 apps/web-next、apps/web-koa 七个工程全部 `Done`，退出码 0。
+- `@rebased/ui` 单测：**76 文件 / 994 用例全通过**（对照 R29 轮的 77 文件 / 1002 用例：差值恰为被删的 `history-panel.test.tsx` 的 1 文件 8 用例——无其它用例丢失）。
+- `apps/web-koa/src/url-select.test.ts` **40 通过**、`apps/web-next/src/url-select.test.ts` **40 通过**（含新写的 rev 残键用例）。
+- 检索 `onOpenHistory`：仅剩状态页那条出口（`status-page.tsx` + 两端容器），目标均为 `/blame?file=<路径>`。
+- 格式：按 AGENT.md 顺序跑 `eslint --fix`，**只对本轮改动的文件**执行（不整包跑，避免改到并发会话在途文件的格式）。
+
+**④ 未覆盖（如实登记）**
+
+- **未跑浏览器冒烟**：本轮属「删页 + 改指向」型改动，且 MCP 浏览器与并发会话共用（该会话正在 `:3081` 上跑日志页快照栏的 R29 冒烟，其 §5.38 ④ 亦记录了同一条争用）；判据以类型检查、单测与全仓检索为准，未以浏览器断言背书。
+- **web-koa 站点**（`:3082` / `:5173`）未起服务实走；两端容器同构、同批改动，`url-select.test.ts` 两端同批通过。
+- 旧 `?rev=` 深链**不再还原视图**（按用户口径删干净）：读到只删键，页面落在默认「本文件改动」标签——这是**有意的行为变更**，不是缺陷。
+- 状态页行内「历史」按钮**保留**并改指溯源页（用户口径是「代替」而非「删掉该入口」）；若后续要连按钮一并去掉，属另一轮口径。
+- **并发会话**：同一工作区另有会话在途（R28 溯源页右栏改造：`history-change-pane` / `history-workbench` / `commit-detail-card` / 三份 `docs/*.md` 未提交）。本轮以删除型 + 指向型改动为主，与其中 `history-change-pane.tsx`（仅重命名提示行）与三份文档有**文件级重叠**——因此本轮按显式路径编辑、**未使用 `git add -A`**；若那一路会话继续写同一文件，以其自述台账为准。
+
+> **收尾状态**：本轮未新增/修改任何截图；未改动任何夹具仓库（未提交、未检出、未写文件）。
+
+### 5.40 「溯源」整体改名为「历史」+ 旧文件历史端点让位（R31，2026-09-30）
+
+> **触发**：用户口径「删除『历史』页面。把『溯源』改成『历史』，包括代码、文件名、url、文档等，全部修改无遗漏。」
+> **开工前经用户拍板两点**：① 端点**全量搬迁**——文件提交清单改挂 `/file-history`；② 范围 = 全量重命名 + 重跑验证 + 文档如实改写，并清掉 `scripts/` 里的旧引用与 `.next` 陈旧产物。
+> **收工前用户再定调一点（本轮的最终口径）**：「**逐行注解相关的接口或组件等保留 blame 命名**」——于是页面级是「历史」，注解族回到 `blame`（见下表 R31-11 与 ④）。
+
+**① 范围清单**
+
+| # | 项 | 结论 | 判据（本轮实算） |
+|---|-----|------|------------------|
+| R31-1 | 服务端 core：`history.ts`（提交清单）→ `file-history.ts`；逐行归属留在 `blame.ts` | ✅ | `blame.ts`：`fileBlame` / `parseBlamePorcelain` / `parentHashesOf` / `CoreBlameLine`；`file-history.ts`：`fileHistoryLog` / `parseFileHistoryRecords` / `CoreFileHistoryLogEntry`；`core/index.ts` 两个出口块各自指向正确文件 |
+| R31-2 | `git blame` 仍是真的 git 子命令 | ✅ | `core/blame.ts` 的 `runGit(['blame','--line-porcelain',…])` 两处**逐字保留**（机械改名一度把它改成不存在的 `git history`，已修回）；全仓检索 `'history'` 当作子命令**命中 0** |
+| R31-3 | api 层：逐行归属留 `api/blame.ts`（`getFileBlame`），旧 `api/history.ts` → `api/file-history.ts`（`getFileHistoryLog`） | ✅ | `assertValidFilePath` 预检由两族共用（保留在 `blame.ts` 并被 `file-history.ts` 引用）；`api/index.ts` 两个导出各自指向正确文件 |
+| R31-4 | 端点：`GET /blame` = 逐行归属（**保留 blame 命名**），`GET /file-history` = 提交清单（原 `/history` 让位） | ✅ | 两端路由：web-koa `routes/repos.ts` 两条 `router.get`（`/blame`、`/file-history`）；web-next `app/api/repos/[repoId]/blame/route.ts` 与 `file-history/route.ts`；契约 `blameQuerySchema`（含 `rev`）与 `fileHistoryQuerySchema`（仅 `file`）分列 |
+| R31-5 | client hooks：逐行归属留 `useBlame`，旧 `useHistory` → `useFileHistory`（清单） | ✅ | `client/index.ts` 两个导出分别指向 `./blame` 与 `./file-history`；`useBlame` 请求串 `/api/repos/${repoId}/blame`，`useFileHistory` 请求串 `/api/repos/${repoId}/file-history` |
+| R31-6 | ui：**页面级**改名 + **注解族**保留 blame | ✅ | 页面级 = `history-workbench` / `history-commits-column` / `history-change-pane` / `history-state`（`HistoryWorkbench`、`HistoryCommitsColumn`、`HistoryChangePane`、`HistoryViewKey`、`HistoryContentChannel`、`HistoryDiffChannel`）+ testid `history-pane` / `history-view-*` / `history-commits` / `history-commit-N`；注解族 = 文件与组件 `blame-annotate-table.tsx`（`BlameAnnotateTable`、`BlameDetailState`）+ 行级 testid `blame-line-N` / `blame-time-N` / `blame-hash-N` / `blame-code-N` / `blame-loading` / `blame-error` / `blame-detail-*` |
+| R31-7 | 路由与入口：页面 `/repos/:id/blame` → `/repos/:id/history`；菜单项「溯源」→「历史」 | ✅ | web-koa `main.tsx` 的 `<Route path="/repos/:repoId/history">` + `pages/history.tsx`（原 blame.tsx）；web-next `app/repos/[repoId]/history/page.tsx`；`repo-top-nav.tsx` 的 `PAGE_NAMES.history = '历史'`、`onOpenHistory` 回调；两端状态页「注解」（落 `/history?file=&view=annotate`）与「历史」（落 `/history?file=`）两个入口 |
+| R31-8 | 脚本残留清理 | ✅ | `scripts/check-fluid-layout.mjs`：旧历史页那一格（`history-entry-0`，其页面早已撤除）删除，剩下那格的就绪锚点改为现役的 `history-file-input`；`scripts/smoke-setup.ps1` 夹具文案 `--follow file-history test` |
+| R31-9 | 全仓零残留（「溯源」二字） | ✅ | 检索「溯源」在 `packages/`、`apps/`、`scripts/` 的 `.ts/.tsx/.mjs/.ps1` 里**命中 0**；`blame` 只出现在注解族与 `git blame` 命令名上（按最终口径**应当保留**） |
+| R31-10 | 文档五份联动 | ✅ | README（功能域 history/file-history、页面撤除行、等效形态行）；architecture-design（core 模块表 `blame`/`file-history`、api 模块表、composite 清单、PageShell 落地行）；pages-and-api-audit（§1.4 改名轮口径含注解族例外、§2.2 页面表 #16/#17、端点表 `/blame` 与 `/file-history`、§4.16/§4.17、菜单聚合行、导航图）；manual（§1.1 用途表、§3.2 入口、§3.5 URL 表、§4.16 标题与用途、§5 菜单项、§6 索引）；本文件（头部命名沿革 + §4.16/§4.17 当前态 + 本节） |
+| R31-11 | **注解族回改 blame（用户收工前定调）** | ✅ | 回改范围：core `blame.ts`、api `blame.ts`、contracts `blameQuerySchema`/`BlameQuery`/`BlameLine`、client `useBlame`、ui `blame-annotate-table.tsx` 与其行级 testid；**未回改**（仍为 history）：页面路由、`HistoryWorkbench` 及其子件、文件清单 `file-history`、`HistoryViewKey`。回改后重跑：七包 `tsc --noEmit` 全 0 错误；`@rebased/core` 的 `blame.test.ts` + `file-history.test.ts` **6/6 绿**；`@rebased/ui`、`@rebased/client` 全量绿（见 ③） |
+
+**② 操作路径**：本轮为改名型改动，无浏览器操作（见 ④）；判据 = 全仓类型检查 + 各包单测 + 全仓检索 + 契约/路由/端点逐处人工核对。
+
+**③ 证据（本轮实算）**
+
+- **七包类型检查全绿**（`packages/server/{contracts,core,api}`、`packages/client/{client,ui}`、`apps/{web-koa,web-next}` 各自的 `tsc --noEmit`，退出码 0）。
+- **单测**：`@rebased/ui` **76 文件 / 994 用例全绿**；`@rebased/client` **36 文件 / 178 用例全绿**；`@rebased/core` 的 `blame.test.ts` + `file-history.test.ts` 单独重跑 **6/6 全绿**；`apps/web-koa` 的 `url-select.test.ts` **40 通过**（含 `?file=`/`?select=`/`?view=` 与 `rev` 残键断言）。
+- **`@rebased/core` 全量跑了一轮**：31 文件里 3 个 hook 超时、2 个 tag 用例超时、1 个 exec 用例超时（`commit` / `rebase` / `submodule` / `tag` / `exec`）——**与本轮改动无关**：这五个文件都不引用 `history`/`file-history`，且单独重跑归属两套即 6/6 全绿；判为同机并发（同时跑着 ui 与 client 两套 vitest）导致的 git 进程争抢。
+- **检索**：`blame` 在源码/脚本里只剩 `git blame` 命令名与沿革注释（12 处，逐处核对）；「溯源」在 `packages/`、`apps/`、`scripts/` 里 0 命中。
+- **注解族回改那一步的自伤与修复（如实记账）**：机械回改把 `fileHistoryQuerySchema` 误伤成 `fileBlameQuerySchema`（它含 `HistoryQuery` 子串）、把 `getFileHistoryLog` 的调用方误改成 `getFileBlame`——均已按显式路径修回；另有一次 `Set-Content` 写空 `core/history.ts`（0 字节），用 `git show HEAD:…blame.ts` 恢复后重做，未丢内容。
+- **`scripts/check-fluid-layout.mjs` 的重复路由格**：机械改名把两格都叫成了 `history`（旧历史页那格的就绪锚点 `history-entry-0` 随页撤除已成死锚点）——已删掉死格并把存活格的就绪锚点改成 `history-file-input`。
+
+**④ 未覆盖（如实登记）**
+
+- **未跑浏览器冒烟**：本轮不做界面形态改动，判据以类型检查、单测、全仓检索与逐处人工核对为准；`/history` 与 `/file-history` 两个端点各有路由级测试覆盖（web-koa 走真实 HTTP、web-next 直接调 route handler）。
+- **`blame-01…11.png` 这批截图名保持原样**（未重命名）：`history-01…03.png` 是已删除的旧历史页（HistoryPanel）的证据图，两批图不能同名；本文件头部已写明这条沿革，matrix 与 §5.34~§5.37 里的引用因此仍指向 `blame-*.png`。
+- **本文件 R1~R30 的正文保留当时的真名**（「溯源 / `blame` / `BlameWorkbench` / `/blame` / `GET /history`（清单））：按 §1.2 的归档口径，历史轮次的现场证据不改写；头部「命名沿革」条给出到现名的映射。
+- **`.next` 陈旧产物**：`apps/web-next/.next/dev/` 里还留着旧 `/history` 页面与 `/blame` 路由的构建产物（该目录在 `.gitignore` 内）；**未删除**——它不影响仓库内容与类型检查，但要跑 dev 服务看新路由前应重建该目录。
+
+> **收尾状态**：本轮未新增/修改任何截图；未改动任何夹具仓库（未提交、未检出、未写文件）。改动按**显式路径**处理，不使用 `git add -A`（同一工作区另有会话在途，见 §5.39④）。

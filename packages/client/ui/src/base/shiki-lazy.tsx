@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shiki 高亮器（懒加载模块，仅由 base/code-block 动态 import）。
  *
  * 为什么这块用 Shiki 而不是 Monaco：状态页「补丁预览」的块是**只读小片段**（一个 hunk 十几行、
@@ -127,7 +127,7 @@ async function highlight({ code, language, lines }: HighlightRequest): Promise<s
 
 /**
  * 逐行 token：与 highlight 共用同一个 Shiki 单例与同一份语法表，只是**不拼 HTML**——
- * 自绘行表（溯源页注解行）每行都是独立的 React 行，需要 token 数组而不是字符串。
+ * 自绘行表（历史页注解行）每行都是独立的 React 行，需要 token 数组而不是字符串。
  * 双主题口径与 highlight 完全一致（一次输出浅色 `color` + 深色 `--shiki-dark`）。
  * 未收录语言返回 null，调用方退纯文本。
  */

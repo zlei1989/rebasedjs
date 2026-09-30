@@ -12,9 +12,11 @@
  *   · 作者行   → `姓名 <邮箱>`（**不含时间戳**：时间不是可复制单元，剪贴板里混进时间就没法直接用）；
  *   · 分支 chip / 标签 chip → chip 原文（`HEAD -> ` 前缀已由 classifyRefs 剥离）。
  *
- * 操作按钮：浏览快照/查看变更集/摘樱桃/还原/Reset 当前分支到此处——均为可选回调注入，缺省不渲染；
- *   「浏览快照」与「查看变更集」都是**开关**：browseActive/changesActive 为真时按钮呈选中态，
- *   再点一次即收起（前者收快照栏、后者收变更集标签，均由容器实现）。
+ * 操作按钮：浏览快照/变更集/摘樱桃/还原/Reset 当前分支到此处——均为可选回调注入，缺省不渲染；
+ *   「浏览快照」与「变更集」都是**开关**：browseActive/changesActive 为真时按钮呈选中态，
+ *   再点一次即收起（前者收快照栏、后者收变更集标签族，均由容器实现）。
+ *   按钮文案（用户口径 2026-09-30）：由「查看变更集」定为**「变更集」**——按钮与它开出来的那个标签
+ *   是同一件事的两个说法，短名更好读；标签自己的名字另按同批口径作「变更(N)」（见 snapshot-tabs）。
  */
 import { Button, Flex, Tag, Tooltip, Typography } from 'antd';
 import type { CSSProperties } from 'react';
@@ -40,7 +42,7 @@ export interface CommitDetailsPanelProps {
    * 缺省 false（未展开）——面板不持有展开态，真源在调用方（URL/容器）。
    */
   browseActive?: boolean;
-  /** 「查看变更集」回调（#13：打开该提交的变更集标签——快照栏标签栏里的「变更集（N）」，再点一次即收起）；缺省不渲染该按钮 */
+  /** 「变更集」回调（#13：打开该提交的变更集标签——快照栏标签栏里的「变更(N)」，再点一次即收起）；缺省不渲染该按钮 */
   onOpenChanges?: (hash: string) => void;
   /**
    * 变更集标签是否开着（且就是当前提交）：为真时该按钮呈主按钮选中态，提示语改为「再点一次收起」。
@@ -155,7 +157,7 @@ export function CommitDetailsPanel({
           )}
         </Flex>
       ) : null}
-      {/* 操作区：浏览快照/查看变更集/摘樱桃/还原/Reset 当前分支到此处——逐个按回调注入渲染（仅调用方注入回调时出现；确认弹窗与 hook 调用由容器持有） */}
+      {/* 操作区：浏览快照/变更集/摘樱桃/还原/Reset 当前分支到此处——逐个按回调注入渲染（仅调用方注入回调时出现；确认弹窗与 hook 调用由容器持有） */}
       {onResetHere || onCherryPick || onRevert || onBrowse || onOpenChanges ? (
         <Flex gap={8} wrap>
           {onBrowse ? (
@@ -174,8 +176,8 @@ export function CommitDetailsPanel({
             <Tooltip
               title={
                 changesActive
-                  ? '收起变更集标签：本次提交的变更清单与逐个文件的差异标签一并关掉'
-                  : '查看该提交的变更集：在快照栏里列出本次提交涉及的全部文件，可再点单个文件看差异'
+                  ? '收起「变更」标签：本次提交的变更清单与逐个文件的差异标签一并关掉'
+                  : '打开该提交的变更集：在快照栏里新增「变更」标签，列出本次提交涉及的全部文件，可再点单个文件看差异'
               }
             >
               <Button
@@ -184,7 +186,7 @@ export function CommitDetailsPanel({
                 type={changesActive ? 'primary' : 'default'}
                 onClick={() => onOpenChanges(commit.hash)}
               >
-                查看变更集
+                变更集
               </Button>
             </Tooltip>
           ) : null}

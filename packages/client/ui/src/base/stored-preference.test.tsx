@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+﻿import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { readStoredPreference, useStoredPreference, useStoredWidth } from './stored-preference';
 
@@ -65,40 +65,40 @@ describe('useStoredWidth（数值偏好：夹紧 + 取整 + 坏值回落）', ()
   });
 
   it('没存过：回落 seed', () => {
-    const { result } = renderHook(() => useStoredWidth('rebased.blame.treeWidth', 240, 80, 480));
+    const { result } = renderHook(() => useStoredWidth('rebased.history.treeWidth', 240, 80, 480));
     expect(result.current[0]).toBe(240);
   });
 
   it('seed 越界：回退值同样夹紧，初值落到下界（不是 seed 原值）', () => {
-    const { result } = renderHook(() => useStoredWidth('rebased.blame.edgeSeed', 10, 80, 480));
+    const { result } = renderHook(() => useStoredWidth('rebased.history.edgeSeed', 10, 80, 480));
     expect(result.current[0]).toBe(80);
   });
 
   it('seed 越界：回退值同样夹紧，初值落到上界（不是 seed 原值）', () => {
-    const { result } = renderHook(() => useStoredWidth('rebased.blame.edgeSeed', 9999, 80, 480));
+    const { result } = renderHook(() => useStoredWidth('rebased.history.edgeSeed', 9999, 80, 480));
     expect(result.current[0]).toBe(480);
   });
 
   it('存量值越界（旧版本范围 / 被手改）：读回时夹紧', () => {
-    window.localStorage.setItem('rebased.blame.treeWidth', '9999');
-    const { result } = renderHook(() => useStoredWidth('rebased.blame.treeWidth', 240, 80, 480));
+    window.localStorage.setItem('rebased.history.treeWidth', '9999');
+    const { result } = renderHook(() => useStoredWidth('rebased.history.treeWidth', 240, 80, 480));
     expect(result.current[0]).toBe(480);
   });
 
   it('存量值不是数字：回落 seed，不抛错', () => {
-    window.localStorage.setItem('rebased.blame.treeWidth', 'abc');
-    const { result } = renderHook(() => useStoredWidth('rebased.blame.treeWidth', 240, 80, 480));
+    window.localStorage.setItem('rebased.history.treeWidth', 'abc');
+    const { result } = renderHook(() => useStoredWidth('rebased.history.treeWidth', 240, 80, 480));
     expect(result.current[0]).toBe(240);
   });
 
   it('更新：取整 + 夹紧 + 写回本机（新挂载读到最后一次要求）', () => {
-    const { result } = renderHook(() => useStoredWidth('rebased.blame.treeWidth', 240, 80, 480));
+    const { result } = renderHook(() => useStoredWidth('rebased.history.treeWidth', 240, 80, 480));
     act(() => result.current[1](301.6));
     expect(result.current[0]).toBe(302);
-    expect(window.localStorage.getItem('rebased.blame.treeWidth')).toBe('302');
+    expect(window.localStorage.getItem('rebased.history.treeWidth')).toBe('302');
     act(() => result.current[1](10));
     expect(result.current[0]).toBe(80);
-    const second = renderHook(() => useStoredWidth('rebased.blame.treeWidth', 240, 80, 480));
+    const second = renderHook(() => useStoredWidth('rebased.history.treeWidth', 240, 80, 480));
     expect(second.result.current[0]).toBe(80);
   });
 });
