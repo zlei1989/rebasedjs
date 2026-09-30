@@ -1715,6 +1715,8 @@
 > **另记：在 `rebased-smoke-big` / `big.txt` 上的实测（用户当场指认的页面）**：该文件 620 行**全部是工作区未提交内容**（CLI：`git status` = ` M big.txt`、`git blame --line-porcelain` 620 行全为全 0 伪哈希），因此该页**整页不可点**（无提交可归属、无详情可看）——这是设计行为、非回归；该页正文也无语法着色（`.txt` 不在 `domain/language` 的映射里 → plaintext，与「不猜语法」口径一致）。**顺带核实**：该夹具现为 **621 行 × ≤51 字符**（`big file line N - working tree rewrite（大 diff 常驻）`），文档 §5.28 一带「620 字符/行」的说法是旧夹具状态，本轮未改动该夹具、也未改写那处描述。
 
 > **收尾状态**：本轮新增 `docs/shots/blame-09.png` 一张；**未改动任何夹具**（`rebasedjs` 与 `rebased-smoke` 的工作区状态与冒烟前一致：前者干净、后者保留其既有的未提交改动，未新增/未还原）。截图落盘走 AGENT.md §MCP 五步：本项目不在 MCP 允许根内 → 先以纯文件名落盘到 MCP 输出目录，再按绝对路径搬进 `docs/shots/` 并 `Get-FileHash` 复核。
+>
+> **归属说明（并发会话）**：本轮提交 `9a3623a` 的**消息只描述注解行改版**，但该提交由 `git add -A` 一并收进了**并行会话在途的改动**——§5.36（R27）的根提交「本文件改动」改 Alert + 只读代码视图（`BlameContentChannel` / `useBrowseContent` 接线、`blame-change-pane` / `blame-workbench` / 两端 blame 页面 / `index.ts` 导出）与它的两张证据图 `blame-07.png`、`blame-10.png`。**本节的 R26-1~R26-9 只覆盖注解行改版**；那两张图与那段功能的判据以 §5.36 自述为准（该会话自带完整台账），不要按本节的结论去解释它们。此类混排的成因是**并发会话共用同一工作区**：`git add -A` 会把别人在途的改动一起收走——后续轮次收尾请按**显式路径**暂存，别用 `-A`。
 
 ### 5.36 溯源页根提交「本文件改动」改 Alert + 只读代码视图 冒烟（R27，2026-09-30）
 
