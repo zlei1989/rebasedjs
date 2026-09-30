@@ -409,8 +409,8 @@ const DENSITY_SAMPLE_WAIT = 5000;
 
 async function assertDensity(page, cell, expected) {
   let m = await page.evaluate(measureDensityInPage);
-  // **有界重采（只在这一种情形下等）**：实测见过 3 格（`dark/768 blame`、`dark/1440 search`、
-  // `light/1024 blame`）在一个 **antd 样式尚未注入**的瞬间被采样 —— 直方图全是浏览器默认的
+  // **有界重采（只在这一种情形下等）**：实测见过 3 格（`dark/768 history`、`dark/1440 search`、
+  // `light/1024 history`）在一个 **antd 样式尚未注入**的瞬间被采样 —— 直方图全是浏览器默认的
   // `16px` / `13.3333px`，一个 12/14 节点都没有。那不是「该路由没有文本可测」，而是「还没上样式」，
   // 直接记 no-sample 等于把一次真实的密度断言让给运气。故：**只在两档计数都为 0 时**有界轮询
   // （有样本时零等待，不拖慢正常格），等到出现 12/14 节点就重采一次；等满仍未出现才记 no-sample。
@@ -873,9 +873,8 @@ function routeCells(ctx) {
     // （live 实测：激活后一帧 monaco=0、稍后才 1）——等它会与「Monaco 还没加载完」纠缠，
     // 门本身不该承担懒加载时序。
     { name: 'log-snapshot-file', path: `/repos/${ctx.repo.id}?select=${ctx.hash}&browse=${q(ctx.file)}`, ready: '[data-testid="snapshot-tabs"]', content: '[data-testid="browse-content-path"]', min: 1, gateTimeout: SLOW_GATE_TIMEOUT },
-    { name: 'blame', path: `/repos/${ctx.repo.id}/blame?file=${q(ctx.file)}`, ready: '[data-testid="blame-file"]' },
+    { name: 'history', path: `/repos/${ctx.repo.id}/history?file=${q(ctx.file)}`, ready: '[data-testid="history-file-input"]' },
     { name: 'branches', path: `/repos/${ctx.repo.id}/branches`, ready: '[data-testid^="row-local-"]' },
-    { name: 'history', path: `/repos/${ctx.repo.id}/history?file=${q(ctx.file)}`, ready: '[data-testid="history-entry-0"]' },
     { name: 'search', path: `/repos/${ctx.repo.id}/search`, ready: '[data-testid^="branch-quick-"]' },
     // merge：整页只有一个**常驻打开**的 Modal（背景文档为空），就绪点即弹窗内的分支选择器。
     // 这一格的**溢出**断言是弱的（背后文档为空 ⇒ 空页永不溢出，见 e2e 文档 §5.16④），
@@ -1800,7 +1799,7 @@ async function runShots(opts, pw, exe) {
     ['settings', `/repos/${ctx.repo.id}/settings`],
     ['status', `/repos/${ctx.repo.id}/status`],
     ['console', `/repos/${ctx.repo.id}/console`],
-    ['blame', `/repos/${ctx.repo.id}/blame?file=${q(ctx.file)}`],
+    ['history', `/repos/${ctx.repo.id}/history?file=${q(ctx.file)}`],
     ['submodules', `/repos/${ctx.repo.id}/submodules`],
     ['patches', `/repos/${ctx.repo.id}/patches`],
   ];

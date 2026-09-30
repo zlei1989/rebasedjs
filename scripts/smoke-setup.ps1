@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env pwsh
+#!/usr/bin/env pwsh
 # 冒烟仓构造/复位脚本（对应 docs/e2e-verification.md §1.3）
 # 用途：一条命令重建全部冒烟仓，保证每轮 E2E 冒烟起点一致。
 # 注意：会删除并重建 $Root 下的 rebased-smoke* / smoke-* 目录，勿指向真实工作区。
@@ -86,7 +86,7 @@ New-Repo $Main
 
 Write-File $Main 'README.md' "# Rebased Smoke`n`nSmoke repository for manual E2E verification.`n"
 Write-File $Main 'docs/gone.md' "# gone`n`nThis file will be deleted in the working tree.`n"
-Write-File $Main 'docs/old-name.md' "# old name`n`nRenamed later for --follow history test.`n"
+Write-File $Main 'docs/old-name.md' "# old name`n`nRenamed later for --follow file-history test.`n"
 Commit $Main 'chore: 初始化仓库与 README'
 
 Write-File $Main 'src/app.ts' @'
@@ -130,7 +130,7 @@ export function feature(): string {
   return 'feature-v2';
 }
 '@
-Write-File $Main 'docs/new-name.md' "# new name`n`nRenamed later for --follow history test.`n`nUpdated on feature branch.`n"
+Write-File $Main 'docs/new-name.md' "# new name`n`nRenamed later for --follow file-history test.`n`nUpdated on feature branch.`n"
 Commit $Main 'feat(feature): 分支第二个提交'
 
 # 回 master 合并（--no-ff 造合并提交）

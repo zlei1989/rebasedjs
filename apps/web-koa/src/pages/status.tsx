@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 状态页容器：useRepoStatus + useStaging（文件级）+ useHunkStaging（hunk 级）+ useCommit + useDiffPatch（选中文件补丁预览）
  * + useChangelists/useChangelistAction（变更列表分组与管理）。
  * 注入 ui StatusPage（与 web-next 容器同构；repoId 取 useParams、导航用 useNavigate，而非 Next params/router）。
@@ -241,10 +241,10 @@ export function RepoStatusPage(): React.ReactNode {
             })
             .catch(onError);
         }}
-        // Annotate（#47）：行内「注解」→ /blame?file=&view=annotate（直接落在「逐行注解」标签；
+        // Annotate（#47）：行内「注解」→ /history?file=&view=annotate（历史页「逐行注解」标签）（直接落在「逐行注解」标签；
         // 不带 ?select= 即看当前工作区版本，本地未提交的行标「未提交」）
-        onOpenAnnotate={(path) => navigate(`/repos/${repoId}/blame?file=${encodeURIComponent(path)}&view=annotate`)}
-        // Show History（#47）：行内「历史」→ /history?file=
+        onOpenAnnotate={(path) => navigate(`/repos/${repoId}/history?file=${encodeURIComponent(path)}&view=annotate`)}
+        // Show History（#47）：行内「历史」→ 历史页（中栏即该文件的提交清单；历史页已并入历史页）
         onOpenHistory={(path) => navigate(`/repos/${repoId}/history?file=${encodeURIComponent(path)}`)}
       />
       {/* CRLF 提示（GitCrlfDialog 语义）：三选——修复并提交（写 core.autocrlf 建议值）/ 原样提交 / 取消 */}

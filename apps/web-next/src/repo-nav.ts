@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 仓库页共用导航装配（web-next 容器侧）：useRepoNav(repoId) 一处装配 RepoTopNav 所需的
  * 导航回调全集（仓库名 + 回首页 + 各仓库页路由 + GitHub/GitLab 可用性 + 仓库状态），
  * 各仓库页容器展开注入 `<RepoTopNav {...nav} current="xxx" />`，取代原先每页复制的「返回日志」链接。
@@ -22,7 +22,6 @@ export type RepoNavCallbacks = Pick<
   | 'onOpenMerge'
   | 'onOpenStashes'
   | 'onOpenSettings'
-  | 'onOpenBlame'
   | 'onOpenHistory'
   | 'onOpenSearch'
   | 'onOpenTags'
@@ -57,7 +56,6 @@ export function useRepoNav(repoId: string): RepoNavCallbacks {
     onOpenMerge: () => router.push(`/repos/${repoId}/merge`),
     onOpenStashes: () => router.push(`/repos/${repoId}/stashes`),
     onOpenSettings: () => router.push(`/repos/${repoId}/settings`),
-    onOpenBlame: () => router.push(`/repos/${repoId}/blame`),
     onOpenHistory: () => router.push(`/repos/${repoId}/history`),
     onOpenSearch: () => router.push(`/repos/${repoId}/search`),
     onOpenTags: () => router.push(`/repos/${repoId}/tags`),

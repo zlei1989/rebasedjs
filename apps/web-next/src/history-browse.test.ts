@@ -1,16 +1,17 @@
 /**
- * web-next blame/history/commits/search 路由测试：注解、文件历史（--follow）、单提交变更与搜索。
+ * web-next blame/file-history/commits/search 路由测试：逐行归属、文件历史清单（--follow）、单提交变更与搜索。
  * 拆分自原 routes.test.ts 的 'web-next blame/history/committed/search 路由' describe：
  * 原单文件 194s 是测试提速瓶颈，按 describe 拆成多文件后由 vitest 多 worker 并行。
  * 测试体逐字保留；环境隔离与仓库夹具见 ./testing/routes-helpers。
  * （原 committed 分页端点的用例随该页撤除而删——父哈希透传等断言在 commits/:hash 用例里仍覆盖。）
+ * 2026-09-30 改名：`/blame` = 逐行归属（保留 blame 命名），`/file-history` = 文件提交清单（原 `/history`）。
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { GET as getFileHistory } from '../app/api/repos/[repoId]/file-history/route';
 import { GET as getBlame } from '../app/api/repos/[repoId]/blame/route';
-import { GET as getHistory } from '../app/api/repos/[repoId]/history/route';
 import { GET as getCommitFilesRoute } from '../app/api/repos/[repoId]/commits/[hash]/route';
 import { GET as getSearch } from '../app/api/repos/[repoId]/search/route';
 import { cleanupTestEnv, ctx, lastRepoPath, makeLocalCommit, registerRepo, setupTestEnv } from './testing/routes-helpers';
@@ -23,7 +24,7 @@ afterEach(() => {
   cleanupTestEnv();
 });
 
-describe('web-next blame/history/commits/search 路由', () => {
+describe('web-next blame/file-history/commits/search 路由', () => {
   /** 本组用例 git 进程密集（多提交/重命名/搜索遍历），统一放宽用例超时 */
   const RIG_TIMEOUT = 120000;
 
@@ -48,13 +49,13 @@ describe('web-next blame/history/commits/search 路由', () => {
     expect(typeof body[1].dateIso).toBe('string');
   });
 
-  it('history 端点：git mv 重命名后返回 200 且含重命名前提交（--follow 证据）', { timeout: RIG_TIMEOUT }, async () => {
+  it('file-history 端点：git mv 重命名后返回 200 且含重命名前提交（--follow 证据）', { timeout: RIG_TIMEOUT }, async () => {
     const repoId = registerRepo();
     execFileSync('git', ['-C', lastRepoPath, 'mv', 'a.txt', 'b.txt']);
     execFileSync('git', ['-C', lastRepoPath, 'add', '.']);
     execFileSync('git', ['-C', lastRepoPath, 'commit', '-q', '-m', 'rename to b']);
 
-    const res = await getHistory(new Request(`http://localhost/api/repos/${repoId}/history?file=b.txt`), ctx(repoId));
+    const res = await getFileHistory(new Request(`http://localhost/api/repos/${repoId}/file-history?file=b.txt`), ctx(repoId));
     expect(res.status).toBe(200);
     const body = await res.json();
     // 最新在前：rename 提交 + init 提交（新路径 b.txt 在重命名前提交中不存在 → --follow 跟随证据）
@@ -120,22 +121,22 @@ describe('web-next blame/history/commits/search 路由', () => {
     expect(await noneRes.json()).toEqual([]);
   });
 
-  it('blame/history/search 端点：缺必填查询参数（file/q）返回 400 INVALID_QUERY', async () => {
+  it('blame/file-history/search 端点：缺必填查询参数（file/q）返回 400 INVALID_QUERY', async () => {
     const repoId = registerRepo();
     const blameRes = await getBlame(new Request(`http://localhost/api/repos/${repoId}/blame`), ctx(repoId));
-    const historyRes = await getHistory(new Request(`http://localhost/api/repos/${repoId}/history`), ctx(repoId));
+    const fileHistoryRes = await getFileHistory(new Request(`http://localhost/api/repos/${repoId}/file-history`), ctx(repoId));
     const searchRes = await getSearch(new Request(`http://localhost/api/repos/${repoId}/search`), ctx(repoId));
-    for (const res of [blameRes, historyRes, searchRes]) {
+    for (const res of [blameRes, fileHistoryRes, searchRes]) {
       expect(res.status).toBe(400);
       expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
     }
   });
 
-  it('未注册 repoId：blame/history/search 返回 404 REPO_NOT_FOUND', async () => {
+  it('未注册 repoId：blame/file-history/search 返回 404 REPO_NOT_FOUND', async () => {
     const blameRes = await getBlame(new Request('http://localhost/api/repos/nope/blame?file=a.txt'), ctx('nope'));
-    const historyRes = await getHistory(new Request('http://localhost/api/repos/nope/history?file=a.txt'), ctx('nope'));
+    const fileHistoryRes = await getFileHistory(new Request('http://localhost/api/repos/nope/file-history?file=a.txt'), ctx('nope'));
     const searchRes = await getSearch(new Request('http://localhost/api/repos/nope/search?q=x'), ctx('nope'));
-    for (const res of [blameRes, historyRes, searchRes]) {
+    for (const res of [blameRes, fileHistoryRes, searchRes]) {
       expect(res.status).toBe(404);
       expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
     }

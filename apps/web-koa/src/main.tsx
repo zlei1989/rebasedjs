@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SPA 入口：antd 主题 Provider + BrowserRouter 路由装配。
  * 纯 client 组件（SPA 无 SSR，等价 web-next 容器的 'use client'）；
  * 页面容器与 web-next 同构（同一套 @rebased/ui 页面 + @rebased/client hooks），路由用 react-router。
@@ -13,13 +13,12 @@ import { DensityProvider, useResolvedTheme } from '@rebased/ui';
 import './index.css';
 import { ReposPage } from './pages';
 import { AppSettingsPage } from './pages/app-settings';
-import { RepoBlamePage } from './pages/blame';
+import { RepoHistoryPage } from './pages/history';
 import { RepoBranchesPage } from './pages/branches';
 import { RepoConflictsPage } from './pages/conflicts';
 import { RepoConsolePage } from './pages/console';
 import { RepoGithubPage } from './pages/github';
 import { RepoGitlabPage } from './pages/gitlab';
-import { RepoHistoryPage } from './pages/history';
 import { RepoIgnorePage } from './pages/ignore';
 import { RepoMergePage } from './pages/merge';
 import { RepoPatchesPage } from './pages/patches';
@@ -57,9 +56,8 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<ReposPage />} />
         <Route path="/settings" element={<AppSettingsPage />} />
         <Route path="/repos/:repoId" element={<RepoPage />} />
-        <Route path="/repos/:repoId/blame" element={<RepoBlamePage />} />
-        <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
         <Route path="/repos/:repoId/history" element={<RepoHistoryPage />} />
+        <Route path="/repos/:repoId/branches" element={<RepoBranchesPage />} />
         <Route path="/repos/:repoId/search" element={<RepoSearchPage />} />
         <Route path="/repos/:repoId/merge" element={<RepoMergePage />} />
         <Route path="/repos/:repoId/remotes" element={<RepoRemotesPage />} />

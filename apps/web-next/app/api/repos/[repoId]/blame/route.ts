@@ -1,4 +1,4 @@
-/** GET /api/repos/:repoId/blame —— zod 校验查询 → getFileBlame（单文件逐行溯源；rev 可选指定版本）→ 200 BlameLine[] */
+/** GET /api/repos/:repoId/blame —— zod 校验查询 → getFileBlame（单文件逐行责任归属；rev 可选指定版本）→ 200 BlameLine[] */
 import { getFileBlame } from '@rebased/api';
 import { blameQuerySchema } from '@rebased/contracts';
 import { z } from 'zod';

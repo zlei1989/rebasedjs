@@ -1,12 +1,13 @@
 /**
- * web-koa blame/history/browse/search 端点集成测试（拆分自 app.test.ts）。
- * 职责：blame（行归属/previousLineno）、history（--follow 重命名）、browse（树/内容/二进制标记）、
+ * web-koa blame/file-history/browse/search 端点集成测试（拆分自 app.test.ts）。
+ * 职责：blame（行归属/previousLineno）、file-history（--follow 重命名清单）、browse（树/内容/二进制标记）、
  * search（grep/pickaxe）、commits/:hash 端点形状与错误映射断言。
  * （原 committed 分页端点的用例随该页撤除而删；父哈希等断言在 commits/:hash 用例里仍覆盖。）
  * 拆分原因：原单文件 app.test.ts（171 用例）约 242s，是测试提速瓶颈；按 describe 拆成 11 个文件，
  * 由 vitest 多 worker 并行执行。
  * 隔离：每文件独立 startServer（ephemeral 端口）；每用例独立 REBASED_CONFIG_DIR（空注册表）；
  * afterEach cleanupDirs 清理临时目录（EPERM/EBUSY 重试）。
+ * 2026-09-30 改名：`/blame` = 逐行归属（保留 blame 命名），`/file-history` = 文件提交清单（原 `/history`）。
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -36,7 +37,7 @@ afterEach(async () => {
   await cleanupDirs();
 });
 
-describe('web-koa blame/history/browse/search 端点', () => {
+describe('web-koa blame/file-history/browse/search 端点', () => {
   /** 本组用例 git 进程密集（多提交/重命名/搜索遍历），统一放宽用例超时 */
   const RIG_TIMEOUT = 120000;
 
@@ -60,13 +61,13 @@ describe('web-koa blame/history/browse/search 端点', () => {
     expect(body[1].hash).toMatch(/^[0-9a-f]{40}$/);
   });
 
-  it('history 端点：git mv 重命名后返回 200 且含重命名前提交（--follow 证据）', { timeout: RIG_TIMEOUT }, async () => {
+  it('file-history 端点：git mv 重命名后返回 200 且含重命名前提交（--follow 证据）', { timeout: RIG_TIMEOUT }, async () => {
     const { repoId, repoPath } = registerRepo();
     execFileSync('git', ['-C', repoPath, 'mv', 'a.txt', 'b.txt']);
     execFileSync('git', ['-C', repoPath, 'add', '.']);
     execFileSync('git', ['-C', repoPath, 'commit', '-q', '-m', 'rename to b']);
 
-    const res = await fetch(`${base}/api/repos/${repoId}/history?file=b.txt`);
+    const res = await fetch(`${base}/api/repos/${repoId}/file-history?file=b.txt`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Array<{ subject: string; hash: string; author: string }>;
     // 最新在前：rename 提交 + init 提交（b.txt 在重命名前提交中不存在 → --follow 跟随证据）
@@ -156,22 +157,22 @@ describe('web-koa blame/history/browse/search 端点', () => {
     expect(await notFoundRes.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
   });
 
-  it('blame/history/search 端点：缺必填查询参数（file/q）返回 400 INVALID_QUERY', async () => {
+  it('blame/file-history/search 端点：缺必填查询参数（file/q）返回 400 INVALID_QUERY', async () => {
     const { repoId } = registerRepo();
     const blameRes = await fetch(`${base}/api/repos/${repoId}/blame`);
-    const historyRes = await fetch(`${base}/api/repos/${repoId}/history`);
+    const fileHistoryRes = await fetch(`${base}/api/repos/${repoId}/file-history`);
     const searchRes = await fetch(`${base}/api/repos/${repoId}/search`);
-    for (const res of [blameRes, historyRes, searchRes]) {
+    for (const res of [blameRes, fileHistoryRes, searchRes]) {
       expect(res.status).toBe(400);
       expect(await res.json()).toMatchObject({ error: { code: 'INVALID_QUERY' } });
     }
   });
 
-  it('未注册 repoId：blame/history/search 返回 404 REPO_NOT_FOUND', async () => {
+  it('未注册 repoId：blame/file-history/search 返回 404 REPO_NOT_FOUND', async () => {
     const blameRes = await fetch(`${base}/api/repos/nope/blame?file=a.txt`);
-    const historyRes = await fetch(`${base}/api/repos/nope/history?file=a.txt`);
+    const fileHistoryRes = await fetch(`${base}/api/repos/nope/file-history?file=a.txt`);
     const searchRes = await fetch(`${base}/api/repos/nope/search?q=x`);
-    for (const res of [blameRes, historyRes, searchRes]) {
+    for (const res of [blameRes, fileHistoryRes, searchRes]) {
       expect(res.status).toBe(404);
       expect(await res.json()).toMatchObject({ error: { code: 'REPO_NOT_FOUND' } });
     }

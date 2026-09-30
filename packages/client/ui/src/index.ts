@@ -45,25 +45,24 @@ export { BranchCompareView, type BranchCompareViewProps } from './composite/bran
 export {
   changesHints,
   isEntryReady,
-  resolveBlameHash,
-  type BlameViewKey,
+  resolveHistoryHash,
+  type HistoryViewKey,
   type ChangesHints,
-} from './composite/blame-state';
+} from './composite/history-state';
 export {
   BlameAnnotateTable,
   type BlameAnnotateTableProps,
   type BlameDetailState,
 } from './composite/blame-annotate-table';
 export {
-  BlameChangePane,
-  type BlameChangePaneProps,
-  type BlameDiffChannel,
-  type BlameContentChannel,
-} from './composite/blame-change-pane';
+  HistoryChangePane,
+  type HistoryChangePaneProps,
+  type HistoryDiffChannel,
+  type HistoryContentChannel,
+} from './composite/history-change-pane';
 export { CommitDetailCard, type CommitDetailCardProps } from './composite/commit-detail-card';
-export { BlameCommitsColumn, type BlameCommitsColumnProps } from './composite/blame-commits-column';
-export { BlameWorkbench, type BlameWorkbenchProps } from './composite/blame-workbench';
-export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
+export { HistoryCommitsColumn, type HistoryCommitsColumnProps } from './composite/history-commits-column';
+export { HistoryWorkbench, type HistoryWorkbenchProps } from './composite/history-workbench';
 export {
   SnapshotTreeColumn,
   snapshotTreeNodes,
