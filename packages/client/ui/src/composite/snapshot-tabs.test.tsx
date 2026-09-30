@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { BrowseContent, BrowseEntry, CommittedEntry } from '@rebased/contracts';
-import { SnapshotTabs } from './snapshot-tabs';
+import type { BlameLine, BrowseContent, BrowseEntry, CommittedEntry, FileVersions } from '@rebased/contracts';
+import type { LineHighlighterLoader } from '../base/line-highlighter';
+import { SnapshotTabs, type SnapshotFileViews } from './snapshot-tabs';
 
 /** 快照条目夹具：两条平铺叶子（树按目录聚合后渲染，与容器真实数据同形） */
 const entries: BrowseEntry[] = [
@@ -31,6 +32,27 @@ const changesetEntry: CommittedEntry = {
 const stubLoader = (): Promise<{ default: () => React.ReactNode }> =>
   Promise.resolve({ default: () => <div>stub-diff-editor</div> });
 
+/** 高亮器桩：返回 null（退纯文本）——注解行的着色不是本文件要验的事（见 blame-annotate-table.test） */
+const nullHighlighter: LineHighlighterLoader = () => Promise.resolve({ highlightLines: () => Promise.resolve(null) });
+
+/** 注解行夹具：两行归属两个不同提交（本文件只验「换没换视图」，行的渲染细节归 blame-annotate-table） */
+const blameLines: BlameLine[] = [
+  { lineno: 1, hash: 'a'.repeat(40), shortHash: 'aaaaaaa', author: 'Sam', authorEmail: 's@example.com', dateIso: '2026-01-01T00:00:00+00:00', content: 'const a = 1;', previousLineno: null, parents: [] },
+  { lineno: 2, hash: 'b'.repeat(40), shortHash: 'bbbbbbb', author: 'Sam', authorEmail: 's@example.com', dateIso: '2026-01-02T00:00:00+00:00', content: 'const b = 2;', previousLineno: null, parents: [] },
+];
+
+/** 两个附加视图的通道夹具（容器在真实链路里条件拉取后注入，这里直接给就绪态） */
+function viewsFixture(overrides: Partial<SnapshotFileViews> = {}): SnapshotFileViews {
+  const diff: FileVersions = { before: '旧正文\n', after: '新正文\n' };
+  return {
+    view: 'plain',
+    onChange: () => {},
+    annotate: { lines: blameLines },
+    latest: { versions: diff },
+    ...overrides,
+  };
+}
+
 /** 点某个标签的关闭按钮：按标签名的 testid 找到它的 .ant-tabs-tab 容器再点 remove */
 function clickRemoveByTestId(testId: string): void {
   const tab = screen.getByTestId(testId).closest('.ant-tabs-tab');
@@ -52,7 +74,7 @@ function activeTabText(): string {
 describe('SnapshotTabs（文件树 + 文件内容合并成一条标签栏）', () => {
   it('默认停在「文件」标签：树在第一个标签里、标签名带总数、不可关闭，标签栏右端不再有版本 chip', () => {
     render(<SnapshotTabs entries={entries} />);
-    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件（2）');
+    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件(2)');
     // 用户口径：标签栏右端的版本短名 chip 已删除
     expect(screen.queryByTestId('snapshot-tree-rev')).not.toBeInTheDocument();
     // 树本体挂在第一个标签里（不是另起一栏）
@@ -103,7 +125,7 @@ describe('SnapshotTabs（文件树 + 文件内容合并成一条标签栏）', (
     expect(screen.queryByTestId('snapshot-file-pending-src/a.ts')).not.toBeInTheDocument();
     // 文件标签激活时**树那一页整个不在 DOM 里**（antd Tabs 默认只挂载激活页的面板，不是 display 隐藏）：
     // 这条锁定的是实测行为——live 上按 `snapshot-tree-pane` 找树会一无所获，别把它当「树渲染失败」。
-    // 想按 data-testid 找树，先点「文件（N）」标签把树那一页激活。
+    // 想按 data-testid 找树，先点「文件(N)」标签把树那一页激活。
     expect(screen.queryByTestId('snapshot-tree-pane')).not.toBeInTheDocument();
     // 点回「文件」标签：树那一页随之挂回（它的 EmptyState/加载态不会残留）
     fireEvent.click(screen.getByTestId('snapshot-tree-title'));
@@ -162,7 +184,7 @@ describe('SnapshotTabs（文件树 + 文件内容合并成一条标签栏）', (
     render(<SnapshotTabs entries={entries} selectedPath="src/a.ts" content={contentOf('AAA')} onActivateTab={onActivateTab} />);
     clickRemove('src/a.ts');
     expect(onActivateTab).toHaveBeenCalledWith(null);
-    expect(activeTabText()).toContain('文件（2）');
+    expect(activeTabText()).toContain('文件(2)');
   });
 
   it('点「文件」标签：回到树并清空容器的 ?file=', () => {
@@ -170,14 +192,14 @@ describe('SnapshotTabs（文件树 + 文件内容合并成一条标签栏）', (
     render(<SnapshotTabs entries={entries} selectedPath="src/a.ts" content={contentOf('AAA')} onActivateTab={onActivateTab} />);
     fireEvent.click(screen.getByTestId('snapshot-tree-title'));
     expect(onActivateTab).toHaveBeenCalledWith(null);
-    expect(activeTabText()).toContain('文件（2）');
+    expect(activeTabText()).toContain('文件(2)');
   });
 
   it('切到「文件」标签不会被容器那份还没清掉的 selectedPath 弹回文件标签', () => {
     render(<SnapshotTabs entries={entries} selectedPath="src/a.ts" content={contentOf('AAA')} onActivateTab={() => {}} />);
     fireEvent.click(screen.getByTestId('snapshot-tree-title'));
     // 容器是否真的清空 ?file= 由它自己决定；本组件只在 selectedPath **变化**时对齐，不每帧抢回
-    expect(activeTabText()).toContain('文件（2）');
+    expect(activeTabText()).toContain('文件(2)');
   });
 
   it('树加载中/出错各有占位（合并成标签页后状态不丢）', () => {
@@ -210,13 +232,13 @@ describe('SnapshotTabs（文件树 + 文件内容合并成一条标签栏）', (
     const withFiles = [{ mode: '100644', type: 'blob' as const, hash: 'h9', path: 'files' }];
     render(<SnapshotTabs entries={withFiles} selectedPath="files" content={contentOf('X')} onActivateTab={onActivateTab} />);
     // 两个标签各自独立（撞键时 antd 会同时把两条都算激活，且点文件名会被当成点「文件」标签）
-    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件（1）');
+    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件(1)');
     expect(screen.getByTestId('snapshot-file-tab-files')).toBeInTheDocument();
     expect(activeTabText()).toContain('files');
     expect(screen.getByTestId('browse-content-path')).toHaveTextContent('files');
     clickRemove('files');
     expect(onActivateTab).toHaveBeenCalledWith(null);
-    expect(activeTabText()).toContain('文件（1）');
+    expect(activeTabText()).toContain('文件(1)');
   });
 
   it('偏差态：容器还没清 ?file= 时切到树，再关掉那个文件标签也要接管选中', () => {
@@ -228,7 +250,7 @@ describe('SnapshotTabs（文件树 + 文件内容合并成一条标签栏）', (
     clickRemove('src/a.ts');
     // 关掉的正是容器选中的那一个 → 必须要求容器清空 ?file=，不能留下「标签没了、URL 还指着它」的死状态
     expect(onActivateTab).toHaveBeenCalledWith(null);
-    expect(activeTabText()).toContain('文件（2）');
+    expect(activeTabText()).toContain('文件(2)');
   });
 
   it('同名不同目录的两个文件各占一个标签（标签名相同、靠 testid 与 Tooltip 的全路径区分）', () => {
@@ -254,13 +276,213 @@ describe('SnapshotTabs（文件树 + 文件内容合并成一条标签栏）', (
   });
 });
 
+describe('SnapshotTabs 文件标签的三个视图（逐行注解 / 与最新版本差异）', () => {
+  it('容器没给这两个视图的取数：路径栏只有复制按钮（无死控件）', () => {
+    render(<SnapshotTabs entries={entries} selectedPath="src/a.ts" content={contentOf('AAA')} />);
+    expect(screen.queryByTestId('browse-view-annotate')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('browse-view-latest')).not.toBeInTheDocument();
+    expect(screen.getByTestId('browse-copy-all')).toBeInTheDocument();
+  });
+
+  it('两个按钮的文字写进 tooltip（按钮本身只有图标），点击上报对应视图', () => {
+    const onChange = vi.fn();
+    render(
+      <SnapshotTabs entries={entries} selectedPath="src/a.ts" content={contentOf('AAA')} views={viewsFixture({ onChange })} />,
+    );
+    // 文字不在按钮里（用户口径：文字写道 tooltip 里），按钮以 aria-label 承载同一个名字
+    const annotate = screen.getByTestId('browse-view-annotate');
+    expect(annotate.textContent).toBe('');
+    expect(annotate).toHaveAttribute('aria-label', '逐行注解');
+    expect(screen.getByTestId('browse-view-latest')).toHaveAttribute('aria-label', '与最新版本差异');
+    fireEvent.click(annotate);
+    expect(onChange).toHaveBeenCalledWith('annotate');
+    fireEvent.click(screen.getByTestId('browse-view-latest'));
+    expect(onChange).toHaveBeenLastCalledWith('latest');
+  });
+
+  it('当前视图高亮（aria-pressed + 实心按钮），另一个仍是可点的描边按钮', () => {
+    render(
+      <SnapshotTabs
+        entries={entries}
+        selectedPath="src/a.ts"
+        content={contentOf('AAA')}
+        views={viewsFixture({ view: 'annotate' })}
+      />,
+    );
+    const annotate = screen.getByTestId('browse-view-annotate');
+    expect(annotate).toHaveAttribute('data-active', 'true');
+    expect(annotate).toHaveAttribute('aria-pressed', 'true');
+    expect(annotate.className).toContain('ant-btn-primary');
+    const latest = screen.getByTestId('browse-view-latest');
+    expect(latest).toHaveAttribute('data-active', 'false');
+    expect(latest.className).not.toContain('ant-btn-primary');
+  });
+
+  it('视图切到「逐行注解」：正文换成注解行表（行号｜时间｜哈希｜正文），不再是只读代码视图', () => {
+    render(
+      <SnapshotTabs
+        entries={entries}
+        selectedPath="src/a.ts"
+        content={contentOf('AAA')}
+        views={viewsFixture({ view: 'annotate' })}
+        annotateLoader={nullHighlighter}
+      />,
+    );
+    expect(screen.getByTestId('browse-view-annotate-body')).toBeInTheDocument();
+    expect(screen.getByTestId('blame-line-1')).toHaveTextContent('const a = 1;');
+    expect(screen.getByTestId('blame-code-2')).toHaveTextContent('const b = 2;');
+    expect(screen.getByTestId('blame-hash-1')).toHaveTextContent('aaaaaaa');
+    expect(screen.queryByTestId('browse-code-editor')).not.toBeInTheDocument();
+  });
+
+  it('注解行的点击与溯源页一致（点行 = 选中该提交 + 开详情浮层），未提交行不可点', () => {
+    const onSelectCommit = vi.fn();
+    const onToggleDetail = vi.fn();
+    const lines: BlameLine[] = [
+      ...blameLines.slice(0, 1),
+      // 第二行是工作区未提交的伪哈希：整行不可点（与溯源页同一判据 ZERO_HASH_RE）
+      { ...blameLines[1]!, hash: '0'.repeat(40), shortHash: '0000000' },
+    ];
+    render(
+      <SnapshotTabs
+        entries={entries}
+        selectedPath="src/a.ts"
+        content={contentOf('AAA')}
+        views={viewsFixture({ view: 'annotate', annotate: { lines } })}
+        annotateLoader={nullHighlighter}
+        onSelectCommit={onSelectCommit}
+        onToggleDetail={onToggleDetail}
+        detail={null}
+      />,
+    );
+    const row = screen.getByTestId('blame-line-1');
+    expect(row).toHaveAttribute('role', 'button');
+    fireEvent.click(row);
+    expect(onSelectCommit).toHaveBeenCalledWith('a'.repeat(40));
+    expect(onToggleDetail).toHaveBeenCalledWith('a'.repeat(40));
+    // 未提交行没有交互语义（Tab 不会停在一个按了也没反应的死控件上）
+    expect(screen.getByTestId('blame-line-2')).not.toHaveAttribute('role');
+  });
+
+  it('换文件收起注解浮层：容器不为上一个文件的行继续持有展开态', () => {
+    const onToggleDetail = vi.fn();
+    const props = {
+      entries,
+      content: contentOf('AAA'),
+      views: viewsFixture({ view: 'annotate' }),
+      annotateLoader: nullHighlighter,
+      onSelectCommit: () => {},
+      onToggleDetail,
+      detail: null,
+    };
+    const { rerender } = render(<SnapshotTabs {...props} selectedPath="src/a.ts" />);
+    fireEvent.click(screen.getByTestId('blame-line-1'));
+    expect(onToggleDetail).toHaveBeenCalledWith('a'.repeat(40));
+    // 容器把浮层状态回传（detail 非空）后换文件：本组件把本地展开态清掉并通知容器收起
+    rerender(<SnapshotTabs {...props} selectedPath="README.md" detail={{ hash: 'a'.repeat(40) }} />);
+    expect(onToggleDetail).toHaveBeenLastCalledWith(null);
+  });
+
+  it('视图切到「与最新版本差异」：正文换成该版本与工作区的差异视图', async () => {
+    render(
+      <SnapshotTabs
+        entries={entries}
+        selectedPath="src/a.ts"
+        content={contentOf('AAA')}
+        views={viewsFixture({ view: 'latest' })}
+        diffLoader={stubLoader}
+      />,
+    );
+    expect(screen.getByTestId('browse-view-latest-body')).toBeInTheDocument();
+    expect(await screen.findByText('stub-diff-editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('browse-code-editor')).not.toBeInTheDocument();
+  });
+
+  it('差异未就绪给加载态、失败给错误行（不空着）', () => {
+    const { unmount } = render(
+      <SnapshotTabs
+        entries={entries}
+        selectedPath="src/a.ts"
+        content={contentOf('AAA')}
+        views={viewsFixture({ view: 'latest', latest: {} })}
+      />,
+    );
+    expect(screen.getByTestId('browse-view-latest-loading')).toBeInTheDocument();
+    unmount();
+    render(
+      <SnapshotTabs
+        entries={entries}
+        selectedPath="src/a.ts"
+        content={contentOf('AAA')}
+        views={viewsFixture({ view: 'latest', latest: { error: '引用不存在' } })}
+      />,
+    );
+    expect(screen.getByTestId('browse-view-latest-error')).toHaveTextContent('引用不存在');
+  });
+
+  it('降级提示行优先于数据：该版本里没有这个路径时只给提示行，连差异视图都不渲染', () => {
+    render(
+      <SnapshotTabs
+        entries={entries}
+        selectedPath="src/a.ts"
+        content={contentOf('AAA')}
+        views={viewsFixture({ view: 'latest', latest: {}, latestHint: '该提交的版本里没有这个路径' })}
+        diffLoader={stubLoader}
+      />,
+    );
+    expect(screen.getByTestId('browse-view-latest-hint')).toHaveTextContent('该提交的版本里没有这个路径');
+    expect(screen.queryByTestId('browse-view-latest-body')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('browse-view-latest-loading')).not.toBeInTheDocument();
+  });
+
+  it('再点一次点亮的按钮即回「文件内容」（视图是切换语义，不额外长第三个按钮）', () => {
+    const onChange = vi.fn();
+    render(
+      <SnapshotTabs
+        entries={entries}
+        selectedPath="src/a.ts"
+        content={contentOf('AAA')}
+        views={viewsFixture({ view: 'annotate', onChange })}
+        annotateLoader={nullHighlighter}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('browse-view-annotate'));
+    expect(onChange).toHaveBeenCalledWith('plain');
+  });
+
+  it('只有激活标签给按钮与对应视图：非激活标签恒显示文件内容（容器只为激活文件取那两路数据）', () => {
+    const props = {
+      entries,
+      views: viewsFixture({ view: 'annotate' }),
+      annotateLoader: nullHighlighter,
+    };
+    // 先让两个文件都留下内容副本（容器换选中那一拍仍会先拿副本显示，见「切回已访问的标签」用例）
+    const { rerender } = render(<SnapshotTabs {...props} selectedPath="src/a.ts" content={contentOf('AAA')} />);
+    rerender(<SnapshotTabs {...props} selectedPath="README.md" content={contentOf('BBB')} />);
+    // 两个文件标签页都在 DOM 里，但视图按钮只出现在激活的那一个上
+    expect(screen.getAllByTestId('browse-view-annotate')).toHaveLength(1);
+    const activePanel = document.querySelector('.ant-tabs-content-active') as HTMLElement;
+    expect(within(activePanel).getByTestId('browse-view-annotate')).toBeInTheDocument();
+    // 激活的那一个在「逐行注解」视图（注解行表），而不是文件内容
+    expect(within(activePanel).getByTestId('browse-view-annotate-body')).toBeInTheDocument();
+    expect(within(activePanel).getByTestId('blame-line-1')).toHaveTextContent('const a = 1;');
+    // 非激活的那一个（视图状态同样是 annotate）仍是文件内容：正文宿主在它那一页里
+    const inactive = [...document.querySelectorAll<HTMLElement>('.ant-tabs-content')].find((p) =>
+      p.classList.contains('ant-tabs-content-hidden'),
+    ) as HTMLElement;
+    expect(within(inactive).getByTestId('browse-content-path')).toHaveTextContent('src/a.ts');
+    expect(within(inactive).getByTestId('browse-code-editor')).toBeInTheDocument();
+    expect(within(inactive).queryByTestId('browse-view-annotate-body')).not.toBeInTheDocument();
+  });
+});
+
 describe('SnapshotTabs 两个开关各自显隐一族标签（browseTree / changeset）', () => {
-  it('只开「查看变更集」（browseTree=false）：没有「文件（N）」标签，挂载即停在变更集清单上', () => {
+  it('只开「变更集」（browseTree=false）：没有「文件(N)」标签，挂载即停在变更集清单上', () => {
     render(<SnapshotTabs browseTree={false} changeset={{ entry: changesetEntry }} />);
     expect(screen.queryByTestId('snapshot-tree-title')).not.toBeInTheDocument();
     expect(screen.queryByTestId('snapshot-tree-pane')).not.toBeInTheDocument();
-    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更集（2）');
-    expect(activeTabText()).toContain('变更集（2）');
+    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更(2)');
+    expect(activeTabText()).toContain('变更(2)');
   });
 
   it('只开「浏览快照」：没有变更集标签，停在文件树上（与变更集开关互不代劳）', () => {
@@ -273,7 +495,7 @@ describe('SnapshotTabs 两个开关各自显隐一族标签（browseTree / chang
     expect(screen.queryByTestId('snapshot-tree-title')).not.toBeInTheDocument();
     unmountOff();
     render(<SnapshotTabs entries={entries} />);
-    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件（2）');
+    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件(2)');
   });
 
   it('两个都关：标签栏为空（调用方据此不渲染右栏，这里只保证不凭空冒出标签）', () => {
@@ -289,24 +511,28 @@ describe('SnapshotTabs 两个开关各自显隐一族标签（browseTree / chang
     );
     expect(screen.queryByTestId('snapshot-tree-title')).not.toBeInTheDocument();
     rerender(<SnapshotTabs entries={entries} browseTree changeset={{ entry: changesetEntry }} diffTabs={{ open: ['src/a.ts'], active: 'src/a.ts' }} />);
-    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件（2）');
+    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件(2)');
     expect(screen.getByTestId('changes-diff-tab-src/a.ts')).toBeInTheDocument();
     expect(activeTabText()).toContain('a.ts');
   });
 });
 
 describe('SnapshotTabs 变更集标签族（清单 + 逐文件差异）', () => {
-  it('没有变更集时标签栏只有「文件（N）」：变更集标签不凭空出现', () => {
+  it('没有变更集时标签栏只有「文件(N)」：变更集标签不凭空出现', () => {
     render(<SnapshotTabs entries={entries} />);
     expect(screen.queryByTestId('snapshot-changeset-title')).not.toBeInTheDocument();
-    expect(activeTabText()).toContain('文件（2）');
+    expect(activeTabText()).toContain('文件(2)');
   });
 
-  it('提供变更集：多一个「变更集（N）」标签并激活，可关闭（关闭即上抛容器）', () => {
+  it('提供变更集：多一个「变更(N)」标签（文件夹图标 + 半角括号计数）并激活，可关闭（关闭即上抛容器）', () => {
     const onCloseChangeset = vi.fn();
     render(<SnapshotTabs entries={entries} changeset={{ entry: changesetEntry }} onCloseChangeset={onCloseChangeset} />);
-    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更集（2）');
-    expect(activeTabText()).toContain('变更集（2）');
+    const title = screen.getByTestId('snapshot-changeset-title');
+    expect(title).toHaveTextContent('变更(2)');
+    // 用户口径 2026-09-30：标签名去「集」字、计数改半角括号，并与「文件(N)」同一个文件夹图标
+    expect(title.textContent).toBe('变更(2)');
+    expect(title.closest('.ant-tabs-tab')?.querySelector('.anticon-folder')).not.toBeNull();
+    expect(activeTabText()).toContain('变更(2)');
     clickRemoveByTestId('snapshot-changeset-title');
     expect(onCloseChangeset).toHaveBeenCalledTimes(1);
   });
@@ -325,7 +551,7 @@ describe('SnapshotTabs 变更集标签族（清单 + 逐文件差异）', () => 
 
   it('清单加载中/出错给占位（与旧弹窗同一套降级），加载中的标签名不带文件数', () => {
     const { unmount } = render(<SnapshotTabs entries={entries} changeset={{ loading: true }} />);
-    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更集（0）');
+    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更(0)');
     expect(document.querySelector('.ant-skeleton')).toBeInTheDocument();
     unmount();
     render(<SnapshotTabs entries={entries} changeset={{ error: 'boom' }} />);
@@ -447,7 +673,7 @@ describe('SnapshotTabs 变更集标签族（清单 + 逐文件差异）', () => 
     );
     fireEvent.click(screen.getByTestId('snapshot-changeset-title'));
     expect(onDiffTabsChange).toHaveBeenCalledWith({ open: ['src/a.ts'], active: '' });
-    expect(activeTabText()).toContain('变更集（2）');
+    expect(activeTabText()).toContain('变更(2)');
   });
 
   it('关闭差异标签：从受控列表里移除，激活项落到右邻（末位落左邻）', () => {
@@ -477,7 +703,7 @@ describe('SnapshotTabs 变更集标签族（清单 + 逐文件差异）', () => 
     );
     clickRemoveByTestId('changes-diff-tab-src/a.ts');
     expect(onDiffTabsChange).toHaveBeenCalledWith({ open: [], active: '' });
-    expect(activeTabText()).toContain('变更集（2）');
+    expect(activeTabText()).toContain('变更(2)');
   });
 
   it('容器剪掉激活的差异标签（路径不在新变更集里）：激活键兜底回变更集清单', () => {
@@ -491,7 +717,7 @@ describe('SnapshotTabs 变更集标签族（清单 + 逐文件差异）', () => 
     expect(activeTabText()).toContain('a.ts');
     rerender(<SnapshotTabs entries={entries} changeset={{ entry: changesetEntry }} diffTabs={{ open: [], active: '' }} />);
     expect(screen.queryByTestId('changes-diff-tab-src/a.ts')).not.toBeInTheDocument();
-    expect(activeTabText()).toContain('变更集（2）');
+    expect(activeTabText()).toContain('变更(2)');
   });
 
   it('根提交的差异标签只给提示行（不渲染伪 diff）', async () => {

@@ -30,10 +30,12 @@ import { ResizableColumns, restoreWidthsToAvailable, type ResizablePane } from '
 import { SplitPane } from '../base/split-pane';
 import { useStoredWidth } from '../base/stored-preference';
 import { FALLBACK_CHAR_WIDTH } from '../base/readonly-text-view';
+import type { LineHighlighterLoader } from '../base/line-highlighter';
 import { copyToClipboard } from '../base/clipboard';
 import { CommitGraph } from '../domain/commit-graph';
 import { CommitDetailsPanel } from '../domain/commit-details-panel';
-import { SnapshotTabs } from './snapshot-tabs';
+import { SnapshotTabs, type SnapshotFileViews } from './snapshot-tabs';
+import type { BlameDetailState } from './blame-annotate-table';
 import { RepoTopNav } from './repo-top-nav';
 import { buildLayout, collapseAllFragments, type CollapsedFragment, type LayoutCommit } from '../graph-layout';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -169,7 +171,7 @@ export interface LogPageProps {
   onBrowse?: (hash: string) => void;
   /**
    * 「浏览快照」开关（受控，真源在容器：URL 的 `browse=1`）：为真时右栏里出现**文件树那一族**标签
-   * （「文件（N）」文件树 + 树里点开的文件内容标签）。与变更集开关（`changesHash` 非空）**互不代劳**——
+   * （「文件(N)」文件树 + 树里点开的文件内容标签）。与变更集开关（`changesHash` 非空）**互不代劳**——
    * 只开变更集时右栏照样出现，只是没有文件树标签（见下面布局分支）。
    * 缺省 false：布局与未引入快照栏之前逐像素一致（两栏：日志 + 详情）。
    */
@@ -190,15 +192,33 @@ export interface LogPageProps {
   browseContentLoading?: boolean;
   /** 文件内容错误信息 */
   browseContentError?: string;
+  /**
+   * 文件标签的两个附加视图（逐行注解 / 与最新版本差异）及其取数：**整套给**，缺省则路径栏只有复制按钮。
+   * 状态与数据都归容器（视图真源是 URL 的 `?view=`，逐行注解与差异各自条件拉取，见 composite/snapshot-tabs）。
+   */
+  snapshotViews?: SnapshotFileViews;
+  /** 注解行的哈希详情浮层（受控）：当前展开了哪个提交 + 它的取数三态；缺省不给浮层 */
+  snapshotDetail?: BlameDetailState | null;
+  /** 点注解行 → 切换浮层（传 null 关闭）；与 snapshotDetail 同传才生效 */
+  onToggleSnapshotDetail?: (hash: string | null) => void;
+  /** 注解行的逐行高亮 loader 注入点（测试传 stub 绕过真实 Shiki） */
+  snapshotAnnotateLoader?: LineHighlighterLoader;
+  /**
+   * 注解行点击 → 选中该行归属的提交。**刻意不复用 onSelectCommit**：容器对「选中提交」有一套既有契约
+   * （换版本就把 `browse` 落回文件树，因为同一路径在新版本里未必存在），拿它来处理注解行点击，
+   * 会让用户刚点开的那张注解表当场消失（实测）。这条回调的语义是「版本换了，但**留在当前文件与视图**」，
+   * 由容器按自己的 URL 形态实现（保留 `browse=` 与 `view=`，只换 `select=`）。
+   */
+  onSnapshotSelectCommit?: (hash: string) => void;
   /** 树里点文件：路径相同 = 收起内容（容器据此清空选中）；目录不触发（FileTree 只对叶子回调）。
    *  快照标签栏切/关标签也走这条回调（换文件传新路径；回文件树传当前路径即收起）。 */
   onSelectBrowseFile?: (path: string) => void;
-  /** 透传给 CommitDetailsPanel 的「查看变更集」回调（#13 LogPage → 变更集标签：开/关该提交的变更集标签）；缺省不渲染该按钮 */
+  /** 透传给 CommitDetailsPanel 的「变更集」回调（#13 LogPage → 变更集标签：开/关该提交的变更集标签）；缺省不渲染该按钮 */
   onOpenChanges?: (hash: string) => void;
   /**
    * 变更集标签受控打开键（容器经 useCommitFiles 条件拉取；'' = 没有该标签）。
-   * 它同时就是「查看变更集」这个开关的**开合真源**（容器由 URL 的 `diff=1` 派生）：非空 → 右栏出现
-   * 「变更集（N）」标签与差异标签，空 → 那一族整族不存在。与 browseOpen **互不代劳**，
+   * 它同时就是「变更集」这个开关的**开合真源**（容器由 URL 的 `diff=1` 派生）：非空 → 右栏出现
+   * 「变更(N)」标签与差异标签，空 → 那一族整族不存在。与 browseOpen **互不代劳**，
    * 但两者**共用一条右栏**——任一为「开」即渲染右栏（见下面布局分支）。
    */
   changesHash?: string;
@@ -315,6 +335,11 @@ export function LogPage({
   browseContent,
   browseContentLoading,
   browseContentError,
+  snapshotViews,
+  snapshotDetail,
+  onToggleSnapshotDetail,
+  onSnapshotSelectCommit,
+  snapshotAnnotateLoader,
   onSelectBrowseFile,
   onOpenChanges,
   changesHash,
@@ -814,10 +839,10 @@ export function LogPage({
           ) : null}
         </div>
       ) : null}
-      {/* 两栏/三栏：主区（提交图）+ 右侧详情面板；任一开关（浏览快照 / 查看变更集）打开时插入**快照栏**。
+      {/* 两栏/三栏：主区（提交图）+ 右侧详情面板；任一开关（浏览快照 / 变更集）打开时插入**快照栏**。
           快照栏 = 两个功能共用的**标签栏**（composite/snapshot-tabs）：
-          「浏览快照」开 → 有「文件（N）」文件树标签，树里点开的文件各占一个内容标签；
-          「查看变更集」开 → 有「变更集（N）」标签，清单里点开的文件各占一个差异标签。两族各由自己的开关显隐。
+          「浏览快照」开 → 有「文件(N)」文件树标签，树里点开的文件各占一个内容标签；
+          「变更集」开 → 有「变更(N)」标签，清单里点开的文件各占一个差异标签。两族各由自己的开关显隐。
           列宽：两条分隔条各调整其**左邻**那一栏（日志 | 详情 | 快照），详情/快照的宽度记 localStorage；
           日志栏是弹性列，实际宽由原语按容器宽反算（见 LOG_WISH_WIDTH 与 base/resizable-columns）。
           未选中提交时退化为主区独占满宽（盒子几何与 SplitPane 的主区宿主一致）。 */}
@@ -874,8 +899,16 @@ export function LogPage({
             }}
             onCopyAll={onCopyBrowseContent}
             copyHint={snapshotCopyHint}
-            /* 变更集（#13）：Modal 已改为标签栏里的一个标签——「查看变更集」开着且该提交有 hash 时出现
-               「变更集（N）」标签，点清单里的文件在同一栏开它的差异标签（容器持有 open/active） */
+            /* 文件标签的三个视图：视图状态与两路数据都归容器（见 SnapshotFileViews）。
+               注解行的点击走**专用回调** onSnapshotSelectCommit（换版本但留在当前文件与视图），
+               不是列表行点击那条 onSelectCommit（那条会把浏览面板落回文件树，注解表会当场消失）。 */
+            {...(snapshotViews === undefined ? {} : { views: snapshotViews })}
+            {...(onSnapshotSelectCommit === undefined ? {} : { onSelectCommit: onSnapshotSelectCommit })}
+            {...(snapshotDetail === undefined ? {} : { detail: snapshotDetail })}
+            {...(onToggleSnapshotDetail === undefined ? {} : { onToggleDetail: onToggleSnapshotDetail })}
+            {...(snapshotAnnotateLoader === undefined ? {} : { annotateLoader: snapshotAnnotateLoader })}
+            /* 变更集（#13）：Modal 已改为标签栏里的一个标签——「变更集」开着且该提交有 hash 时出现
+               「变更(N)」标签，点清单里的文件在同一栏开它的差异标签（容器持有 open/active） */
             changeset={
               changesHash === undefined || changesHash === ''
                 ? null

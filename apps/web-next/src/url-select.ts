@@ -7,7 +7,7 @@
  * 共三个参数，其中两个是**各自独立的就地面板键**（用户口径：两个功能独立开关显隐、互不代劳）：
  *   · `select=<commitHash>` —— 选中的提交（两个面板看的都是这一版；详情面板展示它）
  *   · `browse[=<路径>]`     —— 「浏览快照」：**键在即面板开**
- *   · `diff[=<路径>]`       —— 「查看变更集」：**键在即面板开**
+ *   · `diff[=<路径>]`       —— 「变更集」：**键在即面板开**
  *   · 另有 `?compare=` 等由别的功能读写的参数，一律原样保留。
  *
  * **键在即开、值承载定位**（E-empty，2026-09-17 用户口径）——每个键只有一条规则：
@@ -108,7 +108,7 @@ export function readBrowsePath(query: UrlQuery): string | undefined | null {
   return readPanelPath(query, 'browse');
 }
 
-/** 读「查看变更集」面板的定位：undefined = 面板关着；null = 变更集清单在前台；字符串 = 该差异在前台 */
+/** 读「变更集」面板的定位：undefined = 面板关着；null = 变更集清单在前台；字符串 = 该差异在前台 */
 export function readChangesPath(query: UrlQuery): string | undefined | null {
   return readPanelPath(query, 'diff');
 }
@@ -118,7 +118,7 @@ export function readBrowse(query: UrlQuery): boolean {
   return readPanelPath(query, 'browse') !== undefined;
 }
 
-/** 读「查看变更集」键在不在（= 面板开不开） */
+/** 读「变更集」键在不在（= 面板开不开） */
 export function readChanges(query: UrlQuery): boolean {
   return readPanelPath(query, 'diff') !== undefined;
 }
@@ -148,7 +148,7 @@ export function withBrowsePanel(query: UrlQuery, path: string | null): URLSearch
   return withPanel(query, 'browse', path);
 }
 
-/** 写「查看变更集」面板：`withChangesPanel(q, 'b.ts')` = 面板开且该差异在前台；`withChangesPanel(q, PANEL_AGGREGATE)` = 清单在前台 */
+/** 写「变更集」面板：`withChangesPanel(q, 'b.ts')` = 面板开且该差异在前台；`withChangesPanel(q, PANEL_AGGREGATE)` = 清单在前台 */
 export function withChangesPanel(query: UrlQuery, path: string | null): URLSearchParams {
   return withPanel(query, 'diff', path);
 }
@@ -158,7 +158,19 @@ export function withoutBrowsePanel(query: UrlQuery): URLSearchParams {
   return withPanelClosed(query, 'browse');
 }
 
-/** 关掉「查看变更集」面板（删 `diff` 键） */
+/**
+ * 把快照文件标签的视图一并清掉（删 `view` 键，其余参数原样保留）。
+ * 用途只有一个：**关掉「浏览快照」面板时**调用——`view` 描述的是「那个面板里看文件的哪一种内容」，
+ * 面板都收起了它就没有了描述对象；留着会在下一次打开面板（甚至另一个页面读同名键）时凭空生效。
+ * 注意别拿它去关「变更集」面板：那个面板的差异标签不读 `view`，误删只会把用户刚选的视图偏好弄丢。
+ */
+export function withoutSnapshotFileView(query: UrlQuery): URLSearchParams {
+  const next = copyOf(query);
+  next.delete('view');
+  return next;
+}
+
+/** 关掉「变更集」面板（删 `diff` 键） */
 export function withoutChangesPanel(query: UrlQuery): URLSearchParams {
   return withPanelClosed(query, 'diff');
 }
@@ -225,10 +237,36 @@ export function withMigratedSnapshot(query: UrlQuery): URLSearchParams {
 }
 
 /**
+ * 快照栏**文件标签的视图**（`/repos/:id` 右栏，路径栏那两个图标按钮切换）。
+ * 三个值各是一件事，且都是「看这个文件的哪一种内容」——文件内容本身（plain，缺省）/ 逐行注解 / 与最新版本差异。
+ * 与溯源页的 `view` 键**同名**：语义都是「右栏前台看哪一个视图」，只是取值域各自受限
+ * （溯源页见 {@link readBlameView}）。空值/非法值一律回落 `plain`——地址被手改也不至于渲染出没有的视图。
+ */
+export type SnapshotFileView = 'plain' | 'annotate' | 'latest';
+
+/** 读快照文件标签的视图：缺省、空值与非法值一律 `plain`（缺省视图不写进地址，但读到空也要给一个确定值） */
+export function readSnapshotFileView(query: UrlQuery): SnapshotFileView {
+  const raw = readParam(query, 'view');
+  return raw === 'annotate' || raw === 'latest' ? raw : 'plain';
+}
+
+/**
+ * 写快照文件标签的视图（只动 `view` 一个键，其余参数原样保留）。
+ * `plain` 是缺省视图 → **删键**而不是写 `view=plain`：地址里只留用户显式做过的选择，
+ * 「恢复原样」与「从没切过」于是是同一种地址，刷新与复制链接都不会带上一条无信息量的参数。
+ */
+export function withSnapshotFileView(query: UrlQuery, view: SnapshotFileView): URLSearchParams {
+  const next = copyOf(query);
+  if (view === 'plain') next.delete('view');
+  else next.set('view', view);
+  return next;
+}
+
+/**
  * 溯源页（`/repos/:id/blame`）三栏工作台的参数读写。三个键各管一件事：
  *   · `file=<路径>`                  —— 溯源目标（与 /diff、/history 同名同义）
  *   · `select=<完整哈希>`            —— 中栏选中的提交（右栏三标签看的都是它）
- *   · `view=changes|latest|annotate` —— 右栏在前台的标签
+ *   · `view=changes|latest|annotate|detail` —— 右栏在前台的标签（`detail` = 提交详情）
  * 缺省不写进地址：`?select=` 缺失时容器派生「该文件最新一条」，`?view=` 缺失即 `changes`；
  * 只有用户显式动作才落参数（与日志页「URL 是真源、交互一律 replace」同一口径）。
  * `rev=<哈希>` 是**只读兼容**：文件历史页「Annotate」的旧链接等价于「选中该提交 + 逐行注解」，
@@ -241,7 +279,7 @@ export function readBlameFile(query: UrlQuery): string {
 /** 读右栏标签：缺省与非法值一律回落 `changes`（地址被手改也不至于渲染出一个不存在的标签） */
 export function readBlameView(query: UrlQuery): BlameViewKey {
   const raw = readParam(query, 'view');
-  return raw === 'latest' || raw === 'annotate' || raw === 'changes' ? raw : 'changes';
+  return raw === 'latest' || raw === 'annotate' || raw === 'detail' || raw === 'changes' ? raw : 'changes';
 }
 
 /**
@@ -263,7 +301,7 @@ export function normalizeBlameQuery(query: UrlQuery): URLSearchParams {
   if (next.has('select') && (next.get('select') ?? '') === '') next.delete('select');
   if (next.has('view')) {
     const view = next.get('view') ?? '';
-    if (view !== 'changes' && view !== 'latest' && view !== 'annotate') next.set('view', 'changes');
+    if (view !== 'changes' && view !== 'latest' && view !== 'annotate' && view !== 'detail') next.set('view', 'changes');
   }
   return next;
 }

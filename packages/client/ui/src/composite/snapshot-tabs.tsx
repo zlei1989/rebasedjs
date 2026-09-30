@@ -1,6 +1,7 @@
 /**
  * 快照标签页：把「文件树」「变更集」「文件内容」「变更差异」合并成**一条标签栏**（对齐编辑器式浏览）。
- * 做什么：第一个标签是「文件（N）」（内是文件树，不可关闭）；有变更集时第二个标签是「变更集（N）」
+ * 做什么：第一个标签是「文件(N)」（内是文件树，不可关闭）；有变更集时第二个标签是「变更(N)」
+ *        （两者同一个文件夹图标、计数都用半角括号——用户口径 2026-09-30：标签名去「集」字、加图标，括号一律半角；
  *        （内是本次提交的变更文件清单，可关闭）；树里每点一个文件把它开成一个可关闭的内容标签；
  *        变更集里每点一个文件把它开成一个可关闭的差异标签。正文都渲染在标签页内。
  *        标签栏右端**不再挂版本短名 chip**（用户口径删除）：当前在看哪一版由容器给的提交上下文表达。
@@ -14,9 +15,9 @@
  *     而那次重挂载正是文件树内容标签的复位手段（旧路径在新版本里未必存在）。容器按新提交的变更集剪枝
  *     已开差异标签，并在数据到位后把激活项回报过来。
  * 两族标签的显隐各由一个开关决定，互不代劳（用户口径 2026-09-17）：
- *   · `browseTree`（缺省 true）= 详情面板「浏览快照」；为假时**没有**「文件（N）」标签与文件内容标签，
+ *   · `browseTree`（缺省 true）= 详情面板「浏览快照」；为假时**没有**「文件(N)」标签与文件内容标签，
  *     整条标签栏只剩变更集那一族；
- *   · `changeset` 非空 = 详情面板「查看变更集」；为 null/缺省时没有「变更集（N）」标签与差异标签。
+ *   · `changeset` 非空 = 详情面板「变更集」；为 null/缺省时没有「变更(N)」标签与差异标签。
  * 两个都关时标签栏是空的——调用方（LogPage）据此不渲染右栏，本组件只保证不凭空冒出标签。
  * 激活优先（挂载那一刻，也是换提交重挂载后的落点）：容器指定的差异标签 → 容器选中的文件标签 →
  *        变更集标签（开着的话）→ 文件树。挂载之后只对**变化**做对齐（见下面各处 synced ref），
@@ -27,16 +28,27 @@
  *        变更集 = changeset；差异 = diff:<路径>。路径之间本来就唯一，前缀隔离的是「根目录真有个叫
  *        files 的文件」这类与固定标签重名的路径（React 重复 key + 点文件名被当成点固定标签）。
  * 纯展示：不调接口、不碰 URL，全部经回调上抛。
+ * 文件标签的**三种视图**（用户口径 2026-09-30）：路径栏右侧两个图标按钮切换「逐行注解」与「与最新版本差异」
+ * （文字只在 tooltip 里、点击后高亮、点亮再点一次回「文件内容」即 `plain`）。三者互斥且都渲染在**路径栏之下**
+ * 的同一块正文区：文件内容 / 逐行注解表 / 与工作区（最新版本）的差异。视图状态由**容器**经 URL 的 `?view=`
+ * 持有（本组件纯受控），故刷新、深链、前进后退都在同一个视图上；数据也由容器**只给当前激活视图**那一路
+ * （`views` 缺省 = 容器没给这两个视图的取数 → 两个按钮不渲染，无死控件）。
+ * 逐行注解与「与最新版本差异」复用既有组件（BlameAnnotateTable / DiffViewer），故注解行的交互
+ * （点行 = 选中该提交 + 哈希旁详情浮层）与溯源页逐字一致；浮层「开在哪一行」是本组件的瞬态 UI 态（同溯源页）。
  */
 import { FolderOutlined } from '@ant-design/icons';
-import { Flex, Tabs, Tooltip, Typography, theme } from 'antd';
+import { Flex, Spin, Tabs, Tooltip, Typography, theme } from 'antd';
 import type { TabsProps } from 'antd';
-import type { BrowseContent, BrowseEntry, CommittedEntry, FileVersions } from '@rebased/contracts';
+import type { BlameLine, BrowseContent, BrowseEntry, CommittedEntry, FileVersions } from '@rebased/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
+import type { LineHighlighterLoader } from '../base/line-highlighter';
 import { EmptyState } from '../base/empty-state';
-import { ReadonlyTextView, ReadonlyTextActions } from '../base/readonly-text-view';
+import { ReadonlyTextView, ReadonlyTextActions, type SnapshotFileView } from '../base/readonly-text-view';
+import { BlameAnnotateTable, type BlameDetailState } from './blame-annotate-table';
 import { ChangesetDiffPane, ChangesetList } from './changeset-pane';
+import { DiffViewer } from '../domain/diff-viewer';
+import { languageForPath } from '../domain/language';
 import { SnapshotTreeColumn } from './snapshot-tree-column';
 
 /** 「文件」标签的键：树所在的那一个标签页 */
@@ -94,10 +106,33 @@ export interface SnapshotDiffTabs {
   active: string;
 }
 
+/**
+ * 文件标签的两个附加视图：当前视图 + 它们各自的取数通道。
+ * **由容器整套按需注入**（`undefined` = 不提供这两个视图）：文件标签恒有「文件内容」这一个视图，
+ * 而「逐行注解」「与最新版本差异」都要**钉在某一版**上——容器无法确定看哪一版时（没有选中提交、
+ * 面板关着）就不注入，于是路径栏里不会出现两个点了也没东西看的按钮。
+ */
+export interface SnapshotFileViews {
+  /** 当前视图（`plain` = 文件内容） */
+  view: SnapshotFileView;
+  /** 切换视图（容器据此写 URL 的 `?view=`） */
+  onChange: (view: SnapshotFileView) => void;
+  /** 逐行注解：该版本的逐行归属（容器经 useBlame 条件拉取） */
+  annotate: { lines?: BlameLine[]; loading?: boolean; error?: string };
+  /** 与最新版本差异：该版本与**工作区当前版本**的两侧全文（容器经 useFileDiff 条件拉取） */
+  latest: { versions?: FileVersions; loading?: boolean; error?: string };
+  /**
+   * 「与最新版本差异」的降级提示行：非空时**连差异视图都不渲染**，只显示这句话。
+   * 容器在两种情形下给（与溯源页同一判据）：变更集未就绪（还不能断定这一版有没有这个路径）、
+   * 或该提交那一版里根本没有这个路径（此时那一次差异请求**根本没发**，渲染空视图只会让人以为文件是空的）。
+   */
+  latestHint?: string;
+}
+
 export interface SnapshotTabsProps {
   /**
    * 「浏览快照」开关（详情面板那个按钮，缺省 true = 开）：为假时整族文件标签不渲染——
-   * 没有「文件（N）」文件树、也不会有文件内容标签，标签栏只剩变更集那一族。
+   * 没有「文件(N)」文件树、也不会有文件内容标签，标签栏只剩变更集那一族。
    * 缺省 true 是为了纯展示调用方（只给 entries 的老用法）不必额外传参。
    */
   browseTree?: boolean;
@@ -123,7 +158,7 @@ export interface SnapshotTabsProps {
   onCopyAll?: () => void;
   /** 复制反馈文案（由调用方在点「复制全文」后置位、按时清空） */
   copyHint?: string | null;
-  /** 变更集（#13）：提供时标签栏多一个「变更集（N）」标签（可关闭） */
+  /** 变更集（#13）：提供时标签栏多一个「变更(N)」标签（可关闭） */
   changeset?: SnapshotChangeset | null;
   /** 关闭变更集标签（容器清空 hash 并收起该族差异标签） */
   onCloseChangeset?: () => void;
@@ -141,6 +176,16 @@ export interface SnapshotTabsProps {
   diffError?: string;
   /** Monaco diff 懒加载注入点（测试传 stub 绕过真实 monaco） */
   diffLoader?: MonacoDiffLoader;
+  /** 文件标签的两个附加视图（见 SnapshotFileViews）；缺省 = 路径栏只有复制按钮 */
+  views?: SnapshotFileViews;
+  /** 逐行注解里点某一行：选中该行归属的提交（容器据此写 `?select=`，与溯源页同一联动）；缺省行只读 */
+  onSelectCommit?: (hash: string) => void;
+  /** 逐行注解的哈希详情浮层（受控：当前展开了哪个哈希 + 它的取数三态）；缺省不给浮层 */
+  detail?: BlameDetailState | null;
+  /** 点注解行 → 切换浮层（传 null 关闭）；缺省哈希不可点 */
+  onToggleDetail?: (hash: string | null) => void;
+  /** 高亮 loader 注入点：替换注解行的逐行高亮加载器（默认懒加载真实 Shiki） */
+  annotateLoader?: LineHighlighterLoader;
 }
 
 /** 标签名：取路径最后一段（同名不同目录靠 Tooltip 的全路径区分） */
@@ -170,6 +215,11 @@ export function SnapshotTabs({
   diffLoading,
   diffError,
   diffLoader,
+  views,
+  onSelectCommit,
+  detail,
+  onToggleDetail,
+  annotateLoader,
 }: SnapshotTabsProps): ReactNode {
   // 分隔线走主题 token（暗色主题下硬编码浅灰会过亮），与本页其它表头同源
   const { token } = theme.useToken();
@@ -194,6 +244,29 @@ export function SnapshotTabs({
   // 每路径的差异副本（同上）
   const [diffSnapshots, setDiffSnapshots] = useState<Map<string, DiffSnapshot>>(() => new Map());
   /**
+   * 注解行的详情浮层开在**哪个提交**（本地瞬态 UI 态，数据由容器按 detail.hash 注入；'' = 关着）。
+   * 与溯源页同一手法：开在哪一行由注解表自己记（一个提交可能占连续多行），这里只记「展开了哪个提交」。
+   */
+  const [detailHash, setDetailHash] = useState('');
+  /**
+   * 那份展开态属于**哪个作用域**（`文件路径@视图`）。换文件/切视图时不能只靠 effect 清本地状态：
+   * 旧文件的面板在这一次渲染里**还挂着**（antd 要等下一次渲染才把它摘掉），effect 清状态是渲染之后的事，
+   * 于是旧面板会拿着上一个文件的 detail 再渲染一帧——它内部按 `openLineno + detail.hash` 判定，
+   * 当场又调一次 onToggleDetail 把容器刚收起的浮层重新打开（实测：换文件后浮层弹在已经不存在的行上）。
+   * 故在**渲染期**按作用域判定：作用域一旦不是当下这个，那份展开态就当不存在（收起的回调由下面的 effect 补）。
+   */
+  const detailScope = `${selectedPath ?? ''}@${views?.view ?? 'plain'}`;
+  const detailScopeRef = useRef(detailScope);
+  const detailForPane: BlameDetailState | null =
+    detailScopeRef.current === detailScope && detailHash !== '' ? { hash: detailHash, ...detail } : null;
+  useEffect(() => {
+    if (detailScopeRef.current === detailScope) return;
+    detailScopeRef.current = detailScope;
+    if (detailHash === '') return;
+    setDetailHash('');
+    onToggleDetail?.(null);
+  }, [detailScope, detailHash, onToggleDetail]);
+  /**
    * 上一次对齐过的 selectedPath。**只在它变化时对齐**，不每帧以容器为准：
    * 用户点「文件」标签时容器那次 URL 回写还没落地（或容器压根不清 ?file=），
    * 每帧对齐会把刚切到树上的用户当场弹回文件标签。
@@ -215,7 +288,7 @@ export function SnapshotTabs({
     setActiveKey(fileTabKey(selectedPath));
   }, [selectedPath, browseTree]);
   /**
-   * 变更集标签从无到有：切过去。用户点「查看变更集」时可能正停在某个差异标签上，
+   * 变更集标签从无到有：切过去。用户点「变更集」时可能正停在某个差异标签上，
    * 这一跳是那次点击的应有反馈；而重挂载（换提交）时的是否激活由上面的挂载优先级决定，不在这里重复。
    */
   const changesetWasOpenRef = useRef(changesetOpen);
@@ -333,7 +406,14 @@ export function SnapshotTabs({
     }
     activateTab(fileTabKey(next));
   };
-  /** 单个文件标签的正文区：路径栏（路径 + 复制/新标签页动作）+ 只读代码视图 */
+  /**
+   * 单个文件标签的正文区：路径栏（路径 + 两个视图图标按钮 + 复制全文）+ 正文（按视图切换内容）。
+   * 三个视图**只渲染当前那一个**（不像标签页那样把三份都挂上）：`ReadonlyTextView` 里是 Monaco 编辑器、
+   * 差异视图里是 Monaco diff，都按宿主尺寸布局——把隐藏的那两个也挂上等于白起两个量到零高的编辑器。
+   * 非激活标签恒是「文件内容」视图（容器只为激活文件取注解与差异那两路数据，别的标签切过去也没得看）。
+   * 两个正文构造器写成**函数声明**（提升，故可在本 useCallback 之后声明）：它们是纯渲染函数、无状态、
+   * 每帧跟着本组件闭包重建，把函数名列进依赖表只是如实记录这一点（本仓无 exhaustive-deps 规则）。
+   */
   const renderFilePane = useCallback((path: string): ReactNode => {
     const snapshot = snapshots.get(path);
     const isActive = path === selectedPath;
@@ -342,13 +422,15 @@ export function SnapshotTabs({
     const useLive = isActive && !(contentLoading === true && snapshot !== undefined);
     const view = useLive ? { content: content?.content, binary: content?.binary, error: contentError } : snapshot;
     const viewLoading = useLive && contentLoading === true;
+    // 激活标签上容器的那个视图（非激活标签没有它那两路数据 → 恒显示文件内容）
+    const fileView: SnapshotFileView = isActive ? views?.view ?? 'plain' : 'plain';
     return (
       /* 高度用 height:100% 而不是 flex:1：标签页本体（.ant-tabs-content）是块盒，
          非激活页靠 antd 的 `.ant-tabs-content-hidden{display:none}` 隐藏——
          这一层**绝不能再写行内 display**（行内 display 会盖掉那条隐藏规则，所有标签页会一起摊开，
          实测过一次：三个文件的内容在栏里上下叠成一列）。 */
       <Flex vertical style={{ height: '100%', minHeight: 0, minWidth: 0 }}>
-        {/* 路径栏：左边是这一版／这个文件的定位信息，右边是复制全文（内边距与正文一致，靠 antd 默认行高） */}
+        {/* 路径栏：左边是这一版／这个文件的定位信息，右边是视图切换与复制全文（内边距与正文一致，靠 antd 默认行高） */}
         <Flex
           align="center"
           gap={8}
@@ -366,28 +448,102 @@ export function SnapshotTabs({
             content={view?.content}
             binary={view?.binary}
             onCopyAll={onCopyAll}
+            view={fileView}
+            /* 视图按钮只在**激活标签**上给回调：非激活标签切过去也拿不到那两路数据（见上），
+               给了就成了「点了没反应」的死控件 */
+            {...(isActive && views !== undefined ? { onViewChange: views.onChange } : {})}
           />
         </Flex>
-        {view === undefined && !viewLoading ? (
-          /* 没有副本、也不在加载：开了标签就立刻切走时（容器把内容通道切给了别人）会落到这里。
-             文案不能写「切回该标签页」——它也可能出现在**当前激活**的标签上（组件不保证容器一定在拉它）。 */
-          <Flex vertical data-testid={`snapshot-file-pending-${path}`} style={{ flex: 1, minHeight: 0 }}>
-            <EmptyState title="内容尚未加载" description="再点一次树里的这个文件名即可重新获取" />
-          </Flex>
-        ) : (
-          <ReadonlyTextView
-            path={path}
-            content={view?.content}
-            binary={view?.binary}
-            error={view?.error}
-            loading={viewLoading}
-            // 复制反馈只在激活标签上显示（切走后按钮不在视野里，留着会让人以为刚复制的是这一份）
-            copyHint={isActive ? copyHint : null}
-          />
+        {fileView === 'annotate' ? annotateBody(path) : fileView === 'latest' ? latestBody(path) : (
+          view === undefined && !viewLoading ? (
+            /* 没有副本、也不在加载：开了标签就立刻切走时（容器把内容通道切给了别人）会落到这里。
+               文案不能写「切回该标签页」——它也可能出现在**当前激活**的标签上（组件不保证容器一定在拉它）。 */
+            <Flex vertical data-testid={`snapshot-file-pending-${path}`} style={{ flex: 1, minHeight: 0 }}>
+              <EmptyState title="内容尚未加载" description="再点一次树里的这个文件名即可重新获取" />
+            </Flex>
+          ) : (
+            <ReadonlyTextView
+              path={path}
+              content={view?.content}
+              binary={view?.binary}
+              error={view?.error}
+              loading={viewLoading}
+              // 复制反馈只在激活标签上显示（切走后按钮不在视野里，留着会让人以为刚复制的是这一份）
+              copyHint={isActive ? copyHint : null}
+            />
+          )
         )}
       </Flex>
     );
-  }, [snapshots, selectedPath, content, contentError, contentLoading, copyHint, onCopyAll, token.colorSplit]);
+  }, [snapshots, selectedPath, content, contentError, contentLoading, copyHint, onCopyAll, token.colorSplit, views, annotateBody, latestBody]);
+  /**
+   * 逐行注解正文：**复用溯源页的注解行表**（同一组件 = 同一交互：点行选中该提交 + 哈希旁详情浮层）。
+   * 高亮语言按当前文件路径推断（与另两个视图同一口径）；数据通道由容器条件拉取后经 views 注入。
+   * 外层 flex 列 + `overflow: auto`：与溯源页「逐行注解」标签的承载方式一致（行多时整块纵向滚动）。
+   */
+  function annotateBody(path: string): ReactNode {
+    const channel = views?.annotate;
+    return (
+      <Flex
+        vertical
+        data-testid="browse-view-annotate-body"
+        style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto' }}
+      >
+        <BlameAnnotateTable
+          lines={channel?.lines}
+          loading={channel?.loading}
+          error={channel?.error}
+          language={languageForPath(path)}
+          {...(onSelectCommit === undefined ? {} : { onSelectCommit })}
+          /* 浮层严格对齐溯源页：两个回调都注入时行可点（点行 = 选中 + 开/收浮层），
+             未提交行（全 0 哈希）在表内恒不可点；容器不给 detail 通道时连浮层都不出现 */
+          {...(onToggleDetail === undefined
+            ? {}
+            : { detail: detailForPane, onToggleDetail: (next: string | null) => { setDetailHash(next ?? ''); onToggleDetail(next); } })}
+          {...(annotateLoader === undefined ? {} : { highlightLoader: annotateLoader })}
+        />
+      </Flex>
+    );
+  }
+  /**
+   * 「与最新版本差异」正文：该版本 vs **工作区当前版本**（from-only 语义，与溯源页同名标签同一口径）。
+   * 降级提示行优先于数据状态（它不依赖取数）；随后错误 → 加载 → 差异视图。
+   * 定提交对比模式与 staged/工作区切换互斥（服务端 XOR 校验会给 400），故不传 onToggleStaged；
+   * 宿主可能是窄栏，以「行内」开场——与右栏另两个差异视图同一取舍。
+   */
+  function latestBody(path: string): ReactNode {
+    const channel = views?.latest;
+    if (views?.latestHint !== undefined) {
+      return (
+        <Typography.Text type="secondary" data-testid="browse-view-latest-hint">
+          {views.latestHint}
+        </Typography.Text>
+      );
+    }
+    if (channel?.error !== undefined) {
+      return (
+        <Typography.Text type="danger" data-testid="browse-view-latest-error">
+          {channel.error}
+        </Typography.Text>
+      );
+    }
+    if (channel?.versions === undefined || channel.loading === true) {
+      return <Spin data-testid="browse-view-latest-loading" />;
+    }
+    return (
+      <div data-testid="browse-view-latest-body" style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
+        <DiffViewer
+          versions={channel.versions}
+          staged={false}
+          language={languageForPath(path)}
+          fromTo
+          initialSideBySide={false}
+          {...(diffLoader === undefined ? {} : { loader: diffLoader })}
+        />
+      </div>
+    );
+  }
+
   /** 单个差异标签的正文区：路径栏 + 差异视图（降级提示行由 ChangesetDiffPane 按条目属性决定） */
   const renderDiffPane = useCallback((path: string): ReactNode => {
     const snapshot = diffSnapshots.get(path);
@@ -417,7 +573,7 @@ export function SnapshotTabs({
   }, [diffSnapshots, diffActive, diffVersions, diffError, diffLoading, changeset, diffLoader, activateTab]);
   const items: NonNullable<TabsProps['items']> = useMemo(
     () => [
-      // 「文件（N）」只在「浏览快照」开着时出现（见文件头两族标签的显隐）
+      // 「文件(N)」只在「浏览快照」开着时出现（见文件头两族标签的显隐）
       ...(browseTree
         ? [
           {
@@ -427,7 +583,7 @@ export function SnapshotTabs({
             closable: false,
             label: (
               <Tooltip title="文件树：以该版本的文件列表挑文件，点文件名把它开成一个标签页">
-                <span data-testid="snapshot-tree-title">文件（{entries?.length ?? 0}）</span>
+                <span data-testid="snapshot-tree-title">文件({entries?.length ?? 0})</span>
               </Tooltip>
             ),
             children: (
@@ -452,6 +608,8 @@ export function SnapshotTabs({
         ? [
           {
             key: CHANGESET_TAB_KEY,
+            // 文件夹图标 + 半角括号计数（用户口径 2026-09-30）：与「文件(N)」同一个图标，标签名去掉「集」字作「变更(N)」
+            icon: <FolderOutlined />,
             label: (
               <Tooltip
                 title={
@@ -461,7 +619,7 @@ export function SnapshotTabs({
                 }
               >
                 <span data-testid="snapshot-changeset-title">
-                  变更集（{changeset.entry?.files.length ?? 0}）
+                  变更({changeset.entry?.files.length ?? 0})
                 </span>
               </Tooltip>
             ),

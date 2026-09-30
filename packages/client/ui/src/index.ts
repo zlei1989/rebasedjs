@@ -21,7 +21,7 @@ export { CommitDetailsPanel, type CommitDetailsPanelProps } from './domain/commi
 export { RepoPage, type RepoPageProps, type RepoListItem } from './composite/repo-page';
 export { LogPage, type LogPageProps } from './composite/log-page';
 export { RepoTopNav, type RepoTopNavProps, type RepoNavPage } from './composite/repo-top-nav';
-export { SnapshotTabs, type SnapshotTabsProps } from './composite/snapshot-tabs';
+export { SnapshotTabs, type SnapshotTabsProps, type SnapshotFileViews } from './composite/snapshot-tabs';
 export { DiffPage, type DiffPageProps } from './composite/diff-page';
 export {
   AppSettingsPage,
@@ -120,7 +120,7 @@ export { SplitPane, type SplitPaneProps } from './base/split-pane';
 export { ResizableColumns, type ResizableColumnsProps, type ResizablePane } from './base/resizable-columns';
 export { CopyOnClick, type CopyOnClickProps } from './base/copy-on-click';
 export { copyToClipboard } from './base/clipboard';
-export { ReadonlyTextView, type ReadonlyTextViewProps } from './base/readonly-text-view';
+export { ReadonlyTextView, type ReadonlyTextViewProps, type SnapshotFileView } from './base/readonly-text-view';
 export {
   CodeBlock,
   PatchCodeBlock,

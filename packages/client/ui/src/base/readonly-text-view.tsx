@@ -14,7 +14,7 @@
  * 注意：`options` 里关掉 minimap 与「滚到末尾」之类的交互噪声，保留行号与高亮；
  *      只读由 `readOnly: true` 与 options 双重给出（前者是组件语义、后者是编辑器行为）。
  */
-import { CopyOutlined } from '@ant-design/icons';
+import { AlignLeftOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
 import { Button, Flex, Spin, Tooltip, Typography } from 'antd';
 import { useMemo, type ReactNode } from 'react';
 import { EmptyState } from './empty-state';
@@ -127,31 +127,88 @@ export function ReadonlyTextView({
 }
 
 /**
- * 文件标签路径栏右侧的动作按钮：复制全文（与路径同处一条栏，见 composite/snapshot-tabs）。
+ * 文件标签路径栏右侧的动作按钮：**两个视图切换图标按钮**（逐行注解 / 与最新版本差异）+ 复制全文
+ * （与路径同处一条栏，见 composite/snapshot-tabs）。
+ * 用户口径（2026-09-30）：两个按钮的文字写进 tooltip、点击后高亮、下方内容切换成对应的视图——
+ * 故这里只做「画按钮 + 上报点击」，视图状态与内容切换由调用方（快照标签栏）持有；再点一次已点亮的按钮
+ * 即回**文件内容**（切换语义，与「点亮态再点一次取消」的直觉一致，故不额外长一个「文件内容」按钮）。
  * 用户口径：不再提供「在新标签页打开该文件快照页」那个导出按钮——整页 browse 形态仍可从
  * 详情面板「浏览快照」与地址栏 ?rev= 直达，不必在这里再开一个入口。
  */
+
+/**
+ * 快照文件标签的视图（与日志页地址栏 `?view=` 同一取值域，读写见两端 src/url-select）：
+ *   · `plain`    —— 该版本的文件内容（缺省）；
+ *   · `annotate` —— 逐行注解（逐行归属，数据由容器经 useBlame 条件拉取）；
+ *   · `latest`   —— 与最新版本（**工作区当前版本**）差异（两端全文，数据由容器经 useFileDiff 条件拉取）。
+ * 定义放在这里（而不是快照标签栏里）是为了**分层**：本文件是 base 层，不能反向 import composite 的类型。
+ */
+export type SnapshotFileView = 'plain' | 'annotate' | 'latest';
+
 export function ReadonlyTextActions({
   content,
   binary,
   onCopyAll,
+  view,
+  onViewChange,
 }: {
   content?: string;
   binary?: boolean;
   /** 复制全文回调（反馈文案由调用方渲染在正文区，按钮与提示分处两地） */
   onCopyAll?: () => void;
+  /** 当前视图（`plain` = 文件内容）；与 onViewChange 同传时才渲染那两个图标按钮 */
+  view?: SnapshotFileView;
+  /** 切换视图回调（按钮按自己的值回调；调用方把同值再点一次解释为回 `plain`） */
+  onViewChange?: (view: SnapshotFileView) => void;
 }): ReactNode {
+  /**
+   * 两个视图按钮的文案与说明（**文字只进 tooltip**，按钮本身只有图标——用户口径 2026-09-30）。
+   * 高亮态：点亮 = 当前视图就是它（`type="primary"`）。用 `type` 而不是自写背景色，
+   * 是为了让 antd 自己处理 hover/按下/暗色主题下的对比度（本仓「样式一律走 antd」的口径）。
+   */
+  const toggles: { key: Exclude<SnapshotFileView, 'plain'>; label: string; tip: string; icon: ReactNode }[] = [
+    {
+      key: 'annotate',
+      label: '逐行注解',
+      tip: '逐行注解：看这一版里每一行分别由哪次提交写下的；点某一行可选中它归属的提交',
+      icon: <AlignLeftOutlined />,
+    },
+    {
+      key: 'latest',
+      label: '与最新版本差异',
+      tip: '与最新版本差异：该版本与此文件当前版本（含未提交改动）逐行对比',
+      icon: <DiffOutlined />,
+    },
+  ];
   return (
-    <Tooltip title="复制该文件的完整内容到剪贴板">
-      <span>
-        <Button
-          size="small"
-          icon={<CopyOutlined />}
-          data-testid="browse-copy-all"
-          disabled={content === undefined || binary === true}
-          onClick={onCopyAll}
-        />
-      </span>
-    </Tooltip>
+    <>
+      {onViewChange === undefined ? null : toggles.map((item) => (
+        /* placement 固定在右下：这两个按钮长在**路径栏最右端**，默认的 top 居中会把这条较长的文案
+           顶到视口右缘之外（浏览器实测被裁掉半句）。右下有整块正文空间可落，且不遮路径栏本身。 */
+        <Tooltip key={item.key} title={item.tip} placement="bottomRight">
+          <Button
+            size="small"
+            icon={item.icon}
+            type={view === item.key ? 'primary' : 'default'}
+            aria-label={item.label}
+            aria-pressed={view === item.key}
+            data-testid={`browse-view-${item.key}`}
+            data-active={view === item.key ? 'true' : 'false'}
+            onClick={() => onViewChange(view === item.key ? 'plain' : item.key)}
+          />
+        </Tooltip>
+      ))}
+      <Tooltip title="复制该文件的完整内容到剪贴板">
+        <span>
+          <Button
+            size="small"
+            icon={<CopyOutlined />}
+            data-testid="browse-copy-all"
+            disabled={content === undefined || binary === true}
+            onClick={onCopyAll}
+          />
+        </span>
+      </Tooltip>
+    </>
   );
 }

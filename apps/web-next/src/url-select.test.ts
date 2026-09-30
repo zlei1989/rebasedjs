@@ -21,6 +21,7 @@ import {
   readPanelPath,
   readParam,
   readSelect,
+  readSnapshotFileView,
   syncDiffTabsWithUrl,
   withBlameFile,
   withBlameSelection,
@@ -29,8 +30,10 @@ import {
   withBrowsePanel,
   withMigratedSnapshot,
   withSelectParam,
+  withSnapshotFileView,
   withoutBrowsePanel,
   withoutChangesPanel,
+  withoutSnapshotFileView,
 } from './url-select';
 
 const HASH = '761961d81ca2801637bea2ef42c7a3ca7211e670';
@@ -293,11 +296,12 @@ describe('溯源页参数（?file= / ?select= / ?view=，旧 ?rev= 只读兼容�
     expect(readBlameFile(new URLSearchParams(''))).toBe('');
   });
 
-  it('readBlameView：缺省/非法值一律回落 changes，三个合法值原样读出', () => {
+  it('readBlameView：缺省/非法值一律回落 changes，四个合法值原样读出', () => {
     expect(readBlameView(new URLSearchParams(''))).toBe('changes');
     expect(readBlameView(new URLSearchParams('view=diagonal'))).toBe('changes');
     expect(readBlameView(new URLSearchParams('view=latest'))).toBe('latest');
     expect(readBlameView(new URLSearchParams('view=annotate'))).toBe('annotate');
+    expect(readBlameView(new URLSearchParams('view=detail'))).toBe('detail');
   });
 
   it('normalizeBlameQuery：旧 ?rev= 改写成 select + view=annotate，并删掉 rev 键', () => {
@@ -319,6 +323,9 @@ describe('溯源页参数（?file= / ?select= / ?view=，旧 ?rev= 只读兼容�
   it('normalizeBlameQuery：已规范的查询串原样（幂等，不再触发地址改写）', () => {
     const query = new URLSearchParams('file=a.ts&select=abc&view=annotate');
     expect(normalizeBlameQuery(query).toString()).toBe(query.toString());
+    // 「提交详情」标签同样是合法值：规范化不得把它改写成 changes（否则深链一进来就被踢回标签1）
+    const detailQuery = new URLSearchParams('file=a.ts&select=abc&view=detail');
+    expect(normalizeBlameQuery(detailQuery).toString()).toBe(detailQuery.toString());
   });
 
   it('withBlameFile：换文件删掉 select（回落该文件最新一条），view 保留', () => {
@@ -348,5 +355,51 @@ describe('溯源页参数（?file= / ?select= / ?view=，旧 ?rev= 只读兼容�
     expect(readBlameFile({ file: 'a.ts' })).toBe('a.ts');
     expect(readBlameView({ view: ['annotate'] })).toBe('annotate');
     expect(withBlameSelection({ file: 'a.ts' }, 'abc').get('select')).toBe('abc');
+  });
+});
+
+describe('快照文件标签的视图（?view=annotate|latest）', () => {
+  it('readSnapshotFileView：给出两个合法视图；缺省、空值与非法值一律回落 plain', () => {
+    expect(readSnapshotFileView(new URLSearchParams('browse=a.ts&view=annotate'))).toBe('annotate');
+    expect(readSnapshotFileView(new URLSearchParams('browse=a.ts&view=latest'))).toBe('latest');
+    expect(readSnapshotFileView(new URLSearchParams('browse=a.ts'))).toBe('plain');
+    expect(readSnapshotFileView(new URLSearchParams('browse=a.ts&view='))).toBe('plain');
+    // 溯源页的取值域不落在这里（同一个键名，两个页面各自的域）；手改地址不渲染出一个不存在的视图
+    expect(readSnapshotFileView(new URLSearchParams('view=changes'))).toBe('plain');
+    expect(readSnapshotFileView(new URLSearchParams('view=detail'))).toBe('plain');
+  });
+
+  it('withSnapshotFileView：plain 是缺省视图 → 删键（地址里只留用户显式做过的选择）', () => {
+    const on = withSnapshotFileView(new URLSearchParams('browse=a.ts&select=abc'), 'annotate');
+    expect(on.get('view')).toBe('annotate');
+    expect(on.get('browse')).toBe('a.ts');
+    expect(on.get('select')).toBe('abc');
+    expect(on.toString()).toBe('browse=a.ts&select=abc&view=annotate');
+    const off = withSnapshotFileView(on, 'plain');
+    expect(off.has('view')).toBe(false);
+    // 其余参数一个不动（只动 view 这一个键）
+    expect(off.get('browse')).toBe('a.ts');
+    expect(off.get('select')).toBe('abc');
+  });
+
+  it('withSnapshotFileView 不改动入参（调用方可能仍在用原对象）', () => {
+    const query = new URLSearchParams('browse=a.ts');
+    withSnapshotFileView(query, 'latest');
+    expect(query.has('view')).toBe(false);
+  });
+
+  it('withoutSnapshotFileView：只删 view，browse/diff/select 原样保留', () => {
+    const next = withoutSnapshotFileView(new URLSearchParams('browse=a.ts&diff=b.ts&select=abc&view=latest'));
+    expect(next.has('view')).toBe(false);
+    expect(next.get('browse')).toBe('a.ts');
+    expect(next.get('diff')).toBe('b.ts');
+    expect(next.get('select')).toBe('abc');
+  });
+
+  it('记录形态入参（web-next 的 searchParams）同样可读可写', () => {
+    expect(readSnapshotFileView({ browse: 'a.ts', view: 'latest' })).toBe('latest');
+    expect(readSnapshotFileView({ browse: 'a.ts', view: ['annotate'] })).toBe('annotate');
+    expect(withSnapshotFileView({ browse: 'a.ts' }, 'annotate').get('view')).toBe('annotate');
+    expect(withoutSnapshotFileView({ browse: 'a.ts', view: 'annotate' }).has('view')).toBe(false);
   });
 });

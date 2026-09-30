@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { CommitInfo, RepoStatus } from '@rebased/contracts';
+import type { BlameLine, CommitInfo, RepoStatus } from '@rebased/contracts';
 import { LogPage } from './log-page';
 
 /** 测试提交工厂：补全 CommitInfo 必填字段，按需覆盖 */
@@ -154,7 +154,7 @@ describe('LogPage', () => {
       expect(document.querySelectorAll('.ant-splitter-bar')).toHaveLength(2);
       // 快照栏 = 标签栏：第一个标签是文件树（带总数）；版本短名 chip 已按用户口径删除，标签栏右端空着
       expect(screen.getByTestId('snapshot-tabs')).toBeInTheDocument();
-      expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件（2）');
+      expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件(2)');
       expect(screen.queryByTestId('snapshot-tree-rev')).not.toBeInTheDocument();
     });
 
@@ -196,7 +196,7 @@ describe('LogPage', () => {
       const remove = screen.getByTestId('snapshot-file-tab-src/a.ts').closest('.ant-tabs-tab')?.querySelector('.ant-tabs-tab-remove');
       fireEvent.click(remove as Element);
       expect(onSelectBrowseFile).toHaveBeenCalledWith('src/a.ts');
-      expect(document.querySelector('.ant-tabs-tab-active')).toHaveTextContent('文件（2）');
+      expect(document.querySelector('.ant-tabs-tab-active')).toHaveTextContent('文件(2)');
     });
 
     it('点「文件」标签回到树，同样按 toggle 语义清空容器选中', () => {
@@ -355,6 +355,48 @@ describe('LogPage', () => {
       );
       expect(screen.getByTestId('browse-error')).toHaveTextContent('无效的 ref');
     });
+
+    it('注解行点击走专用回调（不是列表行那条 onSelectCommit）：换版本但留在当前文件与视图', () => {
+      const onSelectCommit = vi.fn();
+      const onSnapshotSelectCommit = vi.fn();
+      const line: BlameLine = {
+        lineno: 1,
+        hash: 'd'.repeat(40),
+        shortHash: 'ddddddd',
+        author: 'Sam',
+        authorEmail: 's@example.com',
+        dateIso: '2026-01-01T00:00:00+00:00',
+        content: 'const a = 1;',
+        previousLineno: null,
+        parents: [],
+      };
+      const snapshotViews = {
+        view: 'annotate' as const,
+        onChange: () => {},
+        annotate: { lines: [line] },
+        latest: {},
+      };
+      render(
+        <LogPage
+          repoName="alpha"
+          status={status}
+          commits={commits}
+          selectedCommit={selected}
+          onSelectCommit={onSelectCommit}
+          browseOpen
+          browseRev="c9selec"
+          browseEntries={entries}
+          browseSelectedPath="src/a.ts"
+          browseContent={{ content: 'hello', binary: false }}
+          snapshotViews={snapshotViews}
+          onSnapshotSelectCommit={onSnapshotSelectCommit}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('blame-line-1'));
+      expect(onSnapshotSelectCommit).toHaveBeenCalledWith('d'.repeat(40));
+      // 两条路各管各的：注解行点击**不**触发列表行那条（那条会把 browse 落回文件树，注解表会当场消失）
+      expect(onSelectCommit).not.toHaveBeenCalled();
+    });
   });
 
   it('详情面板父提交链接透传 onSelectCommit（点击选中父提交）', () => {
@@ -425,7 +467,7 @@ describe('LogPage', () => {
     expect(screen.queryByTestId('reset-here')).not.toBeInTheDocument();
   });
 
-  it('「查看变更集」（#13）：详情按钮回调 hash；变更集以快照栏标签呈现（不再是 Modal），点文件行回调容器', () => {
+  it('「变更集」（#13）：详情按钮回调 hash；变更集以快照栏标签呈现（不再是 Modal），点文件行回调容器', () => {
     const onOpenChanges = vi.fn();
     const onOpenChangedFile = vi.fn();
     const selected = makeCommit({ hash: 'c9selected0001', message: '带变更的提交' });
@@ -455,10 +497,12 @@ describe('LogPage', () => {
         onOpenChangedFile={onOpenChangedFile}
       />,
     );
+    // 用户口径 2026-09-30：按钮文案「查看变更集」→「变更集」
+    expect(screen.getByTestId('open-changes')).toHaveTextContent('变更集');
     fireEvent.click(screen.getByTestId('open-changes'));
     expect(onOpenChanges).toHaveBeenCalledWith('c9selected0001');
-    // 变更集是快照栏标签栏里的一个标签（标签名带文件数），弹窗形态已删除
-    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更集（3）');
+    // 变更集是快照栏标签栏里的一个标签（标签名作「变更(N)」，带文件数），弹窗形态已删除
+    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更(3)');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('changes-file-a.txt'));
     expect(onOpenChangedFile).toHaveBeenCalledTimes(1);
@@ -526,7 +570,7 @@ describe('LogPage', () => {
     expect(screen.getByTestId('changes-diff-rename-hint')).toBeInTheDocument();
   });
 
-  it('两个开关各自显隐（用户口径）：只开「查看变更集」也出右栏，但没有文件树那一族标签', () => {
+  it('两个开关各自显隐（用户口径）：只开「变更集」也出右栏，但没有文件树那一族标签', () => {
     const selected = makeCommit({ hash: 'c9selected0001', message: '带变更的提交' });
     render(
       <LogPage
@@ -534,7 +578,7 @@ describe('LogPage', () => {
         status={status}
         commits={commits}
         selectedCommit={selected}
-        // browseOpen 缺省 = 「浏览快照」关着；changesHash 非空 = 「查看变更集」开着
+        // browseOpen 缺省 = 「浏览快照」关着；changesHash 非空 = 「变更集」开着
         changesHash="c9selected0001"
         changesEntry={{
           hash: 'c9selected0001',
@@ -552,7 +596,7 @@ describe('LogPage', () => {
     // 右栏在（三栏：日志｜详情｜快照栏），但栏内只有变更集那一族
     const panes = screen.getAllByTestId(/^resizable-pane-/).map((p) => p.dataset.testid);
     expect(panes).toEqual(['resizable-pane-log', 'resizable-pane-details', 'resizable-pane-snapshot']);
-    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更集（1）');
+    expect(screen.getByTestId('snapshot-changeset-title')).toHaveTextContent('变更(1)');
     expect(screen.queryByTestId('snapshot-tree-title')).not.toBeInTheDocument();
     expect(screen.queryByTestId('snapshot-tree-pane')).not.toBeInTheDocument();
   });
@@ -563,7 +607,7 @@ describe('LogPage', () => {
     const { rerender } = render(
       <LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} browseOpen browseEntries={entries} />,
     );
-    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件（1）');
+    expect(screen.getByTestId('snapshot-tree-title')).toHaveTextContent('文件(1)');
     expect(screen.queryByTestId('snapshot-changeset-title')).not.toBeInTheDocument();
     rerender(<LogPage repoName="alpha" status={status} commits={commits} selectedCommit={selected} />);
     // 两个开关都关：右栏不渲染（两栏 SplitPane），也没有任何快照标签栏

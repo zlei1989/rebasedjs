@@ -19,6 +19,7 @@
 import {
   useAbortOperation,
   useBranchAction,
+  useBlame,
   useBrowseContent,
   useBrowseTree,
   useCherryPick,
@@ -63,13 +64,13 @@ import {
   type UpdateBody,
   type UpdateOutcome,
 } from '@rebased/contracts';
-import { AuthDialog, BranchCompareView, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog } from '@rebased/ui';
+import { AuthDialog, BranchCompareView, LogPage, PullDialog, PushDialog, RebaseDialog, ResetDialog, UpdateProjectDialog, changesHints, type SnapshotFileView } from '@rebased/ui';
 import { Modal, message } from 'antd';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useSWRConfig } from 'swr';
 import { mergeLogCommits } from '../../../src/log-merge';
-import { diffTabsFromUrl, isLegacySnapshotUrl, PANEL_AGGREGATE, readBrowse, readBrowsePath, readChanges, readParam, readSelect, syncDiffTabsWithUrl, withBrowsePanel, withChangesPanel, withMigratedSnapshot, withSelectParam, withoutBrowsePanel, withoutChangesPanel } from '../../../src/url-select';
+import { diffTabsFromUrl, isLegacySnapshotUrl, PANEL_AGGREGATE, readBrowse, readBrowsePath, readChanges, readParam, readSelect, readSnapshotFileView, syncDiffTabsWithUrl, withBrowsePanel, withChangesPanel, withMigratedSnapshot, withSelectParam, withSnapshotFileView, withoutBrowsePanel, withoutChangesPanel, withoutSnapshotFileView } from '../../../src/url-select';
 
 /**
  * 恢复 URL 选中项的自动补页上限：页大小阶梯 50→100→200→400→500（见 useLogPages），
@@ -83,7 +84,7 @@ type PanelIntent = string | typeof PANEL_AGGREGATE | 'skip';
 /**
  * **当前地址栏**的查询串。本页所有写路径都走原生 `history.replaceState`，而它**不会**触发重渲染、
  * `useSearchParams` 也要等下一次导航才同步——中间这段时间里 `currentQuery` 是旧值：
- *   · 拿它当**写**的底本，会把刚被改写掉的参数又抄回来（实测：旧深链改写去掉的 `snap=` 被「查看变更集」写了回去）；
+ *   · 拿它当**写**的底本，会把刚被改写掉的参数又抄回来（实测：旧深链改写去掉的 `snap=` 被「变更集」写了回去）；
  *   · 拿它当**读**的初值，深链首帧会读到空（实测：`?browse=a.ts` 首帧面板开了却没有激活标签）。
  * 故读与写都以本函数为准（`window.location` 在 replaceState 之后立刻就是新值）。
  * 放在模块级（而不是组件体内）是为了让 `useState` 初值也能用它——组件体内声明会撞上暂时性死区。
@@ -106,7 +107,7 @@ export default function Page({
   const currentQuery = useSearchParams();
   const pathname = usePathname();
   const selectedHash = readSelect(currentQuery);
-  // === 就地面板：两个**独立开关**（详情面板「浏览快照」/「查看变更集」）===
+  // === 就地面板：两个**独立开关**（详情面板「浏览快照」/「变更集」）===
   // 真源在 URL，且**键在即开、值承载定位**（见 src/url-select.ts）：`browse` 键在 = 文件树那一族开，
   // `diff` 键在 = 变更集那一族开；值为路径 = 该文件/该差异在前台，值为空 = 聚合标签（树 / 清单）在前台。
   // 两者互不代劳，但共用一条右栏（LogPage 任一为真即渲染右栏）。两个面板看的都是 selectedHash 那一版，
@@ -122,6 +123,12 @@ export default function Page({
   // 三态 → 两态的容器内翻译：`?browse=`（开着但停在树上）就是「没有选中的文件」，与「关着」一样给 undefined
   const browsePath = readBrowsePath(liveQuery());
   const browseSelectedFile = browsePath === undefined || browsePath === null ? undefined : browsePath;
+  /**
+   * 注解行的详情浮层开在哪个提交（'' = 关着）。容器持有它：浮层内容按该哈希取数（useCommitFiles），
+   * 同时靠它把「逐行注解」的行数据留住在位（见下面 annotateOn）——点了行就换了选中提交，
+   * 若此时把行数据抽走，浮层里的作者邮箱会当场变空。
+   */
+  const [detailHash, setDetailHash] = useState('');
   /** 最近一次已知的地址：同步 effect 用它区分「地址真的变了」与「我们自己刚写的那次」 */
   const lastQueryRef = useRef(currentQuery.toString());
   // 旧深链改写（`?snap=<hash>`）：一次性把地址换成新形态（browse[=<路径>]，并沿用那个版本号做选中提交）
@@ -199,7 +206,7 @@ export default function Page({
   const [openDialog, setOpenDialog] = useState<'pull' | 'push' | 'update' | null>(null);
   // Push up to Commit（#17）：行右键「Push up to Commit」→ 打开 PushDialog 并预置目标提交 hash；null=普通推送
   const [pushUpToHash, setPushUpToHash] = useState<string | null>(null);
-  // 查看变更集（#13）：不再是 Modal，而是右栏标签栏里的「变更集（N）」标签——这里是它**看哪一版**的取数键。
+  // 查看变更集（#13）：不再是 Modal，而是右栏标签栏里的「变更(N)」标签——这里是它**看哪一版**的取数键。
   // 开关真源是 URL 的 `?diff=1`（changesOn）；**没有单独的「变更集 hash」状态**：两个面板看的都是
   // 当前选中的提交（`?select=`），开关本身只是一个布尔，故「哪个提交的变更集」= selectedHash，
   // 由 URL 直接派生（容器不再存第二份，刷新/前进后退/换提交都自动对齐）。
@@ -250,6 +257,75 @@ export default function Page({
   const { data: browseTree, isLoading: browseTreeLoading, error: browseTreeError } = useBrowseTree(repoId, selectedHash ?? '');
   const { data: browseContent, isLoading: browseContentLoading, error: browseContentError } = useBrowseContent(repoId, selectedHash ?? '', browseSelectedFile ?? '');
   /**
+   * 快照栏看的那一版的**变更集**（与「变更集」面板同键共享缓存，选中同一提交时不产生第二个请求）。
+   * 只为一件事：判断「该版本里有没有这个路径」——没有就说明这一版还没有这个文件（改名之前／尚未创建），
+   * 此时「与最新版本差异」发出去只会拿回一份「全新增」的伪差异，故不发（与溯源页同一降级口径）。
+   */
+  const browseEntry = useCommitFiles(repoId, selectedHash ?? '').data;
+  /**
+   * === 快照文件标签的两个附加视图（`?view=annotate|latest`）===
+   * 读走**当前地址栏**（liveQuery）而不是 useSearchParams：与 browse/diff 两个面板键同一理由——
+   * 本页写地址走原生 replaceState，useSearchParams 要等下一次导航才同步（深链首帧还会读到空）。
+   * 门禁：面板开着、有选中提交、且确实停在一个文件上（`browse=` 空值 = 停在树上，那时没有「这个文件」可看）。
+   */
+  const snapshotFileView = readSnapshotFileView(liveQuery());
+  const snapshotViewsAvailable = browseOn && selectedHash !== null && typeof browsePath === 'string';
+  /**
+   * 切视图：只动 `?view=` 一个键（`plain` = 删键，见 withSnapshotFileView），其余参数原样保留。
+   * 与日志列表行点击同一个手法：底本取**当前地址栏**、replaceState 落历史，故刷新/深链/前进后退都在同一视图上。
+   */
+  const writeFileView = (next: URLSearchParams): void => {
+    const qs = next.toString();
+    lastQueryRef.current = qs;
+    window.history.replaceState(null, '', qs === '' ? pathname : `${pathname}?${qs}`);
+  };
+  const onSnapshotFileViewChange = (view: SnapshotFileView): void => {
+    writeFileView(withSnapshotFileView(liveQuery(), view));
+  };
+  /**
+   * 注解行点击 → 选中该行归属的提交：**换版本但留在当前文件与视图**。
+   * 为什么不复用 onSelectCommit：那条路的契约是「换版本 → `browse` 落回文件树」（同一路径在新版本里未必存在），
+   * 拿它处理注解行点击会让刚点开的那张注解表当场消失（浏览器实测）。这里只换 `select`，
+   * `browse=<路径>` 与 `view=annotate` 原样保留——用户看到的仍是同一张表的下一版，
+   * 与溯源页「点注解行 → 中栏与右栏一起换到那一版」的观感一致。
+   */
+  const onSnapshotSelectCommit = (hash: string): void => {
+    // 同值不再写地址：本页标签栏的 key 是「版本」（换版本即重挂载），凭空重写一次会让刚点开的详情浮层
+    // 连同行表一起被重挂载掉（实测）。选中本来就是同一个提交时，这次点击只该开/收浮层。
+    if (hash === selectedHash) return;
+    writeFileView(withSelectParam(liveQuery(), hash));
+  };
+  /**
+   * 逐行注解的行归属：只拉「前台视图是逐行注解」或「注解行的详情浮层开着」的那一次。
+   * 钉在**选中提交那一版**（rev=该哈希）：快照栏看的每一版都是具体某个提交，不存在溯源页那种工作区口径。
+   */
+  const annotateOn = snapshotViewsAvailable && (snapshotFileView === 'annotate' || detailHash !== '');
+  const { data: annotateLines, isLoading: annotateLoading, error: annotateError } = useBlame(
+    repoId,
+    annotateOn ? browseSelectedFile ?? '' : '',
+    selectedHash ?? undefined,
+  );
+  /**
+   * 与最新版本差异：`from-only` 语义（该提交 vs **工作区当前版本**），与溯源页同名标签同一口径。
+   * 两种降级**连请求都不发**（与溯源页同一判据）：变更集未就绪（父/路径三态还没到，不能凭上一提交下结论）
+   * 或该提交那一版里根本没有这个路径（发出去只会拿回「全新增」这种伪差异）——后者在下方以提示行表达。
+   */
+  const changesHintsForFile = changesHints(browseEntry, selectedHash ?? '', browseSelectedFile ?? '');
+  const latestOn = snapshotViewsAvailable && snapshotFileView === 'latest' && changesHintsForFile.ready && !changesHintsForFile.missingPath;
+  const { data: latestVersions, isLoading: latestLoading, error: latestError } = useFileDiff(
+    repoId,
+    latestOn ? browseSelectedFile ?? '' : '',
+    false,
+    selectedHash ?? undefined,
+  );
+  /**
+   * 注解行的详情浮层：与选中提交的变更集**同键共享**缓存（同一提交不产生第二个请求）。
+   * 作者邮箱取自注解行本身（BlameLine 有、CommittedEntry 没有）——同一提交在那一行就是这位作者；
+   * 注解行数据因浮层开着而仍在（见 annotateOn），故邮箱不会因为「点了行就换了版本」而丢掉。
+   */
+  const detailEmail = annotateLines?.find((line) => line.hash === detailHash)?.authorEmail ?? '';
+  const { data: detailEntry, isLoading: detailLoading, error: detailError } = useCommitFiles(repoId, detailHash);
+  /**
    * 写地址一律以**当前地址栏**为底本（见模块级 liveQuery）：不能拿 useSearchParams 给的 currentQuery，
    * replaceState 之后它还是旧值，会把刚改写掉的参数抄回来。
    */
@@ -258,9 +334,11 @@ export default function Page({
     if (intent === 'skip') return query;
     return panel === 'browse' ? withBrowsePanel(query, intent) : withChangesPanel(query, intent);
   };
-  /** 关掉某个面板（删键） */
+  /** 关掉某个面板（删键）。关「浏览快照」时把 `?view=`（文件标签的视图）一并清掉：
+   *  它描述的是「那个面板里看文件的哪一种内容」，面板都收起了它就没有了描述对象，
+   *  留着会在下次打开面板（或另一个读同名键的页面）时凭空生效。关「变更集」不动它——那个面板不读它。 */
   const closePanel = (panel: 'browse' | 'diff'): void => {
-    const qs = (panel === 'browse' ? withoutBrowsePanel(liveQuery()) : withoutChangesPanel(liveQuery())).toString();
+    const qs = (panel === 'browse' ? withoutSnapshotFileView(withoutBrowsePanel(liveQuery())) : withoutChangesPanel(liveQuery())).toString();
     lastQueryRef.current = qs;
     if (panel === 'browse') setBrowseOn(false);
     else setChangesOn(false);
@@ -364,7 +442,7 @@ export default function Page({
     else writePanels(PANEL_AGGREGATE, 'skip');
   };
   /**
-   * 「查看变更集」开关（详情面板按钮）：开着再点即收起（含其差异标签）。
+   * 「变更集」开关（详情面板按钮）：开着再点即收起（含其差异标签）。
    * 打开时看的就是**当前选中的提交**（`effectiveChangesHash` 由 URL 派生），故深链 `?select=X&diff=`
    * 也能直接落在 X 的变更集清单上。
    */
@@ -667,9 +745,10 @@ export default function Page({
     //   ② 只在 repoId **真的变化**时清，首挂载不清 —— 否则深链/刷新同样保不住参数。
     if (previousRepoIdRef.current !== null && previousRepoIdRef.current !== repoId) {
       const live = liveQuery();
-      if (live.has('browse') || live.has('diff') || live.has('file') || live.has('snap')) {
-        // 旧形态先规范化（把 snap/file 收成新的面板键），再统一把两个面板键删掉
-        const qs = withoutChangesPanel(withoutBrowsePanel(withMigratedSnapshot(live))).toString();
+      if (live.has('browse') || live.has('diff') || live.has('file') || live.has('snap') || live.has('view')) {
+        // 旧形态先规范化（把 snap/file 收成新的面板键），再把两个面板键与文件标签的视图键一并删掉
+        // （view 属于上一个仓库的面板；留着会在新仓库里凭空选中同一个视图）
+        const qs = withoutSnapshotFileView(withoutChangesPanel(withoutBrowsePanel(withMigratedSnapshot(live)))).toString();
         lastQueryRef.current = qs;
         setBrowseOn(false);
         setChangesOn(false);
@@ -733,7 +812,7 @@ export default function Page({
         onResetHere={onResetHere}
         // 两个开关各自的回调（详情面板按钮）：都只切换**自己那一个** URL 参数，互不代劳
         onBrowse={() => onBrowse()}
-        // 「浏览快照」开关开着时右栏出现文件树那一族标签（「文件（N）」+ 树里点开的文件标签）
+        // 「浏览快照」开关开着时右栏出现文件树那一族标签（「文件(N)」+ 树里点开的文件标签）
         browseOpen={browseOn}
         // browseRev 只作标签栏的**重挂载键**（换版本即复位已打开的文件标签），不参与取数
         browseRev={selectedCommit?.shortHash ?? ''}
@@ -747,8 +826,42 @@ export default function Page({
         // 树里点文件（或标签栏要求改选中）：写 `browse=<路径>`；同路径再点 = 回**文件树**（聚合标签，写 `browse=`）
         onSelectBrowseFile={(file) => {
           if (!browseOn) return; // 文件树关着：这一族标签不存在，容器不该为它写参数
+          // 切文件**保留 `?view=`**：那是用户的视角偏好（逐行注解／与最新版本差异），换文件不该被重置，
+          // 与溯源页「换文件保留 view」同一口径
           writePanels(browseSelectedFile === file ? PANEL_AGGREGATE : file, 'skip');
         }}
+        /* 文件标签的两个附加视图（逐行注解 / 与最新版本差异）：视图真源是 URL 的 `?view=`，
+           两路数据各自条件拉取（非前台视图挂 null key 不发请求）。容器无法确定看哪一版时整套不给，
+           于是路径栏里不会出现两个点了也没东西看的按钮。 */
+        {...(snapshotViewsAvailable
+          ? {
+            snapshotViews: {
+              view: snapshotFileView,
+              onChange: onSnapshotFileViewChange,
+              annotate: { lines: annotateLines, loading: annotateLoading, error: annotateError?.message },
+              /* 该版本里没有这个路径：不给 versions（那一次请求本来就没发），改由提示行表达（与溯源页同一口径） */
+              latest: changesHintsForFile.ready && changesHintsForFile.missingPath
+                ? {}
+                : { versions: latestVersions, loading: latestLoading, error: latestError?.message },
+              ...(changesHintsForFile.ready && changesHintsForFile.missingPath
+                ? { latestHint: '该提交的版本里没有这个路径（可能当时它叫别的名字，或还没有这个文件），无法与当前版本对比' }
+                : {}),
+            },
+          }
+          : {})}
+        snapshotDetail={
+          detailHash === ''
+            ? null
+            : {
+              hash: detailHash,
+              entry: detailEntry ?? null,
+              authorEmail: detailEmail,
+              loading: detailLoading,
+              ...(detailError === undefined ? {} : { error: detailError.message }),
+            }
+        }
+        onToggleSnapshotDetail={(next) => setDetailHash(next ?? '')}
+        onSnapshotSelectCommit={onSnapshotSelectCommit}
         onOpenChanges={() => onOpenChanges()}
         /* 变更集面板的开合真源是 `diff` 键在不在（URL）；hash 用 effectiveChangesHash 兜底
            （面板开着而选中项未落位时按当前选中的提交取数） */
