@@ -34,7 +34,7 @@
  * 持有（本组件纯受控），故刷新、深链、前进后退都在同一个视图上；数据也由容器**只给当前激活视图**那一路
  * （`views` 缺省 = 容器没给这两个视图的取数 → 两个按钮不渲染，无死控件）。
  * 逐行注解与「与最新版本差异」复用既有组件（BlameAnnotateTable / DiffViewer），故注解行的交互
- * （点行 = 选中该提交 + 哈希旁详情浮层）与溯源页逐字一致；浮层「开在哪一行」是本组件的瞬态 UI 态（同溯源页）。
+ * （点行 = 选中该提交 + 哈希旁详情浮层）与历史页逐字一致；浮层「开在哪一行」是本组件的瞬态 UI 态（同历史页）。
  */
 import { FolderOutlined } from '@ant-design/icons';
 import { Flex, Spin, Tabs, Tooltip, Typography, theme } from 'antd';
@@ -123,7 +123,7 @@ export interface SnapshotFileViews {
   latest: { versions?: FileVersions; loading?: boolean; error?: string };
   /**
    * 「与最新版本差异」的降级提示行：非空时**连差异视图都不渲染**，只显示这句话。
-   * 容器在两种情形下给（与溯源页同一判据）：变更集未就绪（还不能断定这一版有没有这个路径）、
+   * 容器在两种情形下给（与历史页同一判据）：变更集未就绪（还不能断定这一版有没有这个路径）、
    * 或该提交那一版里根本没有这个路径（此时那一次差异请求**根本没发**，渲染空视图只会让人以为文件是空的）。
    */
   latestHint?: string;
@@ -178,7 +178,7 @@ export interface SnapshotTabsProps {
   diffLoader?: MonacoDiffLoader;
   /** 文件标签的两个附加视图（见 SnapshotFileViews）；缺省 = 路径栏只有复制按钮 */
   views?: SnapshotFileViews;
-  /** 逐行注解里点某一行：选中该行归属的提交（容器据此写 `?select=`，与溯源页同一联动）；缺省行只读 */
+  /** 逐行注解里点某一行：选中该行归属的提交（容器据此写 `?select=`，与历史页同一联动）；缺省行只读 */
   onSelectCommit?: (hash: string) => void;
   /** 逐行注解的哈希详情浮层（受控：当前展开了哪个哈希 + 它的取数三态）；缺省不给浮层 */
   detail?: BlameDetailState | null;
@@ -245,7 +245,7 @@ export function SnapshotTabs({
   const [diffSnapshots, setDiffSnapshots] = useState<Map<string, DiffSnapshot>>(() => new Map());
   /**
    * 注解行的详情浮层开在**哪个提交**（本地瞬态 UI 态，数据由容器按 detail.hash 注入；'' = 关着）。
-   * 与溯源页同一手法：开在哪一行由注解表自己记（一个提交可能占连续多行），这里只记「展开了哪个提交」。
+   * 与历史页同一手法：开在哪一行由注解表自己记（一个提交可能占连续多行），这里只记「展开了哪个提交」。
    */
   const [detailHash, setDetailHash] = useState('');
   /**
@@ -477,9 +477,9 @@ export function SnapshotTabs({
     );
   }, [snapshots, selectedPath, content, contentError, contentLoading, copyHint, onCopyAll, token.colorSplit, views, annotateBody, latestBody]);
   /**
-   * 逐行注解正文：**复用溯源页的注解行表**（同一组件 = 同一交互：点行选中该提交 + 哈希旁详情浮层）。
+   * 逐行注解正文：**复用历史页的注解行表**（同一组件 = 同一交互：点行选中该提交 + 哈希旁详情浮层）。
    * 高亮语言按当前文件路径推断（与另两个视图同一口径）；数据通道由容器条件拉取后经 views 注入。
-   * 外层 flex 列 + `overflow: auto`：与溯源页「逐行注解」标签的承载方式一致（行多时整块纵向滚动）。
+   * 外层 flex 列 + `overflow: auto`：与历史页「逐行注解」标签的承载方式一致（行多时整块纵向滚动）。
    */
   function annotateBody(path: string): ReactNode {
     const channel = views?.annotate;
@@ -495,7 +495,7 @@ export function SnapshotTabs({
           error={channel?.error}
           language={languageForPath(path)}
           {...(onSelectCommit === undefined ? {} : { onSelectCommit })}
-          /* 浮层严格对齐溯源页：两个回调都注入时行可点（点行 = 选中 + 开/收浮层），
+          /* 浮层严格对齐历史页：两个回调都注入时行可点（点行 = 选中 + 开/收浮层），
              未提交行（全 0 哈希）在表内恒不可点；容器不给 detail 通道时连浮层都不出现 */
           {...(onToggleDetail === undefined
             ? {}
@@ -506,7 +506,7 @@ export function SnapshotTabs({
     );
   }
   /**
-   * 「与最新版本差异」正文：该版本 vs **工作区当前版本**（from-only 语义，与溯源页同名标签同一口径）。
+   * 「与最新版本差异」正文：该版本 vs **工作区当前版本**（from-only 语义，与历史页同名标签同一口径）。
    * 降级提示行优先于数据状态（它不依赖取数）；随后错误 → 加载 → 差异视图。
    * 定提交对比模式与 staged/工作区切换互斥（服务端 XOR 校验会给 400），故不传 onToggleStaged；
    * 宿主可能是窄栏，以「行内」开场——与右栏另两个差异视图同一取舍。

@@ -796,14 +796,6 @@ describe('LogPage', () => {
     expect(screen.queryByText('推送')).not.toBeInTheDocument();
   });
 
-  it('传入 onOpenBlame 时「更多」菜单含溯源项，点击触发回调', async () => {
-    const onOpenBlame = vi.fn();
-    render(<LogPage repoName="alpha" status={status} commits={commits} onOpenBlame={onOpenBlame} />);
-    await openMoreMenu();
-    fireEvent.click(screen.getByText('溯源'));
-    expect(onOpenBlame).toHaveBeenCalledTimes(1);
-  });
-
   it('传入 onOpenHistory 时「更多」菜单含历史项，点击触发回调', async () => {
     const onOpenHistory = vi.fn();
     render(<LogPage repoName="alpha" status={status} commits={commits} onOpenHistory={onOpenHistory} />);
@@ -811,6 +803,7 @@ describe('LogPage', () => {
     fireEvent.click(screen.getByText('历史'));
     expect(onOpenHistory).toHaveBeenCalledTimes(1);
   });
+
 
   it('传入 onOpenSearch 时「更多」菜单含搜索项，点击触发回调', async () => {
     const onOpenSearch = vi.fn();
@@ -820,10 +813,9 @@ describe('LogPage', () => {
     expect(onOpenSearch).toHaveBeenCalledTimes(1);
   });
 
-  it('未传三入口回调时「更多」菜单不含溯源/历史/搜索项', async () => {
+  it('未传两入口回调时「更多」菜单不含历史/搜索项', async () => {
     render(<LogPage repoName="alpha" status={status} commits={commits} onOpenPull={() => {}} />);
     await openMoreMenu();
-    expect(screen.queryByText('溯源')).not.toBeInTheDocument();
     expect(screen.queryByText('历史')).not.toBeInTheDocument();
     expect(screen.queryByText('搜索')).not.toBeInTheDocument();
   });

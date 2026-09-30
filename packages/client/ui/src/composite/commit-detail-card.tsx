@@ -1,5 +1,5 @@
 /**
- * 提交详情卡：溯源页注解行的哈希浮层内容（点击哈希后展示「其余信息」）。
+ * 提交详情卡：历史页注解行的哈希浮层内容（点击哈希后展示「其余信息」）。
  *
  * 为什么复用 domain/commit-details-panel 而不是另写一张卡：日志页详情面板已经承载了同一组字段与交互
  * ——主题加粗、正文块（保留换行）、作者 + 邮箱 + 时间、短哈希点击复制完整哈希、父提交链接——
@@ -27,17 +27,13 @@ export interface CommitDetailCardProps {
   error?: string;
 }
 
-export function CommitDetailCard({ entry, authorEmail, loading, error }: CommitDetailCardProps): ReactNode {
-  if (loading === true) return <Spin data-testid="blame-detail-loading" />;
-  if (error !== undefined) {
-    return (
-      <Typography.Text type="danger" data-testid="blame-detail-error">
-        {error}
-      </Typography.Text>
-    );
-  }
-  if (entry === undefined || entry === null) return null;
-  const commit: CommitInfo = {
+/**
+ * 变更集条目 → 详情面板要的提交信息。refs/graph 在归属场景没有（分支图列与分支/标签 chips 不渲染）。
+ * 抽成函数的原因：注解行浮层（本文件）与右栏「提交详情」标签（composite/history-change-pane）都要这份映射，
+ * 各写一份必然逐字漂移。
+ */
+export function toCommitInfo(entry: CommittedEntry, authorEmail?: string): CommitInfo {
+  return {
     hash: entry.hash,
     shortHash: entry.shortHash,
     message: entry.message,
@@ -48,6 +44,19 @@ export function CommitDetailCard({ entry, authorEmail, loading, error }: CommitD
     refs: [],
     graph: '',
   };
+}
+
+export function CommitDetailCard({ entry, authorEmail, loading, error }: CommitDetailCardProps): ReactNode {
+  if (loading === true) return <Spin data-testid="blame-detail-loading" />;
+  if (error !== undefined) {
+    return (
+      <Typography.Text type="danger" data-testid="blame-detail-error">
+        {error}
+      </Typography.Text>
+    );
+  }
+  if (entry === undefined || entry === null) return null;
+  const commit = toCommitInfo(entry, authorEmail);
   return (
     <div data-testid="commit-detail-card">
       <CommitDetailsPanel commit={commit} style={{ maxWidth: 420 }} />

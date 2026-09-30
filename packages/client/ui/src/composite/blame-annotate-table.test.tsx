@@ -8,7 +8,7 @@ import { BlameAnnotateTable } from './blame-annotate-table';
 /** 工作区未提交行的伪哈希（git blame 的边界提交） */
 const ZERO_HASH = '0'.repeat(40);
 
-/** 测试溯源行工厂：补全 BlameLine 必填字段 */
+/** 测试归属行工厂：补全 BlameLine 必填字段 */
 function makeLine(partial: Partial<BlameLine> & { lineno: number }): BlameLine {
   return {
     hash: `hash${partial.lineno}`,
@@ -73,7 +73,7 @@ describe('BlameAnnotateTable 渲染', () => {
     rerender(<BlameAnnotateTable error="加载失败" />);
     expect(screen.getByTestId('blame-error')).toHaveTextContent('加载失败');
     rerender(<BlameAnnotateTable lines={[]} />);
-    expect(screen.getByText('暂无溯源信息')).toBeInTheDocument();
+    expect(screen.getByText('暂无历史信息')).toBeInTheDocument();
   });
 
   it('逐行高亮：按行取 loader 的 token，双主题样式落在每个 token 上', async () => {

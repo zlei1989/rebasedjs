@@ -259,7 +259,7 @@ export default function Page({
   /**
    * 快照栏看的那一版的**变更集**（与「变更集」面板同键共享缓存，选中同一提交时不产生第二个请求）。
    * 只为一件事：判断「该版本里有没有这个路径」——没有就说明这一版还没有这个文件（改名之前／尚未创建），
-   * 此时「与最新版本差异」发出去只会拿回一份「全新增」的伪差异，故不发（与溯源页同一降级口径）。
+   * 此时「与最新版本差异」发出去只会拿回一份「全新增」的伪差异，故不发（与历史页同一降级口径）。
    */
   const browseEntry = useCommitFiles(repoId, selectedHash ?? '').data;
   /**
@@ -287,7 +287,7 @@ export default function Page({
    * 为什么不复用 onSelectCommit：那条路的契约是「换版本 → `browse` 落回文件树」（同一路径在新版本里未必存在），
    * 拿它处理注解行点击会让刚点开的那张注解表当场消失（浏览器实测）。这里只换 `select`，
    * `browse=<路径>` 与 `view=annotate` 原样保留——用户看到的仍是同一张表的下一版，
-   * 与溯源页「点注解行 → 中栏与右栏一起换到那一版」的观感一致。
+   * 与历史页「点注解行 → 中栏与右栏一起换到那一版」的观感一致。
    */
   const onSnapshotSelectCommit = (hash: string): void => {
     // 同值不再写地址：本页标签栏的 key 是「版本」（换版本即重挂载），凭空重写一次会让刚点开的详情浮层
@@ -297,7 +297,7 @@ export default function Page({
   };
   /**
    * 逐行注解的行归属：只拉「前台视图是逐行注解」或「注解行的详情浮层开着」的那一次。
-   * 钉在**选中提交那一版**（rev=该哈希）：快照栏看的每一版都是具体某个提交，不存在溯源页那种工作区口径。
+   * 钉在**选中提交那一版**（rev=该哈希）：快照栏看的每一版都是具体某个提交，不存在历史页那种工作区口径。
    */
   const annotateOn = snapshotViewsAvailable && (snapshotFileView === 'annotate' || detailHash !== '');
   const { data: annotateLines, isLoading: annotateLoading, error: annotateError } = useBlame(
@@ -306,8 +306,8 @@ export default function Page({
     selectedHash ?? undefined,
   );
   /**
-   * 与最新版本差异：`from-only` 语义（该提交 vs **工作区当前版本**），与溯源页同名标签同一口径。
-   * 两种降级**连请求都不发**（与溯源页同一判据）：变更集未就绪（父/路径三态还没到，不能凭上一提交下结论）
+   * 与最新版本差异：`from-only` 语义（该提交 vs **工作区当前版本**），与历史页同名标签同一口径。
+   * 两种降级**连请求都不发**（与历史页同一判据）：变更集未就绪（父/路径三态还没到，不能凭上一提交下结论）
    * 或该提交那一版里根本没有这个路径（发出去只会拿回「全新增」这种伪差异）——后者在下方以提示行表达。
    */
   const changesHintsForFile = changesHints(browseEntry, selectedHash ?? '', browseSelectedFile ?? '');
@@ -827,7 +827,7 @@ export default function Page({
         onSelectBrowseFile={(file) => {
           if (!browseOn) return; // 文件树关着：这一族标签不存在，容器不该为它写参数
           // 切文件**保留 `?view=`**：那是用户的视角偏好（逐行注解／与最新版本差异），换文件不该被重置，
-          // 与溯源页「换文件保留 view」同一口径
+          // 与历史页「换文件保留 view」同一口径
           writePanels(browseSelectedFile === file ? PANEL_AGGREGATE : file, 'skip');
         }}
         /* 文件标签的两个附加视图（逐行注解 / 与最新版本差异）：视图真源是 URL 的 `?view=`，
@@ -839,7 +839,7 @@ export default function Page({
               view: snapshotFileView,
               onChange: onSnapshotFileViewChange,
               annotate: { lines: annotateLines, loading: annotateLoading, error: annotateError?.message },
-              /* 该版本里没有这个路径：不给 versions（那一次请求本来就没发），改由提示行表达（与溯源页同一口径） */
+              /* 该版本里没有这个路径：不给 versions（那一次请求本来就没发），改由提示行表达（与历史页同一口径） */
               latest: changesHintsForFile.ready && changesHintsForFile.missingPath
                 ? {}
                 : { versions: latestVersions, loading: latestLoading, error: latestError?.message },
@@ -896,7 +896,6 @@ export default function Page({
         onOpenConflicts={() => router.push(`/repos/${repoId}/conflicts`)}
         onOpenRebase={() => setRebaseOpen(true)}
         onOpenTags={() => router.push(`/repos/${repoId}/tags`)}
-        onOpenBlame={() => router.push(`/repos/${repoId}/blame`)}
         onOpenHistory={() => router.push(`/repos/${repoId}/history`)}
         onOpenSearch={() => router.push(`/repos/${repoId}/search`)}
         onOpenPatches={() => router.push(`/repos/${repoId}/patches`)}

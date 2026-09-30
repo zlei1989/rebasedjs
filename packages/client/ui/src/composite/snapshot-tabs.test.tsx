@@ -335,12 +335,12 @@ describe('SnapshotTabs 文件标签的三个视图（逐行注解 / 与最新版
     expect(screen.queryByTestId('browse-code-editor')).not.toBeInTheDocument();
   });
 
-  it('注解行的点击与溯源页一致（点行 = 选中该提交 + 开详情浮层），未提交行不可点', () => {
+  it('注解行的点击与历史页一致（点行 = 选中该提交 + 开详情浮层），未提交行不可点', () => {
     const onSelectCommit = vi.fn();
     const onToggleDetail = vi.fn();
     const lines: BlameLine[] = [
       ...blameLines.slice(0, 1),
-      // 第二行是工作区未提交的伪哈希：整行不可点（与溯源页同一判据 ZERO_HASH_RE）
+      // 第二行是工作区未提交的伪哈希：整行不可点（与历史页同一判据 ZERO_HASH_RE）
       { ...blameLines[1]!, hash: '0'.repeat(40), shortHash: '0000000' },
     ];
     render(

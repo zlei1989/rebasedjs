@@ -1,5 +1,5 @@
 /**
- * 注解行表：单文件逐行责任归属（原 composite/blame-view 的行渲染职责，迁出成独立组件）。
+ * 注解行表：单文件逐行责任归属（原 composite/history-view 的行渲染职责，迁出成独立组件）。
  *
  * 行 = 行号 | 时间 | 哈希 | **逐行语法高亮的代码内容**（用户口径：作者不占列，移入哈希浮层）。
  * 交互（用户口径：**整行可点击、只做点击不做 hover**）：
@@ -93,7 +93,7 @@ export function BlameAnnotateTable({
       </Typography.Text>
     );
   }
-  if (lines === undefined || lines.length === 0) return <EmptyState title="暂无溯源信息" />;
+  if (lines === undefined || lines.length === 0) return <EmptyState title="暂无历史信息" />;
   // 行数不一致时整份退纯文本：着色错位比没有着色更误导（判据只在渲染处取一次，避免逐行分支）
   const tokenLines = highlighted !== null && highlighted.length === lines.length ? highlighted : null;
   return (
