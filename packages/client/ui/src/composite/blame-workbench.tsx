@@ -40,6 +40,8 @@ export interface BlameWorkbenchProps {
   view: BlameViewKey;
   entry?: CommittedEntry | null;
   changes: { versions?: FileVersions; loading?: boolean; error?: string };
+  /** 标签1 的根提交分支：该提交里的文件全文（容器经 useBrowseContent 条件拉取） */
+  rootContent?: { content?: string; binary?: boolean; loading?: boolean; error?: string };
   latest: { versions?: FileVersions; loading?: boolean; error?: string };
   annotate: { lines?: BlameLine[]; loading?: boolean; error?: string };
   /** 注解行的哈希详情浮层（受控）：容器持有「展开了哪个哈希」与它的取数三态 */
@@ -70,6 +72,7 @@ export function BlameWorkbench({
   view,
   entry,
   changes,
+  rootContent,
   latest,
   annotate,
   affected,
@@ -170,6 +173,7 @@ export function BlameWorkbench({
           view={view}
           entry={entry}
           changes={changes}
+          {...(rootContent === undefined ? {} : { rootContent })}
           latest={latest}
           annotate={annotate}
           selectedHash={hash === '' ? null : hash}

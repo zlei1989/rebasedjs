@@ -2,18 +2,15 @@
  * 注解行表：单文件逐行责任归属（原 composite/blame-view 的行渲染职责，迁出成独立组件）。
  *
  * 行 = 行号 | 时间 | 哈希 | **逐行语法高亮的代码内容**（用户口径：作者不占列，移入哈希浮层）。
- * 两个入口，互不代劳（用户口径）：
- *   · 点**哈希** → 打开该提交的详情浮层（Placement rightTop；完整提交信息、作者与邮箱、父提交）；
- *     浮层跟着**被点的那一行**（同一提交常拥有连续多行，见组件内 openLineno 的说明）；
- *   · 点**行的其他位置** → 选中该行归属的提交——「这行是谁写的 → 那次提交改了什么」的主链路不变
- *     （中栏同步高亮、右栏另两个差异标签换到那一版）。浮层与选中都不走 hover：键盘用户同样够得到
- *     （哈希是原生 button，行是 role=button + Enter/Space）。
- * 键盘：行内控件（哈希）上的按键**不由行代劳**（判 target !== currentTarget），否则在哈希上按回车
- * 会同时弹浮层又选中提交——一次按键两个后果，用户无法预期。
- *
- * 工作区未提交行由 git 给出全 0 伪哈希（core 的边界口径），它不是真实提交：**不可点**（点了会把
- * 0000… 写进 ?select=、或向 /commits/0000… 发一个必 400 的请求），也不再有「未提交」文案
- * （用户口径：行内只留 行号｜时间｜哈希）。这类行的高亮内容是工作区真实文本，照常着色。
+ * 交互（用户口径：**整行可点击、只做点击不做 hover**）：
+ *   · 点**行的任何位置**（含哈希文本）→ 选中该行归属的提交（中栏同步高亮、右栏另两个差异标签换到那一版）
+ *     **并且**在该行哈希旁开/收提交详情浮层——一次点击把"这一行是谁写的"和"那次提交说了什么"一起给到；
+ *   · 浮层仍以**哈希**为锚点（placement rightTop），位置不因"整行可点"而改变；
+ *   · 再点同一行收起浮层；点另一行则浮层挪到那一行（数据由容器按哈希注入）。
+ * 行内不再有任何按钮：哈希是只读 code 文本，整行才是唯一可聚焦入口（role=button + Enter/Space）——
+ * 这样既没有"每行一个 Tab 停靠点"的成本（上千行时 Tab 要按上千次），也没有 antd 按钮的 hover 高亮
+ * （口径要求移入不高亮）。鼠标移入唯一的反馈是 `cursor: pointer`。
+ * 未提交行（全 0 伪哈希）不是提交：整行不可点、不可聚焦、不弹浮层（哈希只作为文本展示）。
  *
  * 高亮源文本由注解行按行拼回：`BlameLine.content` 就是该版本的文件正文，不必再取一次全文
  * （也因此不会出现「高亮的是工作区、注解的是某一版」这类错配）。
@@ -22,7 +19,7 @@
  * 纯受控：数据与回调由容器注入（含浮层的 entry/loading/error）。
  */
 import { useMemo, useState } from 'react';
-import { Button, Flex, Popover, Spin, theme, Typography } from 'antd';
+import { Flex, Popover, Spin, theme, Typography } from 'antd';
 import type { BlameLine, CommittedEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { HighlightedTokens, useHighlightedLines, type LineHighlighterLoader } from '../base/line-highlighter';
@@ -38,13 +35,6 @@ const ZERO_HASH_RE = /^0{40,64}$/;
  * 68px ≈ 4 个汉字（最长档 `12月前` / `59分钟前`）+ 一点余量。
  */
 const TIME_COLUMN_WIDTH = 68;
-
-/**
- * 哈希列固定宽：可点行渲染的是 antd Button（自带内边距，自然宽 68），未提交行渲染的是只读 Text
- * （自然宽 53）——不定宽的话这两类行的**正文左沿会差 15px**（冒烟实测 768 vs 753），
- * 一列里混着两类行时正文就是锯齿。定宽后两类行占同一列宽，正文逐行对齐。
- */
-const HASH_COLUMN_WIDTH = 68;
 
 /** 哈希浮层的数据：hash 为当前展开的那一行，其余字段由容器按该哈希拉取后注入 */
 export interface BlameDetailState {
@@ -111,12 +101,24 @@ export function BlameAnnotateTable({
       {lines.map((line) => {
         const pending = ZERO_HASH_RE.test(line.hash);
         const selected = selectedHash !== undefined && selectedHash !== null && selectedHash === line.hash;
-        const clickable = !pending && onSelectCommit !== undefined;
-        // 点行与键盘激活共用同一个入口：键鼠两路若各写一份判据，迟早漂移出「键盘能选未提交行」之类的不一致
-        const activate = clickable ? () => onSelectCommit(line.hash) : undefined;
-        const hashClickable = !pending && onToggleDetail !== undefined;
+        const clickable = !pending && (onSelectCommit !== undefined || onToggleDetail !== undefined);
         // 开 = 「就是这一行被点了」且容器已把该哈希的数据（或三态）注入进来；容器收起 detail 时这里自然关闭
         const open = openLineno === line.lineno && detail !== undefined && detail !== null && detail.hash === line.hash;
+        /**
+         * 整行唯一入口：选中该提交（注入了才调）+ 开/收该行的详情浮层（注入了才开）。
+         * 开合判据取本轮渲染的 `open`：同一次点击只 toggle 一次——浮层自身的 `onOpenChange` 刻意不接，
+         * 否则哈希文本的一次点击会被「行点击 + 浮层自身」各 toggle 一遍，开了立刻又关。
+         */
+        const activate = clickable
+          ? () => {
+            onSelectCommit?.(line.hash);
+            if (onToggleDetail !== undefined) {
+              const next = !open;
+              setOpenLineno(next ? line.lineno : null);
+              onToggleDetail(next ? line.hash : null);
+            }
+          }
+          : undefined;
         // 行是「逐行注解」标签页里唯一的选择入口（旧版是 antd Button，可聚焦、可回车激活），
         // 一旦只留鼠标点击，纯键盘用户就够不到主功能——故可点行给 role="button" + tabIndex 0 + Enter/Space。
         // 不可点行不给 role/tabIndex：免得 Tab 停在一个按了也没反应的死控件上
@@ -124,8 +126,6 @@ export function BlameAnnotateTable({
           activate === undefined
             ? undefined
             : (event: React.KeyboardEvent<HTMLDivElement>) => {
-              // 行内控件（哈希按钮）自己的按键不代劳：它的回车/空格只切浮层
-              if (event.target !== event.currentTarget) return;
               if (event.key !== 'Enter' && event.key !== ' ') return;
               // Space 的默认行为是滚动页面（行在视口内会把正文顶走）：拦掉，只留激活
               if (event.key === ' ') event.preventDefault();
@@ -158,42 +158,26 @@ export function BlameAnnotateTable({
             >
               {formatRelativeTime(line.dateIso)}
             </Typography.Text>
-            {/* 哈希列（定宽）：可点行是 Button、未提交行是只读 Text，两者自然宽不同——统一压到这个宽度，正文左沿才对齐 */}
-            <Flex
-              align="center"
-              data-testid={`blame-hash-cell-${line.lineno}`}
-              style={{ width: HASH_COLUMN_WIDTH, flexShrink: 0 }}
-            >
-              {hashClickable ? (
-                <Popover
-                  trigger="click"
-                  placement="rightTop"
-                  open={open}
-                  onOpenChange={(next) => {
-                    // 开合记在**这一行**上：同哈希的其余行不跟着开（点另一行 = 浮层挪过去）
-                    setOpenLineno(next ? line.lineno : null);
-                    onToggleDetail(next ? line.hash : null);
-                  }}
-                  content={<CommitDetailCard entry={detail?.entry} authorEmail={detail?.authorEmail} {...(detail?.loading !== undefined ? { loading: detail.loading } : {})} {...(detail?.error !== undefined ? { error: detail.error } : {})} />}
-                >
-                  {/* 原生 button：回车/空格天生就是 click，不必自己写键盘分支；样式走 antd（text 按钮 + code 文本） */}
-                  <Button
-                    type="text"
-                    size="small"
-                    data-testid={`blame-hash-${line.lineno}`}
-                    // 哈希点击只切浮层：不冒泡到行，避免一次点击同时选中提交
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <Typography.Text code>{line.shortHash}</Typography.Text>
-                  </Button>
-                </Popover>
-              ) : (
-                // 不可点（未提交行 / 未注入回调）：保持只读文本形态，不给按钮语义
-                <Typography.Text code type={pending ? 'secondary' : undefined} data-testid={`blame-hash-${line.lineno}`}>
+            {/* 哈希：只读 code 文本（不再是按钮——整行才是点击目标，行内因此没有任何 Tab 停靠点）。
+                浮层仍以**它**为锚点（rightTop），故 Popover 包在这里；开合由整行点击驱动：受控 open，
+                刻意不接 onOpenChange（接了就会与行点击各 toggle 一次，开了立刻又关）。 */}
+            {!pending && onToggleDetail !== undefined ? (
+              <Popover
+                trigger="click"
+                placement="rightTop"
+                open={open}
+                content={<CommitDetailCard entry={detail?.entry} authorEmail={detail?.authorEmail} {...(detail?.loading !== undefined ? { loading: detail.loading } : {})} {...(detail?.error !== undefined ? { error: detail.error } : {})} />}
+              >
+                <Typography.Text code data-testid={`blame-hash-${line.lineno}`}>
                   {line.shortHash}
                 </Typography.Text>
-              )}
-            </Flex>
+              </Popover>
+            ) : (
+              // 未提交行（全 0 伪哈希，不是提交）或未注入浮层回调：纯文本，不给任何交互语义
+              <Typography.Text code type={pending ? 'secondary' : undefined} data-testid={`blame-hash-${line.lineno}`}>
+                {line.shortHash}
+              </Typography.Text>
+            )}
             <span
               className="rebased-line"
               data-testid={`blame-code-${line.lineno}`}

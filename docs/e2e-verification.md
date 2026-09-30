@@ -347,7 +347,7 @@
 ### 4.16 BlameWorkbench（slug `blame`；P3，三栏工作台）
 
 - **入口**：更多「溯源」→ `/repos/:id/blame`；左栏（HEAD 文件树）选文件或页内「输入文件路径」框（两者都写回 `?file=`）；也可带 `?file=&select=&view=` 深链直达，旧 `?rev=<hash>` 读到即规范化为 `select=<hash>&view=annotate`。
-- **形态**：左树（文件，固定看 HEAD）｜中栏（该文件的提交清单，`--follow`）｜右栏（操作条四出口 + 「本文件改动」/「与最新版本差异」/「逐行注解」三标签）；页面动作一律 replace 回写地址。注解行有两个互不代劳的入口（2026-09 用户口径：**只做点击、不做 hover**）：点**行内短哈希** → 右上角弹提交详情浮层；点**行的其余位置** → 选中该行归属的提交。
+- **形态**：左树（文件，固定看 HEAD）｜中栏（该文件的提交清单，`--follow`）｜右栏（操作条四出口 + 「本文件改动」/「与最新版本差异」/「逐行注解」三标签）；页面动作一律 replace 回写地址。注解行**整行是一个入口**（2026-09 用户口径：只做点击、不做 hover、移入不高亮）：点行的任何位置 = 选中该行归属的提交 **+** 在该行哈希旁开/收提交详情浮层（浮层位置不因"整行可点"而变，仍锚在哈希）。
 
 | 编号 | 功能点 | MCP 冒烟操作（模拟人工） | 预期最终正确效果（截图判定） | 结果 | 截图 |
 |------|--------|--------------------------|------------------------------|------|------|
@@ -355,7 +355,7 @@
 | F-102 | 选中提交级出口与点击联动（轮换旧「注解行内三联动」） | 中栏点第 2 条提交（`?select=` 变）→ 切「与最新版本差异」→ 逐条走操作条四出口 → 深链旧 `?rev=` | 「日志定位」→ 日志页选中该提交；「差异页」→ **新标签页** DiffPage（`from=父&to=该提交`，根提交 `root=1`）；「文件历史」→ `/history?file=`；「受影响」→ 全量变更文件 Modal。切标签只写 `?view=` 并只拉当前标签的数据 | ✅ | blame-02.png（「与最新版本差异」标签：右栏工具条与 Monaco 差异就位，`[data-testid="blame-view-latest"]` 真实渲染、**高 580 落在右栏 646 之内**——Task 6 的高度契约修复在浏览器里被证实）；blame-05b.png（旧 `?rev=` 深链规范化后的落点）：`?file=docs/manual.md&rev=8d6d961` → 地址被改写成 `?file=docs%2Fmanual.md&select=8d6d961&view=annotate`，落在「逐行注解」1519 行（web-next 同形）。**点选复现**：无 `?select=` 时首条派生选中（`blame-commit-0` 带 `data-selected="true"`），点第 2 条 → `?select=6e1807493cf0050e9178a4e4935a8d9427a60416`。**四出口齐备**以 `blame-action-log` / `blame-action-diff` / `blame-action-affected` / `blame-action-history` 四个 testid 全在盘为证（blame-01.png 同屏可见，见 §5.34 范围项 6）。**淘汰说明**：旧单列页的「行内哈希徽标 → 日志 `?select=`／行内「差异」／行内「历史」」三联动已随 `BlameView` 一并删除（提交 `c824bcd`），能力升格为本行的选中提交级四出口 |
 | F-103 | Show All Affected（受影响文件） | 操作条「受影响」→ Modal 看清单 → 点文件 → Esc 关闭 | 提交全量变更文件 Modal；文件点击 → **新标签页**打开该文件在这次提交里的差异 | ✅ | blame-03.png（**根提交态**——选中根提交 `13a68f62…`（`.agent/AGENT.md` 的唯一提交）时点操作条「受影响」：「受影响文件（13a68f6）」Modal：**52 个文件行**（`affected-file-0…51`），状标全为 `A`，首行 `A .agent/AGENT.md`；Esc 可关。**互证**：`git show --name-only 13a68f62` 恰 **52** 条（含 `.agent/AGENT.md` 等），与清单逐条一致）。**降级口径**：该提交是根提交（`13a68f62…` 无父版本），清单里的文件点击走 `root=1` 分支——差异页只给提示行，与 F-102「差异页」同一三态出口 |
 | F-104 | previousLineno 边界 | 抽查重命名/边界行注解 | 注解近似正确（orig 近似边界口径，抽查即可） | ⏭ 本轮未重跑（沿用 R10） | 本行本轮**未重跑**（见 §5.34⑤）：近似边界判据落在未改动的 `blame-annotate-table` 行渲染上，API 侧 `previousLineno` 对改动行给 1、3、未改动行给 null（R10 口径）。按 §1.2 的 ✅ 定义「界面 + CLI 互证 + 截图」三者缺一不可，本轮既没重走、旧单列图 `blame-04.png` 也已被三栏态同名覆盖 ⇒ **不判 ✅、如实记未重跑** |
-| F-164 | 注解行哈希浮层（点哈希看完整提交信息；2026-09 用户口径「只做点击、不做 hover」） | 切「逐行注解」→ 点某行行内的短哈希（`blame-hash-N`）→ 读浮层内容 → 再点同一哈希收起 → 点另一个哈希 → 点浮层外面 | 右上角（`placement="rightTop"`，空间不足时 antd 自动上下翻转，左右恒在右侧）弹提交详情卡（`commit-detail-card`）：主题 + **完整提交正文**（保留换行）+ 作者与时间 + **作者邮箱**（`commit-detail-email`）+ 短哈希（点一下复制完整哈希）+ 父提交链接；点哈希**不**改变选中提交（`?select=` 不变）；未提交行（全 0 哈希）的哈希不可点；关闭态/换文件后不发 `/commits/:hash` 请求 | ✅（R26） | blame-09.png（R26：`AGENT.md` 点 `blame-hash-1` 的浮层打开态——主题 + 短哈希 + `zhanglei1120 on 2026-09-01 at 15:40` + 邮箱；该提交是单行信息故无正文块）。**完整正文**以 `b96148e` 实测（R26-3）：浮层正文 5 段与 `git show -s --format=%B b96148e` **逐字一致**、邮箱与 `--format='%an <%ae>'` 一致、父提交 `6ba9c86` 与 `%P` 一致；**互不代劳**（R26-4）：点哈希后地址未写 `?select=`、选中行数不变；**按需取数**（R26-5）：点 `13a68f6` 新增一次 `GET /commits/13a68f62…` 200，同哈希再点走 SWR 缓存不重复请求；**缺陷**：初版按哈希开合导致同哈希多行同时弹多个浮层（D-45，已修 + 回归守卫） |
+| F-164 | 注解行：整行可点 → 选中提交 + 哈希旁详情浮层（2026-09 用户口径：只做点击、不做 hover、移入不高亮） | 切「逐行注解」→ 点某行的**正文区**（非哈希处）→ 读浮层内容与位置 → 点另一行 → 再点同一行收起 → 悬停未选中行看底色 | ① 点行任意位置：选中该行归属的提交（URL 写 `?select=`、中栏高亮）**并且**在该行**哈希右侧**（`rightTop`，空间不足时 antd 自动上下翻转、左右恒在右侧）弹出详情卡（`commit-detail-card`）：主题 + **完整提交正文**（保留换行）+ 作者与绝对时间 + **作者邮箱**（`commit-detail-email`）+ 短哈希（点一下复制完整哈希）+ 父提交链接；② 再点同一行收起、点另一行浮层挪过去；③ 未提交行（全 0 哈希）**整行不可点**（含哈希）；④ 行内**没有任何 button**、行是唯一 `role=button`+`tabIndex`；⑤ **鼠标移入不高亮**（唯一反馈是 `cursor: pointer`）；⑥ 关闭态/换文件不发 `/commits/:hash` | ✅（R26；整行可点改版见 §5.35⑨） | blame-09.png（R26 复拍：`AGENT.md` 的「逐行注解」——相对时间列（`28天前`/`17天前`…定宽右对齐）+ 短哈希（只读文本）+ 高亮正文；**点第 8 行正文区**后：地址写入 `?select=0881b926…`、该提交的行带选中底色、浮层在其哈希右侧展开）。**几何实测**：浮层 `left=756` 在哈希 `left=692` 之右（`popupIsRightOfHash=true`）、`placement=ant-popover-placement-rightTop`；正文左沿 `distinctCodeLeft=[768]` 单一值；悬停未选中行时行与哈希背景均为 `rgba(0,0,0,0)`、选中行为 `rgb(21,50,91)`（选中态而非 hover）；行内 `button` 计数 **0**。**完整正文**以 `b96148e` 实测（R26-3）：浮层正文 5 段与 `git show -s --format=%B b96148e` **逐字一致**、邮箱与 `--format='%an <%ae>'` 一致、父提交 `6ba9c86` 与 `%P` 一致；**按需取数**（R26-5）：点 `13a68f6` 新增一次 `GET /commits/13a68f62…` 200，同哈希再点走 SWR 缓存不重复请求；**缺陷**：初版按哈希开合导致同哈希多行同时弹多个浮层（D-45，已修 + 回归守卫） |
 
 ### 4.17 HistoryPanel（slug `history`；P3）
 
@@ -1166,7 +1166,7 @@
 | `diff-stream-view` | `diff-page-07.png`（大仓 `big.txt` 的分块流渲染，F-035 实测 2 个 `diff.chunk` 帧渐进累积后切标准视图）；其 `diff-stream-error` 分支由单测覆盖 |
 | `three-way-view` / `merge-view` | `conflicts-03.png`（全屏三栏：当前分支 / 合并来源 / 合并结果）、`conflicts-08b.png`（保存前结果栏已改写为 `line1 master` / `line2 feature` / `line3 resolved-by-hand`） |
 | `branch-compare-view` | `diff-page-10.png`（`?compare=diverge-test` 双 range 对比视图）、`branch-06.png`（分支页「比较」入口与「当前」分支禁用态） |
-| `blame-workbench`（三栏工作台；原单列 `blame-view` 已随页面重构删除） | `blame-01…06.png`（三栏总览暗色 / 「与最新版本差异」/ 受影响文件 Modal / 逐行注解点行联动 / 陈旧 `?select=` 未知态 / 明亮主题总览）+ `blame-08.png`（**收尾轮 R25 补拍**：工作区口径的逐行注解，含 1 行「未提交」，见 §5.34⑦）；testid 实测在盘——根 `blame-pane`、操作条 `blame-pane-actions` + `blame-action-log`/`-diff`/`-affected`/`-history`、三标签页 `blame-view-changes`/`-latest`/`-annotate`、中栏 `blame-commits` + `blame-commit-N`、注解行 `blame-line-N` + **相对时间列 `blame-time-N`（定宽 68px）** + **哈希列容器 `blame-hash-cell-N`（定宽 68px）** + **逐行高亮正文 `blame-code-N`** + **哈希浮层触发按钮 `blame-hash-N`（2026-09 起是 button，不再是只读徽标）** + 浮层内容 `commit-detail-card` / `commit-detail-email` / `blame-detail-loading` / `blame-detail-error`、提示行 `blame-changes-root-hint`/`-rename-hint`/`-missing-hint` 与 `blame-latest-missing-hint`。**旧 testid `blame-file` 已随旧组件消失**（路径输入框现为 `blame-file-input`） |
+| `blame-workbench`（三栏工作台；原单列 `blame-view` 已随页面重构删除） | `blame-01…06.png`（三栏总览暗色 / 「与最新版本差异」/ 受影响文件 Modal / 逐行注解点行联动 / 陈旧 `?select=` 未知态 / 明亮主题总览）+ `blame-08.png`（**收尾轮 R25 补拍**：工作区口径的逐行注解，含 1 行「未提交」，见 §5.34⑦）+ `blame-09.png`（R26 逐行注解改版）+ `blame-07.png` / `blame-10.png`（**R27**：根提交的「本文件改动」＝Alert 提示 + 只读代码视图，见 §5.36）；testid 实测在盘——根 `blame-pane`、操作条 `blame-pane-actions` + `blame-action-log`/`-diff`/`-affected`/`-history`、三标签页 `blame-view-changes`/`-latest`/`-annotate`、中栏 `blame-commits` + `blame-commit-N`、注解行 `blame-line-N` + **相对时间列 `blame-time-N`（定宽 68px）** + **逐行高亮正文 `blame-code-N`** + **哈希 `blame-hash-N`（只读文本，同时是浮层锚点；行内无 button——行 `blame-line-N` 本身才是 `role=button`）** + 浮层内容 `commit-detail-card` / `commit-detail-email` / `blame-detail-loading` / `blame-detail-error`、提示行 `blame-changes-root-hint`/`-rename-hint`/`-missing-hint` 与 `blame-latest-missing-hint`（**R27 起** `blame-changes-root-hint` 落在 antd `Alert` 根节点上：`DIV.ant-alert.ant-alert-info` + `role=alert`，其下多一个 `browse-code-editor`——`ReadonlyTextView` 的既有 testid，复用而非新造；另有两个 R27 新增的 props 而非 testid：`rootContent` 通道与 `contentLoader` 注入点）。**旧 testid `blame-file` 已随旧组件消失**（路径输入框现为 `blame-file-input`）；**`blame-hash-cell-N` 随 ⑨ 改版删除**（哈希定宽容器不再需要——两类行的哈希已是同一元素） |
 | ~~`committed-changes-panel`~~ | 组件已随页面删除（2026-09-20 用户口径）；`committed-01…03.png` 保留为删除前的历史证据（提交列表分页 50→100 / 目录树 / 与 diff 页联动），根 testid `committed-entry-N` / `committed-load-more` 已随组件移除。当前的等效证据见 `log-page-*`（变更集标签：`snapshot-changeset-title` / `snapshot-changeset-pane` / `changes-diff-*`） |
 | 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复（原 `BrowsePanel`、`CommittedChangesPanel` 已随整页形态删除） |
 
@@ -1583,7 +1583,7 @@
 | 4 | 三标签切换 | ✅ | 「与最新版本差异」→ `?view=latest`；「逐行注解」→ `?view=annotate`；**均只拉当前标签的数据** | 网络面板逐次核对：非激活标签无对应 `/diff`、`/blame` 请求 |
 | 5 | 逐行注解 + 点行选提交 | ✅ | 点 `blame-line-7`（归属 `8536a91`）→ `?file=AGENT.md&view=annotate&select=8536a9166d331aaad59c788df7cf35114e05e21c`；注解选中行数 1；**中栏同时高亮 `8536a91`**；注解区行数 77 | `git show -s 8536a91` = `fix(core): abort 陈旧 pid 守卫与未合并状态解析，AGENT.md 路径更新`，与注解行归属一致 |
 | 6 | 操作条四出口齐备 | ✅ | `blame-action-log` / `blame-action-diff` / `blame-action-affected` / `blame-action-history` 四个 testid **全部渲染** | — |
-| 7 | 根提交降级 | ✅ | `.agent/AGENT.md` 唯一提交即根提交（`13a68f62…`）；「本文件改动」显示 `blame-changes-root-hint`（「该提交为根提交（无父版本）…」），**无加载态、无错误** | `git rev-list --parents -1 13a68f62` 只有一个字段（无父）；**不发 `/diff` 请求**（网络面板 0 条，与 UI 无加载态互证） |
+| 7 | 根提交降级 | ✅ | `.agent/AGENT.md` 唯一提交即根提交（`13a68f62…`）；「本文件改动」显示 `blame-changes-root-hint`（「该提交为根提交（无父版本）…」），**无加载态、无错误** | `git rev-list --parents -1 13a68f62` 只有一个字段（无父）；**不发 `/diff` 请求**（网络面板 0 条，与 UI 无加载态互证）。**⤳ R27 起**：该提示改由 antd `Alert` 承载，下面就地展示该提交里的文件全文（只读代码视图）——本行的「不发 `/diff`」结论仍成立，见 §5.36 |
 | 8 | 受影响文件弹窗 | ✅ | 标题「受影响文件（13a68f6）」；**52 个文件行**（`affected-file-0…51`），状标 `A`；Esc 可关 | `git show --name-only 13a68f62` 恰 **52** 条，与清单逐条一致 |
 | 9 | 未知态（陈旧 `?select=`） | ✅ | `?select=deadbeef…` → 操作条只剩 **3 个**按钮（**无「差异页」**，不猜根提交）；「本文件改动」显示服务端中文错误「引用不存在或不是提交：deadbeefdeadbeefdeadbeefdeadbeefdeadbeef」；中栏不高亮任何行但 **12 条历史仍在** | 控制台唯一一条 error 是预期内的 `GET /api/repos/…/commits/deadbeef…` **400** |
 | 10 | 旧 `?rev=` 深链规范化 | ✅ | web-koa `:5173`：`?file=docs/manual.md&rev=8d6d961` → 地址被改写为 `?file=docs%2Fmanual.md&select=8d6d961&view=annotate`，逐行注解 **1519 行**；web-next `:3091` 同形 | `git show -s 8d6d961` = `docs: 更新 README 与使用手册（同步新功能、精简 README、重选手册配图）` |
@@ -1596,7 +1596,7 @@
 |---|--------|------|------|
 | 13 | Tabs 高度契约端到端成立 | ✅ | 「与最新版本差异」里 Monaco 真实渲染，`[data-testid="blame-view-latest"]` 高 **580** 落在右栏 **646** 之内（Task 6 的 Important 修复在浏览器里被证实） |
 | 14 | hydration 一致性 | ✅ | web-next 硬加载深链 `?file=AGENT.md&view=annotate&select=<完整哈希>` → 控制台 **0 error**（修复前必报 `Hydration failed …`）；注：范围项 9 那次陈旧哈希的唯一 error 是预期内的 400 |
-| 15 | 「降级不请求」成立 | ✅ | 根提交与「该提交无此路径」两种降级下，「本文件改动」**不发 `/diff` 请求**（网络面板与 UI 加载态互证） |
+| 15 | 「降级不请求」成立 | ✅ | 根提交与「该提交无此路径」两种降级下，「本文件改动」**不发 `/diff` 请求**（网络面板与 UI 加载态互证）。**⤳ R27 起**：根提交这一种会**新增一条** `GET /browse/content?rev=该提交&file=`（读该版本全文给只读代码视图），`/diff` 仍为 0 条；「该提交无此路径」仍是**一条请求都不发**——见 §5.36 |
 
 **② 操作路径（点击 / 输入序列）**
 
@@ -1672,23 +1672,23 @@
 | # | 冒烟项 | 结论 | 判据（浏览器 DOM / 网络 / CLI 互证） |
 |---|--------|------|--------------------------------------|
 | R26-1 | 行结构改版（行号｜时间｜哈希 + 高亮正文；无作者列、无「未提交」字样） | ✅ | `blame-line-1` 文本 = `1` + `2026-09-01 15:40` + `13a68f6` + `# AGENT.md`；全页 `innerText` **不含「未提交」**；`.rebased-line .code` 计算色 **3 种**（`AGENT.md`）/ **6 种**（`src/app.ts`，`.ts` 语法）——逐行 token 着色生效 |
-| R26-2 | 哈希是原生 `button`（键盘天生可达，不再自己写键盘分支） | ✅ | 108 行 → `button[data-testid^="blame-hash-"]` 恰 **108** 个；`src/app.ts` 12 行中 **7** 个（= 12 − 5 行未提交） |
-| R26-3 | 点哈希 → 浮层展示**完整提交信息**（与 CLI 逐字一致） | ✅ | 点 `blame-hash-44`（`b96148e`）→ `commit-detail-card` 文本含主题 + **正文 5 段全部**（末段「已重启本机 dev 服务并探针验证…」在内）+ 作者时间 + `commit-detail-email` = `zhanglei1120@jd.com` + 父提交 `6ba9c86`；**互证**：`git show -s --format=%B b96148e` 与卡内正文逐字相同、`git show -s --format='%an <%ae>'` = `zhanglei1120 <zhanglei1120@jd.com>` |
-| R26-4 | 点哈希**不**代劳行选中（两个入口互不代劳） | ✅ | 点哈希后地址仍为 `?file=AGENT.md&view=annotate`（**未写入 `?select=`**）、`[data-selected="true"]` 行数不变（4 → 4） |
-| R26-5 | 再点同一哈希收起；点另一个哈希 → 浮层挪过去并按需取数 | ✅ | 再点同哈希 → `.ant-popover.ant-popover-hidden` 且 `display:none`（可见浮层 0）；点 `blame-hash-1`（`13a68f6`，与选中提交不同）→ 网络新增 `GET /commits/13a68f62ba…` **200**，可见浮层内容 = 该提交（单行信息 → **无正文块**，与 `CommitDetailsPanel` 口径一致） |
+| R26-2 | 哈希是原生 `button`（键盘天生可达）→ **已随 ⑨ 改版移除** | ⤳ 见 ⑨ | 改版前：108 行 → `button[data-testid^="blame-hash-"]` 恰 **108** 个；⑨ 之后行内 **0 个 button**（整行 `role=button` 才是入口，见 ⑨ 的实测） |
+| R26-3 | 浮层展示**完整提交信息**（与 CLI 逐字一致） | ✅ | 点 `blame-hash-44`（改版后同样流程：点该行任意位置）→ `commit-detail-card` 文本含主题 + **正文 5 段全部**（末段「已重启本机 dev 服务并探针验证…」在内）+ 作者时间 + `commit-detail-email` = `zhanglei1120@jd.com` + 父提交 `6ba9c86`；**互证**：`git show -s --format=%B b96148e` 与卡内正文逐字相同、`git show -s --format='%an <%ae>'` = `zhanglei1120 <zhanglei1120@jd.com>` |
+| R26-4 | ~~点哈希**不**代劳行选中（两个入口互不代劳）~~ → **已随 ⑨ 改版反转** | ⤳ 见 ⑨ | 改版前：点哈希后地址未写 `?select=`、选中行数不变；⑨ 之后**整行点击同时选中并开浮层**（一次点击两个后果是用户新口径，见 ⑨ 的实测与说明） |
+| R26-5 | 再点同一行收起；点另一行 → 浮层挪过去并按需取数 | ✅ | 改版前按哈希点、⑨ 之后按行点，行为一致：再点同点位 → `.ant-popover.ant-popover-hidden` 且 `display:none`（可见浮层 0）；点另一行（`13a68f6`，与选中提交不同）→ 网络新增 `GET /commits/13a68f62ba…` **200**，可见浮层内容 = 该提交（单行信息 → **无正文块**，与 `CommitDetailsPanel` 口径一致） |
 | R26-6 | 未提交行（全 0 伪哈希）：不可点、无文案、行也不可选 | ✅ | `src/app.ts` 5 行 `0000000`：哈希元素是 **`SPAN`**（非 button）、所在行无 `tabindex`/`role`；**互证**：CLI `git blame --line-porcelain -- src/app.ts` = 12 行 / 5 行全 0，API `GET /blame?file=src/app.ts` = 12 行 / 5 行 `hash` 全 0，与页面逐项一致 |
 | R26-7 | 浮层开合必须**按行**（首次实测暴露并修复，见 D-45） | ✅（修复后复验） | 修复前：点 `b96148e`（**占 3 行**）同时弹 **3 个**同内容浮层（`b96148e` 3 行、`13a68f6` 48 行时更甚）；修复后同点位**可见浮层恰 1 个**，单测加回归（同哈希两行只弹一个，`blame-annotate-table.test.tsx`） |
 
 > **新登记缺陷 D-45（已修，本轮冒烟发现）**：注解行浮层的开合初版按「哈希命中」判定（`detail.hash === line.hash`），而**一个提交通常拥有连续多行**——点一次哈希会同时弹出 N 个内容相同的浮层（实测 `b96148e` 3 个叠在一起，`13a68f6` 48 行时更严重；3 个浮层还会互相干扰关闭路径）。修法：开合状态改为**被点的那一行**（组件内 `openLineno`），容器 API 不变；回归守卫见 `blame-annotate-table.test.tsx` 的「同一提交拥有多行时只弹一个浮层」。
 > **探针纠偏 P-32（写进口径，避免下次误判）**：antd 浮层关闭后**节点仍留在 DOM**（`destroyOnHidden` 默认 false，只在 `.ant-popover` 上加 `ant-popover-hidden`）。因此 `document.querySelector('[data-testid="commit-detail-card"]')` 取到的是**第一个（可能是已隐藏的旧）浮层**——本轮一度据此误判"点 13a68f6 显示 b96148e 内容（张冠李戴）"，复查后澄清：**可见浮层内的内容是正确的**。后续 e2e 断言一律**限定在可见浮层内**（`getComputedStyle(p).display !== 'none'`）再取文本。
 > **视觉口径（实测）**：`placement="rightTop"` 在右栏靠近视口底部时会被 antd 自动上下翻转（实测类名 `ant-popover-placement-rightBottom`）以留在视口内（`autoAdjustOverflow` 默认 true）——**左右方向始终在右侧**（锚点 x=717 → 浮层 x=797）。若要求严格"右上不翻转"，需 `autoAdjustOverflow={false}` 并接受可能溢出错位；当前取「留在视口内」。
-> **未覆盖（如实登记）**：**web-koa 站点**（`pnpm dev` 的另一半：`:3082` 服务端与 `:5173` SPA——本轮它们未在运行，未擅自起服务）；明亮主题下的浮层取色；360/480/768 响应式档；Esc 关闭浮层（未实测）；键盘 Tab 到哈希后按 Enter 开浮层（仅单测覆盖，未在浏览器实测）；`?select=` 显式选中版本口径下的注解行浮层（本轮只测了工作区口径）。
+> **未覆盖（如实登记）**：**web-koa 站点**（`pnpm dev` 的另一半：`:3082` 服务端与 `:5173` SPA——本轮它们未在运行，未擅自起服务）；明亮主题下的浮层取色；360/480/768 响应式档；Esc 关闭浮层（未实测）；**键盘**在行上按 Enter/Space 开浮层（⑨ 之后键盘入口就是行本身；仅单测覆盖，未在浏览器实测）；点浮层外面关闭（未实测）；`?select=` 显式选中版本口径下的注解行浮层（本轮只测了工作区口径）。
 
 **证据（R26）**
 
 | 截图 | 画面 | 覆盖项 | SHA256（完整值，`Get-FileHash` 实算） |
 |------|------|--------|----------------------------------------|
-| `blame-09.png` | 1440×900 暗色：主仓 `AGENT.md` 的「逐行注解」——行号｜**相对时间**（`28天前`/`17天前`/`20天前`…，定宽 68px 右对齐）｜短哈希 + 高亮正文（markdown 语法色，正文左沿逐行对齐）；**点 `blame-hash-1` 后的浮层打开态**（主题 + 短哈希 + 作者/绝对时间 `zhanglei1120 on 2026-09-01 at 15:40` + 邮箱 `zhanglei1120@jd.com`；该提交为单行信息故无正文块） | R26-1~R26-5、R26-8 | `BC0190402E8250096D933A3DACB79FB9668C7D8178F7434EDFFFB362429CF6A2`（191725 字节） |
+| `blame-09.png` | 1440×900 暗色：主仓 `AGENT.md` 的「逐行注解」——行号｜**相对时间**（`28天前`/`17天前`/`20天前`…，定宽 68px 右对齐）｜短哈希（只读文本）｜高亮正文（markdown 语法色，正文左沿逐行对齐）；**点第 8 行正文区**后的状态：地址写入 `?select=0881b926…`（该提交的行带选中底色）+ 浮层在其哈希右侧展开（主题 + 短哈希 + 作者/绝对时间 + 邮箱） | R26-1、R26-3、R26-5、R26-8、R26-9 | `0D7B057AF2A016C6ADE63D9CEDBAC1D13EB3CDDA2B33238003429D8CCB6D9989`（254777 字节） |
 
 **⑧ 同日微调：时间列改相对时间 + 列宽定死（对准口径）**
 
@@ -1696,11 +1696,66 @@
 > **为什么按 31 天切**：口径里「31天前」与「1月前」都要能出现；按 30 天切会让 31 天变成「1月前」，`31天前` 永远看不到。
 > **定宽与对齐（几何实测，`getBoundingClientRect`，非目测）**：
 > - 时间列 **68px 右对齐**：相对时间字数不一（`刚刚` 2 字 ~ `59分钟前` 4 字），不定宽则每行宽度不同、右侧逐行错开；
-> - **哈希列 68px（本轮一并修掉的既有错位）**：可点行是 antd Button（自然宽 68）、未提交行是只读 Text（自然宽 53）——修前同一页里**正文左沿出现两个值：768 / 753（差 15px）**，修后 `distinctCodeLeft = [768]`（`rebased-smoke` 的 12 行含 5 行未提交全部一致；主仓 `AGENT.md` 108 行同样只有一个值）；
+> - **哈希列**：⑧ 当时用「给哈希加 68px 定宽容器」消掉了 Button（自然宽 68）与只读 Text（自然宽 53）造成的 15px 错位（正文左沿 768 / 753 两个值）；**⑨ 改版后哈希在两类行里都是同一个只读 code 文本**（按钮已移除），错位由「同类元素自然同宽」保证——定宽容器随之删除（DOM 更少一层），几何复测仍为单一值（见 ⑨）；
 > - 六种档位文本在 68px 列内**均不裁切**（在页面内克隆同款单元格逐档实测：`刚刚`/`59分钟前`/`23小时前`/`31天前`/`12月前`/`1年前`，`scrollWidth == clientWidth`，12px 字号）。
 > **刷新时机（如实说明）**：相对时间在**重渲染时**刷新，本仓不为此挂定时器（每秒/每分钟重渲染上千行不值得）——页面长时间挂着不动时，`59分钟前` 不会自己跳成 `1小时前`。
 > **未覆盖（微调部分）**：`N分钟前`/`N小时前`/`N月前`/`N年前` 四档本轮**只有单测覆盖**（`domain/format.test.ts` 注入固定的「现在」精确断言），浏览器里实测到的是 `刚刚` 与 `N天前` 两档（夹具仓的提交都在近 31 天内）。
 
+**⑨ 同日改版：整行可点击（选中 + 浮层）+ 移入不高亮 + 行内去按钮**
+
+> **口径**：交互从「点哈希开浮层 / 点行其余处选中提交」两个入口，改为**整行一个入口**——点行的任何位置（行号、时间、哈希、正文）**同时**：① 选中该行归属的提交；② 在该行**哈希旁边**开/收提交详情浮层（浮层位置不变，仍是 `rightTop`）。**鼠标移入不高亮**；行内不再有任何按钮。
+> **做法**：`BlameAnnotateTable` 的 `activate` 一个入口做完两件事（`onSelectCommit` + `onToggleDetail`，都注入才做）；哈希退回**只读 `Typography.Text`**（仍是浮层的锚点——`Text` 是 `forwardRef` 的 span），Popover 用**受控 `open`** 且**刻意不接 `onOpenChange`**（否则哈希上的一次点击会被「行点击 + 浮层自身」各 toggle 一遍，开了立刻又关）；行内的按键判 target !== currentTarget 的守卫随之删除（已无行内控件）。
+> **实测（浏览器，`getBoundingClientRect` / `getComputedStyle`）**：
+> - 点**正文区**（非哈希处）→ `?select=0881b926…` 写入、`[data-selected="true"]` 行出现、**可见浮层 1 个**且 `placement=ant-popover-placement-rightTop`、浮层 `left=756` 在哈希 `left=692` **之右**（`popupIsRightOfHash=true`）；
+> - **移入不高亮**：悬停未选中行 → 行背景 `rgba(0,0,0,0)`、哈希背景 `rgba(0,0,0,0)`；被选中行是 `rgb(21,50,91)`（`controlItemBgActive`＝**选中态**，不是 hover）；行 `cursor: pointer` 是唯一的移入反馈；
+> - **行内 0 个 `button`**（`document.querySelectorAll('[data-testid^="blame-line-"] button').length === 0`）→ 上千行时不再有上千个 Tab 停靠点；行是唯一 `role=button` + `tabIndex=0` + Enter/Space 的入口；
+> - 对齐复测：`AGENT.md` 108 行 `distinctCodeLeft=[768]`；`rebased-smoke-big` 的 `big.txt` 620 行 `distinctCodeLeft=[753]`（同一个页面内单一值；两页数值不同是因为三栏宽度偏好不同，非错位）。
+> **一行一提示（用户可见的行为变化，如实记下）**：整行点击现在**一次做两件事**——选中（会写 `?select=`，于是「逐行注解」切到那一版，行内容随之变化）**并**开浮层。若只想要浮层、不希望顺手改选中/切版本，说一声即可去掉选中那半边（`activate` 里一行的事）。
+
+> **另记：在 `rebased-smoke-big` / `big.txt` 上的实测（用户当场指认的页面）**：该文件 620 行**全部是工作区未提交内容**（CLI：`git status` = ` M big.txt`、`git blame --line-porcelain` 620 行全为全 0 伪哈希），因此该页**整页不可点**（无提交可归属、无详情可看）——这是设计行为、非回归；该页正文也无语法着色（`.txt` 不在 `domain/language` 的映射里 → plaintext，与「不猜语法」口径一致）。**顺带核实**：该夹具现为 **621 行 × ≤51 字符**（`big file line N - working tree rewrite（大 diff 常驻）`），文档 §5.28 一带「620 字符/行」的说法是旧夹具状态，本轮未改动该夹具、也未改写那处描述。
+
 > **收尾状态**：本轮新增 `docs/shots/blame-09.png` 一张；**未改动任何夹具**（`rebasedjs` 与 `rebased-smoke` 的工作区状态与冒烟前一致：前者干净、后者保留其既有的未提交改动，未新增/未还原）。截图落盘走 AGENT.md §MCP 五步：本项目不在 MCP 允许根内 → 先以纯文件名落盘到 MCP 输出目录，再按绝对路径搬进 `docs/shots/` 并 `Get-FileHash` 复核。
+
+### 5.36 溯源页根提交「本文件改动」改 Alert + 只读代码视图 冒烟（R27，2026-09-30）
+
+> **口径（用户当场指认，2026-09-30）**：根提交那句提示「该提交为根提交（无父版本），无法按父级对比变更；该文件的初始内容可在「逐行注解」标签查看」**改用 `Alert` 包裹**，并在**下面展示该提交新添加的内容**；「高亮」经用户澄清＝**代码（语法）高亮**（不是差异的增行绿块）。范围**限溯源页右栏「本文件改动」标签**（用户明确「只改这里」）——日志页变更集的差异标签与差异页 `root=1` **维持原样**（仍是纯提示行；差异页若要同样处理，需给入口链接补 `to=<哈希>` 才能取到内容）。
+
+**改动面（一句话）**：`ui/composite/blame-change-pane.tsx` 的标签1 根提交分支 = `Alert`（`type="info"` + `showIcon`，`data-testid="blame-changes-root-hint"` **保持不变**、落在 Alert 根节点上）+ 下面 `ReadonlyTextView`（Monaco 只读，语言按路径推断）；新增受控通道 `rootContent`（`content`/`binary`/`loading`/`error`）与测试注入点 `contentLoader`，`blame-workbench` 只做透传；两端容器（web-next `app/repos/[repoId]/blame/page.tsx`、web-koa `src/pages/blame.tsx`，同构）在 `view=changes && hints.ready && hints.rootCommit` 时用 `useBrowseContent(repoId, hash, file)` 读该版本全文。**零新增端点、零契约改动**；根提交**仍不发 `/diff`**（没有可比的两端）。
+
+**① 范围清单**
+
+| # | 冒烟项 | 结论 | 判据（浏览器 DOM / 网络 / CLI 互证） |
+|---|--------|------|--------------------------------------|
+| R27-1 | 提示由 Alert 承载（文案逐字不变） | ✅ | `rebased-smoke-big` 的 `big.txt`（根提交 `a6de2eb657ebc22b3de66618f405f3ccf859d00f`）：「本文件改动」里 `blame-changes-root-hint` 是 `DIV.ant-alert.ant-alert-info.ant-alert-outlined`、`role=alert`，`textContent` **逐字**＝「该提交为根提交（无父版本），无法按父级对比变更；该文件的初始内容可在「逐行注解」标签查看」 |
+| R27-2 | 下面展示该提交里的文件全文（不是伪 diff） | ✅ | 同页 1 个 `.monaco-editor`、首行 `big file line 1`、滚到底末行 `big file line 40`。**互证**：`git show a6de2eb6:big.txt` = **40 行**（首 `big file line 1`／末 `big file line 40`）；`GET /browse/content?rev=a6de2eb6…&file=big.txt` 同一份（`split('\n')` 41 段 = 40 行 + 末尾换行，`binary:false`）。**关键对照**：该仓工作区的 `big.txt` 是**另一份 620 行改写稿**（§5.35 另记：`git status` = ` M big.txt`）——页面渲染的是**选中提交那一版**（40 行），不是工作区那一份，版本口径正确 |
+| R27-3 | 「高亮」＝代码（语法）高亮 | ✅ | `proxyGateway` 的 `app.js`（根提交 `e74f624da39ad6d2ff3d93bfb8fa80cc63ee0b2e`）：宿主 `data-mode-id="javascript"`、`.view-lines span[class*="mtk"]` = **463 个**（`mtk1/mtk5/mtk7/mtk8/mtk9` 等 + `bracket-highlighting`）；同一功能在 `big.txt` 上是 `plaintext` 且 0 着色（`.txt` 不在 `domain/language` 映射里）——**沿既有「不猜语法」口径** |
+| R27-4 | 仍不做伪 diff | ✅ | 根提交页 `.monaco-diff-editor` **0**、差异工具条 `diff-ignore-ws` **不在盘**、`blame-changes-loading` **不在盘**（提示不依赖取数，不会退化成加载态或伪差异） |
+| R27-5 | 「不发差异请求」口径保持 | ✅ | 网络面板（两页各一遍）：只有 `GET /commits/<hash>` 200 与 **`GET /browse/content?rev=<hash>&file=` 200**，**`/diff` 0 条**；未就绪（`?select=` 陈旧/被改写）时 `hints.ready=false` → 连 `browse/content` 也不发（门禁同源） |
+| R27-6 | 高度契约（Alert 自适应 + 代码视图吃满剩余） | ✅ | `blame-view-changes` 高 **755.7**（y 144.3→900）；`blame-changes-root-hint` 高 **29.3**（144.3→173.7）；编辑器宿主 `browse-code-editor` 高 **718.3**（181.7→900）——紧接 Alert 之下、与右栏底边齐平；无溢出、无零高盒子 |
+| R27-7 | 单测（先写测试再改实现）与静态检查 | ✅ | `blame-change-pane.test.tsx` 根提交用例改为断言 `role=alert` 文案逐字 + 只读代码视图的值/推断语言（`typescript`）+ **无**差异工具条，并新增「加载/错误/二进制三态下 Alert 恒在、正文按态切换」。`@rebased/ui` 全量 **78 文件 / 992 用例全绿**；`packages/client/ui`、`apps/web-next`、`apps/web-koa` 三包 `tsc --noEmit` 均 0 错误。**执行口径**：本机 corepack 把 `pnpm` 解析成 v11，与仓库 `packageManager: pnpm@10.26.2` 不符而拒绝执行 → 改用各包 `node_modules/.bin/vitest run` 与 `node_modules/.bin/tsc --noEmit`（与 `pnpm --filter … test` / `pnpm typecheck` 等价），ESLint `--fix` 同理走包内 bin |
+
+**② 操作路径（点击 / 深链序列）**
+
+1. 深链 `http://localhost:3081/repos/7649bb35-612f-4949-9974-d498d68fb19d/blame?file=big.txt&view=changes&select=a6de2eb657ebc22b3de66618f405f3ccf859d00f`（即用户当场指认的那一页）→ 等 SWR 落定 → 读 Alert 节点（标签名/类名/`role`/文案）、`.monaco-editor` 计数、首末行、`blame-view-changes` 与两个子盒的 `getBoundingClientRect()`。
+2. 同页 `fetch('/api/repos/<id>/browse/content?rev=a6de2eb6…&file=big.txt')` 取同一份内容做前后端互证；再把编辑器滚到底读末行。
+3. 换 `proxyGateway` 根提交页：`/repos/bc52b542-3369-4522-b30f-fb78428eb5a1/blame?file=app.js&view=changes&select=e74f624da39ad6d2ff3d93bfb8fa80cc63ee0b2e` → 读 `data-mode-id` 与着色 token 计数、复读两条网络请求与差异元素计数。
+4. 网络面板复核（`/api/repos/<id>/…` 过滤）：两页均无 `/diff`，只有 `/commits/<hash>` 与 `/browse/content`。
+5. 截图两张（先落 MCP 输出目录再搬进 `docs/shots/`），`Get-FileHash` 复核。
+
+**③ 证据（截图，`Get-FileHash -Algorithm SHA256` 实算）**
+
+| 截图 | 画面 | 覆盖项 | SHA256（完整值，字节数） |
+|------|------|--------|--------------------------|
+| `blame-07.png` | 1440×900 暗色：`proxyGateway` 的 `app.js`（根提交 `e74f624…`）——「本文件改动」标签里 **Alert 提示条 + 只读代码视图**（JS 语法高亮、行号 1…38、占据右栏全部剩余高度） | R27-1、R27-3、R27-4、R27-5、R27-6 | `370054736BB4CAB306828723116CAAAB6FE95597648AADC9DB92CF35673D5C3C`（235891 字节） |
+| `blame-10.png` | 1440×900 暗色：`rebased-smoke-big` 的 `big.txt`（根提交 `a6de2eb…`，即被指认的那一页）——Alert 提示 + `big file line 1 … big file line 38+`（`plaintext`，无着色，与「不猜语法」一致） | R27-1、R27-2、R27-5、R27-6 | `C7F9167E3FA2DF7C2E5A1C01F195FC95FC76F88F4BA97E2CD9FCEA1288B21E3A`（83670 字节） |
+
+**④ 未覆盖（如实登记）**
+
+- **web-koa 站点**（`:3082` 服务端 / `:5173` SPA）本轮未起服务、未在浏览器实走；该容器与 web-next **同构**（同一批 hook、同一份 props 形状、同一份门禁判据），本轮以包内 `tsc --noEmit` + 共享组件单测覆盖，未以浏览器断言背书。
+- **明亮主题**下的该页未复拍：Alert 走 antd 主题 token、代码视图由 Monaco 主题跟随（无新硬编码色），但本轮没有明亮主题帧。
+- **二进制文件**（`browse/content` 的 `binary:true` → `browse-binary` 提示）只有单测覆盖，未找二进制根提交在浏览器实走。
+- **空文件 / 超大文件**在根提交下的观感未专门实测（编辑器自身虚拟化，未造专门夹具）。
+
+> **收尾状态**：本轮新增 `docs/shots/blame-07.png`、`blame-10.png` 两张（SHA256 见 ③，实算值）；**未改动任何夹具**（`rebased-smoke-big`、`proxyGateway` 的工作区保持冒烟前状态：前者保留其既有的 ` M big.txt`，后者未动）。截图落盘走 AGENT.md §MCP 五步：本项目不在 MCP 允许根内 → 先以纯文件名落盘到 MCP 输出目录，再按绝对路径搬进 `docs/shots/` 并 `Get-FileHash` 复核。
 
 

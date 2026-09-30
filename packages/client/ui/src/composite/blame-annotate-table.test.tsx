@@ -120,19 +120,6 @@ describe('BlameAnnotateTable 渲染', () => {
 });
 
 describe('BlameAnnotateTable 行交互', () => {
-  it('哈希列定宽：未提交行（只读文本）与可点行（按钮）占同一列宽，正文起始位不漂移', () => {
-    render(
-      <BlameAnnotateTable
-        lines={[makeLine({ lineno: 1, hash: 'h1' }), makeLine({ lineno: 2, hash: ZERO_HASH, shortHash: '0000000' })]}
-        onToggleDetail={() => {}}
-      />,
-    );
-    // 实测（冒烟）：Button 自然宽 68 / 只读 Text 自然宽 53 → 两类行的正文起始位差 15px（768 vs 753）。
-    // 定宽把两类行压到同一列宽，正文左沿才逐行对齐（几何由冒烟在浏览器里量，这里钉列宽契约）。
-    expect(screen.getByTestId('blame-hash-cell-1').style.width).toBe('68px');
-    expect(screen.getByTestId('blame-hash-cell-2').style.width).toBe('68px');
-  });
-
   it('点行以该行归属的提交调 onSelectCommit', () => {
     const onSelectCommit = vi.fn();
     render(<BlameAnnotateTable lines={[makeLine({ lineno: 3, hash: 'fullhash3' })]} onSelectCommit={onSelectCommit} />);
@@ -203,7 +190,7 @@ describe('BlameAnnotateTable 行交互', () => {
 });
 
 describe('BlameAnnotateTable 哈希详情浮层', () => {
-  it('点哈希：以该行哈希调 onToggleDetail，且**不**触发该行的选中（两者互不代劳）', () => {
+  it('点整行：既选中该提交、又在其哈希旁打开详情浮层（整行是唯一入口，用户口径）', () => {
     const onToggleDetail = vi.fn();
     const onSelectCommit = vi.fn();
     render(
@@ -211,52 +198,96 @@ describe('BlameAnnotateTable 哈希详情浮层', () => {
         lines={[makeLine({ lineno: 1, hash: 'fullhash1' })]}
         onSelectCommit={onSelectCommit}
         onToggleDetail={onToggleDetail}
+        detail={{ hash: 'fullhash1', authorEmail: 'a@example.com', entry: makeEntry({ hash: 'fullhash1' }) }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('blame-line-1'));
+    expect(onSelectCommit).toHaveBeenCalledWith('fullhash1');
+    expect(onToggleDetail).toHaveBeenCalledWith('fullhash1');
+    expect(screen.getByTestId('commit-detail-card')).toBeInTheDocument();
+  });
+
+  it('点行内哈希文本同样生效（事件冒泡到行，哈希自己不再单独处理点击）', () => {
+    const onToggleDetail = vi.fn();
+    const onSelectCommit = vi.fn();
+    render(
+      <BlameAnnotateTable
+        lines={[makeLine({ lineno: 1, hash: 'fullhash1' })]}
+        onSelectCommit={onSelectCommit}
+        onToggleDetail={onToggleDetail}
+        detail={{ hash: 'fullhash1', entry: makeEntry({ hash: 'fullhash1' }) }}
       />,
     );
     fireEvent.click(screen.getByTestId('blame-hash-1'));
     expect(onToggleDetail).toHaveBeenCalledWith('fullhash1');
-    expect(onSelectCommit).not.toHaveBeenCalled();
+    expect(onSelectCommit).toHaveBeenCalledWith('fullhash1');
   });
 
-  it('点开后再点同一哈希 → onToggleDetail(null)（受控关闭）', () => {
+  it('行内不再渲染任何 button：整行是唯一可聚焦入口（哈希不再是 Tab 停靠点）', () => {
+    render(
+      <BlameAnnotateTable
+        lines={[makeLine({ lineno: 1, hash: 'h1' }), makeLine({ lineno: 2, hash: ZERO_HASH, shortHash: '0000000' })]}
+        onSelectCommit={() => {}}
+        onToggleDetail={() => {}}
+      />,
+    );
+    expect(document.querySelectorAll('button')).toHaveLength(0);
+    // 两类行的哈希是同类元素（只读 code 文本）→ 自然同宽，正文左沿不会因「按钮 vs 文本」而漂移
+    expect(screen.getByTestId('blame-hash-1').tagName).toBe('SPAN');
+    expect(screen.getByTestId('blame-hash-2').tagName).toBe('SPAN');
+  });
+
+  it('点开后再点同一行 → onToggleDetail(null)（受控关闭）；选中回调照常触发', () => {
     const onToggleDetail = vi.fn();
+    const onSelectCommit = vi.fn();
     render(
       <BlameAnnotateTable
         lines={[makeLine({ lineno: 1, hash: 'fullhash1' })]}
+        onSelectCommit={onSelectCommit}
         onToggleDetail={onToggleDetail}
         detail={{ hash: 'fullhash1', entry: makeEntry({ hash: 'fullhash1' }), authorEmail: 'a@example.com' }}
       />,
     );
-    fireEvent.click(screen.getByTestId('blame-hash-1'));
+    fireEvent.click(screen.getByTestId('blame-line-1'));
     expect(onToggleDetail).toHaveBeenLastCalledWith('fullhash1');
     expect(screen.getByTestId('commit-detail-card')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('blame-hash-1'));
+    fireEvent.click(screen.getByTestId('blame-line-1'));
     expect(onToggleDetail).toHaveBeenLastCalledWith(null);
+    expect(onSelectCommit).toHaveBeenCalledTimes(2);
     /* 「浮层真的收起了」不在这里断言：antd 的关闭走 rc-motion（离场动画靠 transitionend/定时器），
        jsdom 不跑这类动画，节点会停在离场前那一帧——按 DOM 判定会得到假阴性。
        视觉层的收起由冒烟在真实浏览器里验（§4.16 F-164）。这里只钉交互契约：两次点击 = 开 → 关。 */
   });
 
-  it('未提交行（全 0 伪哈希）哈希不可点：不调 onToggleDetail', () => {
+  it('未提交行（全 0 伪哈希）：整行不可点——不选中、不弹浮层、不可聚焦', () => {
     const onToggleDetail = vi.fn();
+    const onSelectCommit = vi.fn();
     render(
       <BlameAnnotateTable
         lines={[makeLine({ lineno: 1, hash: ZERO_HASH, shortHash: '0000000' })]}
+        onSelectCommit={onSelectCommit}
         onToggleDetail={onToggleDetail}
+        detail={{ hash: ZERO_HASH, entry: makeEntry({ hash: ZERO_HASH }) }}
       />,
     );
-    fireEvent.click(screen.getByTestId('blame-hash-1'));
+    const row = screen.getByTestId('blame-line-1');
+    expect(row).not.toHaveAttribute('tabindex');
+    expect(row).not.toHaveAttribute('role');
+    fireEvent.click(row);
+    expect(onSelectCommit).not.toHaveBeenCalled();
     expect(onToggleDetail).not.toHaveBeenCalled();
+    expect(screen.queryAllByTestId('commit-detail-card')).toHaveLength(0);
   });
 
-  it('未注入 onToggleDetail：哈希不可点（无死控件）', () => {
-    render(<BlameAnnotateTable lines={[makeLine({ lineno: 1 })]} />);
-    fireEvent.click(screen.getByTestId('blame-hash-1'));
-    expect(screen.getByTestId('blame-hash-1')).toBeInTheDocument();
+  it('未注入 onToggleDetail：整行仍可选中，但不弹浮层（哈希退回纯文本，无死控件）', () => {
+    const onSelectCommit = vi.fn();
+    render(<BlameAnnotateTable lines={[makeLine({ lineno: 1 })]} onSelectCommit={onSelectCommit} />);
+    fireEvent.click(screen.getByTestId('blame-line-1'));
+    expect(onSelectCommit).toHaveBeenCalledTimes(1);
+    expect(screen.queryAllByTestId('commit-detail-card')).toHaveLength(0);
   });
 
-  it('同一提交拥有多行时只弹一个浮层：浮层跟着**被点的行**，不跟着哈希（冒烟实测：b96148e 有 3 行 → 曾同时弹 3 个）', async () => {
-    const onToggleDetail = vi.fn();
+  it('同一提交拥有多行时只弹一个浮层：浮层跟着**被点的行**，不跟着哈希（冒烟实测：b96148e 有 3 行 → 曾同时弹 3 个）', async () => {    const onToggleDetail = vi.fn();
     const lines = [
       makeLine({ lineno: 1, hash: 'same', shortHash: 'same123' }),
       makeLine({ lineno: 2, hash: 'same', shortHash: 'same123' }),

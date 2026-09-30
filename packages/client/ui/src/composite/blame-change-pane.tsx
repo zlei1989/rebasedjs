@@ -6,16 +6,21 @@
  *   · 标签1「本文件改动」= 该提交对当前文件的 diff（from=父提交、to=该提交）；
  *   · 标签2「与最新版本差异」= 该提交的该文件版本 vs **当前工作区版本**（from-only 语义）；
  *   · 标签3「逐行注解」= 该提交版本的逐行归属（BlameAnnotateTable）。
- * 三种降级（根提交 / 重命名 / 该提交的版本里没有这个路径）只给提示行、**不做伪 diff**——
- * 与差异页、日志页变更集标签同一口径（判据见 composite/blame-state 的 changesHints）。
+ * 三种降级（根提交 / 重命名 / 该提交的版本里没有这个路径）**不做伪 diff**——与差异页、日志页变更集标签
+ * 同一口径（判据见 composite/blame-state 的 changesHints）。其中**根提交另有内容可看**：没有父版本可比，
+ * 但这一版的文件全文就是这次提交新添加的全部内容，故标签1 在 Alert 提示下用只读代码视图（语法高亮）
+ * 把它就地读出来（数据由容器经 rootContent 通道给，走既有 browse/content 端点，**不发差异请求**）；
+ * 重命名与「这一版没有这个路径」两种降级连内容也取不到，仍是纯提示行。
  * 纯受控：不调接口、不碰 URL，数据与动作全部由容器给。
  */
-import { Button, Flex, Spin, Tabs, Tooltip, Typography, theme } from 'antd';
+import { Alert, Button, Flex, Spin, Tabs, Tooltip, Typography, theme } from 'antd';
 import type { TabsProps } from 'antd';
 import type { BlameLine, CommittedEntry, FileVersions } from '@rebased/contracts';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
 import type { LineHighlighterLoader } from '../base/line-highlighter';
+import type { MonacoLazyLoader } from '../base/monaco-lazy';
 import { EmptyState } from '../base/empty-state';
+import { ReadonlyTextView } from '../base/readonly-text-view';
 import { DiffViewer } from '../domain/diff-viewer';
 import { languageForPath } from '../domain/language';
 import { AffectedFilesModal } from './affected-files-modal';
@@ -25,6 +30,15 @@ import { changesHints, type BlameViewKey } from './blame-state';
 /** 一个差异标签的数据通道（全文 + 三态） */
 export interface BlameDiffChannel {
   versions?: FileVersions;
+  loading?: boolean;
+  error?: string;
+}
+
+/** 根提交标签1 的文件内容通道（该提交里的文件全文 + 三态；形状对齐 BrowseContent） */
+export interface BlameContentChannel {
+  content?: string;
+  /** 二进制文件：只提示不渲染（容器取自 browse/content 的同名字段） */
+  binary?: boolean;
   loading?: boolean;
   error?: string;
 }
@@ -40,6 +54,8 @@ export interface BlameChangePaneProps {
   entry?: CommittedEntry | null;
   /** 标签1：本文件改动 */
   changes: BlameDiffChannel;
+  /** 标签1 的根提交分支：该提交里的文件全文（容器经 useBrowseContent 条件拉取；非根提交时容器不给） */
+  rootContent?: BlameContentChannel;
   /** 标签2：与最新版本差异 */
   latest: BlameDiffChannel;
   /** 标签3：逐行注解 */
@@ -50,6 +66,8 @@ export interface BlameChangePaneProps {
   onToggleDetail?: (hash: string | null) => void;
   /** 测试注入点：替换注解行的高亮加载器（默认懒加载真实 Shiki） */
   annotateLoader?: LineHighlighterLoader;
+  /** 测试注入点：替换根提交内容视图的加载器（默认懒加载真实 Monaco） */
+  contentLoader?: MonacoLazyLoader;
   /** 主区域（注解行）当前选中的提交：归属它的行加底色 */
   selectedHash?: string | null;
   /** 注解行点击 → 选中该行归属的提交 */
@@ -77,6 +95,7 @@ export function BlameChangePane({
   onViewChange,
   entry,
   changes,
+  rootContent,
   latest,
   annotate,
   selectedHash,
@@ -91,6 +110,7 @@ export function BlameChangePane({
   detail,
   onToggleDetail,
   annotateLoader,
+  contentLoader,
   loader,
 }: BlameChangePaneProps): React.ReactNode {
   // 操作条下边线与选中底色走主题 token（暗色主题下硬编码浅灰会过亮）
@@ -121,7 +141,8 @@ export function BlameChangePane({
       label: '本文件改动',
       children: (
         <div data-testid="blame-view-changes" style={{ height: '100%', minHeight: 0, minWidth: 0 }}>
-          {diffBody(changes, 'changes', changesHint(hints))}
+          {/* 根提交单独一路：没有父版本可比，但该版本的文件全文就是这次提交新增的全部内容，照样有得看 */}
+          {hints.rootCommit ? rootCommitBody() : diffBody(changes, 'changes', changesHint(hints))}
         </div>
       ),
     },
@@ -212,17 +233,42 @@ export function BlameChangePane({
   );
 
   /**
-   * 标签1 的降级提示行：根提交 → 无父版本；重命名 → 两侧文件名不同，单文件对比会误读成「全新增」；
-   * 该提交里没有这个路径 → 这一版里它还不存在（改名之前 / 尚未创建）。都没有则 null（正常渲染差异）。
+   * 根提交的标签1：Alert 提示（没有父版本可比）+ **该提交里的文件全文**（只读代码视图，按扩展名语法高亮）。
+   * 为什么不止一行提示：差异确实无从谈起，但「这一版的文件内容」是有的，而它正是这次提交新添加的全部内容——
+   * 就地读出来看，比让用户切别的标签再找一遍有用。数据由容器经 `rootContent` 通道给（走既有 browse/content
+   * 端点读该版本全文，**不发差异请求**：没有可比的两端，发出去只会拿回两个空文档）。
+   * 高度契约：Alert 只占自身高度，下面的代码视图吃满剩余高度——少了 flex:1 + minHeight:0 这层，
+   * ReadonlyTextView 的 height:100% 会落到 auto 高度祖先上，Monaco 子元素（绝对定位）就拿到零高盒子。
+   */
+  function rootCommitBody(): React.ReactNode {
+    return (
+      <Flex vertical gap={8} style={{ height: '100%', minHeight: 0, minWidth: 0 }}>
+        <Alert
+          type="info"
+          showIcon
+          data-testid="blame-changes-root-hint"
+          title="该提交为根提交（无父版本），无法按父级对比变更；该文件的初始内容可在「逐行注解」标签查看"
+        />
+        <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
+          <ReadonlyTextView
+            path={file}
+            content={rootContent?.content}
+            binary={rootContent?.binary}
+            loading={rootContent?.loading}
+            error={rootContent?.error}
+            {...(contentLoader === undefined ? {} : { loader: contentLoader })}
+          />
+        </div>
+      </Flex>
+    );
+  }
+
+  /**
+   * 标签1 的降级提示行（根提交不走这里，它有 rootCommitBody 那一路）：重命名 → 两侧文件名不同，
+   * 单文件对比会误读成「全新增」；该提交里没有这个路径 → 这一版里它还不存在（改名之前 / 尚未创建）。
+   * 都没有则 null（正常渲染差异）。
    */
   function changesHint(h: ReturnType<typeof changesHints>): React.ReactNode {
-    if (h.rootCommit) {
-      return (
-        <Typography.Text type="secondary" data-testid="blame-changes-root-hint">
-          该提交为根提交（无父版本），无法按父级对比变更；该文件的初始内容可在「逐行注解」标签查看
-        </Typography.Text>
-      );
-    }
     // renameFrom 为空串不是合法原名：只判 undefined 会渲染出「该变更涉及重命名： → src/app.ts」
     // 这种空名字的提示行（判据一律取自 changesHints，此处不做二次推导）
     if (h.renameFrom !== undefined && h.renameFrom !== '') {

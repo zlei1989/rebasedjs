@@ -54,7 +54,12 @@ export {
   type BlameAnnotateTableProps,
   type BlameDetailState,
 } from './composite/blame-annotate-table';
-export { BlameChangePane, type BlameChangePaneProps, type BlameDiffChannel } from './composite/blame-change-pane';
+export {
+  BlameChangePane,
+  type BlameChangePaneProps,
+  type BlameDiffChannel,
+  type BlameContentChannel,
+} from './composite/blame-change-pane';
 export { CommitDetailCard, type CommitDetailCardProps } from './composite/commit-detail-card';
 export { BlameCommitsColumn, type BlameCommitsColumnProps } from './composite/blame-commits-column';
 export { BlameWorkbench, type BlameWorkbenchProps } from './composite/blame-workbench';

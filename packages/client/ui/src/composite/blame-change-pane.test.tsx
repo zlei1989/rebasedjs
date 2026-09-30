@@ -2,11 +2,27 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { BlameLine, CommittedEntry, FileVersions } from '@rebased/contracts';
 import { BlameChangePane } from './blame-change-pane';
+import type { MonacoEditorInnerProps, MonacoLazyLoader } from '../base/monaco-lazy';
 
 /** Monaco diff 加载器桩：测试不加载真实 monaco（沿既有 diff 组件测试口径） */
 const loader = async (): Promise<never> => {
   throw new Error('测试不应加载 monaco');
 };
+
+/** 只读代码视图桩：把收到的 props 落成可断言的 DOM（真实编辑器在 jsdom 里起不来，口径同 readonly-text-view 测试） */
+const contentLoader: MonacoLazyLoader = () =>
+  Promise.resolve({
+    default: (props) => {
+      const inner = props as MonacoEditorInnerProps;
+      return (
+        <div
+          data-testid="root-content-stub"
+          data-language={String(inner.language)}
+          data-value={String(inner.value)}
+        />
+      );
+    },
+  });
 
 const versions: FileVersions = { before: 'a\n', after: 'b\n' };
 
@@ -111,11 +127,54 @@ describe('BlameChangePane 三标签', () => {
 });
 
 describe('BlameChangePane 降级提示行（不做伪 diff）', () => {
-  it('根提交：标签1 给提示行', () => {
-    renderPane({ entry: makeEntry({ hash: 'aaaaaa1', parents: [] }), changes: {} });
+  it('根提交：提示行改由 Alert 包裹，下面是该版本的初始内容（只读代码视图 → 语法高亮）', async () => {
+    renderPane({
+      entry: makeEntry({ hash: 'aaaaaa1', parents: [] }),
+      changes: {},
+      rootContent: { content: 'const a = 1;' },
+      contentLoader,
+    });
+    // 提示文案逐字不变（e2e 断言按 testid 取它），外面换成 Alert：角色与 testid 都在同一个盒子上
     expect(screen.getByTestId('blame-changes-root-hint')).toBeInTheDocument();
-    // 提示行优先于数据状态：changes 未给数据，但提示行在就绝不退化成加载态或伪 diff
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '该提交为根提交（无父版本），无法按父级对比变更；该文件的初始内容可在「逐行注解」标签查看',
+    );
+    // 下面就是该提交里的文件全文：语言按路径推断（→ 代码高亮），是只读代码视图而不是差异视图
+    const stub = await screen.findByTestId('root-content-stub');
+    expect(stub).toHaveAttribute('data-value', 'const a = 1;');
+    expect(stub).toHaveAttribute('data-language', 'typescript');
+    expect(screen.queryByTestId('diff-ignore-ws')).not.toBeInTheDocument();
+    // 仍不做伪 diff：changes 通道没数据也不退化成差异加载态
     expect(screen.queryByTestId('blame-changes-loading')).not.toBeInTheDocument();
+  });
+
+  it('根提交：内容取数三态（加载/错误/二进制）下 Alert 恒在，正文按态切换', async () => {
+    const entry = makeEntry({ hash: 'aaaaaa1', parents: [] });
+    const pane = (rootContent: React.ComponentProps<typeof BlameChangePane>['rootContent']) => (
+      <BlameChangePane
+        file="src/app.ts"
+        hash="aaaaaa1"
+        view="changes"
+        entry={entry}
+        changes={{}}
+        latest={{}}
+        annotate={{}}
+        affected={{ hash: '' }}
+        rootContent={rootContent}
+        contentLoader={contentLoader}
+        loader={loader}
+      />
+    );
+    const { rerender } = render(pane({ loading: true }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByTestId('browse-content-loading')).toBeInTheDocument();
+    rerender(pane({ error: '读不出来' }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByTestId('browse-content-error')).toHaveTextContent('读不出来');
+    rerender(pane({ binary: true }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByTestId('browse-binary')).toBeInTheDocument();
+    expect(screen.queryByTestId('root-content-stub')).not.toBeInTheDocument();
   });
 
   it('重命名：标签1 给「旧 → 新」提示行', () => {

@@ -3,7 +3,8 @@
  * → ui BlameWorkbench（与 web-next 容器同构；repoId 取 useParams、导航用 useNavigate）。
  * 取数（全部既有端点，无新增）：左树 useBrowseTree(HEAD) / 中栏 useHistory(--follow) /
  * 选中提交变更集 useCommitFiles（父提交与三种降级判据的唯一来源，也供受影响弹窗同键缓存共享）/
- * 右栏三标签各按激活项条件拉取——非激活标签传空字符串挂 null key，不发请求（design §3.2）。
+ * 右栏三标签各按激活项条件拉取——非激活标签传空字符串挂 null key，不发请求（design §3.2）/
+ * 根提交的标签1 不用差异（没有父版本），改用 useBrowseContent 读该提交里的文件全文（只读代码视图）。
  * 「逐行注解」按地址里有没有显式 `?select=` 分两种口径：没有 → 看**当前工作区**（不给 rev，本地未提交的行
  * 哈希为全 0、不可点）；有（含旧 `?rev=` 规范化来的）→ 看那一版。差异两标签始终看选中提交那一版。
  * 注解行两个入口互不代劳（用户口径）：点**哈希** → 该提交的详情浮层（右上方，含完整提交信息与作者邮箱）；
@@ -12,7 +13,7 @@
  * 受影响弹窗（清单行点击 → 该文件这次的差异）/ 文件历史页。
  * 旧深链兼容：`?rev=<hash>` 一次性规范化成 `select=<hash>&view=annotate`（历史页「Annotate」入口）。
  */
-import { useBlame, useBrowseTree, useCommitFiles, useFileDiff, useHistory } from '@rebased/client';
+import { useBlame, useBrowseContent, useBrowseTree, useCommitFiles, useFileDiff, useHistory } from '@rebased/client';
 import { BlameWorkbench, PageShell, RepoTopNav, changesHints, openInNewTab, resolveBlameHash } from '@rebased/ui';
 import { Button, Flex, Input, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
@@ -82,6 +83,19 @@ export function RepoBlamePage(): React.ReactNode {
     false,
     parent,
     hash,
+  );
+  /**
+   * 根提交的标签1（本文件改动）：没有父版本可比——差异请求照旧不发（上面的门禁卡在 `parent !== undefined` 上），
+   * 但「该提交里的文件全文」是有的，而它正是这次提交新加入的全部内容，故改经既有 browse/content 端点读出来，
+   * 交给右栏的只读代码视图（按路径推断语言 → 语法高亮）。
+   * 门禁与右栏的降级判据是同一份（`hints.ready && hints.rootCommit`）：两个条件同时成立时右栏才走 rootCommitBody
+   * 那一路，这里才发请求；未就绪时**不置位**（变更集还没到，不能凭上一提交下结论），挂 null key 不发请求。
+   */
+  const rootContentEnabled = view === 'changes' && file !== '' && hints.ready && hints.rootCommit;
+  const { data: rootContent, isLoading: rootContentLoading, error: rootContentError } = useBrowseContent(
+    repoId,
+    rootContentEnabled ? hash : '',
+    rootContentEnabled ? file : '',
   );
   const latestEnabled = view === 'latest' && file !== '' && hash !== '' && !hints.missingPath;
   const { data: latestVersions, isLoading: latestLoading, error: latestError } = useFileDiff(
@@ -190,6 +204,12 @@ export function RepoBlamePage(): React.ReactNode {
           versions: changesVersions,
           loading: changesLoading,
           error: changesError?.message ?? (hints.ready ? undefined : entryError?.message),
+        }}
+        rootContent={{
+          content: rootContent?.content,
+          binary: rootContent?.binary,
+          loading: rootContentLoading,
+          error: rootContentError?.message,
         }}
         latest={{ versions: latestVersions, loading: latestLoading, error: latestError?.message }}
         annotate={{ lines, loading: linesLoading, error: linesError?.message }}
