@@ -17,6 +17,7 @@ const changesetEntry: CommittedEntry = {
   hash: 'c9selected0001',
   shortHash: 'c9selec',
   subject: '带变更的提交',
+  message: '带变更的提交',
   author: 'Test User',
   dateIso: '2026-01-02T00:00:00.000Z',
   parents: ['p1'],

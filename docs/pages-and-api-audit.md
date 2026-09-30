@@ -146,10 +146,10 @@
 | rebase | `repos/:id/rebase`、`rebase/todo`、`rebase/interactive`、`autosquash`、`commit-edit` | POST/GET/POST/POST/POST | 变基 onto / todo 读取 / 交互式执行 / auto-squash（fixup!·squash! 折入）/ 单提交编辑直通（reword/drop/squash/fixup） | RebaseDialog（内嵌 LogPage）+ 日志行右键 | ✅ |
 | pick | `repos/:id/cherry-pick`、`revert` | POST | 摘樱桃 / 还原 | LogPage 详情面板按钮 | ✅ |
 | tag | `repos/:id/tags` | GET/POST | 标签列表 / create(含附注)/delete/push/pushAll/deleteRemote | TagPanel | ✅ |
-| blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`；**不给 `rev` 即当前工作区**，给 `rev` 看该版本） | BlameWorkbench（`blame-workbench.tsx`：地址无 `?select=` 时不给 `rev`——工作区口径，本地未提交行标「未提交」） | ✅ |
+| blame | `repos/:id/blame` | GET | 逐行溯源（`--line-porcelain`；**不给 `rev` 即当前工作区**，给 `rev` 看该版本） | BlameWorkbench（`blame-workbench.tsx`：地址无 `?select=` 时不给 `rev`——工作区口径，本地未提交行哈希为全 0、不可点） | ✅ |
 | history | `repos/:id/history` | GET | 文件历史（`--follow`） | HistoryPanel | ✅ |
 | browse | `repos/:id/browse`、`repos/:id/browse/content` | GET ×2 | 指定版本文件树 / 单文件内容（二进制标记） | LogPage 就地快照栏（`?browse=<路径\|空>`，键在即开、值承载定位）、`scripts/check-fluid-layout.mjs` 选夹具文件 | ✅ |
-| commits | `repos/:id/commits/:hash` | GET | 单提交全量变更文件（Show All Affected） | LogPage 变更集标签（`useCommitFiles`）、BlameWorkbench（操作条「受影响」弹窗） | ✅ |
+| commits | `repos/:id/commits/:hash` | GET | 单提交全量变更文件（Show All Affected）+ **完整提交信息 `message`（%B）**——2026-09 注解行哈希浮层要展示完整提交内容，与变更清单**并发**取（core `commitMessage` 独立原语，见 §4.16；路径/方法数不变，仍是同一端点） | LogPage 变更集标签（`useCommitFiles`）、BlameWorkbench（操作条「受影响」弹窗、**注解行哈希浮层**） | ✅ |
 | search | `repos/:id/search` | GET | 提交搜索（grep/pickaxe） | SearchPanel | ✅ |
 | patch | `repos/:id/patches`、`patches/create`、`patches/apply`、`patches/delete`、`patches/:name/import-shelf` | GET + 4×POST | 补丁列表 / 创建（四态：工作区/暂存/提交区间/**勾选文件**）/ 应用（check 先行）/ 删除 / 导入搁置 | PatchPanel、StatusPage（创建补丁入口） | ✅ |
 | shelf | `repos/:id/shelves` | GET/POST | 搁置列表 / save/restore/drop | ShelfPanel | ✅ |
@@ -428,8 +428,9 @@ Update Project——策略化更新入口；对应 `GitUpdateOptionsDialog` / `G
 
 | 功能点 | 状态 | 说明 |
 |--------|------|------|
-| 注解展示 | ✅（等效形态） | 右栏「逐行注解」标签（`blame-annotate-table.tsx`，即原 `BlameView` 行渲染的承继者）：行号/短哈希/作者/日期/内容，承载注解语义（Web 无编辑器 gutter）；**默认看当前工作区**（地址无 `?select=` 时不给 `rev`，即旧单列页的工作区口径），工作区未提交行（全 0 哈希）标注「未提交」且不可点；显式选中某提交（含旧 `?rev=`）时才看那一版 |
-| 注解点击联动 | ✅ | 右栏操作条（**选中提交级**，等价旧行内按钮，D4）四出口：「日志定位」→ LogPage `?select=`；「差异页」→ 新标签页 DiffPage `from=父哈希&to=该提交`（根提交 `root=1`；父提交未知时不注入该按钮）；「文件历史」→ HistoryPanel；「受影响」→ 全量变更文件 Modal（边 #29/#33）。**新增**：注解行点击 = 选中该行归属的提交（页内联动，D7） |
+| 注解展示 | ✅（等效形态） | 右栏「逐行注解」标签（`blame-annotate-table.tsx`，即原 `BlameView` 行渲染的承继者）：行号/时间/短哈希 + **逐行语法高亮的正文**（`base/line-highlighter` → `shiki-lazy.highlightLines`：整块 tokenize 后按行取 token；未收录语法、wasm 未就绪、行数与源文件不一致一律退纯文本），承载注解语义（Web 无编辑器 gutter）；**作者不占行内列**（用户口径，移入哈希浮层）；**默认看当前工作区**（地址无 `?select=` 时不给 `rev`，即旧单列页的工作区口径），工作区未提交行（全 0 哈希）不可点、不再写「未提交」字样；显式选中某提交（含旧 `?rev=`）时才看那一版 |
+| 注解点击联动 | ✅ | 右栏操作条（**选中提交级**，等价旧行内按钮，D4）四出口：「日志定位」→ LogPage `?select=`；「差异页」→ 新标签页 DiffPage `from=父哈希&to=该提交`（根提交 `root=1`；父提交未知时不注入该按钮）；「文件历史」→ HistoryPanel；「受影响」→ 全量变更文件 Modal（边 #29/#33）。注解行点击 = 选中该行归属的提交（页内联动，D7）；**点行内短哈希不代劳选中**（`stopPropagation` + 行内控件按键不冒泡到行的判据）——两个入口互不代劳 |
+| 注解行哈希浮层（用户口径：只做点击，不做 hover） | ✅ | **新增**：`commit-detail-card.tsx` 装在 `Popover placement="rightTop"`（`trigger="click"`，原生 button 触发，键盘 Enter/Space 天生可用）里，内容复用 `domain/commit-details-panel`（主题 + 完整正文 + 作者 + 短哈希点击复制 + 父提交），另补一行**可见的作者邮箱**（`BlameLine.authorEmail`——`CommittedEntry` 不带邮箱）；数据走 `GET /commits/:hash`（该响应**新增 `message` 字段**，见端点表），关闭态 hash 传空串挂 null key **零请求**、同哈希再点走 SWR 缓存；未提交行（全 0）不可点；换文件即收起。**开合按「被点的行」而不是哈希**——一个提交通常拥有连续多行，按哈希判定会一次弹出 N 个浮层（冒烟实测 `b96148e` 3 个，D-45，已修 + 回归守卫，见 e2e §5.35）；浮层在空间不足时由 antd 自动上下翻转（左右恒在右侧） |
 | 右栏三标签（本文件改动 / 与最新版本差异 / 逐行注解） | ✅ | 「本文件改动」（默认）= `useFileDiff(from=父提交,to=该提交)`；**「与最新版本差异」= `useFileDiff(repoId,file,false,该提交)` 的 from-only 语义（该提交版本 vs 当前工作区版本，未提交改动一并体现）**；「逐行注解」= `useBlame(repoId,file,rev)`，**`rev` 只在该标签被激活且地址里有显式 `?select=` 时才给**（不给 = 工作区口径），门禁随之分叉（无显式选中时不要求 hash 非空——一次提交都没有的文件照样能注解工作区内容）；三标签懒取数——非激活标签挂 null key 不发请求 |
 | 降级提示行（不给伪 diff） | ✅ | 根提交 / 重命名 / 该提交的版本里没有这个路径：判据统一由 `blame-state.ts` 的 `changesHints` 派生，两标签各按自己的取数门禁筛（与差异页、日志页变更集同一口径）——**标签1「本文件改动」三种情形都只给提示行、连请求都不发**（根提交无父版本、重命名两侧文件名不同、该提交里没有这个路径，三种下 `useFileDiff` 均挂 null key）；**标签2「与最新版本差异」只筛「该提交的版本里没有这个路径」这一种**（它比的是该提交版本 vs 当前工作区版本，与父版本无关），根提交与重命名两种情形**照常发 `/diff` 请求并渲染真实差异** |
 | 左栏 HEAD 文件树（选文件） | ✅ | **新增**：复用 `snapshot-tree-column.tsx`（`useBrowseTree(repoId,'HEAD')` → `GET /browse?rev=HEAD`）；树固定最新版本、**不跟随选中提交**（D3）；点叶子写 `?file=` 并清 `?select=`（选中回落该文件最新一条） |

@@ -32,6 +32,12 @@
   color: var(--shiki-dark) !important;
 }
 
+/* 逐行高亮（自绘行表，如溯源页注解行）：与代码块同一套双主题口径。
+   行表每行自带 `.rebased-line` 容器（见 base/line-highlighter），故这里按它取 token 深色。 */
+[data-theme='dark'] .rebased-line .code {
+  color: var(--shiki-dark) !important;
+}
+
 /* 行块：块级 + 可收缩，补丁行底色才能占满整行 */
 .line {
   display: block;

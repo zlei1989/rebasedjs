@@ -18,7 +18,9 @@
  * 选中提交变更集 useCommitFiles（父提交与三种降级判据的唯一来源，也供受影响弹窗同键缓存共享）/
  * 右栏三标签各按激活项条件拉取——非激活标签传空字符串挂 null key，不发请求（design §3.2）。
  * 「逐行注解」按地址里有没有显式 `?select=` 分两种口径：没有 → 看**当前工作区**（不给 rev，本地未提交的行
- * 标「未提交」）；有（含旧 `?rev=` 规范化来的）→ 看那一版。差异两标签始终看选中提交那一版。
+ * 哈希为全 0、不可点）；有（含旧 `?rev=` 规范化来的）→ 看那一版。差异两标签始终看选中提交那一版。
+ * 注解行两个入口互不代劳（用户口径）：点**哈希** → 该提交的详情浮层（右上方，含完整提交信息与作者邮箱）；
+ * 点行其他位置 → 选中该提交（主链路不变）。浮层数据复用 useCommitFiles，关着时挂 null key 不发请求。
  * 出口（选中提交级）：日志页定位 `?select=`（`router.push`，这一步是真导航）/ 新标签页差异
  * （from=父&to=提交，根提交 root=1，父提交未知则不注入该回调）/ 受影响弹窗（清单行点击 → 该文件这次的差异）/
  * 文件历史页。
@@ -167,6 +169,18 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
   // 受影响弹窗（Show All Affected）：与上同键（同一提交）时缓存命中，不产生第二个请求
   const [affectedHash, setAffectedHash] = useState('');
   const { data: affectedEntry, isLoading: affectedLoading, error: affectedError } = useCommitFiles(repoId, affectedHash);
+  /**
+   * 注解行的哈希详情浮层（用户口径：只做点击，不做 hover）：点哈希 → 打开该提交的详情卡。
+   * 数据源复用 useCommitFiles（与选中提交变更集、受影响弹窗同键共享缓存）：'' = 关着 → hook 挂 null key
+   * **不发请求**；打开后按该哈希拉一次，SWR 缓存住，来回点不重复请求。
+   * 作者邮箱取自注解行本身（BlameLine 有、CommittedEntry 没有）——同一提交在那一行就是这位作者。
+   */
+  const [detailHash, setDetailHash] = useState('');
+  const { data: detailEntry, isLoading: detailLoading, error: detailError } = useCommitFiles(repoId, detailHash);
+  // 换文件即收起浮层：它属于上一个文件的行，留着只会指向一个在新行表里不存在的哈希
+  useEffect(() => {
+    setDetailHash('');
+  }, [file]);
   /** 换文件（左树点叶子 / 工具条提交）：写 file 并清掉 select，同时收起受影响弹窗 */
   const selectFile = (path: string): void => {
     write(withBlameFile(liveQuery(), path));
@@ -243,6 +257,18 @@ export default function Page({ params }: { params: Promise<{ repoId: string }> }
         latest={{ versions: latestVersions, loading: latestLoading, error: latestError?.message }}
         annotate={{ lines, loading: linesLoading, error: linesError?.message }}
         affected={{ hash: affectedHash, entry: affectedEntry, loading: affectedLoading, error: affectedError?.message ?? null }}
+        detail={
+          detailHash === ''
+            ? null
+            : {
+              hash: detailHash,
+              entry: detailEntry ?? null,
+              authorEmail: lines?.find((line) => line.hash === detailHash)?.authorEmail ?? '',
+              loading: detailLoading,
+              ...(detailError === undefined ? {} : { error: detailError.message }),
+            }
+        }
+        onToggleDetail={(next) => setDetailHash(next ?? '')}
         onSelectFile={selectFile}
         onSelectCommit={(next) => write(withBlameSelection(liveQuery(), next))}
         onViewChange={(next) => write(withBlameView(liveQuery(), next))}

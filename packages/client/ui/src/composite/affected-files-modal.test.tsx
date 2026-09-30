@@ -8,6 +8,7 @@ function makeEntry(partial: Partial<CommittedEntry> & { hash: string }): Committ
   return {
     shortHash: partial.hash.slice(0, 7),
     subject: 'a commit',
+    message: 'a commit',
     author: 'Sam',
     dateIso: '2026-01-02T00:00:00+00:00',
     parents: [],

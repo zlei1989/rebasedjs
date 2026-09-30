@@ -14,11 +14,12 @@ import { Button, Flex, Spin, Tabs, Tooltip, Typography, theme } from 'antd';
 import type { TabsProps } from 'antd';
 import type { BlameLine, CommittedEntry, FileVersions } from '@rebased/contracts';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
+import type { LineHighlighterLoader } from '../base/line-highlighter';
 import { EmptyState } from '../base/empty-state';
 import { DiffViewer } from '../domain/diff-viewer';
 import { languageForPath } from '../domain/language';
 import { AffectedFilesModal } from './affected-files-modal';
-import { BlameAnnotateTable } from './blame-annotate-table';
+import { BlameAnnotateTable, type BlameDetailState } from './blame-annotate-table';
 import { changesHints, type BlameViewKey } from './blame-state';
 
 /** 一个差异标签的数据通道（全文 + 三态） */
@@ -43,6 +44,12 @@ export interface BlameChangePaneProps {
   latest: BlameDiffChannel;
   /** 标签3：逐行注解 */
   annotate: { lines?: BlameLine[]; loading?: boolean; error?: string };
+  /** 注解行的哈希详情浮层（受控）：由容器持有「展开了哪个哈希」与它的取数三态 */
+  detail?: BlameDetailState | null;
+  /** 注解行点哈希 → 切换浮层（传 null 关闭） */
+  onToggleDetail?: (hash: string | null) => void;
+  /** 测试注入点：替换注解行的高亮加载器（默认懒加载真实 Shiki） */
+  annotateLoader?: LineHighlighterLoader;
   /** 主区域（注解行）当前选中的提交：归属它的行加底色 */
   selectedHash?: string | null;
   /** 注解行点击 → 选中该行归属的提交 */
@@ -81,6 +88,9 @@ export function BlameChangePane({
   affected,
   onCloseAffected,
   onOpenAffectedFile,
+  detail,
+  onToggleDetail,
+  annotateLoader,
   loader,
 }: BlameChangePaneProps): React.ReactNode {
   // 操作条下边线与选中底色走主题 token（暗色主题下硬编码浅灰会过亮）
@@ -134,7 +144,12 @@ export function BlameChangePane({
             loading={annotate.loading}
             error={annotate.error}
             selectedHash={selectedHash}
+            // 语言按当前文件路径推断（与两个差异标签同一口径）；推不出即纯文本
+            language={languageForPath(file)}
             {...(onSelectCommit === undefined ? {} : { onSelectCommit })}
+            {...(detail === undefined ? {} : { detail })}
+            {...(onToggleDetail === undefined ? {} : { onToggleDetail })}
+            {...(annotateLoader === undefined ? {} : { highlightLoader: annotateLoader })}
           />
         </div>
       ),

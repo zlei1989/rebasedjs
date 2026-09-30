@@ -70,4 +70,20 @@ describe('getCommitFiles 服务（Show All Affected 语义 #34）', () => {
     const err = await getCommitFiles(repo, 'deadbeef'.repeat(5)).catch((e: unknown) => e);
     expect(err).toMatchObject({ code: 'INVALID_REF', message: expect.stringContaining('引用不存在或不是提交：deadbeef') });
   });
+
+  /* message：整条提交信息（%B）。注解行点击哈希后的浮层要展示「完整提交内容」，
+     而 subject（%s）只是首行——这是两者必须同时下发的理由。 */
+  it('message 下发完整提交信息（主题 + 多行正文，含制表符正文行）', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const body = 'feat: 主题行\n\n正文第一段\n\nA\tfake.txt';
+    const h = commitFile(repo, 'a.txt', 'alpha', body);
+
+    const entry = await getCommitFiles(repo, h);
+
+    expect(entry.subject).toBe('feat: 主题行');
+    expect(entry.message).toBe(body);
+    // 正文里的 name-status 形状行不得污染变更清单（%B 独立取，见 core 的同名说明）
+    expect(entry.files).toEqual([{ path: 'a.txt', status: 'A' }]);
+  });
 });

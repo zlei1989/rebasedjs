@@ -13,7 +13,9 @@ import { EmptyState } from '../base/empty-state';
 import { ResizableColumns, restoreWidthsToAvailable, type ResizablePane } from '../base/resizable-columns';
 import { useStoredWidth } from '../base/stored-preference';
 import type { MonacoDiffLoader } from '../base/monaco-diff-view';
+import type { LineHighlighterLoader } from '../base/line-highlighter';
 import { BlameChangePane } from './blame-change-pane';
+import type { BlameDetailState } from './blame-annotate-table';
 import { BlameCommitsColumn } from './blame-commits-column';
 import type { BlameViewKey } from './blame-state';
 import { SnapshotTreeColumn } from './snapshot-tree-column';
@@ -40,6 +42,12 @@ export interface BlameWorkbenchProps {
   changes: { versions?: FileVersions; loading?: boolean; error?: string };
   latest: { versions?: FileVersions; loading?: boolean; error?: string };
   annotate: { lines?: BlameLine[]; loading?: boolean; error?: string };
+  /** 注解行的哈希详情浮层（受控）：容器持有「展开了哪个哈希」与它的取数三态 */
+  detail?: BlameDetailState | null;
+  /** 注解行点哈希 → 切换浮层（传 null 关闭） */
+  onToggleDetail?: (hash: string | null) => void;
+  /** 测试注入点：替换注解行的高亮加载器 */
+  annotateLoader?: LineHighlighterLoader;
   affected: { hash: string; entry?: CommittedEntry | null; loading?: boolean; error?: string | null };
   onSelectFile?: (path: string) => void;
   onSelectCommit?: (hash: string) => void;
@@ -74,6 +82,9 @@ export function BlameWorkbench({
   onOpenInHistory,
   onCloseAffected,
   onOpenAffectedFile,
+  detail,
+  onToggleDetail,
+  annotateLoader,
   loader,
 }: BlameWorkbenchProps): React.ReactNode {
   const [treeWidth, setTreeWidth] = useStoredWidth(TREE_WIDTH_KEY, TREE_WIDTH.default, TREE_WIDTH.min, TREE_WIDTH.max);
@@ -171,6 +182,9 @@ export function BlameWorkbench({
           {...(onOpenInHistory === undefined ? {} : { onOpenInHistory })}
           {...(onCloseAffected === undefined ? {} : { onCloseAffected })}
           {...(onOpenAffectedFile === undefined ? {} : { onOpenAffectedFile })}
+          {...(detail === undefined ? {} : { detail })}
+          {...(onToggleDetail === undefined ? {} : { onToggleDetail })}
+          {...(annotateLoader === undefined ? {} : { annotateLoader })}
           {...(loader === undefined ? {} : { loader })}
         />
       ) : (

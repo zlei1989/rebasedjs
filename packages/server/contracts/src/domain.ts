@@ -348,6 +348,9 @@ export interface CommittedEntry {
   hash: string;
   shortHash: string;
   subject: string;
+  /** 提交信息全文（%B：主题 + 正文，结尾换行已裁）；与日志页 CommitInfo.message 同口径。
+   *  溯源页注解行点击哈希后的浮层展示「完整提交内容」用它——subject 只是首行，不是完整信息 */
+  message: string;
   author: string;
   /** 日期为 ISO 字符串（git %aI，带作者时区偏移；blame 同口径——ui 的 formatCommitDate 直接截取字符串字段） */
   dateIso: string;

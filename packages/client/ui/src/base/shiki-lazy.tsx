@@ -38,8 +38,9 @@ import toml from 'shiki/langs/toml.mjs';
 import githubDark from 'shiki/themes/github-dark.mjs';
 import githubLight from 'shiki/themes/github-light.mjs';
 import wasm from 'shiki/wasm';
-import type { PatchLine } from '../domain/highlight';
+import type { HighlightToken, PatchLine } from '../domain/highlight';
 import { renderHighlightLines } from '../domain/highlight';
+import type { LineHighlightRequest, LineHighlighter } from './line-highlighter';
 
 /** 高亮请求：`lines` 有值 = 补丁（带行标记与 diff 底色）；无值 = 整块代码 */
 export interface HighlightRequest {
@@ -96,6 +97,8 @@ function getHighlighter(): Promise<HighlighterGeneric<string, string>> {
 
 /** 高亮结果缓存：同一个 hunk 在折叠/展开、切暂存/工作区视图时会反复渲染，重算一遍不值得 */
 const htmlCache = new Map<string, string>();
+/** 逐行 token 缓存（与 htmlCache 分开：产物形状不同，且逐行路径不需要再拼 HTML 字符串） */
+const tokensCache = new Map<string, HighlightToken[][]>();
 const HTML_CACHE_LIMIT = 64;
 
 /**
@@ -122,5 +125,31 @@ async function highlight({ code, language, lines }: HighlightRequest): Promise<s
   return rendered;
 }
 
-const defaultExport: ShikiHighlighter = { highlight };
+/**
+ * 逐行 token：与 highlight 共用同一个 Shiki 单例与同一份语法表，只是**不拼 HTML**——
+ * 自绘行表（溯源页注解行）每行都是独立的 React 行，需要 token 数组而不是字符串。
+ * 双主题口径与 highlight 完全一致（一次输出浅色 `color` + 深色 `--shiki-dark`）。
+ * 未收录语言返回 null，调用方退纯文本。
+ */
+async function highlightLines({ code, language }: LineHighlightRequest): Promise<HighlightToken[][] | null> {
+  const grammarId = LANG_ALIASES[language] ?? language;
+  if (!(grammarId in LANG_GRAMMARS)) return null;
+  const key = `${grammarId}\u0000${code}`;
+  const cached = tokensCache.get(key);
+  if (cached !== undefined) return cached;
+  const highlighter = await getHighlighter();
+  const { tokens } = highlighter.codeToTokens(code, {
+    lang: grammarId,
+    themes: { light: 'github-light', dark: 'github-dark' },
+    defaultColor: 'light',
+    cssVariablePrefix: '--shiki-',
+  });
+  // 只保留渲染需要的两项：文本与行内样式（其余如 offset/fontStyle 逐行渲染用不到）
+  const lines = tokens.map((lineTokens) => lineTokens.map((token) => ({ content: token.content, htmlStyle: token.htmlStyle })));
+  if (tokensCache.size >= HTML_CACHE_LIMIT) tokensCache.clear();
+  tokensCache.set(key, lines);
+  return lines;
+}
+
+const defaultExport: ShikiHighlighter & LineHighlighter = { highlight, highlightLines };
 export default defaultExport;

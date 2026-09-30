@@ -16,6 +16,7 @@ describe('CommittedEntry.files.status（git name-status 码）', () => {
       hash: 'h',
       shortHash: 'h',
       subject: 's',
+      message: 's',
       author: 'a',
       dateIso: '2024-01-01T00:00:00Z',
       parents: [],

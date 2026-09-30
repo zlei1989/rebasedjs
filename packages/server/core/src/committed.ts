@@ -129,3 +129,19 @@ export async function commitFiles(cwd: string, hash: string): Promise<CoreCommit
   if (entries.length === 0) throw new Error(`未找到提交 ${hash}`);
   return entries[0];
 }
+
+/**
+ * 提交信息全文（%B = 主题 + 正文，原样）。
+ *
+ * 为什么**不**把 %B 并进 COMMITTED_FORMAT：parseCommitted 是**按行**判定「含 NUL = 提交头行、
+ * 不含 = 文件行」的，其成立前提正是「格式字段无换行」（%s 保证无换行/NUL）。正文是多行的，
+ * 一旦进格式行，正文里带 \t 的行（代码片段、缩进列表）就会被误读成 name-status 文件行，
+ * 变更清单随之污染。多花一次 git 调用换取这个不变量；调用方（api 层）与 commitFiles **并发**发出，
+ * 墙钟时间不叠加（两者互不依赖）。
+ *
+ * 结尾换行按 log.ts 的 %B 同口径 trimEnd（多数提交的信息以 \n 收尾，原样下发会让 UI 多一段空行）。
+ */
+export async function commitMessage(cwd: string, hash: string): Promise<string> {
+  const { stdout } = await runGit(['show', '-s', '--format=%B', hash], { cwd });
+  return stdout.trimEnd();
+}

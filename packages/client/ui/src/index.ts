@@ -49,8 +49,13 @@ export {
   type BlameViewKey,
   type ChangesHints,
 } from './composite/blame-state';
-export { BlameAnnotateTable, type BlameAnnotateTableProps } from './composite/blame-annotate-table';
+export {
+  BlameAnnotateTable,
+  type BlameAnnotateTableProps,
+  type BlameDetailState,
+} from './composite/blame-annotate-table';
 export { BlameChangePane, type BlameChangePaneProps, type BlameDiffChannel } from './composite/blame-change-pane';
+export { CommitDetailCard, type CommitDetailCardProps } from './composite/commit-detail-card';
 export { BlameCommitsColumn, type BlameCommitsColumnProps } from './composite/blame-commits-column';
 export { BlameWorkbench, type BlameWorkbenchProps } from './composite/blame-workbench';
 export { HistoryPanel, type HistoryPanelProps } from './composite/history-panel';
@@ -118,5 +123,12 @@ export {
   type CodeBlockLoader,
   type CodeBlockHighlighter,
 } from './base/code-block';
+export {
+  HighlightedTokens,
+  useHighlightedLines,
+  type LineHighlighter,
+  type LineHighlighterLoader,
+  type LineHighlightRequest,
+} from './base/line-highlighter';
 export { decoratePatchLines, type PatchLine, type PatchLineKind } from './domain/highlight';
 export { openInNewTab } from './base/open-in-new-tab';

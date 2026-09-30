@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { commitFiles } from './committed';
+import { commitFiles, commitMessage } from './committed';
 import { cleanupTmpRepo, createTmpRepo } from './testing/tmp-repo';
 
 const dirs: string[] = [];
@@ -100,5 +100,25 @@ describe('committed 原语（单提交变更清单 commitFiles）', () => {
     commitFile(repo, 'a.txt', 'alpha', 'create');
 
     await expect(commitFiles(repo, 'deadbeef'.repeat(5))).rejects.toMatchObject({ name: 'GitExitError', exitCode: 128 });
+  });
+
+  /* commitMessage：整条提交信息（%B，主题 + 正文）。
+     为什么单开一个原语而不是往 COMMITTED_FORMAT 里加 %B：parseCommitted 是**按行**判定
+     「含 NUL = 提交头行、不含 = 文件行」的，其不变量正是「格式字段无换行」（%s 保证）。
+     正文是多行的，塞进格式行会让正文里带 \t 的行被误读成 name-status 文件行——
+     下面第一条用例正文刻意带 `A\tfake.txt`，就是把这个不变量钉在测试里。 */
+  it('commitMessage：主题 + 多行正文原样返回，正文里形如 name-status 的行不被吞（%B 独立取）', { timeout: 30000 }, async () => {
+    const repo = createTmpRepo();
+    dirs.push(repo);
+    const body = 'feat: 主题行\n\n正文第一段（含制表符）\n\nA\tfake.txt\n- 要点一\n- 要点二';
+    const h = commitFile(repo, 'a.txt', 'alpha', body);
+
+    expect(await commitMessage(repo, h)).toBe(body);
+    // 同一仓库的变更清单不受正文影响：文件名集仍只有真实改动的那一个
+    expect((await commitFiles(repo, h)).files).toEqual([{ path: 'a.txt', status: 'A' }]);
+
+    // 单行信息（无正文）同样成立：%B 即主题本身，且不带 git 补的结尾换行
+    const h2 = commitFile(repo, 'b.txt', 'beta', '单行信息');
+    expect(await commitMessage(repo, h2)).toBe('单行信息');
   });
 });

@@ -10,6 +10,7 @@ const ENTRY: CommittedEntry = {
   hash: 'aaaaaa',
   shortHash: 'aaaaaa',
   subject: 'add b',
+  message: 'add b',
   author: 'Bob',
   dateIso: '2024-01-01T00:00:00Z',
   parents: [],

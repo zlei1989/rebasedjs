@@ -34,6 +34,7 @@ const entry: CommittedEntry = {
   hash: 'c1',
   shortHash: 'c1',
   subject: 'first',
+  message: 'first',
   author: 'Sam',
   dateIso: '2026-01-01T00:00:00+00:00',
   parents: ['p0'],
