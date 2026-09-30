@@ -26,11 +26,25 @@ import { Button, Flex, Popover, Spin, theme, Typography } from 'antd';
 import type { BlameLine, CommittedEntry } from '@rebased/contracts';
 import { EmptyState } from '../base/empty-state';
 import { HighlightedTokens, useHighlightedLines, type LineHighlighterLoader } from '../base/line-highlighter';
-import { formatCommitDate } from '../domain/format';
+import { formatRelativeTime } from '../domain/format';
 import { CommitDetailCard } from './commit-detail-card';
 
 /** 工作区未提交行的伪哈希：git blame 的边界提交（仓库里不存在该对象；sha1/sha256 长度兼容） */
 const ZERO_HASH_RE = /^0{40,64}$/;
+
+/**
+ * 时间列固定宽（右对齐）：相对时间的字数不固定（`刚刚` 2 字 ~ `59分钟前` 4 字），
+ * 不定宽的话每行的时间段宽度各不相同，右侧的哈希与正文就会逐行错开——定宽是"右侧对齐"的前提。
+ * 68px ≈ 4 个汉字（最长档 `12月前` / `59分钟前`）+ 一点余量。
+ */
+const TIME_COLUMN_WIDTH = 68;
+
+/**
+ * 哈希列固定宽：可点行渲染的是 antd Button（自带内边距，自然宽 68），未提交行渲染的是只读 Text
+ * （自然宽 53）——不定宽的话这两类行的**正文左沿会差 15px**（冒烟实测 768 vs 753），
+ * 一列里混着两类行时正文就是锯齿。定宽后两类行占同一列宽，正文逐行对齐。
+ */
+const HASH_COLUMN_WIDTH = 68;
 
 /** 哈希浮层的数据：hash 为当前展开的那一行，其余字段由容器按该哈希拉取后注入 */
 export interface BlameDetailState {
@@ -137,38 +151,49 @@ export function BlameAnnotateTable({
             <Typography.Text type="secondary" style={{ width: 48, textAlign: 'right', flexShrink: 0 }}>
               {line.lineno}
             </Typography.Text>
-            <Typography.Text type="secondary" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-              {formatCommitDate(line.dateIso)}
+            <Typography.Text
+              type="secondary"
+              data-testid={`blame-time-${line.lineno}`}
+              style={{ width: TIME_COLUMN_WIDTH, textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' }}
+            >
+              {formatRelativeTime(line.dateIso)}
             </Typography.Text>
-            {hashClickable ? (
-              <Popover
-                trigger="click"
-                placement="rightTop"
-                open={open}
-                onOpenChange={(next) => {
-                  // 开合记在**这一行**上：同哈希的其余行不跟着开（点另一行 = 浮层挪过去）
-                  setOpenLineno(next ? line.lineno : null);
-                  onToggleDetail(next ? line.hash : null);
-                }}
-                content={<CommitDetailCard entry={detail?.entry} authorEmail={detail?.authorEmail} {...(detail?.loading !== undefined ? { loading: detail.loading } : {})} {...(detail?.error !== undefined ? { error: detail.error } : {})} />}
-              >
-                {/* 原生 button：回车/空格天生就是 click，不必自己写键盘分支；样式走 antd（text 按钮 + code 文本） */}
-                <Button
-                  type="text"
-                  size="small"
-                  data-testid={`blame-hash-${line.lineno}`}
-                  // 哈希点击只切浮层：不冒泡到行，避免一次点击同时选中提交
-                  onClick={(event) => event.stopPropagation()}
+            {/* 哈希列（定宽）：可点行是 Button、未提交行是只读 Text，两者自然宽不同——统一压到这个宽度，正文左沿才对齐 */}
+            <Flex
+              align="center"
+              data-testid={`blame-hash-cell-${line.lineno}`}
+              style={{ width: HASH_COLUMN_WIDTH, flexShrink: 0 }}
+            >
+              {hashClickable ? (
+                <Popover
+                  trigger="click"
+                  placement="rightTop"
+                  open={open}
+                  onOpenChange={(next) => {
+                    // 开合记在**这一行**上：同哈希的其余行不跟着开（点另一行 = 浮层挪过去）
+                    setOpenLineno(next ? line.lineno : null);
+                    onToggleDetail(next ? line.hash : null);
+                  }}
+                  content={<CommitDetailCard entry={detail?.entry} authorEmail={detail?.authorEmail} {...(detail?.loading !== undefined ? { loading: detail.loading } : {})} {...(detail?.error !== undefined ? { error: detail.error } : {})} />}
                 >
-                  <Typography.Text code>{line.shortHash}</Typography.Text>
-                </Button>
-              </Popover>
-            ) : (
-              // 不可点（未提交行 / 未注入回调）：保持只读文本形态，不给按钮语义
-              <Typography.Text code type={pending ? 'secondary' : undefined} data-testid={`blame-hash-${line.lineno}`}>
-                {line.shortHash}
-              </Typography.Text>
-            )}
+                  {/* 原生 button：回车/空格天生就是 click，不必自己写键盘分支；样式走 antd（text 按钮 + code 文本） */}
+                  <Button
+                    type="text"
+                    size="small"
+                    data-testid={`blame-hash-${line.lineno}`}
+                    // 哈希点击只切浮层：不冒泡到行，避免一次点击同时选中提交
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Typography.Text code>{line.shortHash}</Typography.Text>
+                  </Button>
+                </Popover>
+              ) : (
+                // 不可点（未提交行 / 未注入回调）：保持只读文本形态，不给按钮语义
+                <Typography.Text code type={pending ? 'secondary' : undefined} data-testid={`blame-hash-${line.lineno}`}>
+                  {line.shortHash}
+                </Typography.Text>
+              )}
+            </Flex>
             <span
               className="rebased-line"
               data-testid={`blame-code-${line.lineno}`}

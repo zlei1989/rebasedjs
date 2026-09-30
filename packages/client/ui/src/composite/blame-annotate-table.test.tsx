@@ -54,9 +54,14 @@ describe('BlameAnnotateTable 渲染', () => {
     );
     const row1 = screen.getByTestId('blame-line-1');
     expect(row1).toHaveTextContent('1');
-    expect(row1).toHaveTextContent('2026-01-01 00:00');
     expect(row1).toHaveTextContent('abc1');
     expect(row1).toHaveTextContent('const a = 1;');
+    // 时间列是相对时间缩写（精确分档由 domain/format.test.ts 用注入的 now 钉住；这里只钉形状与列宽）
+    const time1 = screen.getByTestId('blame-time-1');
+    expect(time1.textContent).toMatch(/前$|^刚刚$/);
+    // 固定宽度 + 右对齐：相对时间字数不一（刚刚 2 字 ~ 59分钟前 4 字），定宽才能让右侧哈希与正文逐行对齐
+    expect(time1.style.width).toBe('68px');
+    expect(time1.style.textAlign).toBe('right');
     // 用户口径：行内只有 行号｜时间｜哈希 + 内容；作者（及其邮箱）只在浮层里出现
     expect(row1).not.toHaveTextContent('author 1');
     expect(screen.getByTestId('blame-line-2')).toHaveTextContent('const b = 2;');
@@ -115,6 +120,19 @@ describe('BlameAnnotateTable 渲染', () => {
 });
 
 describe('BlameAnnotateTable 行交互', () => {
+  it('哈希列定宽：未提交行（只读文本）与可点行（按钮）占同一列宽，正文起始位不漂移', () => {
+    render(
+      <BlameAnnotateTable
+        lines={[makeLine({ lineno: 1, hash: 'h1' }), makeLine({ lineno: 2, hash: ZERO_HASH, shortHash: '0000000' })]}
+        onToggleDetail={() => {}}
+      />,
+    );
+    // 实测（冒烟）：Button 自然宽 68 / 只读 Text 自然宽 53 → 两类行的正文起始位差 15px（768 vs 753）。
+    // 定宽把两类行压到同一列宽，正文左沿才逐行对齐（几何由冒烟在浏览器里量，这里钉列宽契约）。
+    expect(screen.getByTestId('blame-hash-cell-1').style.width).toBe('68px');
+    expect(screen.getByTestId('blame-hash-cell-2').style.width).toBe('68px');
+  });
+
   it('点行以该行归属的提交调 onSelectCommit', () => {
     const onSelectCommit = vi.fn();
     render(<BlameAnnotateTable lines={[makeLine({ lineno: 3, hash: 'fullhash3' })]} onSelectCommit={onSelectCommit} />);

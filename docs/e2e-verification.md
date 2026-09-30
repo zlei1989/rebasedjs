@@ -1166,7 +1166,7 @@
 | `diff-stream-view` | `diff-page-07.png`（大仓 `big.txt` 的分块流渲染，F-035 实测 2 个 `diff.chunk` 帧渐进累积后切标准视图）；其 `diff-stream-error` 分支由单测覆盖 |
 | `three-way-view` / `merge-view` | `conflicts-03.png`（全屏三栏：当前分支 / 合并来源 / 合并结果）、`conflicts-08b.png`（保存前结果栏已改写为 `line1 master` / `line2 feature` / `line3 resolved-by-hand`） |
 | `branch-compare-view` | `diff-page-10.png`（`?compare=diverge-test` 双 range 对比视图）、`branch-06.png`（分支页「比较」入口与「当前」分支禁用态） |
-| `blame-workbench`（三栏工作台；原单列 `blame-view` 已随页面重构删除） | `blame-01…06.png`（三栏总览暗色 / 「与最新版本差异」/ 受影响文件 Modal / 逐行注解点行联动 / 陈旧 `?select=` 未知态 / 明亮主题总览）+ `blame-08.png`（**收尾轮 R25 补拍**：工作区口径的逐行注解，含 1 行「未提交」，见 §5.34⑦）；testid 实测在盘——根 `blame-pane`、操作条 `blame-pane-actions` + `blame-action-log`/`-diff`/`-affected`/`-history`、三标签页 `blame-view-changes`/`-latest`/`-annotate`、中栏 `blame-commits` + `blame-commit-N`、注解行 `blame-line-N` + **逐行高亮正文 `blame-code-N`** + **哈希浮层触发按钮 `blame-hash-N`（2026-09 起是 button，不再是只读徽标）** + 浮层内容 `commit-detail-card` / `commit-detail-email` / `blame-detail-loading` / `blame-detail-error`、提示行 `blame-changes-root-hint`/`-rename-hint`/`-missing-hint` 与 `blame-latest-missing-hint`。**旧 testid `blame-file` 已随旧组件消失**（路径输入框现为 `blame-file-input`） |
+| `blame-workbench`（三栏工作台；原单列 `blame-view` 已随页面重构删除） | `blame-01…06.png`（三栏总览暗色 / 「与最新版本差异」/ 受影响文件 Modal / 逐行注解点行联动 / 陈旧 `?select=` 未知态 / 明亮主题总览）+ `blame-08.png`（**收尾轮 R25 补拍**：工作区口径的逐行注解，含 1 行「未提交」，见 §5.34⑦）；testid 实测在盘——根 `blame-pane`、操作条 `blame-pane-actions` + `blame-action-log`/`-diff`/`-affected`/`-history`、三标签页 `blame-view-changes`/`-latest`/`-annotate`、中栏 `blame-commits` + `blame-commit-N`、注解行 `blame-line-N` + **相对时间列 `blame-time-N`（定宽 68px）** + **哈希列容器 `blame-hash-cell-N`（定宽 68px）** + **逐行高亮正文 `blame-code-N`** + **哈希浮层触发按钮 `blame-hash-N`（2026-09 起是 button，不再是只读徽标）** + 浮层内容 `commit-detail-card` / `commit-detail-email` / `blame-detail-loading` / `blame-detail-error`、提示行 `blame-changes-root-hint`/`-rename-hint`/`-missing-hint` 与 `blame-latest-missing-hint`。**旧 testid `blame-file` 已随旧组件消失**（路径输入框现为 `blame-file-input`） |
 | ~~`committed-changes-panel`~~ | 组件已随页面删除（2026-09-20 用户口径）；`committed-01…03.png` 保留为删除前的历史证据（提交列表分页 50→100 / 目录树 / 与 diff 页联动），根 testid `committed-entry-N` / `committed-load-more` 已随组件移除。当前的等效证据见 `log-page-*`（变更集标签：`snapshot-changeset-title` / `snapshot-changeset-pane` / `changes-diff-*`） |
 | 其余复合页面组件 | `BranchPanel` / `StashPanel` / `TagPanel` / `RemotePanel` / `PatchPanel` / `ShelfPanel` / `WorktreePanel` / `SubmodulePanel` / `ConflictsPanel` / `HistoryPanel` / `SearchPanel` / `ConsolePanel` / `GitHubPanel` / `GitLabPanel` 与 `Reset` / `Merge` / `Rebase` / `Push` / `Pull` / `UpdateProject` / `Ignore` / `Auth` 各对话框属「页面级」组件，落图见 §5.27 ①（成对）与 §4 各页矩阵，不在此表重复（原 `BrowsePanel`、`CommittedChangesPanel` 已随整页形态删除） |
 
@@ -1688,7 +1688,18 @@
 
 | 截图 | 画面 | 覆盖项 | SHA256（完整值，`Get-FileHash` 实算） |
 |------|------|--------|----------------------------------------|
-| `blame-09.png` | 1440×900 暗色：主仓 `AGENT.md` 的「逐行注解」——行号｜时间｜短哈希 + 高亮正文（markdown 语法色）；**点 `blame-hash-1` 后的浮层打开态**（主题 + 短哈希 + 作者/时间 + 邮箱 `zhanglei1120@jd.com`；该提交为单行信息故无正文块） | R26-1~R26-5 | `A734DFE70E3EB8756130446506A1561E506D96247648CB95E398689C0CFFABD5`（190903 字节） |
+| `blame-09.png` | 1440×900 暗色：主仓 `AGENT.md` 的「逐行注解」——行号｜**相对时间**（`28天前`/`17天前`/`20天前`…，定宽 68px 右对齐）｜短哈希 + 高亮正文（markdown 语法色，正文左沿逐行对齐）；**点 `blame-hash-1` 后的浮层打开态**（主题 + 短哈希 + 作者/绝对时间 `zhanglei1120 on 2026-09-01 at 15:40` + 邮箱 `zhanglei1120@jd.com`；该提交为单行信息故无正文块） | R26-1~R26-5、R26-8 | `BC0190402E8250096D933A3DACB79FB9668C7D8178F7434EDFFFB362429CF6A2`（191725 字节） |
+
+**⑧ 同日微调：时间列改相对时间 + 列宽定死（对准口径）**
+
+> **口径**：行内时间列由绝对时间（`YYYY-MM-DD HH:mm`）改为**相对时间缩写**——`刚刚` / `N分钟前` / `N小时前` / `N天前` / `N月前` / `N年前`（分档见 `domain/format.ts` 的 `formatRelativeTime`：<60 秒 → 刚刚；<60 分 → 分钟；<24 小时 → 小时；**≤31 天 → 天**；<365 天 → 月（⌊天/30⌋，至少 1）；≥365 天 → 年；未来时刻按「刚刚」）。**绝对时间没丢**：浮层里仍是 `作者 on YYYY-MM-DD at HH:mm`，且更精确。
+> **为什么按 31 天切**：口径里「31天前」与「1月前」都要能出现；按 30 天切会让 31 天变成「1月前」，`31天前` 永远看不到。
+> **定宽与对齐（几何实测，`getBoundingClientRect`，非目测）**：
+> - 时间列 **68px 右对齐**：相对时间字数不一（`刚刚` 2 字 ~ `59分钟前` 4 字），不定宽则每行宽度不同、右侧逐行错开；
+> - **哈希列 68px（本轮一并修掉的既有错位）**：可点行是 antd Button（自然宽 68）、未提交行是只读 Text（自然宽 53）——修前同一页里**正文左沿出现两个值：768 / 753（差 15px）**，修后 `distinctCodeLeft = [768]`（`rebased-smoke` 的 12 行含 5 行未提交全部一致；主仓 `AGENT.md` 108 行同样只有一个值）；
+> - 六种档位文本在 68px 列内**均不裁切**（在页面内克隆同款单元格逐档实测：`刚刚`/`59分钟前`/`23小时前`/`31天前`/`12月前`/`1年前`，`scrollWidth == clientWidth`，12px 字号）。
+> **刷新时机（如实说明）**：相对时间在**重渲染时**刷新，本仓不为此挂定时器（每秒/每分钟重渲染上千行不值得）——页面长时间挂着不动时，`59分钟前` 不会自己跳成 `1小时前`。
+> **未覆盖（微调部分）**：`N分钟前`/`N小时前`/`N月前`/`N年前` 四档本轮**只有单测覆盖**（`domain/format.test.ts` 注入固定的「现在」精确断言），浏览器里实测到的是 `刚刚` 与 `N天前` 两档（夹具仓的提交都在近 31 天内）。
 
 > **收尾状态**：本轮新增 `docs/shots/blame-09.png` 一张；**未改动任何夹具**（`rebasedjs` 与 `rebased-smoke` 的工作区状态与冒烟前一致：前者干净、后者保留其既有的未提交改动，未新增/未还原）。截图落盘走 AGENT.md §MCP 五步：本项目不在 MCP 允许根内 → 先以纯文件名落盘到 MCP 输出目录，再按绝对路径搬进 `docs/shots/` 并 `Get-FileHash` 复核。
 
